@@ -55,14 +55,17 @@ struct CreateWalletView: View {
             Button {
                 step = .showSeed
             } label: {
-                Text("Continue")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(canProceed ? Color.orange : Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
+                HStack(spacing: 8) {
+                    Text("Continue")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(canProceed ? Color.orange : Color.gray)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
             }
+            .buttonStyle(.glass)
             .disabled(!canProceed)
             .padding(.horizontal)
 
@@ -90,14 +93,17 @@ struct CreateWalletView: View {
             Button {
                 step = .confirmSeed
             } label: {
-                Text("Continue")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(confirmed ? Color.orange : Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
+                HStack(spacing: 8) {
+                    Text("Continue")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(confirmed ? Color.orange : Color.gray)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
             }
+            .buttonStyle(.glass)
             .disabled(!confirmed)
             .padding(.horizontal)
         }

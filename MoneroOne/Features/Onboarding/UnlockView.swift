@@ -44,19 +44,22 @@ struct UnlockView: View {
                 Button {
                     unlockWithPIN()
                 } label: {
-                    if isUnlocking {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else {
-                        Text("Unlock")
+                    HStack(spacing: 8) {
+                        if isUnlocking {
+                            ProgressView()
+                                .tint(pin.count >= 6 ? Color.orange : Color.gray)
+                        } else {
+                            Image(systemName: "lock.open.fill")
+                                .font(.callout.weight(.semibold))
+                            Text("Unlock")
+                                .font(.callout.weight(.semibold))
+                        }
                     }
+                    .foregroundStyle(pin.count >= 6 ? Color.orange : Color.gray)
+                    .frame(width: 200)
+                    .padding(.vertical, 16)
                 }
-                .fontWeight(.semibold)
-                .frame(width: 200)
-                .padding()
-                .background(pin.count >= 6 ? Color.orange : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(14)
+                .buttonStyle(.glass)
                 .disabled(pin.count < 6 || isUnlocking)
             }
 
@@ -67,12 +70,15 @@ struct UnlockView: View {
                 } label: {
                     VStack(spacing: 8) {
                         Image(systemName: biometricAuth.biometricType.iconName)
-                            .font(.system(size: 40))
+                            .font(.system(size: 32))
                         Text("Use \(biometricAuth.biometricType.displayName)")
-                            .font(.caption)
+                            .font(.callout.weight(.medium))
                     }
-                    .foregroundColor(.orange)
+                    .foregroundStyle(Color.orange)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
                 }
+                .buttonStyle(.glass)
                 .disabled(isUnlocking)
             }
 

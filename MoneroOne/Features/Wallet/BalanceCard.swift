@@ -82,8 +82,8 @@ struct BalanceCard: View {
             }
         }
         .padding(24)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .glassEffect()
     }
 
     private var syncStatusColor: Color {

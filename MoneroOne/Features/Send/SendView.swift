@@ -153,19 +153,22 @@ struct SendView: View {
                     Button {
                         validateAndSend()
                     } label: {
-                        if isSending {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Text("Send XMR")
+                        HStack(spacing: 8) {
+                            if isSending {
+                                ProgressView()
+                                    .tint(isValidInput ? Color.orange : Color.gray)
+                            } else {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.callout.weight(.semibold))
+                                Text("Send XMR")
+                                    .font(.callout.weight(.semibold))
+                            }
                         }
+                        .foregroundStyle(isValidInput ? Color.orange : Color.gray)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
                     }
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(isValidInput ? Color.orange : Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
+                    .buttonStyle(.glass)
                     .disabled(!isValidInput || isSending)
                 }
                 .padding()

@@ -84,16 +84,15 @@ struct ReceiveView: View {
                         } label: {
                             VStack(spacing: 8) {
                                 Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
-                                    .font(.title2)
+                                    .font(.title3)
                                 Text(copied ? "Copied!" : "Copy")
-                                    .font(.caption)
+                                    .font(.callout.weight(.medium))
                             }
+                            .foregroundStyle(copied ? Color.green : Color.primary)
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(12)
+                            .padding(.vertical, 16)
                         }
-                        .foregroundColor(copied ? .green : .primary)
+                        .buttonStyle(.glass)
 
                         // Share Button
                         Button {
@@ -101,16 +100,15 @@ struct ReceiveView: View {
                         } label: {
                             VStack(spacing: 8) {
                                 Image(systemName: "square.and.arrow.up")
-                                    .font(.title2)
+                                    .font(.title3)
                                 Text("Share")
-                                    .font(.caption)
+                                    .font(.callout.weight(.medium))
                             }
+                            .foregroundStyle(Color.orange)
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(12)
+                            .padding(.vertical, 16)
                         }
-                        .foregroundColor(.primary)
+                        .buttonStyle(.glass)
                     }
                     .padding(.horizontal)
                     .disabled(walletManager.address.isEmpty)

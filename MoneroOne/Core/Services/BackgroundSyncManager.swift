@@ -57,11 +57,11 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         locationManager?.delegate = self
         locationManager?.desiredAccuracy = kCLLocationAccuracyThreeKilometers // Low accuracy = less battery
         locationManager?.distanceFilter = 500 // Only update every 500m
-        locationManager?.allowsBackgroundLocationUpdates = true
         locationManager?.pausesLocationUpdatesAutomatically = false
         locationManager?.showsBackgroundLocationIndicator = false // Hide blue bar
 
         // Request always authorization for background
+        // Background updates will be enabled in the authorization callback
         locationManager?.requestAlwaysAuthorization()
     }
 
@@ -137,7 +137,8 @@ extension BackgroundSyncManager: CLLocationManagerDelegate {
         Task { @MainActor in
             switch manager.authorizationStatus {
             case .authorizedAlways:
-                // Perfect - start location updates for background execution
+                // Now we can safely enable background updates
+                manager.allowsBackgroundLocationUpdates = true
                 manager.startUpdatingLocation()
             case .authorizedWhenInUse:
                 // Need "Always" for background - prompt upgrade

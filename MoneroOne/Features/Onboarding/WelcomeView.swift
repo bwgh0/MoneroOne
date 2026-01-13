@@ -9,10 +9,8 @@ struct WelcomeView: View {
             VStack(spacing: 32) {
                 Spacer()
 
-                // Logo
-                Image(systemName: "shield.checkered")
-                    .font(.system(size: 80))
-                    .foregroundColor(.orange)
+                // Animated Monero Logo
+                AnimatedMoneroLogo(size: 240)
 
                 VStack(spacing: 8) {
                     Text("Monero One")
@@ -26,7 +24,7 @@ struct WelcomeView: View {
 
                 Spacer()
 
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     Button {
                         showCreate = true
                     } label: {
@@ -38,7 +36,7 @@ struct WelcomeView: View {
                         }
                         .foregroundStyle(Color.orange)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 12)
                     }
                     .buttonStyle(.glass)
 
@@ -53,11 +51,11 @@ struct WelcomeView: View {
                         }
                         .foregroundStyle(Color.primary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 12)
                     }
                     .buttonStyle(.glass)
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 40)
                 .padding(.bottom, 32)
             }
             .navigationDestination(isPresented: $showCreate) {

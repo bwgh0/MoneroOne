@@ -4,10 +4,10 @@
     {
       "layers" : [
         {
-          "image-name" : "monero-trans.png",
-          "name" : "monero-trans",
+          "image-name" : "monero-correct.png",
+          "name" : "monero-correct",
           "position" : {
-            "scale" : 0.77,
+            "scale" : 0.75,
             "translation-in-points" : [
               0,
               0

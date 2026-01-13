@@ -1,10 +1,8 @@
 {
   "images" : [
     {
-      "filename" : "AppIcon.png",
-      "idiom" : "universal",
-      "platform" : "ios",
-      "size" : "1024x1024"
+      "filename" : "monero-correct.png",
+      "idiom" : "universal"
     }
   ],
   "info" : {
@@ -13,6 +11,6 @@
   },
   "properties" : {
     "preserves-vector-representation" : true,
-    "tintable" : true
+    "template-rendering-intent" : "original"
   }
 }

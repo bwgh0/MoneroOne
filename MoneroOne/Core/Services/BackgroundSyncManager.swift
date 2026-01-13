@@ -26,6 +26,7 @@ class BackgroundSyncManager: NSObject, ObservableObject {
 
         // Observe sync state changes to update Live Activity
         walletManager.$syncState
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 self?.handleSyncStateChange(state)
             }
@@ -94,6 +95,10 @@ class BackgroundSyncManager: NSObject, ObservableObject {
 
         switch state {
         case .syncing(let progress, let remaining):
+            // Start Live Activity if not running
+            if !SyncActivityManager.shared.isActivityRunning {
+                SyncActivityManager.shared.startActivity()
+            }
             // Update Live Activity with progress
             SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining)
 
@@ -105,7 +110,13 @@ class BackgroundSyncManager: NSObject, ObservableObject {
             // Keep activity showing but could add error state
             break
 
-        case .connecting, .idle:
+        case .connecting:
+            // Start Live Activity when connecting
+            if !SyncActivityManager.shared.isActivityRunning {
+                SyncActivityManager.shared.startActivity()
+            }
+
+        case .idle:
             break
         }
     }

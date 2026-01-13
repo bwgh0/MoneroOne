@@ -2,7 +2,7 @@ name: MoneroOne
 options:
   bundleIdPrefix: one.monero
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
   xcodeVersion: "16.0"
   createIntermediateGroups: true
 

@@ -30,26 +30,32 @@ struct WelcomeView: View {
                     Button {
                         showCreate = true
                     } label: {
-                        Text("Create New Wallet")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.orange)
-                            .foregroundColor(.white)
-                            .cornerRadius(14)
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.callout.weight(.semibold))
+                            Text("Create New Wallet")
+                                .font(.callout.weight(.semibold))
+                        }
+                        .foregroundStyle(Color.orange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
                     }
+                    .buttonStyle(.glass)
 
                     Button {
                         showRestore = true
                     } label: {
-                        Text("Restore Wallet")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .foregroundColor(.primary)
-                            .cornerRadius(14)
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.counterclockwise.circle.fill")
+                                .font(.callout.weight(.semibold))
+                            Text("Restore Wallet")
+                                .font(.callout.weight(.semibold))
+                        }
+                        .foregroundStyle(Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
                     }
+                    .buttonStyle(.glass)
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)

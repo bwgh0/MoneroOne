@@ -11,6 +11,7 @@
 		2B66E3C39AB91C177152ADCB /* MoneroKit in Frameworks */ = {isa = PBXBuildFile; productRef = 21A9BF46E283EEB36F8735D8 /* MoneroKit */; };
 		39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED23DE61696E2D6C0C9D6DAC /* SeedPhraseView.swift */; };
 		3FA12723C8F524DD76D5080C /* NodeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B03E2005118D429FE332C194 /* NodeSettingsView.swift */; };
+		42B3FDC8C5DE699F5A9B4ABB /* HdWalletKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4BC8724B0D2F0107CA711C57 /* HdWalletKit */; };
 		474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AA838F4EF37023CE4794A9 /* SecurityView.swift */; };
 		53961F04EC40C1BB78F573E5 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885C8AC405766D0B3663F27F /* MainTabView.swift */; };
 		7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873A08AAC18A1EE631F3FC67 /* WalletView.swift */; };
@@ -18,6 +19,7 @@
 		9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8C8A112B161D2A874330F /* TransactionListView.swift */; };
 		A139AB6ABC4D9EA71F3AF12D /* SyncModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4332A28BBF78E91CD1A7114 /* SyncModeView.swift */; };
 		A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066F201548A5A5EA2351656E /* SendView.swift */; };
+		A2173E3306237E1F4E1C9AB9 /* MoneroWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE53A66511AA0C64737C553 /* MoneroWallet.swift */; };
 		AF3420AD18242AB7B017171D /* MoneroOneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DA1C3CAB861DC98E98BED4 /* MoneroOneApp.swift */; };
 		AF8CD53F523DABC80F06F168 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D5B417D8D6615D3C56F22085 /* Assets.xcassets */; };
 		B6CA1E6614A397E2BC1F155A /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6282B77F4ACF513576365CA3 /* WelcomeView.swift */; };
@@ -39,6 +41,7 @@
 		4A66C894ECCBB9545048AD27 /* MoneroOne.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoneroOne.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5488A55F65931268A5493C9B /* CreateWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateWalletView.swift; sourceTree = "<group>"; };
 		6282B77F4ACF513576365CA3 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		6BE53A66511AA0C64737C553 /* MoneroWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroWallet.swift; sourceTree = "<group>"; };
 		73D8C8A112B161D2A874330F /* TransactionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionListView.swift; sourceTree = "<group>"; };
 		7BE0BF27D62647071D8D9F0E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		833C5B007D9D33E833CFE48B /* WalletManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletManager.swift; sourceTree = "<group>"; };
@@ -64,6 +67,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2B66E3C39AB91C177152ADCB /* MoneroKit in Frameworks */,
+				42B3FDC8C5DE699F5A9B4ABB /* HdWalletKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -137,6 +141,7 @@
 			isa = PBXGroup;
 			children = (
 				D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */,
+				6BE53A66511AA0C64737C553 /* MoneroWallet.swift */,
 				833C5B007D9D33E833CFE48B /* WalletManager.swift */,
 			);
 			path = Wallet;
@@ -221,6 +226,7 @@
 			name = MoneroOne;
 			packageProductDependencies = (
 				21A9BF46E283EEB36F8735D8 /* MoneroKit */,
+				4BC8724B0D2F0107CA711C57 /* HdWalletKit */,
 			);
 			productName = MoneroOne;
 			productReference = 4A66C894ECCBB9545048AD27 /* MoneroOne.app */;
@@ -252,6 +258,7 @@
 			mainGroup = 453FE5EA1C7EBE179675DED5;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				6B0D518F49CF572F6E5E24CC /* XCRemoteSwiftPackageReference "HdWalletKit.Swift" */,
 				F085F64B7D3D574132E20B56 /* XCRemoteSwiftPackageReference "MoneroKit.Swift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -286,6 +293,7 @@
 				916B54FE617C739781D795D9 /* KeychainStorage.swift in Sources */,
 				53961F04EC40C1BB78F573E5 /* MainTabView.swift in Sources */,
 				AF3420AD18242AB7B017171D /* MoneroOneApp.swift in Sources */,
+				A2173E3306237E1F4E1C9AB9 /* MoneroWallet.swift in Sources */,
 				3FA12723C8F524DD76D5080C /* NodeSettingsView.swift in Sources */,
 				FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */,
 				D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */,
@@ -509,6 +517,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		6B0D518F49CF572F6E5E24CC /* XCRemoteSwiftPackageReference "HdWalletKit.Swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/horizontalsystems/HdWalletKit.Swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.3.0;
+			};
+		};
 		F085F64B7D3D574132E20B56 /* XCRemoteSwiftPackageReference "MoneroKit.Swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/horizontalsystems/MoneroKit.Swift.git";
@@ -524,6 +540,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F085F64B7D3D574132E20B56 /* XCRemoteSwiftPackageReference "MoneroKit.Swift" */;
 			productName = MoneroKit;
+		};
+		4BC8724B0D2F0107CA711C57 /* HdWalletKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6B0D518F49CF572F6E5E24CC /* XCRemoteSwiftPackageReference "HdWalletKit.Swift" */;
+			productName = HdWalletKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

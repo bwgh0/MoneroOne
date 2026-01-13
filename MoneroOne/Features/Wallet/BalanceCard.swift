@@ -42,13 +42,19 @@ struct BalanceCard: View {
             }
 
             // Sync Progress
-            if case .syncing(let progress) = syncState {
+            if case .syncing(let progress, let remaining) = syncState {
                 VStack(spacing: 4) {
-                    ProgressView(value: progress)
+                    ProgressView(value: progress / 100)
                         .tint(.orange)
-                    Text("\(Int(progress * 100))% synced")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    if let remaining = remaining {
+                        Text("\(Int(progress))% synced - \(remaining) blocks remaining")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("\(Int(progress))% synced")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
         }
@@ -60,6 +66,7 @@ struct BalanceCard: View {
     private var syncStatusColor: Color {
         switch syncState {
         case .idle: return .gray
+        case .connecting: return .yellow
         case .syncing: return .orange
         case .synced: return .green
         case .error: return .red
@@ -68,7 +75,8 @@ struct BalanceCard: View {
 
     private var syncStatusText: String {
         switch syncState {
-        case .idle: return "Not syncing"
+        case .idle: return "Idle"
+        case .connecting: return "Connecting..."
         case .syncing: return "Syncing..."
         case .synced: return "Synced"
         case .error(let msg): return "Error: \(msg)"
@@ -95,7 +103,7 @@ struct BalanceCard: View {
         BalanceCard(
             balance: 5.5,
             unlockedBalance: 3.2,
-            syncState: .syncing(progress: 0.65)
+            syncState: .syncing(progress: 65, remaining: 1000)
         )
     }
     .padding()

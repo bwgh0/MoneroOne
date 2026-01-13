@@ -15,6 +15,9 @@ packages:
   MoneroKit:
     url: https://github.com/horizontalsystems/MoneroKit.Swift.git
     exactVersion: 0.1.13
+  HdWalletKit:
+    url: https://github.com/horizontalsystems/HdWalletKit.Swift.git
+    exactVersion: 1.3.0
 
 targets:
   MoneroOne:
@@ -24,6 +27,7 @@ targets:
       - MoneroOne
     dependencies:
       - package: MoneroKit
+      - package: HdWalletKit
     settings:
       base:
         INFOPLIST_GENERATION_MODE: GeneratedFile

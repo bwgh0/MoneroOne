@@ -11,9 +11,10 @@ struct SyncLiveActivity: Widget {
             DynamicIsland {
                 // Expanded UI
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .foregroundColor(.orange)
-                        .font(.title2)
+                    Image("MoneroSymbol")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 28, height: 28)
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
@@ -73,19 +74,21 @@ struct LockScreenView: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Monero icon
-            Image(systemName: "m.circle.fill")
-                .font(.largeTitle)
-                .foregroundColor(.orange)
+            // Monero logo
+            Image("MoneroSymbol")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(context.state.isSynced ? "Wallet Synced" : "Syncing Wallet")
                     .font(.headline)
+                    .foregroundStyle(.primary)
 
                 if context.state.isSynced {
                     Text("Your wallet is up to date")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 } else {
                     ProgressView(value: context.state.progress, total: 100)
                         .tint(.orange)
@@ -93,7 +96,7 @@ struct LockScreenView: View {
                     if let blocks = context.state.blocksRemaining, blocks > 0 {
                         Text("\(blocks) blocks remaining")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -103,15 +106,14 @@ struct LockScreenView: View {
             if context.state.isSynced {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title)
-                    .foregroundColor(.green)
+                    .foregroundStyle(.green)
             } else {
                 Text("\(Int(context.state.progress))%")
                     .font(.title2.bold())
-                    .foregroundColor(.orange)
+                    .foregroundStyle(.orange)
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
     }
 }
 

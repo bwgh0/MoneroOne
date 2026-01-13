@@ -33,23 +33,29 @@ targets:
       - package: HdWalletKit
       - target: MoneroOneWidgets
         embed: true
+    info:
+      path: MoneroOne/Info.plist
+      properties:
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleDisplayName: "Monero One"
+        UIBackgroundModes:
+          - location
+        NSSupportsLiveActivities: true
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Background sync uses location services to keep your wallet synced. Location data is never stored or transmitted."
+        NSLocationWhenInUseUsageDescription: "Enable background sync to keep your wallet updated."
+        NSCameraUsageDescription: "Camera is used to scan QR codes"
+        NSFaceIDUsageDescription: "Face ID is used to unlock your wallet"
     settings:
       base:
-        INFOPLIST_GENERATION_MODE: GeneratedFile
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
-        INFOPLIST_KEY_UILaunchScreen_Generation: true
-        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        INFOPLIST_KEY_CFBundleDisplayName: "Monero One"
-        INFOPLIST_KEY_NSCameraUsageDescription: "Camera is used to scan QR codes"
-        INFOPLIST_KEY_NSFaceIDUsageDescription: "Face ID is used to unlock your wallet"
-        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: "Background sync uses location services to keep your wallet synced. Location data is never stored or transmitted."
-        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Enable background sync to keep your wallet updated."
-        INFOPLIST_KEY_UIBackgroundModes: "(location)"
-        INFOPLIST_KEY_NSSupportsLiveActivities: true
+        INFOPLIST_FILE: MoneroOne/Info.plist
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
-        GENERATE_INFOPLIST_FILE: true
         SWIFT_EMIT_LOC_STRINGS: true
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -60,6 +66,8 @@ targets:
     sources:
       - MoneroOneWidgets
       - Shared
+      - path: MoneroOne/Resources/Assets.xcassets
+        type: folder
     info:
       path: MoneroOneWidgets/Info.plist
       properties:

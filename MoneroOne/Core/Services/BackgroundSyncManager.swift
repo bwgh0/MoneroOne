@@ -134,15 +134,16 @@ class BackgroundSyncManager: NSObject, ObservableObject {
 // MARK: - CLLocationManagerDelegate
 extension BackgroundSyncManager: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
         Task { @MainActor in
-            switch manager.authorizationStatus {
+            switch status {
             case .authorizedAlways:
                 // Now we can safely enable background updates
-                manager.allowsBackgroundLocationUpdates = true
-                manager.startUpdatingLocation()
+                locationManager?.allowsBackgroundLocationUpdates = true
+                locationManager?.startUpdatingLocation()
             case .authorizedWhenInUse:
                 // Need "Always" for background - prompt upgrade
-                manager.requestAlwaysAuthorization()
+                locationManager?.requestAlwaysAuthorization()
             case .denied, .restricted:
                 // User denied - disable feature
                 setEnabled(false)

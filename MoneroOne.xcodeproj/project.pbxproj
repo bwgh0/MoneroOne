@@ -26,6 +26,7 @@
 		5C75645DBD84C0B8D1365716 /* MoneroOneUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05799DCC87A0172BABA5972C /* MoneroOneUITestsLaunchTests.swift */; };
 		6B3AD2E53A2A967DFDB3A407 /* NodeManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70806977F6367D918B532021 /* NodeManagerTests.swift */; };
 		7324C5B0F049E590C2DC176D /* WalletIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9698D5ECB87A0302392684C6 /* WalletIntegrationTests.swift */; };
+		79EC2C97278C5EC00D2271AC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D5B417D8D6615D3C56F22085 /* Assets.xcassets */; };
 		7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873A08AAC18A1EE631F3FC67 /* WalletView.swift */; };
 		8BFA73260FA46CA7935C386F /* UnlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA44CACB97519C2456A1D98 /* UnlockView.swift */; };
 		916B54FE617C739781D795D9 /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */; };
@@ -116,6 +117,7 @@
 		1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncActivityAttributes.swift; sourceTree = "<group>"; };
 		21E285BBA23EE048C15BFB86 /* monero-one.icon */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "monero-one.icon"; path = "MoneroOne/monero-one.icon"; sourceTree = SOURCE_ROOT; };
 		39D836D865F70A7477790100 /* BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
+		453AD935BC81C7E29EC967D6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4848074569E3E47EE8FE7F31 /* BiometricAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricAuthManager.swift; sourceTree = "<group>"; };
 		4A66C894ECCBB9545048AD27 /* MoneroOne.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoneroOne.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B3447370DAF20BCC562A834 /* icon.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = icon.json; sourceTree = "<group>"; };
@@ -366,6 +368,7 @@
 			isa = PBXGroup;
 			children = (
 				E06460C0C64ADF867FDFD082 /* ContentView.swift */,
+				453AD935BC81C7E29EC967D6 /* Info.plist */,
 				0DD09EE23C0514DF10A7A6B4 /* Monero-hero.png */,
 				21E285BBA23EE048C15BFB86 /* monero-one.icon */,
 				F2DA1C3CAB861DC98E98BED4 /* MoneroOneApp.swift */,
@@ -433,6 +436,7 @@
 			buildConfigurationList = 6B3D5F0F098C94ED0D1870BC /* Build configuration list for PBXNativeTarget "MoneroOneWidgets" */;
 			buildPhases = (
 				50346F89F367AAF4E2787BC4 /* Sources */,
+				B2349C778F8AB7E69B1C22A9 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -550,6 +554,14 @@
 				E57189844708D135C1870342 /* icon.json in Resources */,
 				98600690CFC4685EF1443DF2 /* monero-correct.png in Resources */,
 				0FB5BB9D59516059EF6ECB1A /* monero-one.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B2349C778F8AB7E69B1C22A9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79EC2C97278C5EC00D2271AC /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -691,19 +703,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_GENERATION_MODE = GeneratedFile;
-				INFOPLIST_KEY_CFBundleDisplayName = "Monero One";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to scan QR codes";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID is used to unlock your wallet";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Background sync uses location services to keep your wallet synced. Location data is never stored or transmitted.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Enable background sync to keep your wallet updated.";
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "(location)";
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_FILE = MoneroOne/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -723,19 +723,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_GENERATION_MODE = GeneratedFile;
-				INFOPLIST_KEY_CFBundleDisplayName = "Monero One";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to scan QR codes";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID is used to unlock your wallet";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Background sync uses location services to keep your wallet synced. Location data is never stored or transmitted.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Enable background sync to keep your wallet updated.";
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "(location)";
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_FILE = MoneroOne/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

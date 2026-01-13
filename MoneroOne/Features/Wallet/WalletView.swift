@@ -2,18 +2,30 @@ import SwiftUI
 
 struct WalletView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var priceService: PriceService
     @State private var showReceive = false
     @State private var showSend = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
+                    // Error Banners
+                    VStack(spacing: 8) {
+                        OfflineBanner()
+                        SyncErrorBanner(syncState: walletManager.syncState) {
+                            walletManager.refresh()
+                        }
+                    }
+                    .padding(.horizontal)
+                    .animation(.easeInOut, value: walletManager.syncState)
+
                     // Balance Card
                     BalanceCard(
                         balance: walletManager.balance,
                         unlockedBalance: walletManager.unlockedBalance,
-                        syncState: walletManager.syncState
+                        syncState: walletManager.syncState,
+                        priceService: priceService
                     )
                     .padding(.horizontal)
 
@@ -42,6 +54,10 @@ struct WalletView: View {
                 .padding(.top)
             }
             .navigationTitle("Monero One")
+            .refreshable {
+                walletManager.refresh()
+                await priceService.fetchPrice()
+            }
             .sheet(isPresented: $showReceive) {
                 ReceiveView()
             }
@@ -81,4 +97,5 @@ struct ActionButton: View {
 #Preview {
     WalletView()
         .environmentObject(WalletManager())
+        .environmentObject(PriceService())
 }

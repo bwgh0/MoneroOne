@@ -4,6 +4,7 @@ struct BalanceCard: View {
     let balance: Decimal
     let unlockedBalance: Decimal
     let syncState: WalletManager.SyncState
+    @ObservedObject var priceService: PriceService
 
     var body: some View {
         VStack(spacing: 16) {
@@ -16,6 +17,17 @@ struct BalanceCard: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
+
+                // Price change indicator
+                if let change = priceService.priceChange24h {
+                    HStack(spacing: 2) {
+                        Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.caption2)
+                        Text(priceService.formatPriceChange() ?? "")
+                            .font(.caption)
+                    }
+                    .foregroundColor(change >= 0 ? .green : .red)
+                }
             }
 
             // Main Balance
@@ -26,6 +38,13 @@ struct BalanceCard: View {
                 Text("XMR")
                     .font(.headline)
                     .foregroundColor(.secondary)
+
+                // Fiat value
+                if let fiatValue = priceService.formatFiatValue(balance) {
+                    Text("≈ \(fiatValue)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
             }
 
             // Unlocked Balance
@@ -37,6 +56,10 @@ struct BalanceCard: View {
                         .fontWeight(.medium)
                     Text("XMR")
                         .foregroundColor(.secondary)
+                    if let fiat = priceService.formatFiatValue(unlockedBalance) {
+                        Text("(\(fiat))")
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .font(.subheadline)
             }
@@ -97,13 +120,15 @@ struct BalanceCard: View {
         BalanceCard(
             balance: 1.234567890123,
             unlockedBalance: 1.234567890123,
-            syncState: .synced
+            syncState: .synced,
+            priceService: PriceService()
         )
 
         BalanceCard(
             balance: 5.5,
             unlockedBalance: 3.2,
-            syncState: .syncing(progress: 65, remaining: 1000)
+            syncState: .syncing(progress: 65, remaining: 1000),
+            priceService: PriceService()
         )
     }
     .padding()

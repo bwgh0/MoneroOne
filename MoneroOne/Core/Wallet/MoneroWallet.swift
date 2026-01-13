@@ -29,15 +29,15 @@ class MoneroWallet: ObservableObject {
     // MARK: - Initialization
 
     /// Create a new wallet from seed words
-    func create(seed: [String], restoreHeight: UInt64 = 0) throws {
-        let node = defaultNode()
+    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil) throws {
+        let walletNode = node ?? defaultNode()
 
         kit = try MoneroKit.Kit(
             wallet: .bip39(seed: seed, passphrase: ""),
             account: 0,
             restoreHeight: restoreHeight,
             walletId: UUID().uuidString,
-            node: node,
+            node: walletNode,
             networkType: .mainnet,
             reachabilityManager: reachabilityManager,
             logger: nil
@@ -47,15 +47,15 @@ class MoneroWallet: ObservableObject {
     }
 
     /// Create watch-only wallet
-    func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0) throws {
-        let node = defaultNode()
+    func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil) throws {
+        let walletNode = node ?? defaultNode()
 
         kit = try MoneroKit.Kit(
             wallet: .watch(address: address, viewKey: viewKey),
             account: 0,
             restoreHeight: restoreHeight,
             walletId: UUID().uuidString,
-            node: node,
+            node: walletNode,
             networkType: .mainnet,
             reachabilityManager: reachabilityManager,
             logger: nil
@@ -65,8 +65,10 @@ class MoneroWallet: ObservableObject {
     }
 
     private func defaultNode() -> MoneroKit.Node {
-        MoneroKit.Node(
-            url: URL(string: "https://node.moneroworld.com:18089")!,
+        // Load from UserDefaults or use default
+        let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? "https://node.moneroworld.com:18089"
+        return MoneroKit.Node(
+            url: URL(string: savedURL)!,
             isTrusted: false,
             login: nil,
             password: nil

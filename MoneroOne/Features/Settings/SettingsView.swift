@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var priceService: PriceService
     @State private var showBackup = false
     @State private var showSecurity = false
     @State private var showSyncMode = false
@@ -30,6 +31,24 @@ struct SettingsView: View {
                             title: "Security",
                             color: .blue
                         )
+                    }
+                }
+
+                // Display Section
+                Section("Display") {
+                    NavigationLink {
+                        CurrencySettingsView(priceService: priceService)
+                    } label: {
+                        HStack {
+                            SettingsRow(
+                                icon: "dollarsign.circle",
+                                title: "Currency",
+                                color: .green
+                            )
+                            Spacer()
+                            Text(priceService.selectedCurrency.uppercased())
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
 
@@ -126,4 +145,5 @@ struct SettingsRow: View {
 #Preview {
     SettingsView()
         .environmentObject(WalletManager())
+        .environmentObject(PriceService())
 }

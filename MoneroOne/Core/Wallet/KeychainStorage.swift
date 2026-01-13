@@ -2,8 +2,8 @@ import Foundation
 import Security
 
 class KeychainStorage {
-    private let seedKey = "com.xmrlitewallet.seed"
-    private let pinHashKey = "com.xmrlitewallet.pinhash"
+    private let seedKey = "one.monero.MoneroOne.seed"
+    private let pinHashKey = "one.monero.MoneroOne.pinhash"
 
     // MARK: - Seed Storage
 

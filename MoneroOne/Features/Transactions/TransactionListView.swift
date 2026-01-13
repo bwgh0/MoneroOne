@@ -2,6 +2,43 @@ import SwiftUI
 
 struct TransactionListView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @State private var searchText = ""
+    @State private var filterType: FilterType = .all
+    @State private var showFilters = false
+
+    enum FilterType: String, CaseIterable {
+        case all = "All"
+        case incoming = "Received"
+        case outgoing = "Sent"
+        case pending = "Pending"
+    }
+
+    private var filteredTransactions: [MoneroTransaction] {
+        var result = walletManager.transactions
+
+        // Apply type filter
+        switch filterType {
+        case .all:
+            break
+        case .incoming:
+            result = result.filter { $0.type == .incoming }
+        case .outgoing:
+            result = result.filter { $0.type == .outgoing }
+        case .pending:
+            result = result.filter { $0.status == .pending }
+        }
+
+        // Apply search filter
+        if !searchText.isEmpty {
+            result = result.filter { tx in
+                tx.id.localizedCaseInsensitiveContains(searchText) ||
+                tx.address.localizedCaseInsensitiveContains(searchText) ||
+                (tx.memo?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
+        }
+
+        return result
+    }
 
     var body: some View {
         NavigationStack {
@@ -13,6 +50,28 @@ struct TransactionListView: View {
                 }
             }
             .navigationTitle("History")
+            .searchable(text: $searchText, prompt: "Search transactions")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        ForEach(FilterType.allCases, id: \.self) { type in
+                            Button {
+                                filterType = type
+                            } label: {
+                                HStack {
+                                    Text(type.rawValue)
+                                    if filterType == type {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: filterType == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                            .foregroundColor(filterType == .all ? .primary : .orange)
+                    }
+                }
+            }
             .refreshable {
                 walletManager.refresh()
             }
@@ -37,11 +96,20 @@ struct TransactionListView: View {
     }
 
     private var transactionList: some View {
-        List(walletManager.transactions) { transaction in
-            NavigationLink {
-                TransactionDetailView(transaction: transaction)
-            } label: {
-                TransactionRow(transaction: transaction)
+        List {
+            if filteredTransactions.isEmpty && !searchText.isEmpty {
+                Text("No results for \"\(searchText)\"")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
+            } else {
+                ForEach(filteredTransactions) { transaction in
+                    NavigationLink {
+                        TransactionDetailView(transaction: transaction)
+                    } label: {
+                        TransactionRow(transaction: transaction)
+                    }
+                }
             }
         }
         .listStyle(.plain)

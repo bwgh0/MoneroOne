@@ -4,10 +4,11 @@
     {
       "layers" : [
         {
-          "image-name" : "monero-symbol-on-white-1280 3.png",
-          "name" : "monero-symbol-on-white-1280 3",
+          "glass" : true,
+          "image-name" : "monero-symbol-800.png",
+          "name" : "monero-symbol-800",
           "position" : {
-            "scale" : 0.75,
+            "scale" : 1.2,
             "translation-in-points" : [
               0,
               0

@@ -213,6 +213,15 @@ class WalletManager: ObservableObject {
         moneroWallet?.start()
     }
 
+    // MARK: - Seed Access
+
+    func getSeedPhrase(pin: String) throws -> [String]? {
+        guard let seedPhrase = try keychain.getSeed(pin: pin) else {
+            return nil
+        }
+        return seedPhrase.split(separator: " ").map(String.init)
+    }
+
     // MARK: - Delete Wallet
 
     func deleteWallet() {

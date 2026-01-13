@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WalletView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @StateObject private var priceService = PriceService()
     @State private var showReceive = false
     @State private var showSend = false
 
@@ -13,7 +14,8 @@ struct WalletView: View {
                     BalanceCard(
                         balance: walletManager.balance,
                         unlockedBalance: walletManager.unlockedBalance,
-                        syncState: walletManager.syncState
+                        syncState: walletManager.syncState,
+                        priceService: priceService
                     )
                     .padding(.horizontal)
 
@@ -42,6 +44,10 @@ struct WalletView: View {
                 .padding(.top)
             }
             .navigationTitle("Monero One")
+            .refreshable {
+                walletManager.refresh()
+                await priceService.fetchPrice()
+            }
             .sheet(isPresented: $showReceive) {
                 ReceiveView()
             }

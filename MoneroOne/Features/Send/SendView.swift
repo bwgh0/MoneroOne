@@ -6,111 +6,161 @@ struct SendView: View {
 
     @State private var address = ""
     @State private var amount = ""
+    @State private var memo = ""
     @State private var showScanner = false
     @State private var showConfirmation = false
     @State private var isSending = false
     @State private var errorMessage: String?
+    @State private var estimatedFee: Decimal?
+    @State private var sendSuccess = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                // Address Input
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Recipient Address")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    HStack {
-                        TextField("Enter XMR address", text: $address)
-                            .font(.system(.body, design: .monospaced))
-                            .autocapitalization(.none)
-                            .autocorrectionDisabled()
-
-                        Button {
-                            showScanner = true
-                        } label: {
-                            Image(systemName: "qrcode.viewfinder")
-                                .font(.title2)
-                                .foregroundColor(.orange)
-                        }
-
-                        Button {
-                            if let clipboard = UIPasteboard.general.string {
-                                address = clipboard
-                            }
-                        } label: {
-                            Image(systemName: "doc.on.clipboard")
-                                .font(.title2)
-                                .foregroundColor(.orange)
-                        }
-                    }
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(12)
-                }
-
-                // Amount Input
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Amount")
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Address Input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recipient Address")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
 
-                        Spacer()
+                        HStack {
+                            TextField("Enter XMR address", text: $address)
+                                .font(.system(.caption, design: .monospaced))
+                                .autocapitalization(.none)
+                                .autocorrectionDisabled()
+                                .onChange(of: address) { _, _ in
+                                    validateAddress()
+                                }
 
-                        Button("Max") {
-                            amount = "\(walletManager.unlockedBalance)"
+                            Button {
+                                showScanner = true
+                            } label: {
+                                Image(systemName: "qrcode.viewfinder")
+                                    .font(.title2)
+                                    .foregroundColor(.orange)
+                            }
+
+                            Button {
+                                if let clipboard = UIPasteboard.general.string {
+                                    address = clipboard
+                                }
+                            } label: {
+                                Image(systemName: "doc.on.clipboard")
+                                    .font(.title2)
+                                    .foregroundColor(.orange)
+                            }
                         }
-                        .font(.caption)
-                        .foregroundColor(.orange)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+
+                        // Address validation indicator
+                        if !address.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: isValidAddress ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .foregroundColor(isValidAddress ? .green : .red)
+                                Text(isValidAddress ? "Valid address" : "Invalid address")
+                                    .font(.caption)
+                                    .foregroundColor(isValidAddress ? .green : .red)
+                            }
+                        }
                     }
 
-                    HStack {
-                        TextField("0.0", text: $amount)
-                            .font(.system(size: 24, weight: .semibold, design: .rounded))
-                            .keyboardType(.decimalPad)
+                    // Amount Input
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Amount")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
 
-                        Text("XMR")
-                            .font(.headline)
+                            Spacer()
+
+                            Button("Max") {
+                                amount = "\(walletManager.unlockedBalance)"
+                            }
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        }
+
+                        HStack {
+                            TextField("0.0", text: $amount)
+                                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                                .keyboardType(.decimalPad)
+
+                            Text("XMR")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+
+                        Text("Available: \(formatXMR(walletManager.unlockedBalance)) XMR")
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(12)
 
-                    Text("Available: \(formatXMR(walletManager.unlockedBalance)) XMR")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                    // Memo (optional)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Memo (optional)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
 
-                if let error = errorMessage {
-                    Text(error)
-                        .foregroundColor(.red)
-                        .font(.caption)
-                }
-
-                Spacer()
-
-                // Send Button
-                Button {
-                    validateAndSend()
-                } label: {
-                    if isSending {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else {
-                        Text("Send XMR")
+                        TextField("Add a note", text: $memo)
+                            .padding()
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
                     }
+
+                    // Fee estimate
+                    if let fee = estimatedFee {
+                        HStack {
+                            Text("Estimated Fee")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("\(formatXMR(fee)) XMR")
+                                .fontWeight(.medium)
+                        }
+                        .font(.subheadline)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                    }
+
+                    if let error = errorMessage {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+
+                    Spacer(minLength: 40)
+
+                    // Send Button
+                    Button {
+                        validateAndSend()
+                    } label: {
+                        if isSending {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Text("Send XMR")
+                        }
+                    }
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(isValidInput ? Color.orange : Color.gray)
+                    .foregroundColor(.white)
+                    .cornerRadius(14)
+                    .disabled(!isValidInput || isSending)
                 }
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity)
                 .padding()
-                .background(isValidInput ? Color.orange : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(14)
-                .disabled(!isValidInput || isSending)
             }
-            .padding()
             .navigationTitle("Send XMR")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -121,7 +171,9 @@ struct SendView: View {
                 }
             }
             .sheet(isPresented: $showScanner) {
-                QRScannerView(scannedCode: $address)
+                QRScannerView { scannedAddress in
+                    address = scannedAddress
+                }
             }
             .alert("Confirm Send", isPresented: $showConfirmation) {
                 Button("Cancel", role: .cancel) { }
@@ -129,40 +181,91 @@ struct SendView: View {
                     sendTransaction()
                 }
             } message: {
-                Text("Send \(amount) XMR to \(address.prefix(20))...?")
+                let feeText = estimatedFee.map { " + \(formatXMR($0)) fee" } ?? ""
+                Text("Send \(amount) XMR\(feeText) to:\n\(formatAddress(address))")
+            }
+            .alert("Success", isPresented: $sendSuccess) {
+                Button("Done") {
+                    dismiss()
+                }
+            } message: {
+                Text("Transaction submitted successfully")
             }
         }
     }
 
+    private var isValidAddress: Bool {
+        walletManager.isValidAddress(address)
+    }
+
     private var isValidInput: Bool {
-        !address.isEmpty && address.count >= 95 && // Monero addresses are 95+ chars
-        !amount.isEmpty && (Decimal(string: amount) ?? 0) > 0
+        isValidAddress &&
+        !amount.isEmpty &&
+        (Decimal(string: amount) ?? 0) > 0 &&
+        (Decimal(string: amount) ?? 0) <= walletManager.unlockedBalance
+    }
+
+    private func validateAddress() {
+        errorMessage = nil
+        if !address.isEmpty && !isValidAddress {
+            errorMessage = "Invalid Monero address"
+        }
     }
 
     private func validateAndSend() {
         errorMessage = nil
 
-        guard address.count >= 95 else {
+        guard isValidAddress else {
             errorMessage = "Invalid Monero address"
             return
         }
 
         guard let amountDecimal = Decimal(string: amount),
-              amountDecimal > 0,
-              amountDecimal <= walletManager.unlockedBalance else {
+              amountDecimal > 0 else {
             errorMessage = "Invalid amount"
             return
         }
 
-        showConfirmation = true
+        guard amountDecimal <= walletManager.unlockedBalance else {
+            errorMessage = "Insufficient balance"
+            return
+        }
+
+        // Estimate fee before confirming
+        Task {
+            do {
+                estimatedFee = try await walletManager.estimateFee(to: address, amount: amountDecimal)
+                showConfirmation = true
+            } catch {
+                errorMessage = "Failed to estimate fee: \(error.localizedDescription)"
+            }
+        }
     }
 
     private func sendTransaction() {
         isSending = true
-        // In real implementation, this would call MoneroKit to send
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        errorMessage = nil
+
+        guard let amountDecimal = Decimal(string: amount) else {
+            errorMessage = "Invalid amount"
             isSending = false
-            dismiss()
+            return
+        }
+
+        Task {
+            do {
+                let txHash = try await walletManager.send(
+                    to: address,
+                    amount: amountDecimal,
+                    memo: memo.isEmpty ? nil : memo
+                )
+                print("Transaction sent: \(txHash)")
+                isSending = false
+                sendSuccess = true
+            } catch {
+                errorMessage = "Send failed: \(error.localizedDescription)"
+                isSending = false
+            }
         }
     }
 
@@ -173,26 +276,10 @@ struct SendView: View {
         formatter.maximumFractionDigits = 12
         return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
     }
-}
 
-// Simple QR Scanner placeholder
-struct QRScannerView: View {
-    @Binding var scannedCode: String
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        VStack {
-            Text("QR Scanner")
-                .font(.headline)
-
-            Text("Camera access required")
-                .foregroundColor(.secondary)
-
-            Button("Done") {
-                dismiss()
-            }
-            .padding()
-        }
+    private func formatAddress(_ addr: String) -> String {
+        guard addr.count > 20 else { return addr }
+        return "\(addr.prefix(12))...\(addr.suffix(8))"
     }
 }
 

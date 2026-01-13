@@ -5,12 +5,16 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if walletManager.hasWallet {
-                MainTabView()
-            } else {
+            if !walletManager.hasWallet {
                 WelcomeView()
+            } else if !walletManager.isUnlocked {
+                UnlockView()
+            } else {
+                MainTabView()
             }
         }
+        .animation(.easeInOut, value: walletManager.hasWallet)
+        .animation(.easeInOut, value: walletManager.isUnlocked)
     }
 }
 

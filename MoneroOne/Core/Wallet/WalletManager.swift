@@ -222,6 +222,31 @@ class WalletManager: ObservableObject {
         return seedPhrase.split(separator: " ").map(String.init)
     }
 
+    // MARK: - Biometric Unlock
+
+    /// Enable biometric unlock by storing PIN securely
+    func enableBiometricUnlock(pin: String) throws {
+        try keychain.savePinForBiometrics(pin)
+    }
+
+    /// Disable biometric unlock
+    func disableBiometricUnlock() {
+        keychain.deleteBiometricPin()
+    }
+
+    /// Check if biometric unlock is available
+    var hasBiometricPinStored: Bool {
+        keychain.hasBiometricPin()
+    }
+
+    /// Unlock using biometrics - retrieves PIN via Face ID/Touch ID
+    func unlockWithBiometrics() throws {
+        guard let pin = keychain.getPinWithBiometrics() else {
+            throw WalletError.biometricFailed
+        }
+        try unlock(pin: pin)
+    }
+
     // MARK: - Delete Wallet
 
     func deleteWallet() {
@@ -239,6 +264,7 @@ enum WalletError: LocalizedError {
     case invalidPin
     case saveFailed
     case notUnlocked
+    case biometricFailed
 
     var errorDescription: String? {
         switch self {
@@ -246,6 +272,7 @@ enum WalletError: LocalizedError {
         case .invalidPin: return "Invalid PIN"
         case .saveFailed: return "Failed to save wallet"
         case .notUnlocked: return "Wallet is locked"
+        case .biometricFailed: return "Biometric authentication failed"
         }
     }
 }

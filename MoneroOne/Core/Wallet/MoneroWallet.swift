@@ -65,8 +65,8 @@ class MoneroWallet: ObservableObject {
     }
 
     private func defaultNode() -> MoneroKit.Node {
-        // Load from UserDefaults or use default
-        let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? "https://node.moneroworld.com:18089"
+        // Load from UserDefaults or use default (CakeWallet node is generally reliable)
+        let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? "https://xmr-node.cakewallet.com:18081"
         return MoneroKit.Node(
             url: URL(string: savedURL)!,
             isTrusted: false,
@@ -74,6 +74,14 @@ class MoneroWallet: ObservableObject {
             password: nil
         )
     }
+
+    /// Available public nodes
+    static let publicNodes: [(name: String, url: String)] = [
+        ("CakeWallet", "https://xmr-node.cakewallet.com:18081"),
+        ("MoneroWorld", "https://node.moneroworld.com:18089"),
+        ("Community Node", "https://nodes.hashvault.pro:18081"),
+        ("XMR.to", "https://node.xmr.to:18081")
+    ]
 
     private func setupKit() {
         guard let kit = kit else { return }
@@ -123,10 +131,40 @@ class MoneroWallet: ObservableObject {
             let progressPercent = Double(min(99, progress))
             syncState = .syncing(progress: progressPercent, remaining: remainingBlocksCount > 0 ? remainingBlocksCount : nil)
         case .notSynced(let error):
-            syncState = .error(error.localizedDescription)
+            syncState = .error(friendlyErrorMessage(for: error))
         case .idle:
             syncState = .idle
         }
+    }
+
+    private func friendlyErrorMessage(for error: Error) -> String {
+        let errorString = String(describing: error)
+
+        // Check for common MoneroKit errors
+        if errorString.contains("WalletStateError") {
+            if errorString.contains("error 1") {
+                return "Unable to connect to node. Please try a different node in Settings."
+            } else if errorString.contains("error 2") {
+                return "Node returned invalid response. Try another node."
+            } else if errorString.contains("error 3") {
+                return "Connection timeout. Check your internet connection."
+            }
+        }
+
+        if errorString.lowercased().contains("timeout") {
+            return "Connection timed out. Try again or switch nodes."
+        }
+
+        if errorString.lowercased().contains("network") || errorString.lowercased().contains("internet") {
+            return "Network error. Check your connection."
+        }
+
+        if errorString.lowercased().contains("refused") || errorString.lowercased().contains("unreachable") {
+            return "Node unavailable. Try a different node."
+        }
+
+        // Fallback to a cleaner message
+        return "Sync failed. Tap Retry or try a different node."
     }
 
     // MARK: - Transactions

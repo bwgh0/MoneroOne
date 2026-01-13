@@ -1,36 +1,31 @@
 import SwiftUI
 
-struct RemoteNode: Identifiable, Hashable {
-    let id = UUID()
-    let name: String
-    let url: String
-    let isDefault: Bool
-}
-
 struct NodeSettingsView: View {
-    @AppStorage("selectedNodeURL") private var selectedNodeURL = "https://node.moneroworld.com:18089"
+    @EnvironmentObject var walletManager: WalletManager
+    @StateObject private var nodeManager = NodeManager()
+    @State private var customNodeName = ""
     @State private var customNodeURL = ""
     @State private var showAddNode = false
-
-    private let defaultNodes: [RemoteNode] = [
-        RemoteNode(name: "MoneroWorld", url: "https://node.moneroworld.com:18089", isDefault: true),
-        RemoteNode(name: "XMR.to", url: "https://node.xmr.to:18081", isDefault: true),
-        RemoteNode(name: "MyMonero", url: "https://opennode.xmr-tw.org:18089", isDefault: true),
-    ]
+    @State private var showRestartAlert = false
 
     var body: some View {
         List {
             Section("Default Nodes") {
-                ForEach(defaultNodes) { node in
+                ForEach(NodeManager.defaultNodes) { node in
                     nodeRow(node: node)
                 }
             }
 
-            Section("Custom Node") {
-                if !customNodeURL.isEmpty {
-                    nodeRow(node: RemoteNode(name: "Custom", url: customNodeURL, isDefault: false))
+            if !nodeManager.customNodes.isEmpty {
+                Section("Custom Nodes") {
+                    ForEach(nodeManager.customNodes) { node in
+                        nodeRow(node: node)
+                    }
+                    .onDelete(perform: deleteCustomNode)
                 }
+            }
 
+            Section {
                 Button {
                     showAddNode = true
                 } label: {
@@ -44,11 +39,15 @@ struct NodeSettingsView: View {
 
             Section {
                 Button {
-                    testConnection()
+                    Task {
+                        await nodeManager.testConnection()
+                    }
                 } label: {
                     HStack {
                         Image(systemName: "network")
                         Text("Test Connection")
+                        Spacer()
+                        connectionStatusView
                     }
                 }
             }
@@ -56,19 +55,28 @@ struct NodeSettingsView: View {
         .navigationTitle("Remote Node")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Add Custom Node", isPresented: $showAddNode) {
-            TextField("Node URL", text: $customNodeURL)
-            Button("Cancel", role: .cancel) { }
+            TextField("Name (e.g., My Node)", text: $customNodeName)
+            TextField("URL (e.g., https://node.example.com:18089)", text: $customNodeURL)
+            Button("Cancel", role: .cancel) {
+                customNodeName = ""
+                customNodeURL = ""
+            }
             Button("Add") {
-                selectedNodeURL = customNodeURL
+                addCustomNode()
             }
         } message: {
-            Text("Enter the full URL including port (e.g., https://node.example.com:18089)")
+            Text("Enter the node details")
+        }
+        .alert("Node Changed", isPresented: $showRestartAlert) {
+            Button("OK") { }
+        } message: {
+            Text("The new node will be used when you next open the app.")
         }
     }
 
-    private func nodeRow(node: RemoteNode) -> some View {
+    private func nodeRow(node: MoneroNode) -> some View {
         Button {
-            selectedNodeURL = node.url
+            selectNode(node)
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -81,7 +89,7 @@ struct NodeSettingsView: View {
 
                 Spacer()
 
-                if selectedNodeURL == node.url {
+                if nodeManager.selectedNode.id == node.id {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.orange)
                 }
@@ -89,13 +97,52 @@ struct NodeSettingsView: View {
         }
     }
 
-    private func testConnection() {
-        // In real implementation, test connection to selected node
+    @ViewBuilder
+    private var connectionStatusView: some View {
+        switch nodeManager.connectionStatus {
+        case .unknown:
+            EmptyView()
+        case .testing:
+            ProgressView()
+                .scaleEffect(0.8)
+        case .connected:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+        case .failed:
+            Image(systemName: "xmark.circle.fill")
+                .foregroundColor(.red)
+        }
+    }
+
+    private func selectNode(_ node: MoneroNode) {
+        let previousNode = nodeManager.selectedNode
+        nodeManager.selectNode(node)
+        walletManager.setNode(url: node.url, isTrusted: node.isTrusted)
+
+        // Show restart alert if node changed and wallet is unlocked
+        if previousNode.id != node.id && walletManager.isUnlocked {
+            showRestartAlert = true
+        }
+    }
+
+    private func addCustomNode() {
+        guard !customNodeName.isEmpty, !customNodeURL.isEmpty else { return }
+        nodeManager.addCustomNode(name: customNodeName, url: customNodeURL)
+        customNodeName = ""
+        customNodeURL = ""
+    }
+
+    private func deleteCustomNode(at offsets: IndexSet) {
+        for index in offsets {
+            let node = nodeManager.customNodes[index]
+            nodeManager.removeCustomNode(node)
+        }
     }
 }
 
 #Preview {
     NavigationStack {
         NodeSettingsView()
+            .environmentObject(WalletManager())
     }
 }

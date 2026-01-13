@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import HdWalletKit
+import MoneroKit
 
 @MainActor
 class WalletManager: ObservableObject {
@@ -200,6 +201,16 @@ class WalletManager: ObservableObject {
 
     func refresh() {
         moneroWallet?.refresh()
+    }
+
+    // MARK: - Node Management
+
+    /// Node changes take effect immediately by restarting the connection
+    func setNode(url: String, isTrusted: Bool = false) {
+        UserDefaults.standard.set(url, forKey: "selectedNodeURL")
+        // Restart sync with new node
+        moneroWallet?.stop()
+        moneroWallet?.start()
     }
 
     // MARK: - Delete Wallet

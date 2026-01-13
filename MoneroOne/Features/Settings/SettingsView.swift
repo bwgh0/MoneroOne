@@ -55,13 +55,20 @@ struct SettingsView: View {
                 // Sync Section
                 Section("Sync") {
                     NavigationLink {
-                        SyncModeView()
+                        BackgroundSyncView()
                     } label: {
-                        SettingsRow(
-                            icon: "arrow.triangle.2.circlepath",
-                            title: "Sync Mode",
-                            color: .green
-                        )
+                        HStack {
+                            SettingsRow(
+                                icon: "arrow.triangle.2.circlepath",
+                                title: "Background Sync",
+                                color: .orange
+                            )
+                            Spacer()
+                            if BackgroundSyncManager.shared.isEnabled {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                            }
+                        }
                     }
 
                     NavigationLink {

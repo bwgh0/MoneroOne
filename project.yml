@@ -25,11 +25,14 @@ targets:
     platform: iOS
     sources:
       - MoneroOne
+      - Shared
       - path: MoneroOne/monero-one.icon
         type: folder
     dependencies:
       - package: MoneroKit
       - package: HdWalletKit
+      - target: MoneroOneWidgets
+        embed: true
     settings:
       base:
         INFOPLIST_GENERATION_MODE: GeneratedFile
@@ -40,12 +43,38 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: "Monero One"
         INFOPLIST_KEY_NSCameraUsageDescription: "Camera is used to scan QR codes"
         INFOPLIST_KEY_NSFaceIDUsageDescription: "Face ID is used to unlock your wallet"
+        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: "Background sync uses location services to keep your wallet synced. Location data is never stored or transmitted."
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Enable background sync to keep your wallet updated."
+        INFOPLIST_KEY_UIBackgroundModes: "(location)"
+        INFOPLIST_KEY_NSSupportsLiveActivities: true
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: true
         SWIFT_EMIT_LOC_STRINGS: true
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  MoneroOneWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - MoneroOneWidgets
+      - Shared
+    info:
+      path: MoneroOneWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: "Monero Sync"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        NSSupportsLiveActivities: true
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: false
+        INFOPLIST_FILE: MoneroOneWidgets/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: one.monero.MoneroOne.Widgets
+        SWIFT_EMIT_LOC_STRINGS: true
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
 
   MoneroOneTests:
     type: bundle.unit-test

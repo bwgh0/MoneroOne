@@ -11,12 +11,19 @@ settings:
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
 
+packages:
+  MoneroKit:
+    url: https://github.com/horizontalsystems/MoneroKit.Swift.git
+    exactVersion: 0.1.13
+
 targets:
   MoneroOne:
     type: application
     platform: iOS
     sources:
       - MoneroOne
+    dependencies:
+      - package: MoneroKit
     settings:
       base:
         INFOPLIST_GENERATION_MODE: GeneratedFile

@@ -2,14 +2,24 @@ import SwiftUI
 
 struct WalletView: View {
     @EnvironmentObject var walletManager: WalletManager
-    @StateObject private var priceService = PriceService()
+    @EnvironmentObject var priceService: PriceService
     @State private var showReceive = false
     @State private var showSend = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
+                    // Error Banners
+                    VStack(spacing: 8) {
+                        OfflineBanner()
+                        SyncErrorBanner(syncState: walletManager.syncState) {
+                            walletManager.refresh()
+                        }
+                    }
+                    .padding(.horizontal)
+                    .animation(.easeInOut, value: walletManager.syncState)
+
                     // Balance Card
                     BalanceCard(
                         balance: walletManager.balance,
@@ -87,4 +97,5 @@ struct ActionButton: View {
 #Preview {
     WalletView()
         .environmentObject(WalletManager())
+        .environmentObject(PriceService())
 }

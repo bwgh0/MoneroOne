@@ -3,6 +3,7 @@ import SwiftUI
 struct SendView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
+    @ObservedObject private var networkMonitor = NetworkMonitor.shared
 
     @State private var address = ""
     @State private var amount = ""
@@ -18,6 +19,14 @@ struct SendView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    // Offline Banner
+                    if !networkMonitor.isConnected {
+                        ErrorBanner(
+                            message: "No internet connection. Cannot send.",
+                            type: .offline
+                        )
+                    }
+
                     // Address Input
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Recipient Address")
@@ -199,6 +208,7 @@ struct SendView: View {
     }
 
     private var isValidInput: Bool {
+        networkMonitor.isConnected &&
         isValidAddress &&
         !amount.isEmpty &&
         (Decimal(string: amount) ?? 0) > 0 &&

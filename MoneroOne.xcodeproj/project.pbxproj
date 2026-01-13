@@ -1,0 +1,495 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		28E3D0F995F39C0E7791AF35 /* WalletManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 833C5B007D9D33E833CFE48B /* WalletManager.swift */; };
+		39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED23DE61696E2D6C0C9D6DAC /* SeedPhraseView.swift */; };
+		3FA12723C8F524DD76D5080C /* NodeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B03E2005118D429FE332C194 /* NodeSettingsView.swift */; };
+		474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AA838F4EF37023CE4794A9 /* SecurityView.swift */; };
+		53961F04EC40C1BB78F573E5 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885C8AC405766D0B3663F27F /* MainTabView.swift */; };
+		7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873A08AAC18A1EE631F3FC67 /* WalletView.swift */; };
+		916B54FE617C739781D795D9 /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */; };
+		9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8C8A112B161D2A874330F /* TransactionListView.swift */; };
+		A139AB6ABC4D9EA71F3AF12D /* SyncModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4332A28BBF78E91CD1A7114 /* SyncModeView.swift */; };
+		A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066F201548A5A5EA2351656E /* SendView.swift */; };
+		AF3420AD18242AB7B017171D /* MoneroOneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DA1C3CAB861DC98E98BED4 /* MoneroOneApp.swift */; };
+		AF8CD53F523DABC80F06F168 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D5B417D8D6615D3C56F22085 /* Assets.xcassets */; };
+		B6CA1E6614A397E2BC1F155A /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6282B77F4ACF513576365CA3 /* WelcomeView.swift */; };
+		B7E8275313B16877F1E2B0CB /* CreateWalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5488A55F65931268A5493C9B /* CreateWalletView.swift */; };
+		C0E85580EF176D61DF97BA87 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06460C0C64ADF867FDFD082 /* ContentView.swift */; };
+		D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67F51494AC5434F206AED5C /* ReceiveView.swift */; };
+		E2276935B7E0FA16D8904A2E /* RestoreWalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFDF397CD9F75684D51EA38 /* RestoreWalletView.swift */; };
+		E7C33EC8082FAB9206BD8A0B /* BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D836D865F70A7477790100 /* BackupView.swift */; };
+		EDA400DA20EDD8E52EA9CC2C /* TransactionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A960D21BC3F24D2F556BE5C9 /* TransactionDetailView.swift */; };
+		F336976B66186C3C48D2922A /* BalanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A39B30F864DF425DCA258A4B /* BalanceCard.swift */; };
+		F6ABA0841FC56C21D8B64743 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE0BF27D62647071D8D9F0E /* SettingsView.swift */; };
+		FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF818FE69F2EC0B444D26754 /* QRCodeView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		066F201548A5A5EA2351656E /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
+		09AA838F4EF37023CE4794A9 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
+		39D836D865F70A7477790100 /* BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
+		4A66C894ECCBB9545048AD27 /* MoneroOne.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoneroOne.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5488A55F65931268A5493C9B /* CreateWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateWalletView.swift; sourceTree = "<group>"; };
+		6282B77F4ACF513576365CA3 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		73D8C8A112B161D2A874330F /* TransactionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionListView.swift; sourceTree = "<group>"; };
+		7BE0BF27D62647071D8D9F0E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		833C5B007D9D33E833CFE48B /* WalletManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletManager.swift; sourceTree = "<group>"; };
+		873A08AAC18A1EE631F3FC67 /* WalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletView.swift; sourceTree = "<group>"; };
+		885C8AC405766D0B3663F27F /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		A39B30F864DF425DCA258A4B /* BalanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BalanceCard.swift; sourceTree = "<group>"; };
+		A960D21BC3F24D2F556BE5C9 /* TransactionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionDetailView.swift; sourceTree = "<group>"; };
+		B03E2005118D429FE332C194 /* NodeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeSettingsView.swift; sourceTree = "<group>"; };
+		CF818FE69F2EC0B444D26754 /* QRCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeView.swift; sourceTree = "<group>"; };
+		D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStorage.swift; sourceTree = "<group>"; };
+		D5B417D8D6615D3C56F22085 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		DEFDF397CD9F75684D51EA38 /* RestoreWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreWalletView.swift; sourceTree = "<group>"; };
+		E06460C0C64ADF867FDFD082 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		E4332A28BBF78E91CD1A7114 /* SyncModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncModeView.swift; sourceTree = "<group>"; };
+		E67F51494AC5434F206AED5C /* ReceiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveView.swift; sourceTree = "<group>"; };
+		ED23DE61696E2D6C0C9D6DAC /* SeedPhraseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseView.swift; sourceTree = "<group>"; };
+		F2DA1C3CAB861DC98E98BED4 /* MoneroOneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneApp.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0DF3D7EFD61EFEAC3E7DEBC3 /* Receive */ = {
+			isa = PBXGroup;
+			children = (
+				CF818FE69F2EC0B444D26754 /* QRCodeView.swift */,
+				E67F51494AC5434F206AED5C /* ReceiveView.swift */,
+			);
+			path = Receive;
+			sourceTree = "<group>";
+		};
+		1BE878F172F56E925E6B5E27 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				39D836D865F70A7477790100 /* BackupView.swift */,
+				B03E2005118D429FE332C194 /* NodeSettingsView.swift */,
+				09AA838F4EF37023CE4794A9 /* SecurityView.swift */,
+				7BE0BF27D62647071D8D9F0E /* SettingsView.swift */,
+				E4332A28BBF78E91CD1A7114 /* SyncModeView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		2ED5DC43FD54B689C44074A9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4A66C894ECCBB9545048AD27 /* MoneroOne.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		355B80F2AADB94A31B38327D /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				A009680DCA5DEAEBFFBE7D54 /* Wallet */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		453FE5EA1C7EBE179675DED5 = {
+			isa = PBXGroup;
+			children = (
+				DA37D8A22F64D8D5D63F9F81 /* MoneroOne */,
+				2ED5DC43FD54B689C44074A9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		533CA045DC4B388B4341E079 /* Wallet */ = {
+			isa = PBXGroup;
+			children = (
+				A39B30F864DF425DCA258A4B /* BalanceCard.swift */,
+				885C8AC405766D0B3663F27F /* MainTabView.swift */,
+				873A08AAC18A1EE631F3FC67 /* WalletView.swift */,
+			);
+			path = Wallet;
+			sourceTree = "<group>";
+		};
+		762B13FD658C85E63D2F6F09 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				D5B417D8D6615D3C56F22085 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		A009680DCA5DEAEBFFBE7D54 /* Wallet */ = {
+			isa = PBXGroup;
+			children = (
+				D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */,
+				833C5B007D9D33E833CFE48B /* WalletManager.swift */,
+			);
+			path = Wallet;
+			sourceTree = "<group>";
+		};
+		BC0EDD05073CA3C3B9CEFE47 /* Send */ = {
+			isa = PBXGroup;
+			children = (
+				066F201548A5A5EA2351656E /* SendView.swift */,
+			);
+			path = Send;
+			sourceTree = "<group>";
+		};
+		C22A77E3D593D0FC140AF36C /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				E60BB1617649DB1D49B6DDB9 /* Onboarding */,
+				0DF3D7EFD61EFEAC3E7DEBC3 /* Receive */,
+				BC0EDD05073CA3C3B9CEFE47 /* Send */,
+				1BE878F172F56E925E6B5E27 /* Settings */,
+				C46B3238829DF50B5087A67B /* Transactions */,
+				533CA045DC4B388B4341E079 /* Wallet */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		C46B3238829DF50B5087A67B /* Transactions */ = {
+			isa = PBXGroup;
+			children = (
+				A960D21BC3F24D2F556BE5C9 /* TransactionDetailView.swift */,
+				73D8C8A112B161D2A874330F /* TransactionListView.swift */,
+			);
+			path = Transactions;
+			sourceTree = "<group>";
+		};
+		DA37D8A22F64D8D5D63F9F81 /* MoneroOne */ = {
+			isa = PBXGroup;
+			children = (
+				E06460C0C64ADF867FDFD082 /* ContentView.swift */,
+				F2DA1C3CAB861DC98E98BED4 /* MoneroOneApp.swift */,
+				355B80F2AADB94A31B38327D /* Core */,
+				C22A77E3D593D0FC140AF36C /* Features */,
+				762B13FD658C85E63D2F6F09 /* Resources */,
+				FB57AB1B895B7ECBF3DC3153 /* Shared */,
+			);
+			path = MoneroOne;
+			sourceTree = "<group>";
+		};
+		E60BB1617649DB1D49B6DDB9 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				5488A55F65931268A5493C9B /* CreateWalletView.swift */,
+				DEFDF397CD9F75684D51EA38 /* RestoreWalletView.swift */,
+				ED23DE61696E2D6C0C9D6DAC /* SeedPhraseView.swift */,
+				6282B77F4ACF513576365CA3 /* WelcomeView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		FB57AB1B895B7ECBF3DC3153 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		89A538C7F39DB892BF18C755 /* MoneroOne */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2649843DFBF85C6126A6D64 /* Build configuration list for PBXNativeTarget "MoneroOne" */;
+			buildPhases = (
+				F63DBEB85BE9D3FF8CC6CC3D /* Sources */,
+				7998F2FB460359DB8E8CF401 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MoneroOne;
+			packageProductDependencies = (
+			);
+			productName = MoneroOne;
+			productReference = 4A66C894ECCBB9545048AD27 /* MoneroOne.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C1A34F0FC74827F8198C8B2A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					89A538C7F39DB892BF18C755 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 68A59E88E18DD97E16B8CF4F /* Build configuration list for PBXProject "MoneroOne" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 453FE5EA1C7EBE179675DED5;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				89A538C7F39DB892BF18C755 /* MoneroOne */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7998F2FB460359DB8E8CF401 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AF8CD53F523DABC80F06F168 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F63DBEB85BE9D3FF8CC6CC3D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E7C33EC8082FAB9206BD8A0B /* BackupView.swift in Sources */,
+				F336976B66186C3C48D2922A /* BalanceCard.swift in Sources */,
+				C0E85580EF176D61DF97BA87 /* ContentView.swift in Sources */,
+				B7E8275313B16877F1E2B0CB /* CreateWalletView.swift in Sources */,
+				916B54FE617C739781D795D9 /* KeychainStorage.swift in Sources */,
+				53961F04EC40C1BB78F573E5 /* MainTabView.swift in Sources */,
+				AF3420AD18242AB7B017171D /* MoneroOneApp.swift in Sources */,
+				3FA12723C8F524DD76D5080C /* NodeSettingsView.swift in Sources */,
+				FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */,
+				D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */,
+				E2276935B7E0FA16D8904A2E /* RestoreWalletView.swift in Sources */,
+				474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */,
+				39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */,
+				A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */,
+				F6ABA0841FC56C21D8B64743 /* SettingsView.swift in Sources */,
+				A139AB6ABC4D9EA71F3AF12D /* SyncModeView.swift in Sources */,
+				EDA400DA20EDD8E52EA9CC2C /* TransactionDetailView.swift in Sources */,
+				9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */,
+				28E3D0F995F39C0E7791AF35 /* WalletManager.swift in Sources */,
+				7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */,
+				B6CA1E6614A397E2BC1F155A /* WelcomeView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		3B7BB15F7053956B1590F12B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_GENERATION_MODE = GeneratedFile;
+				INFOPLIST_KEY_CFBundleDisplayName = "Monero One";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to scan QR codes";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID is used to unlock your wallet";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = one.monero.MoneroOne;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		3FF79AE60B442BAD973F5190 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_GENERATION_MODE = GeneratedFile;
+				INFOPLIST_KEY_CFBundleDisplayName = "Monero One";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to scan QR codes";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID is used to unlock your wallet";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = one.monero.MoneroOne;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8664DCFA45786101AD56359B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		ED4E1805BDA1D3F456068996 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		68A59E88E18DD97E16B8CF4F /* Build configuration list for PBXProject "MoneroOne" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ED4E1805BDA1D3F456068996 /* Debug */,
+				8664DCFA45786101AD56359B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A2649843DFBF85C6126A6D64 /* Build configuration list for PBXNativeTarget "MoneroOne" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3B7BB15F7053956B1590F12B /* Debug */,
+				3FF79AE60B442BAD973F5190 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C1A34F0FC74827F8198C8B2A /* Project object */;
+}

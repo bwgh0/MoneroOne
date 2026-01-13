@@ -78,19 +78,15 @@ struct ActionButton: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 32))
-                    .foregroundColor(color)
-
+                    .font(.system(size: 28))
                 Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.callout.weight(.semibold))
             }
+            .foregroundStyle(color)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(16)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glass)
     }
 }
 

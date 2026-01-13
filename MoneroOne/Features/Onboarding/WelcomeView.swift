@@ -9,10 +9,8 @@ struct WelcomeView: View {
             VStack(spacing: 32) {
                 Spacer()
 
-                // Logo
-                Image(systemName: "shield.checkered")
-                    .font(.system(size: 80))
-                    .foregroundColor(.orange)
+                // Animated Monero Logo
+                AnimatedMoneroLogo(size: 240)
 
                 VStack(spacing: 8) {
                     Text("Monero One")
@@ -26,32 +24,38 @@ struct WelcomeView: View {
 
                 Spacer()
 
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     Button {
                         showCreate = true
                     } label: {
-                        Text("Create New Wallet")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.orange)
-                            .foregroundColor(.white)
-                            .cornerRadius(14)
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.callout.weight(.semibold))
+                            Text("Create New Wallet")
+                                .font(.callout.weight(.semibold))
+                        }
+                        .foregroundStyle(Color.orange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                     }
+                    .buttonStyle(.glass)
 
                     Button {
                         showRestore = true
                     } label: {
-                        Text("Restore Wallet")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .foregroundColor(.primary)
-                            .cornerRadius(14)
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.counterclockwise.circle.fill")
+                                .font(.callout.weight(.semibold))
+                            Text("Restore Wallet")
+                                .font(.callout.weight(.semibold))
+                        }
+                        .foregroundStyle(Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                     }
+                    .buttonStyle(.glass)
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 40)
                 .padding(.bottom, 32)
             }
             .navigationDestination(isPresented: $showCreate) {

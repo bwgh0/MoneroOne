@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TransactionDetailView: View {
-    let transaction: Transaction
+    let transaction: MoneroTransaction
 
     var body: some View {
         List {
@@ -16,11 +16,11 @@ struct TransactionDetailView: View {
                 }
 
                 // Fee (for outgoing)
-                if let fee = transaction.fee {
+                if transaction.type == .outgoing {
                     HStack {
                         Text("Fee")
                         Spacer()
-                        Text("\(formatXMR(fee)) XMR")
+                        Text("\(formatXMR(transaction.fee)) XMR")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -37,12 +37,13 @@ struct TransactionDetailView: View {
                     }
                 }
 
-                // Confirmations
-                HStack {
-                    Text("Confirmations")
-                    Spacer()
-                    Text("\(transaction.confirmations)")
-                        .foregroundColor(.secondary)
+                // Memo
+                if let memo = transaction.memo, !memo.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Memo")
+                        Text(memo)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
 
@@ -61,14 +62,18 @@ struct TransactionDetailView: View {
                     Text(transaction.id)
                         .font(.system(.caption, design: .monospaced))
                         .foregroundColor(.secondary)
+                        .textSelection(.enabled)
                 }
 
                 // Address
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(transaction.type == .incoming ? "From" : "To")
-                    Text(transaction.address)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
+                if !transaction.address.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(transaction.type == .incoming ? "From" : "To")
+                        Text(transaction.address)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                    }
                 }
             }
 
@@ -82,9 +87,7 @@ struct TransactionDetailView: View {
                     }
                 }
 
-                Button {
-                    // Open in block explorer
-                } label: {
+                Link(destination: URL(string: "https://blockchair.com/monero/transaction/\(transaction.id)")!) {
                     HStack {
                         Image(systemName: "safari")
                         Text("View in Block Explorer")
@@ -130,7 +133,7 @@ struct TransactionDetailView: View {
 
 #Preview {
     NavigationStack {
-        TransactionDetailView(transaction: Transaction(
+        TransactionDetailView(transaction: MoneroTransaction(
             id: "abc123def456",
             type: .outgoing,
             amount: 1.5,
@@ -138,7 +141,8 @@ struct TransactionDetailView: View {
             address: "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H",
             timestamp: Date(),
             confirmations: 10,
-            status: .confirmed
+            status: .confirmed,
+            memo: nil
         ))
     }
 }

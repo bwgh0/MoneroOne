@@ -2,18 +2,20 @@ import SwiftUI
 
 struct TransactionListView: View {
     @EnvironmentObject var walletManager: WalletManager
-    @State private var transactions: [Transaction] = []
 
     var body: some View {
         NavigationStack {
             Group {
-                if transactions.isEmpty {
+                if walletManager.transactions.isEmpty {
                     emptyState
                 } else {
                     transactionList
                 }
             }
             .navigationTitle("History")
+            .refreshable {
+                walletManager.refresh()
+            }
         }
     }
 
@@ -35,7 +37,7 @@ struct TransactionListView: View {
     }
 
     private var transactionList: some View {
-        List(transactions) { transaction in
+        List(walletManager.transactions) { transaction in
             NavigationLink {
                 TransactionDetailView(transaction: transaction)
             } label: {
@@ -46,34 +48,10 @@ struct TransactionListView: View {
     }
 }
 
-// MARK: - Transaction Model
-
-struct Transaction: Identifiable {
-    let id: String
-    let type: TransactionType
-    let amount: Decimal
-    let fee: Decimal?
-    let address: String
-    let timestamp: Date
-    let confirmations: Int
-    let status: TransactionStatus
-
-    enum TransactionType {
-        case incoming
-        case outgoing
-    }
-
-    enum TransactionStatus {
-        case pending
-        case confirmed
-        case failed
-    }
-}
-
 // MARK: - Transaction Row
 
 struct TransactionRow: View {
-    let transaction: Transaction
+    let transaction: MoneroTransaction
 
     var body: some View {
         HStack(spacing: 12) {
@@ -126,7 +104,7 @@ struct TransactionRow: View {
     private var statusText: String {
         switch transaction.status {
         case .pending: return "Pending"
-        case .confirmed: return "\(transaction.confirmations) confirmations"
+        case .confirmed: return "Confirmed"
         case .failed: return "Failed"
         }
     }

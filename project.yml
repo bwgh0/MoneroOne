@@ -66,8 +66,6 @@ targets:
     sources:
       - MoneroOneWidgets
       - Shared
-      - path: MoneroOne/Resources/Assets.xcassets
-        type: folder
     info:
       path: MoneroOneWidgets/Info.plist
       properties:

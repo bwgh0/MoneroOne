@@ -52,6 +52,7 @@ struct SyncLiveActivity: Widget {
             } compactLeading: {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .foregroundColor(.orange)
+                    .symbolEffect(.rotate, isActive: !context.state.isSynced)
             } compactTrailing: {
                 if context.state.isSynced {
                     Image(systemName: "checkmark.circle.fill")
@@ -64,6 +65,7 @@ struct SyncLiveActivity: Widget {
             } minimal: {
                 Image(systemName: context.state.isSynced ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
                     .foregroundColor(context.state.isSynced ? .green : .orange)
+                    .symbolEffect(.rotate, isActive: !context.state.isSynced)
             }
         }
     }
@@ -83,12 +85,12 @@ struct LockScreenView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(context.state.isSynced ? "Wallet Synced" : "Syncing Wallet")
                     .font(.headline)
-                    .foregroundStyle(.primary)
+                    .foregroundColor(.black)
 
                 if context.state.isSynced {
                     Text("Your wallet is up to date")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.gray)
                 } else {
                     ProgressView(value: context.state.progress, total: 100)
                         .tint(.orange)
@@ -96,7 +98,7 @@ struct LockScreenView: View {
                     if let blocks = context.state.blocksRemaining, blocks > 0 {
                         Text("\(blocks) blocks remaining")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.gray)
                     }
                 }
             }
@@ -106,14 +108,16 @@ struct LockScreenView: View {
             if context.state.isSynced {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title)
-                    .foregroundStyle(.green)
+                    .foregroundColor(.green)
             } else {
                 Text("\(Int(context.state.progress))%")
                     .font(.title2.bold())
-                    .foregroundStyle(.orange)
+                    .foregroundColor(.orange)
             }
         }
         .padding()
+        .background(Color.white)
+        .activityBackgroundTint(Color.white)
     }
 }
 

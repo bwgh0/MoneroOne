@@ -19,7 +19,7 @@ class NodeManager: ObservableObject {
     @Published var customNodes: [MoneroNode] = []
     @Published var connectionStatus: ConnectionStatus = .unknown
 
-    enum ConnectionStatus {
+    enum ConnectionStatus: Equatable {
         case unknown
         case testing
         case connected

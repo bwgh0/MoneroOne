@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 import MoneroKit
 import HsToolKit
 
@@ -31,12 +32,13 @@ class MoneroWallet: ObservableObject {
     /// Create a new wallet from seed words
     func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil) throws {
         let walletNode = node ?? defaultNode()
+        let walletId = Self.stableWalletId(for: seed)
 
         kit = try MoneroKit.Kit(
             wallet: .bip39(seed: seed, passphrase: ""),
             account: 0,
             restoreHeight: restoreHeight,
-            walletId: UUID().uuidString,
+            walletId: walletId,
             node: walletNode,
             networkType: .mainnet,
             reachabilityManager: reachabilityManager,
@@ -49,12 +51,13 @@ class MoneroWallet: ObservableObject {
     /// Create watch-only wallet
     func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil) throws {
         let walletNode = node ?? defaultNode()
+        let walletId = Self.stableWalletId(for: address + viewKey)
 
         kit = try MoneroKit.Kit(
             wallet: .watch(address: address, viewKey: viewKey),
             account: 0,
             restoreHeight: restoreHeight,
-            walletId: UUID().uuidString,
+            walletId: walletId,
             node: walletNode,
             networkType: .mainnet,
             reachabilityManager: reachabilityManager,
@@ -231,6 +234,21 @@ class MoneroWallet: ObservableObject {
 
     static func restoreHeight(for date: Date) -> UInt64 {
         UInt64(MoneroKit.RestoreHeight.getHeight(date: date))
+    }
+
+    // MARK: - Wallet ID
+
+    /// Generate a stable wallet ID from seed words - ensures sync data persists across app restarts
+    private static func stableWalletId(for seed: [String]) -> String {
+        stableWalletId(for: seed.joined(separator: " "))
+    }
+
+    /// Generate a stable wallet ID from any string (seed phrase or address+viewKey)
+    private static func stableWalletId(for identifier: String) -> String {
+        let data = Data(identifier.utf8)
+        let hash = SHA256.hash(data: data)
+        // Use first 16 bytes as a UUID-like identifier
+        return hash.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 }
 

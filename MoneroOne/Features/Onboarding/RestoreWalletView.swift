@@ -10,6 +10,12 @@ struct RestoreWalletView: View {
     @State private var step: Step = .enterSeed
     @State private var errorMessage: String?
     @State private var isRestoring = false
+    @FocusState private var focusedField: PINField?
+
+    enum PINField {
+        case pin
+        case confirmPin
+    }
 
     enum Step {
         case enterSeed
@@ -82,11 +88,24 @@ struct RestoreWalletView: View {
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
+                .focused($focusedField, equals: .pin)
+                .onSubmit {
+                    if pin.count >= 6 {
+                        focusedField = .confirmPin
+                    }
+                }
 
             SecureField("Confirm PIN", text: $confirmPin)
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
+                .focused($focusedField, equals: .confirmPin)
+                .onSubmit {
+                    if canProceed {
+                        step = .restoring
+                        restoreWallet()
+                    }
+                }
 
             Button {
                 step = .restoring
@@ -104,6 +123,9 @@ struct RestoreWalletView: View {
             .padding(.horizontal)
 
             Spacer()
+        }
+        .onAppear {
+            focusedField = .pin
         }
     }
 

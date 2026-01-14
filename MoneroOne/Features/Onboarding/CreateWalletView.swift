@@ -10,6 +10,12 @@ struct CreateWalletView: View {
     @State private var pin = ""
     @State private var confirmPin = ""
     @State private var step: Step = .setPIN
+    @FocusState private var focusedField: PINField?
+
+    enum PINField {
+        case pin
+        case confirmPin
+    }
 
     enum Step {
         case setPIN
@@ -46,11 +52,23 @@ struct CreateWalletView: View {
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
+                .focused($focusedField, equals: .pin)
+                .onSubmit {
+                    if pin.count >= 6 {
+                        focusedField = .confirmPin
+                    }
+                }
 
             SecureField("Confirm PIN", text: $confirmPin)
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
+                .focused($focusedField, equals: .confirmPin)
+                .onSubmit {
+                    if canProceed {
+                        step = .showSeed
+                    }
+                }
 
             Button {
                 step = .showSeed
@@ -70,6 +88,9 @@ struct CreateWalletView: View {
             .padding(.horizontal)
 
             Spacer()
+        }
+        .onAppear {
+            focusedField = .pin
         }
     }
 

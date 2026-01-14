@@ -32,13 +32,36 @@ class NodeManager: ObservableObject {
         MoneroNode(name: "Seth for Privacy", url: "https://node.sethforprivacy.com:18089"),
     ]
 
-    private let selectedNodeKey = "selectedNodeURL"
-    private let customNodesKey = "customNodes"
+    static let defaultTestnetNodes: [MoneroNode] = [
+        MoneroNode(name: "Melo Tools", url: "http://testnet.melo.tools:28081"),
+        MoneroNode(name: "Ditatompel", url: "http://testnet.xmr.ditatompel.com:28081"),
+        MoneroNode(name: "Monero Devs", url: "http://node.monerodevs.org:28089"),
+    ]
+
+    private var selectedNodeKey: String {
+        isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
+    }
+    private var customNodesKey: String {
+        isTestnet ? "customTestnetNodes" : "customNodes"
+    }
+
+    var isTestnet: Bool {
+        UserDefaults.standard.bool(forKey: "isTestnet")
+    }
+
+    var currentDefaultNodes: [MoneroNode] {
+        isTestnet ? Self.defaultTestnetNodes : Self.defaultNodes
+    }
 
     init() {
+        // Determine which node list to use based on network
+        let testnet = UserDefaults.standard.bool(forKey: "isTestnet")
+        let nodeKey = testnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
+        let nodes = testnet ? Self.defaultTestnetNodes : Self.defaultNodes
+
         // Load selected node from UserDefaults
-        let savedURL = UserDefaults.standard.string(forKey: selectedNodeKey) ?? Self.defaultNodes[0].url
-        if let node = Self.defaultNodes.first(where: { $0.url == savedURL }) {
+        let savedURL = UserDefaults.standard.string(forKey: nodeKey) ?? nodes[0].url
+        if let node = nodes.first(where: { $0.url == savedURL }) {
             selectedNode = node
         } else {
             // Check custom nodes
@@ -67,7 +90,7 @@ class NodeManager: ObservableObject {
 
         // If removed node was selected, switch to default
         if selectedNode.id == node.id {
-            selectNode(Self.defaultNodes[0])
+            selectNode(currentDefaultNodes[0])
         }
     }
 

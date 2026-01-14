@@ -9,6 +9,7 @@ struct BackupSeedView: View {
     @State private var errorMessage: String?
     @State private var isVerifying = false
     @State private var showSeed = false
+    @FocusState private var isPinFocused: Bool
 
     var body: some View {
         VStack(spacing: 24) {
@@ -46,6 +47,15 @@ struct BackupSeedView: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 200)
                 .multilineTextAlignment(.center)
+                .focused($isPinFocused)
+                .onSubmit {
+                    if pin.count >= 6 && !isVerifying {
+                        verifySeedAccess()
+                    }
+                }
+                .onAppear {
+                    isPinFocused = true
+                }
 
             if let error = errorMessage {
                 Text(error)

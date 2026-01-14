@@ -84,8 +84,8 @@ class MoneroWallet: ObservableObject {
 
     private func defaultNode(for networkType: MoneroKit.NetworkType = .mainnet) -> MoneroKit.Node {
         if networkType == .testnet {
-            // Testnet node
-            let testnetURL = UserDefaults.standard.string(forKey: "selectedTestnetNodeURL") ?? "http://testnet.xmr.ditatompel.com:28081"
+            // Testnet node (port 28081)
+            let testnetURL = UserDefaults.standard.string(forKey: "selectedTestnetNodeURL") ?? Self.testnetNodes.first!.url
             return MoneroKit.Node(
                 url: URL(string: testnetURL)!,
                 isTrusted: false,
@@ -104,12 +104,19 @@ class MoneroWallet: ObservableObject {
         }
     }
 
-    /// Available public nodes
+    /// Available public mainnet nodes
     static let publicNodes: [(name: String, url: String)] = [
         ("CakeWallet", "https://xmr-node.cakewallet.com:18081"),
         ("MoneroWorld", "https://node.moneroworld.com:18089"),
         ("Community Node", "https://nodes.hashvault.pro:18081"),
         ("XMR.to", "https://node.xmr.to:18081")
+    ]
+
+    /// Available public testnet nodes (port 28081)
+    static let testnetNodes: [(name: String, url: String)] = [
+        ("Monero Project", "http://testnet.melo.tools:28081"),
+        ("Ditatompel", "http://testnet.xmr.ditatompel.com:28081"),
+        ("Community", "http://node.monerodevs.org:28089")
     ]
 
     private func setupKit() {

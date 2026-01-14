@@ -8,6 +8,7 @@ struct UnlockView: View {
     @State private var errorMessage: String?
     @State private var isUnlocking = false
     @State private var attempts = 0
+    @FocusState private var isPinFocused: Bool
 
     var body: some View {
         VStack(spacing: 32) {
@@ -32,6 +33,12 @@ struct UnlockView: View {
                     .multilineTextAlignment(.center)
                     .font(.title2)
                     .disabled(isUnlocking)
+                    .focused($isPinFocused)
+                    .onSubmit {
+                        if pin.count >= 6 && !isUnlocking {
+                            unlockWithPIN()
+                        }
+                    }
 
                 if let error = errorMessage {
                     Text(error)
@@ -96,6 +103,9 @@ struct UnlockView: View {
             // Auto-trigger biometrics if enabled
             if biometricAuth.canUseBiometrics && walletManager.hasBiometricPinStored {
                 unlockWithBiometrics()
+            } else {
+                // Focus PIN field if not using biometrics
+                isPinFocused = true
             }
         }
     }

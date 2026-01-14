@@ -34,10 +34,18 @@ struct UnlockView: View {
                     .font(.title2)
                     .disabled(isUnlocking)
                     .focused($isPinFocused)
+                    .submitLabel(.go)
                     .onSubmit {
                         if pin.count >= 6 && !isUnlocking {
                             unlockWithPIN()
                         }
+                    }
+                    .onKeyPress(.return) {
+                        if pin.count >= 6 && !isUnlocking {
+                            unlockWithPIN()
+                            return .handled
+                        }
+                        return .ignored
                     }
 
                 if let error = errorMessage {

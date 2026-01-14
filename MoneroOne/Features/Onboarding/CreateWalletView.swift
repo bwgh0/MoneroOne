@@ -53,10 +53,18 @@ struct CreateWalletView: View {
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
                 .focused($focusedField, equals: .pin)
+                .submitLabel(.next)
                 .onSubmit {
                     if pin.count >= 6 {
                         focusedField = .confirmPin
                     }
+                }
+                .onKeyPress(.return) {
+                    if pin.count >= 6 {
+                        focusedField = .confirmPin
+                        return .handled
+                    }
+                    return .ignored
                 }
 
             SecureField("Confirm PIN", text: $confirmPin)
@@ -64,10 +72,18 @@ struct CreateWalletView: View {
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
                 .focused($focusedField, equals: .confirmPin)
+                .submitLabel(.go)
                 .onSubmit {
                     if canProceed {
                         step = .showSeed
                     }
+                }
+                .onKeyPress(.return) {
+                    if canProceed {
+                        step = .showSeed
+                        return .handled
+                    }
+                    return .ignored
                 }
 
             Button {

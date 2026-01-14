@@ -48,10 +48,18 @@ struct BackupSeedView: View {
                 .frame(maxWidth: 200)
                 .multilineTextAlignment(.center)
                 .focused($isPinFocused)
+                .submitLabel(.go)
                 .onSubmit {
                     if pin.count >= 6 && !isVerifying {
                         verifySeedAccess()
                     }
+                }
+                .onKeyPress(.return) {
+                    if pin.count >= 6 && !isVerifying {
+                        verifySeedAccess()
+                        return .handled
+                    }
+                    return .ignored
                 }
                 .onAppear {
                     isPinFocused = true

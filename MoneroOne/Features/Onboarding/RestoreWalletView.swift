@@ -89,10 +89,18 @@ struct RestoreWalletView: View {
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
                 .focused($focusedField, equals: .pin)
+                .submitLabel(.next)
                 .onSubmit {
                     if pin.count >= 6 {
                         focusedField = .confirmPin
                     }
+                }
+                .onKeyPress(.return) {
+                    if pin.count >= 6 {
+                        focusedField = .confirmPin
+                        return .handled
+                    }
+                    return .ignored
                 }
 
             SecureField("Confirm PIN", text: $confirmPin)
@@ -100,11 +108,20 @@ struct RestoreWalletView: View {
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
                 .focused($focusedField, equals: .confirmPin)
+                .submitLabel(.go)
                 .onSubmit {
                     if canProceed {
                         step = .restoring
                         restoreWallet()
                     }
+                }
+                .onKeyPress(.return) {
+                    if canProceed {
+                        step = .restoring
+                        restoreWallet()
+                        return .handled
+                    }
+                    return .ignored
                 }
 
             Button {

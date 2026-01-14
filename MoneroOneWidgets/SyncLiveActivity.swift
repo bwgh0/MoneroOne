@@ -50,22 +50,31 @@ struct SyncLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundColor(.orange)
-                    .symbolEffect(.rotate, isActive: !context.state.isSynced)
+                Image("MoneroSymbol")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 18, height: 18)
+                    .clipShape(Circle())
             } compactTrailing: {
-                if context.state.isSynced {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                } else {
-                    Text("\(Int(context.state.progress))%")
-                        .font(.caption.bold())
-                        .foregroundColor(.orange)
+                HStack(spacing: 4) {
+                    if context.state.isSynced {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.caption)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundColor(.orange)
+                            .font(.caption2)
+
+                        Text("\(Int(context.state.progress))%")
+                            .font(.caption.bold())
+                            .foregroundColor(.orange)
+                    }
                 }
             } minimal: {
                 Image(systemName: context.state.isSynced ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
                     .foregroundColor(context.state.isSynced ? .green : .orange)
-                    .symbolEffect(.rotate, isActive: !context.state.isSynced)
+                    .symbolEffect(.rotate, options: .repeat(.continuous), isActive: !context.state.isSynced)
             }
         }
     }

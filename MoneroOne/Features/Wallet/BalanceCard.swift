@@ -41,27 +41,35 @@ struct BalanceCard: View {
             }
 
             // Main Balance
-            VStack(spacing: 4) {
-                // Monero symbol with circular mask for dark mode
+            HStack(spacing: 16) {
+                // Monero symbol with tight circular mask
                 Image("MoneroSymbol")
                     .resizable()
-                    .scaledToFit()
-                    .frame(width: 40, height: 40)
+                    .scaledToFill()
+                    .frame(width: 48, height: 48)
                     .clipShape(Circle())
+                    .scaleEffect(1.15) // Scale up slightly before clipping for tighter crop
+                    .clipShape(Circle()) // Clip again after scale
 
-                Text(formatXMR(balance))
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(formatXMR(balance))
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
 
-                Text("XMR")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
+                        Text("XMR")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
 
-                // Fiat value
-                if let fiatValue = priceService.formatFiatValue(balance) {
-                    Text("≈ \(fiatValue)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    // Fiat value
+                    if let fiatValue = priceService.formatFiatValue(balance) {
+                        Text("≈ \(fiatValue)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                 }
+
+                Spacer()
             }
 
             // Unlocked Balance

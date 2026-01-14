@@ -18,9 +18,6 @@ packages:
   HdWalletKit:
     url: https://github.com/horizontalsystems/HdWalletKit.Swift.git
     exactVersion: 1.3.0
-  LightweightCharts:
-    url: https://github.com/tradingview/LightweightChartsIOS.git
-    from: 4.0.0
 
 targets:
   MoneroOne:
@@ -32,7 +29,6 @@ targets:
     dependencies:
       - package: MoneroKit
       - package: HdWalletKit
-      - package: LightweightCharts
       - target: MoneroOneWidgets
         embed: true
     info:
@@ -59,7 +55,7 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_EMIT_LOC_STRINGS: true
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: monero-one
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
   MoneroOneWidgets:

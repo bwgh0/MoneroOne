@@ -193,7 +193,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Developer")
                 } footer: {
-                    Text("Testnet uses test XMR with no real value. Switching networks requires a full re-sync.")
+                    Text("Testnet uses test XMR with no real value. Note: Testnet nodes are often unreliable.")
                 }
 
                 // Danger Zone
@@ -246,7 +246,7 @@ struct SettingsView: View {
                 if isTestnet {
                     Text("Switching to mainnet will reset sync progress. Your wallet seed remains the same but will sync on the main Monero network.")
                 } else {
-                    Text("Switching to testnet will reset sync progress. Testnet XMR has no real value and is used for testing only.")
+                    Text("Switching to testnet will reset sync progress. Testnet XMR has no real value. Note: Testnet nodes are often unreliable.")
                 }
             }
         }

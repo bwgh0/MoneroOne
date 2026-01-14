@@ -113,10 +113,11 @@ class MoneroWallet: ObservableObject {
     ]
 
     /// Available public testnet nodes (port 28081)
+    /// Note: Testnet nodes are often unreliable. MoneroKit doesn't support stagenet.
     static let testnetNodes: [(name: String, url: String)] = [
-        ("Monero Project", "http://testnet.melo.tools:28081"),
-        ("Ditatompel", "http://testnet.xmr.ditatompel.com:28081"),
-        ("Community", "http://node.monerodevs.org:28089")
+        ("Monero Project", "http://testnet.xmr-tw.org:28081"),
+        ("Rino Community", "http://testnet.community.rino.io:28081"),
+        ("XMR.to Community", "http://testnet.community.xmr.to:28081")
     ]
 
     private func setupKit() {

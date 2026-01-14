@@ -33,9 +33,9 @@ class NodeManager: ObservableObject {
     ]
 
     static let defaultTestnetNodes: [MoneroNode] = [
-        MoneroNode(name: "Melo Tools", url: "http://testnet.melo.tools:28081"),
-        MoneroNode(name: "Ditatompel", url: "http://testnet.xmr.ditatompel.com:28081"),
-        MoneroNode(name: "Monero Devs", url: "http://node.monerodevs.org:28089"),
+        MoneroNode(name: "Monero Project", url: "http://testnet.xmr-tw.org:28081"),
+        MoneroNode(name: "Rino Community", url: "http://testnet.community.rino.io:28081"),
+        MoneroNode(name: "XMR.to Community", url: "http://testnet.community.xmr.to:28081"),
     ]
 
     private var selectedNodeKey: String {

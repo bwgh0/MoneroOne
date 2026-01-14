@@ -1,16 +1,21 @@
 import SwiftUI
 
 struct AnimatedMoneroLogo: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
     @State private var shineOffset: CGFloat = -1.5
     @State private var floating = false
 
     var size: CGFloat = 240
 
+    private var imageName: String {
+        colorScheme == .dark ? "MoneroSymbolDark" : "MoneroSymbol"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Main logo
-            Image("MoneroSymbol")
+            Image(imageName)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
@@ -33,7 +38,7 @@ struct AnimatedMoneroLogo: View {
                         .offset(x: shineOffset * geo.size.width)
                     }
                     .mask {
-                        Image("MoneroSymbol")
+                        Image(imageName)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                     }

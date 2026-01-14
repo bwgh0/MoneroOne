@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 import MoneroKit
 import HsToolKit
 
@@ -29,14 +30,25 @@ class MoneroWallet: ObservableObject {
     // MARK: - Initialization
 
     /// Create a new wallet from seed words
-    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil) throws {
+    /// - Parameters:
+    ///   - seed: BIP39 seed words
+    ///   - restoreHeight: Block height to restore from (0 for full sync)
+    ///   - node: Optional custom node
+    ///   - resetSuffix: Optional suffix to force new walletId (used for reset sync)
+    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil) throws {
         let walletNode = node ?? defaultNode()
+        var walletId = Self.stableWalletId(for: seed)
+
+        // Append reset suffix to force new wallet identity
+        if let suffix = resetSuffix {
+            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + suffix)
+        }
 
         kit = try MoneroKit.Kit(
             wallet: .bip39(seed: seed, passphrase: ""),
             account: 0,
             restoreHeight: restoreHeight,
-            walletId: UUID().uuidString,
+            walletId: walletId,
             node: walletNode,
             networkType: .mainnet,
             reachabilityManager: reachabilityManager,
@@ -49,12 +61,13 @@ class MoneroWallet: ObservableObject {
     /// Create watch-only wallet
     func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil) throws {
         let walletNode = node ?? defaultNode()
+        let walletId = Self.stableWalletId(for: address + viewKey)
 
         kit = try MoneroKit.Kit(
             wallet: .watch(address: address, viewKey: viewKey),
             account: 0,
             restoreHeight: restoreHeight,
-            walletId: UUID().uuidString,
+            walletId: walletId,
             node: walletNode,
             networkType: .mainnet,
             reachabilityManager: reachabilityManager,
@@ -65,8 +78,8 @@ class MoneroWallet: ObservableObject {
     }
 
     private func defaultNode() -> MoneroKit.Node {
-        // Load from UserDefaults or use default
-        let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? "https://node.moneroworld.com:18089"
+        // Load from UserDefaults or use default (CakeWallet node is generally reliable)
+        let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? "https://xmr-node.cakewallet.com:18081"
         return MoneroKit.Node(
             url: URL(string: savedURL)!,
             isTrusted: false,
@@ -74,6 +87,14 @@ class MoneroWallet: ObservableObject {
             password: nil
         )
     }
+
+    /// Available public nodes
+    static let publicNodes: [(name: String, url: String)] = [
+        ("CakeWallet", "https://xmr-node.cakewallet.com:18081"),
+        ("MoneroWorld", "https://node.moneroworld.com:18089"),
+        ("Community Node", "https://nodes.hashvault.pro:18081"),
+        ("XMR.to", "https://node.xmr.to:18081")
+    ]
 
     private func setupKit() {
         guard let kit = kit else { return }
@@ -123,10 +144,40 @@ class MoneroWallet: ObservableObject {
             let progressPercent = Double(min(99, progress))
             syncState = .syncing(progress: progressPercent, remaining: remainingBlocksCount > 0 ? remainingBlocksCount : nil)
         case .notSynced(let error):
-            syncState = .error(error.localizedDescription)
+            syncState = .error(friendlyErrorMessage(for: error))
         case .idle:
             syncState = .idle
         }
+    }
+
+    private func friendlyErrorMessage(for error: Error) -> String {
+        let errorString = String(describing: error)
+
+        // Check for common MoneroKit errors
+        if errorString.contains("WalletStateError") {
+            if errorString.contains("error 1") {
+                return "Unable to connect to node. Please try a different node in Settings."
+            } else if errorString.contains("error 2") {
+                return "Node returned invalid response. Try another node."
+            } else if errorString.contains("error 3") {
+                return "Connection timeout. Check your internet connection."
+            }
+        }
+
+        if errorString.lowercased().contains("timeout") {
+            return "Connection timed out. Try again or switch nodes."
+        }
+
+        if errorString.lowercased().contains("network") || errorString.lowercased().contains("internet") {
+            return "Network error. Check your connection."
+        }
+
+        if errorString.lowercased().contains("refused") || errorString.lowercased().contains("unreachable") {
+            return "Node unavailable. Try a different node."
+        }
+
+        // Fallback to a cleaner message
+        return "Sync failed. Tap Retry or try a different node."
     }
 
     // MARK: - Transactions
@@ -193,6 +244,21 @@ class MoneroWallet: ObservableObject {
 
     static func restoreHeight(for date: Date) -> UInt64 {
         UInt64(MoneroKit.RestoreHeight.getHeight(date: date))
+    }
+
+    // MARK: - Wallet ID
+
+    /// Generate a stable wallet ID from seed words - ensures sync data persists across app restarts
+    private static func stableWalletId(for seed: [String]) -> String {
+        stableWalletId(for: seed.joined(separator: " "))
+    }
+
+    /// Generate a stable wallet ID from any string (seed phrase or address+viewKey)
+    private static func stableWalletId(for identifier: String) -> String {
+        let data = Data(identifier.utf8)
+        let hash = SHA256.hash(data: data)
+        // Use first 16 bytes as a UUID-like identifier
+        return hash.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 }
 

@@ -4,6 +4,7 @@ import Security
 class KeychainStorage {
     private let seedKey = "one.monero.MoneroOne.seed"
     private let pinHashKey = "one.monero.MoneroOne.pinhash"
+    private let biometricPinKey = "one.monero.MoneroOne.biometricpin"
 
     // MARK: - Seed Storage
 
@@ -93,6 +94,81 @@ class KeychainStorage {
             kSecAttrAccount as String: pinHashKey
         ]
         SecItemDelete(pinQuery as CFDictionary)
+    }
+
+    // MARK: - Biometric PIN Storage
+
+    /// Save PIN with biometric protection for Face ID/Touch ID unlock
+    func savePinForBiometrics(_ pin: String) throws {
+        // Delete existing biometric PIN if present
+        deleteBiometricPin()
+
+        // Create access control requiring biometric authentication
+        var error: Unmanaged<CFError>?
+        guard let accessControl = SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault,
+            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            .biometryCurrentSet,
+            &error
+        ) else {
+            throw KeychainError.saveFailed
+        }
+
+        // Store PIN with biometric protection
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: biometricPinKey,
+            kSecValueData as String: Data(pin.utf8),
+            kSecAttrAccessControl as String: accessControl
+        ]
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw KeychainError.saveFailed
+        }
+    }
+
+    /// Retrieve PIN using biometric authentication (Face ID/Touch ID prompt)
+    func getPinWithBiometrics() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: biometricPinKey,
+            kSecReturnData as String: true,
+            kSecUseOperationPrompt as String: "Unlock your Monero wallet"
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let pinData = result as? Data,
+              let pin = String(data: pinData, encoding: .utf8) else {
+            return nil
+        }
+
+        return pin
+    }
+
+    /// Check if biometric PIN is stored
+    func hasBiometricPin() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: biometricPinKey,
+            kSecReturnData as String: false,
+            kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail
+        ]
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        // errSecInteractionNotAllowed means it exists but needs biometrics
+        return status == errSecSuccess || status == errSecInteractionNotAllowed
+    }
+
+    /// Delete biometric PIN
+    func deleteBiometricPin() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: biometricPinKey
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     // MARK: - PIN Verification

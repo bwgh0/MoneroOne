@@ -13,10 +13,8 @@ struct UnlockView: View {
         VStack(spacing: 32) {
             Spacer()
 
-            // App Icon
-            Image(systemName: "shield.checkered")
-                .font(.system(size: 60))
-                .foregroundColor(.orange)
+            // App Logo
+            AnimatedMoneroLogo(size: 120)
 
             Text("Monero One")
                 .font(.title)
@@ -57,14 +55,14 @@ struct UnlockView: View {
                     }
                     .foregroundStyle(pin.count >= 6 ? Color.orange : Color.gray)
                     .frame(width: 200)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, 12)
                 }
                 .buttonStyle(.glass)
                 .disabled(pin.count < 6 || isUnlocking)
             }
 
             // Biometric Button
-            if biometricAuth.canUseBiometrics && biometricAuth.isBiometricEnabled {
+            if biometricAuth.canUseBiometrics && walletManager.hasBiometricPinStored {
                 Button {
                     unlockWithBiometrics()
                 } label: {
@@ -76,7 +74,7 @@ struct UnlockView: View {
                     }
                     .foregroundStyle(Color.orange)
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, 12)
                 }
                 .buttonStyle(.glass)
                 .disabled(isUnlocking)
@@ -95,7 +93,8 @@ struct UnlockView: View {
         }
         .padding()
         .onAppear {
-            if biometricAuth.canUseBiometrics && biometricAuth.isBiometricEnabled {
+            // Auto-trigger biometrics if enabled
+            if biometricAuth.canUseBiometrics && walletManager.hasBiometricPinStored {
                 unlockWithBiometrics()
             }
         }
@@ -122,29 +121,19 @@ struct UnlockView: View {
     }
 
     private func unlockWithBiometrics() {
-        Task {
-            let success = await biometricAuth.authenticate(reason: "Unlock your Monero wallet")
+        isUnlocking = true
+        errorMessage = nil
 
-            if success {
-                // For biometric unlock, we need the stored PIN
-                // In a real app, we'd store the PIN securely in keychain with biometric protection
-                // For now, we'll prompt for PIN after first biometric unlock
-                if let storedPIN = getStoredPIN() {
-                    do {
-                        try walletManager.unlock(pin: storedPIN)
-                    } catch {
-                        errorMessage = "Biometric unlock failed. Please use PIN."
-                    }
-                }
-            }
+        // The keychain will prompt for Face ID/Touch ID automatically
+        do {
+            try walletManager.unlockWithBiometrics()
+            // Success
+        } catch {
+            // Biometric failed or was cancelled - user can try PIN
+            errorMessage = nil // Don't show error, just let them use PIN
         }
-    }
 
-    // In production, this would retrieve the PIN from keychain with biometric protection
-    private func getStoredPIN() -> String? {
-        // This is a simplified implementation
-        // Real implementation would use keychain with kSecAccessControlBiometryAny
-        return nil
+        isUnlocking = false
     }
 }
 

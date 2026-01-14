@@ -27,7 +27,6 @@ class NodeManager: ObservableObject {
     }
 
     static let defaultNodes: [MoneroNode] = [
-        MoneroNode(name: "MoneroWorld", url: "https://node.moneroworld.com:18089"),
         MoneroNode(name: "CakeWallet", url: "https://xmr-node.cakewallet.com:18081"),
         MoneroNode(name: "Monerujo", url: "https://node.monerujo.io:18081"),
         MoneroNode(name: "Seth for Privacy", url: "https://node.sethforprivacy.com:18089"),

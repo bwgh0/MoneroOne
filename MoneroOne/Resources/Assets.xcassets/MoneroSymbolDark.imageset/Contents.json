@@ -1,16 +1,6 @@
 {
   "images" : [
     {
-      "filename" : "Monero-hero.png",
-      "idiom" : "universal"
-    },
-    {
-      "appearances" : [
-        {
-          "appearance" : "luminosity",
-          "value" : "dark"
-        }
-      ],
       "filename" : "monero-hero-dark.png",
       "idiom" : "universal"
     }

@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "Monero-hero.png",
+      "filename" : "monero-hero-128.png",
       "idiom" : "universal"
     },
     {
@@ -11,7 +11,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "monero-hero-dark.png",
+      "filename" : "monero-hero-dark-128.png",
       "idiom" : "universal"
     }
   ],
@@ -20,7 +20,6 @@
     "version" : 1
   },
   "properties" : {
-    "preserves-vector-representation" : true,
     "template-rendering-intent" : "original"
   }
 }

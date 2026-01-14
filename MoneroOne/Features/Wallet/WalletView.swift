@@ -10,6 +10,12 @@ struct WalletView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    // Testnet Banner
+                    if walletManager.isTestnet {
+                        TestnetBanner()
+                            .padding(.horizontal)
+                    }
+
                     // Error Banners
                     VStack(spacing: 8) {
                         OfflineBanner()
@@ -65,6 +71,26 @@ struct WalletView: View {
                 SendView()
             }
         }
+    }
+}
+
+struct TestnetBanner: View {
+    var body: some View {
+        HStack {
+            Image(systemName: "flask.fill")
+                .foregroundStyle(.white)
+            Text("Testnet Mode")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+            Spacer()
+            Text("Test XMR only")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.8))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.cyan.gradient)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

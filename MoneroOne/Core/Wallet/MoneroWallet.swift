@@ -35,13 +35,17 @@ class MoneroWallet: ObservableObject {
     ///   - restoreHeight: Block height to restore from (0 for full sync)
     ///   - node: Optional custom node
     ///   - resetSuffix: Optional suffix to force new walletId (used for reset sync)
-    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil) throws {
-        let walletNode = node ?? defaultNode()
+    ///   - networkType: Mainnet or testnet
+    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) throws {
+        let walletNode = node ?? defaultNode(for: networkType)
         var walletId = Self.stableWalletId(for: seed)
 
-        // Append reset suffix to force new wallet identity
+        // Append reset suffix and network to force new wallet identity
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
         if let suffix = resetSuffix {
-            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + suffix)
+            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + suffix + networkSuffix)
+        } else if networkType == .testnet {
+            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + networkSuffix)
         }
 
         kit = try MoneroKit.Kit(
@@ -50,7 +54,7 @@ class MoneroWallet: ObservableObject {
             restoreHeight: restoreHeight,
             walletId: walletId,
             node: walletNode,
-            networkType: .mainnet,
+            networkType: networkType,
             reachabilityManager: reachabilityManager,
             logger: nil
         )
@@ -59,9 +63,10 @@ class MoneroWallet: ObservableObject {
     }
 
     /// Create watch-only wallet
-    func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil) throws {
-        let walletNode = node ?? defaultNode()
-        let walletId = Self.stableWalletId(for: address + viewKey)
+    func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, networkType: MoneroKit.NetworkType = .mainnet) throws {
+        let walletNode = node ?? defaultNode(for: networkType)
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        let walletId = Self.stableWalletId(for: address + viewKey + networkSuffix)
 
         kit = try MoneroKit.Kit(
             wallet: .watch(address: address, viewKey: viewKey),
@@ -69,7 +74,7 @@ class MoneroWallet: ObservableObject {
             restoreHeight: restoreHeight,
             walletId: walletId,
             node: walletNode,
-            networkType: .mainnet,
+            networkType: networkType,
             reachabilityManager: reachabilityManager,
             logger: nil
         )
@@ -77,23 +82,42 @@ class MoneroWallet: ObservableObject {
         setupKit()
     }
 
-    private func defaultNode() -> MoneroKit.Node {
-        // Load from UserDefaults or use default (CakeWallet node is generally reliable)
-        let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? "https://xmr-node.cakewallet.com:18081"
-        return MoneroKit.Node(
-            url: URL(string: savedURL)!,
-            isTrusted: false,
-            login: nil,
-            password: nil
-        )
+    private func defaultNode(for networkType: MoneroKit.NetworkType = .mainnet) -> MoneroKit.Node {
+        if networkType == .testnet {
+            // Testnet node (port 28081)
+            let testnetURL = UserDefaults.standard.string(forKey: "selectedTestnetNodeURL") ?? Self.testnetNodes.first!.url
+            return MoneroKit.Node(
+                url: URL(string: testnetURL)!,
+                isTrusted: false,
+                login: nil,
+                password: nil
+            )
+        } else {
+            // Mainnet - Load from UserDefaults or use default
+            let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? "https://xmr-node.cakewallet.com:18081"
+            return MoneroKit.Node(
+                url: URL(string: savedURL)!,
+                isTrusted: false,
+                login: nil,
+                password: nil
+            )
+        }
     }
 
-    /// Available public nodes
+    /// Available public mainnet nodes
     static let publicNodes: [(name: String, url: String)] = [
         ("CakeWallet", "https://xmr-node.cakewallet.com:18081"),
         ("MoneroWorld", "https://node.moneroworld.com:18089"),
         ("Community Node", "https://nodes.hashvault.pro:18081"),
         ("XMR.to", "https://node.xmr.to:18081")
+    ]
+
+    /// Available public testnet nodes (port 28081)
+    /// Note: Testnet nodes are often unreliable. MoneroKit doesn't support stagenet.
+    static let testnetNodes: [(name: String, url: String)] = [
+        ("Monero Project", "http://testnet.xmr-tw.org:28081"),
+        ("Rino Community", "http://testnet.community.rino.io:28081"),
+        ("XMR.to Community", "http://testnet.community.xmr.to:28081")
     ]
 
     private func setupKit() {
@@ -236,8 +260,8 @@ class MoneroWallet: ObservableObject {
 
     // MARK: - Validation
 
-    static func isValidAddress(_ address: String) -> Bool {
-        MoneroKit.Kit.isValid(address: address, networkType: .mainnet)
+    static func isValidAddress(_ address: String, networkType: MoneroKit.NetworkType = .mainnet) -> Bool {
+        MoneroKit.Kit.isValid(address: address, networkType: networkType)
     }
 
     // MARK: - Restore Height

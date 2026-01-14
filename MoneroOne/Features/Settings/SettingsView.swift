@@ -32,6 +32,8 @@ struct SettingsView: View {
     @State private var showSyncMode = false
     @State private var showDeleteConfirmation = false
     @State private var showResetSyncConfirmation = false
+    @State private var showNetworkChangeAlert = false
+    @AppStorage("isTestnet") private var isTestnet = false
 
     private var currentSyncMode: String {
         SyncMode(rawValue: syncMode)?.rawValue ?? "Lite Mode"
@@ -160,6 +162,40 @@ struct SettingsView: View {
                     }
                 }
 
+                // Developer Section
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { isTestnet },
+                        set: { newValue in
+                            if newValue != isTestnet {
+                                showNetworkChangeAlert = true
+                            }
+                        }
+                    )) {
+                        HStack {
+                            SettingsRow(
+                                icon: "flask",
+                                title: "Testnet Mode",
+                                color: .cyan
+                            )
+                            if isTestnet {
+                                Text("Active")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(Color.cyan)
+                                    .cornerRadius(4)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Testnet uses test XMR with no real value. Switching networks requires a full re-sync.")
+                }
+
                 // Danger Zone
                 Section {
                     Button(role: .destructive) {
@@ -199,6 +235,19 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("This will remove all wallet data from this device. Make sure you have backed up your seed phrase!")
+            }
+            .alert(isTestnet ? "Switch to Mainnet?" : "Switch to Testnet?", isPresented: $showNetworkChangeAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Switch & Reset", role: .destructive) {
+                    isTestnet.toggle()
+                    walletManager.resetSyncData()
+                }
+            } message: {
+                if isTestnet {
+                    Text("Switching to mainnet will reset sync progress. Your wallet seed remains the same but will sync on the main Monero network.")
+                } else {
+                    Text("Switching to testnet will reset sync progress. Testnet XMR has no real value and is used for testing only.")
+                }
             }
         }
     }

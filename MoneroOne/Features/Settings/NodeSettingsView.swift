@@ -10,8 +10,8 @@ struct NodeSettingsView: View {
 
     var body: some View {
         List {
-            Section("Default Nodes") {
-                ForEach(NodeManager.defaultNodes) { node in
+            Section(nodeManager.isTestnet ? "Testnet Nodes" : "Default Nodes") {
+                ForEach(nodeManager.currentDefaultNodes) { node in
                     nodeRow(node: node)
                 }
             }
@@ -52,7 +52,7 @@ struct NodeSettingsView: View {
                 }
             }
         }
-        .navigationTitle("Remote Node")
+        .navigationTitle(nodeManager.isTestnet ? "Remote Node (Testnet)" : "Remote Node")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Add Custom Node", isPresented: $showAddNode) {
             TextField("Name (e.g., My Node)", text: $customNodeName)

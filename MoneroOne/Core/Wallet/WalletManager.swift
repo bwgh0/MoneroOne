@@ -23,6 +23,15 @@ class WalletManager: ObservableObject {
         case error(String)
     }
 
+    // MARK: - Network Type
+    var isTestnet: Bool {
+        UserDefaults.standard.bool(forKey: "isTestnet")
+    }
+
+    var networkType: MoneroKit.NetworkType {
+        isTestnet ? .testnet : .mainnet
+    }
+
     // MARK: - Private
     private let keychain = KeychainStorage()
     private var moneroWallet: MoneroWallet?
@@ -118,7 +127,7 @@ class WalletManager: ObservableObject {
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
 
         do {
-            try wallet.create(seed: mnemonic, restoreHeight: restoreHeight, resetSuffix: resetSuffix)
+            try wallet.create(seed: mnemonic, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
         } catch {
             throw WalletError.invalidMnemonic
         }
@@ -201,7 +210,7 @@ class WalletManager: ObservableObject {
     // MARK: - Validation
 
     func isValidAddress(_ address: String) -> Bool {
-        MoneroWallet.isValidAddress(address)
+        MoneroWallet.isValidAddress(address, networkType: networkType)
     }
 
     // MARK: - Refresh
@@ -282,7 +291,7 @@ class WalletManager: ObservableObject {
         // Restart wallet with fresh sync using new walletId suffix
         do {
             let wallet = MoneroWallet()
-            try wallet.create(seed: seed, restoreHeight: 0, resetSuffix: "\(resetCount)")
+            try wallet.create(seed: seed, restoreHeight: 0, resetSuffix: "\(resetCount)", networkType: networkType)
             moneroWallet = wallet
             bindToWallet(wallet)
         } catch {

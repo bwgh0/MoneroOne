@@ -1,6 +1,12 @@
 import Foundation
 import Combine
 
+struct PriceDataPoint: Identifiable {
+    let id = UUID()
+    let timestamp: Date
+    let price: Double
+}
+
 @MainActor
 class PriceService: ObservableObject {
     @Published var xmrPrice: Double?
@@ -9,6 +15,8 @@ class PriceService: ObservableObject {
     @Published var selectedCurrency: String = "usd"
     @Published var isLoading = false
     @Published var error: String?
+    @Published var chartData: [PriceDataPoint] = []
+    @Published var isLoadingChart = false
 
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 60 // 1 minute
@@ -117,10 +125,61 @@ class PriceService: ObservableObject {
         let sign = change >= 0 ? "+" : ""
         return "\(sign)\(String(format: "%.2f", change))%"
     }
+
+    func fetchChartData(days: Int = 7) async {
+        isLoadingChart = true
+        chartData = [] // Clear old data before fetching new
+
+        let urlString = "https://api.coingecko.com/api/v3/coins/monero/market_chart?vs_currency=\(selectedCurrency)&days=\(days)"
+        print("Fetching chart data for \(days) days: \(urlString)")
+
+        guard let url = URL(string: urlString) else {
+            isLoadingChart = false
+            return
+        }
+
+        // Create request with cache policy to avoid stale data
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                isLoadingChart = false
+                return
+            }
+
+            let result = try JSONDecoder().decode(MarketChartResponse.self, from: data)
+
+            // Convert price data to PriceDataPoint array
+            chartData = result.prices.map { priceData in
+                let timestamp = Date(timeIntervalSince1970: priceData[0] / 1000)
+                let price = priceData[1]
+                return PriceDataPoint(timestamp: timestamp, price: price)
+            }
+            print("Received \(chartData.count) price points for \(days) days")
+        } catch {
+            print("Chart data fetch error: \(error)")
+        }
+
+        isLoadingChart = false
+    }
+
+    var priceRange: (min: Double, max: Double)? {
+        guard !chartData.isEmpty else { return nil }
+        let prices = chartData.map { $0.price }
+        return (prices.min() ?? 0, prices.max() ?? 0)
+    }
 }
 
 // MARK: - CoinGecko Response
 
 struct CoinGeckoResponse: Codable {
     let monero: [String: Double]?
+}
+
+struct MarketChartResponse: Codable {
+    let prices: [[Double]]
 }

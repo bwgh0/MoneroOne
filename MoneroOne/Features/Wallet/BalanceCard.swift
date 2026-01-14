@@ -5,6 +5,7 @@ struct BalanceCard: View {
     let unlockedBalance: Decimal
     let syncState: WalletManager.SyncState
     @ObservedObject var priceService: PriceService
+    var onPriceChangeTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -19,20 +20,35 @@ struct BalanceCard: View {
                     .foregroundColor(.secondary)
                 Spacer()
 
-                // Price change indicator
+                // Price change indicator (tappable)
                 if let change = priceService.priceChange24h {
-                    HStack(spacing: 2) {
-                        Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                            .font(.caption2)
-                        Text(priceService.formatPriceChange() ?? "")
-                            .font(.caption)
+                    Button {
+                        onPriceChangeTap?()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                .font(.caption2)
+                            Text(priceService.formatPriceChange() ?? "")
+                                .font(.caption)
+                        }
+                        .foregroundColor(change >= 0 ? .green : .red)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background((change >= 0 ? Color.green : Color.red).opacity(0.1))
+                        .cornerRadius(8)
                     }
-                    .foregroundColor(change >= 0 ? .green : .red)
                 }
             }
 
             // Main Balance
             VStack(spacing: 4) {
+                // Monero symbol with circular mask for dark mode
+                Image("MoneroSymbol")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+
                 Text(formatXMR(balance))
                     .font(.system(size: 36, weight: .bold, design: .rounded))
 

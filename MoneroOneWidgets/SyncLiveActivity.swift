@@ -41,7 +41,7 @@ struct SyncLiveActivity: Widget {
                                 .tint(.orange)
 
                             if let blocks = context.state.blocksRemaining, blocks > 0 {
-                                Text("\(blocks) blocks remaining")
+                                Text("\(formatBlockCount(blocks)) blocks remaining")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -71,6 +71,17 @@ struct SyncLiveActivity: Widget {
     }
 }
 
+// Helper to format block counts (e.g., 1500 -> "1.5K", 1500000 -> "1.50M")
+private func formatBlockCount(_ count: Int) -> String {
+    if count >= 1_000_000 {
+        return String(format: "%.2fM", Double(count) / 1_000_000)
+    } else if count >= 1_000 {
+        return String(format: "%.1fK", Double(count) / 1_000)
+    } else {
+        return "\(count)"
+    }
+}
+
 struct LockScreenView: View {
     let context: ActivityViewContext<SyncActivityAttributes>
 
@@ -85,20 +96,20 @@ struct LockScreenView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(context.state.isSynced ? "Wallet Synced" : "Syncing Wallet")
                     .font(.headline)
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
 
                 if context.state.isSynced {
                     Text("Your wallet is up to date")
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(.secondary)
                 } else {
                     ProgressView(value: context.state.progress, total: 100)
                         .tint(.orange)
 
                     if let blocks = context.state.blocksRemaining, blocks > 0 {
-                        Text("\(blocks) blocks remaining")
+                        Text("\(formatBlockCount(blocks)) blocks remaining")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -116,8 +127,7 @@ struct LockScreenView: View {
             }
         }
         .padding()
-        .background(Color.white)
-        .activityBackgroundTint(Color.white)
+        .activityBackgroundTint(Color(.systemBackground))
     }
 }
 

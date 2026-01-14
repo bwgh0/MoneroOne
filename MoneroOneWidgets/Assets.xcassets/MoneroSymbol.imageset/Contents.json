@@ -1,9 +1,18 @@
 {
   "images" : [
     {
-      "filename" : "MoneroSymbol-widget.png",
-      "idiom" : "universal",
-      "scale" : "2x"
+      "filename" : "monero-hero-128.png",
+      "idiom" : "universal"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "monero-hero-dark-128.png",
+      "idiom" : "universal"
     }
   ],
   "info" : {

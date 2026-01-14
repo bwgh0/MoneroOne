@@ -30,9 +30,19 @@ class MoneroWallet: ObservableObject {
     // MARK: - Initialization
 
     /// Create a new wallet from seed words
-    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil) throws {
+    /// - Parameters:
+    ///   - seed: BIP39 seed words
+    ///   - restoreHeight: Block height to restore from (0 for full sync)
+    ///   - node: Optional custom node
+    ///   - resetSuffix: Optional suffix to force new walletId (used for reset sync)
+    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil) throws {
         let walletNode = node ?? defaultNode()
-        let walletId = Self.stableWalletId(for: seed)
+        var walletId = Self.stableWalletId(for: seed)
+
+        // Append reset suffix to force new wallet identity
+        if let suffix = resetSuffix {
+            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + suffix)
+        }
 
         kit = try MoneroKit.Kit(
             wallet: .bip39(seed: seed, passphrase: ""),

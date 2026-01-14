@@ -5,6 +5,7 @@ struct BalanceCard: View {
     let unlockedBalance: Decimal
     let syncState: WalletManager.SyncState
     @ObservedObject var priceService: PriceService
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 16) {
@@ -70,7 +71,7 @@ struct BalanceCard: View {
                     ProgressView(value: progress / 100)
                         .tint(.orange)
                     if let remaining = remaining {
-                        Text("\(Int(progress))% synced - \(remaining) blocks remaining")
+                        Text("\(Int(progress))% synced - \(formatBlockCount(remaining)) blocks remaining")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     } else {
@@ -82,8 +83,16 @@ struct BalanceCard: View {
             }
         }
         .padding(24)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .glassEffect()
+        .background {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .shadow(
+                    color: colorScheme == .light ? Color.black.opacity(0.08) : Color.clear,
+                    radius: 12,
+                    x: 0,
+                    y: 4
+                )
+        }
     }
 
     private var syncStatusColor: Color {
@@ -112,6 +121,16 @@ struct BalanceCard: View {
         formatter.minimumFractionDigits = 4
         formatter.maximumFractionDigits = 12
         return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
+    }
+
+    private func formatBlockCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.2fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        } else {
+            return "\(count)"
+        }
     }
 }
 

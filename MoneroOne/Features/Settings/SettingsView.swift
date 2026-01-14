@@ -1,12 +1,41 @@
 import SwiftUI
 
+enum AppearanceMode: Int, CaseIterable {
+    case system = 0
+    case light = 1
+    case dark = 2
+
+    var displayName: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
+    @AppStorage("appearanceMode") private var appearanceMode: Int = 0
+    @AppStorage("syncMode") private var syncMode: String = SyncMode.lite.rawValue
     @State private var showBackup = false
     @State private var showSecurity = false
     @State private var showSyncMode = false
     @State private var showDeleteConfirmation = false
+    @State private var showResetSyncConfirmation = false
+
+    private var currentSyncMode: String {
+        SyncMode(rawValue: syncMode)?.rawValue ?? "Lite Mode"
+    }
 
     var body: some View {
         NavigationStack {
@@ -36,6 +65,18 @@ struct SettingsView: View {
 
                 // Display Section
                 Section("Display") {
+                    Picker(selection: $appearanceMode) {
+                        ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
+                            Text(mode.displayName).tag(mode.rawValue)
+                        }
+                    } label: {
+                        SettingsRow(
+                            icon: "circle.lefthalf.filled",
+                            title: "Appearance",
+                            color: .indigo
+                        )
+                    }
+
                     NavigationLink {
                         CurrencySettingsView(priceService: priceService)
                     } label: {
@@ -54,6 +95,21 @@ struct SettingsView: View {
 
                 // Sync Section
                 Section("Sync") {
+                    NavigationLink {
+                        SyncModeView()
+                    } label: {
+                        HStack {
+                            SettingsRow(
+                                icon: "bolt.fill",
+                                title: "Sync Mode",
+                                color: .yellow
+                            )
+                            Spacer()
+                            Text(currentSyncMode)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
                     NavigationLink {
                         BackgroundSyncView()
                     } label: {
@@ -95,10 +151,10 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    Link(destination: URL(string: "https://getmonero.org")!) {
+                    Link(destination: URL(string: "https://monero.one")!) {
                         SettingsRow(
                             icon: "globe",
-                            title: "Monero Website",
+                            title: "Website",
                             color: .orange
                         )
                     }
@@ -106,6 +162,16 @@ struct SettingsView: View {
 
                 // Danger Zone
                 Section {
+                    Button(role: .destructive) {
+                        showResetSyncConfirmation = true
+                    } label: {
+                        SettingsRow(
+                            icon: "arrow.counterclockwise",
+                            title: "Reset Sync Data",
+                            color: .orange
+                        )
+                    }
+
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
                     } label: {
@@ -118,6 +184,14 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .alert("Reset Sync Data?", isPresented: $showResetSyncConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Reset", role: .destructive) {
+                    walletManager.resetSyncData()
+                }
+            } message: {
+                Text("This will clear all sync progress and re-sync from the beginning. Your wallet and keys are not affected.")
+            }
             .alert("Delete Wallet?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
                 Button("Delete", role: .destructive) {

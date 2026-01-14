@@ -77,24 +77,18 @@ class BackgroundSyncManager: NSObject, ObservableObject {
 
         isSyncing = true
         wallet.refresh()
-        lastSyncTime = Date()
 
         // Start Live Activity if not already running
         if isEnabled && !SyncActivityManager.shared.isActivityRunning {
             SyncActivityManager.shared.startActivity()
         }
-
-        // Mark sync as done after a brief delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.isSyncing = false
-        }
     }
 
     private func handleSyncStateChange(_ state: WalletManager.SyncState) {
-        guard isEnabled else { return }
-
         switch state {
         case .syncing(let progress, let remaining):
+            isSyncing = true
+            guard isEnabled else { return }
             // Start Live Activity if not running
             if !SyncActivityManager.shared.isActivityRunning {
                 SyncActivityManager.shared.startActivity()
@@ -103,20 +97,27 @@ class BackgroundSyncManager: NSObject, ObservableObject {
             SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining)
 
         case .synced:
+            isSyncing = false
+            lastSyncTime = Date()
+            guard isEnabled else { return }
             // Mark as synced
             SyncActivityManager.shared.markSynced()
 
         case .error:
+            isSyncing = false
             // Keep activity showing but could add error state
             break
 
         case .connecting:
+            isSyncing = true
+            guard isEnabled else { return }
             // Start Live Activity when connecting
             if !SyncActivityManager.shared.isActivityRunning {
                 SyncActivityManager.shared.startActivity()
             }
 
         case .idle:
+            isSyncing = false
             break
         }
     }

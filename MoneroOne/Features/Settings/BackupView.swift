@@ -6,6 +6,8 @@ struct BackupView: View {
     @State private var isUnlocked = false
     @State private var seedPhrase: [String] = []
     @State private var errorMessage: String?
+    @State private var showCopiedFeedback = false
+    @FocusState private var isPinFocused: Bool
 
     var body: some View {
         VStack(spacing: 24) {
@@ -33,6 +35,20 @@ struct BackupView: View {
                 .textFieldStyle(.roundedBorder)
                 .keyboardType(.numberPad)
                 .padding(.horizontal)
+                .focused($isPinFocused)
+                .submitLabel(.go)
+                .onSubmit {
+                    if pin.count >= 6 {
+                        unlockSeed()
+                    }
+                }
+                .onKeyPress(.return) {
+                    if pin.count >= 6 {
+                        unlockSeed()
+                        return .handled
+                    }
+                    return .ignored
+                }
 
             if let error = errorMessage {
                 Text(error)
@@ -56,6 +72,9 @@ struct BackupView: View {
 
             Spacer()
         }
+        .onAppear {
+            isPinFocused = true
+        }
     }
 
     private var unlockedView: some View {
@@ -72,6 +91,29 @@ struct BackupView: View {
                 .padding()
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(16)
+
+            Button {
+                let fullPhrase = seedPhrase.joined(separator: " ")
+                UIPasteboard.general.string = fullPhrase
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                showCopiedFeedback = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    showCopiedFeedback = false
+                }
+            } label: {
+                HStack {
+                    Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
+                    Text(showCopiedFeedback ? "Copied!" : "Copy Seed Phrase")
+                }
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.orange)
+                .foregroundColor(.white)
+                .cornerRadius(14)
+            }
+            .padding(.horizontal)
 
             Spacer()
 

@@ -34,11 +34,18 @@ jobs:
             -scheme MoneroOne
 
       - name: Build and Archive
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           xcodebuild -project MoneroOne.xcodeproj \
             -scheme MoneroOne \
             -destination "generic/platform=iOS" \
             -archivePath build/MoneroOne.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8 \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID" \
             archive
 
       - name: Export and Upload to TestFlight

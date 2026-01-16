@@ -36,6 +36,19 @@ struct BackupView: View {
                 .keyboardType(.numberPad)
                 .padding(.horizontal)
                 .focused($isPinFocused)
+                .submitLabel(.go)
+                .onSubmit {
+                    if pin.count >= 6 {
+                        unlockSeed()
+                    }
+                }
+                .onKeyPress(.return) {
+                    if pin.count >= 6 {
+                        unlockSeed()
+                        return .handled
+                    }
+                    return .ignored
+                }
 
             if let error = errorMessage {
                 Text(error)

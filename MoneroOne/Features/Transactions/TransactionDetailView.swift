@@ -25,6 +25,19 @@ struct TransactionDetailView: View {
                     }
                 }
 
+                // Confirmations
+                HStack {
+                    Text("Confirmations")
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(confirmationColor)
+                            .frame(width: 8, height: 8)
+                        Text(confirmationText)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 // Status
                 HStack {
                     Text("Status")
@@ -119,6 +132,28 @@ struct TransactionDetailView: View {
         case .pending: return .orange
         case .confirmed: return .green
         case .failed: return .red
+        }
+    }
+
+    private var confirmationText: String {
+        let confs = transaction.confirmations
+        if confs == 0 {
+            return "Unconfirmed"
+        } else if confs < 10 {
+            return "\(confs)/10 (locked)"
+        } else {
+            return "\(confs) (unlocked)"
+        }
+    }
+
+    private var confirmationColor: Color {
+        let confs = transaction.confirmations
+        if confs == 0 {
+            return .red
+        } else if confs < 10 {
+            return .orange
+        } else {
+            return .green
         }
     }
 

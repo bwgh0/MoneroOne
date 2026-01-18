@@ -73,7 +73,7 @@ struct TransactionListView: View {
                 }
             }
             .refreshable {
-                walletManager.refresh()
+                await walletManager.refresh()
             }
         }
     }

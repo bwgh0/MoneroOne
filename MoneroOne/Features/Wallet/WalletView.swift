@@ -40,7 +40,9 @@ struct WalletView: View {
                     VStack(spacing: 8) {
                         OfflineBanner()
                         SyncErrorBanner(syncState: walletManager.syncState) {
-                            walletManager.refresh()
+                            Task {
+                                await walletManager.refresh()
+                            }
                         }
                     }
                     .padding(.horizontal)
@@ -89,7 +91,7 @@ struct WalletView: View {
             }
             .navigationBarHidden(true)
             .refreshable {
-                walletManager.refresh()
+                await walletManager.refresh()
                 await priceService.fetchPrice()
             }
             .sheet(isPresented: $showReceive) {
@@ -194,12 +196,22 @@ struct RecentTransactionsSection: View {
 
             if recentTransactions.isEmpty {
                 VStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.title)
-                        .foregroundColor(.secondary)
-                    Text("No transactions yet")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    if case .syncing = walletManager.syncState {
+                        // Still scanning - show scanning message
+                        ProgressView()
+                            .tint(.orange)
+                        Text("Looking for transactions...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    } else {
+                        // Synced but no transactions
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.title)
+                            .foregroundColor(.secondary)
+                        Text("No transactions yet")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)

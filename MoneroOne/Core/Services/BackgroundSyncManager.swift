@@ -76,7 +76,9 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         guard let wallet = walletManager, wallet.isUnlocked else { return }
 
         isSyncing = true
-        wallet.refresh()
+        Task {
+            await wallet.refresh()
+        }
 
         // Start Live Activity if not already running
         if isEnabled && !SyncActivityManager.shared.isActivityRunning {

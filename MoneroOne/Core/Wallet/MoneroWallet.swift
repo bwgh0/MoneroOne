@@ -14,6 +14,26 @@ class MoneroWallet: ObservableObject {
     @Published var syncState: SyncState = .idle
     @Published var transactions: [MoneroTransaction] = []
 
+    /// Secret view key (hex string) - used for lite mode
+    var secretViewKey: String? {
+        guard let walletCredentials = walletCredentials else { return nil }
+        // Get private view key (not spend key)
+        return try? MoneroKit.Kit.key(wallet: walletCredentials, privateKey: true, spendKey: false)
+    }
+
+    /// Primary address (index 0) - from storage (pre-computed)
+    var primaryAddress: String {
+        kit?.primaryAddress ?? ""
+    }
+
+    /// Primary address directly from wallet2 runtime - use for light wallet mode
+    var runtimePrimaryAddress: String {
+        kit?.runtimePrimaryAddress ?? ""
+    }
+
+    // Store wallet credentials for view key extraction
+    private var walletCredentials: MoneroKit.MoneroWallet?
+
     enum SyncState: Equatable {
         case idle
         case connecting
@@ -48,8 +68,12 @@ class MoneroWallet: ObservableObject {
             walletId = Self.stableWalletId(for: seed.joined(separator: " ") + networkSuffix)
         }
 
+        // Store credentials for view key extraction
+        let credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
+        walletCredentials = credentials
+
         kit = try MoneroKit.Kit(
-            wallet: .bip39(seed: seed, passphrase: ""),
+            wallet: credentials,
             account: 0,
             restoreHeight: restoreHeight,
             walletId: walletId,
@@ -74,6 +98,51 @@ class MoneroWallet: ObservableObject {
             restoreHeight: restoreHeight,
             walletId: walletId,
             node: walletNode,
+            networkType: networkType,
+            reachabilityManager: reachabilityManager,
+            logger: nil
+        )
+
+        setupKit()
+    }
+
+    /// Create wallet in light wallet mode connected to LWS server
+    /// The LWS handles blockchain scanning; wallet2 fetches outputs from LWS endpoints
+    /// - Parameters:
+    ///   - seed: BIP39 seed words
+    ///   - lwsURL: Light Wallet Server URL
+    ///   - restoreHeight: Block height to restore from
+    ///   - resetSuffix: Optional suffix to force new walletId
+    ///   - networkType: Mainnet or testnet
+    func createLightWallet(seed: [String], lwsURL: URL, restoreHeight: UInt64 = 0, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) throws {
+        // Create light wallet node - wallet2 will use LWS endpoints for outputs
+        let lightNode = MoneroKit.Node(
+            url: lwsURL,
+            isTrusted: true,
+            isLightWallet: true
+        )
+
+        var walletId = Self.stableWalletId(for: seed)
+
+        // Append reset suffix and network to force new wallet identity
+        let modeSuffix = "_light"
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        if let suffix = resetSuffix {
+            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + suffix + modeSuffix + networkSuffix)
+        } else {
+            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + modeSuffix + networkSuffix)
+        }
+
+        // Store credentials for view key extraction
+        let credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
+        walletCredentials = credentials
+
+        kit = try MoneroKit.Kit(
+            wallet: credentials,
+            account: 0,
+            restoreHeight: restoreHeight,
+            walletId: walletId,
+            node: lightNode,
             networkType: networkType,
             reachabilityManager: reachabilityManager,
             logger: nil
@@ -136,11 +205,18 @@ class MoneroWallet: ObservableObject {
 
     // MARK: - Lifecycle
 
+    deinit {
+        NSLog("[MoneroWallet] DEINIT called - wallet being deallocated!")
+        Thread.callStackSymbols.prefix(15).forEach { NSLog("[MoneroWallet] deinit stack: \($0)") }
+    }
+
     func start() {
         kit?.start()
     }
 
     func stop() {
+        NSLog("[MoneroWallet] stop() called")
+        Thread.callStackSymbols.prefix(10).forEach { NSLog("[MoneroWallet] stack: \($0)") }
         kit?.stop()
     }
 
@@ -232,11 +308,40 @@ class MoneroWallet: ObservableObject {
     // MARK: - Send
 
     func estimateFee(to address: String, amount: Decimal, priority: SendPriority = .default) async throws -> Decimal {
-        guard let kit = kit else { throw WalletError.notUnlocked }
+        guard let kit = kit else {
+            writeDebugLog("estimateFee: kit is nil")
+            throw WalletError.notUnlocked
+        }
 
         let piconero = Int((amount * coinRate) as NSDecimalNumber)
-        let fee = try await kit.estimateFee(address: address, amount: .value(piconero), priority: priority)
-        return Decimal(fee) / coinRate
+        writeDebugLog("estimateFee: calling kit.estimateFee with piconero=\(piconero)")
+        do {
+            let fee = try kit.estimateFee(address: address, amount: .value(piconero), priority: priority)
+            writeDebugLog("estimateFee: success, fee=\(fee)")
+            return Decimal(fee) / coinRate
+        } catch {
+            writeDebugLog("estimateFee: FAILED - \(error)")
+            writeDebugLog("estimateFee: error type = \(type(of: error))")
+            writeDebugLog("estimateFee: localizedDescription = \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    private func writeDebugLog(_ message: String) {
+        let logFile = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("debug.log")
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let logMessage = "[\(timestamp)] \(message)\n"
+        if let data = logMessage.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile.path) {
+                if let handle = try? FileHandle(forWritingTo: logFile) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                try? data.write(to: logFile)
+            }
+        }
     }
 
     func send(to address: String, amount: Decimal, priority: SendPriority = .default, memo: String? = nil) async throws -> String {

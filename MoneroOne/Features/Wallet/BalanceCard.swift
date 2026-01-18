@@ -133,7 +133,7 @@ struct BalanceCard: View {
         switch syncState {
         case .idle: return "Idle"
         case .connecting: return "Connecting..."
-        case .syncing: return "Syncing..."
+        case .syncing: return "Scanning for transactions..."
         case .synced: return "Synced"
         case .error(let msg): return "Error: \(msg)"
         }

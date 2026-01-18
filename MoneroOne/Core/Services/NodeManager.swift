@@ -109,22 +109,25 @@ class NodeManager: ObservableObject {
     func testConnection() async {
         connectionStatus = .testing
 
-        guard let url = URL(string: selectedNode.url) else {
+        guard let baseURL = URL(string: selectedNode.url) else {
             connectionStatus = .failed("Invalid URL")
             return
         }
 
-        // Simple HTTP check to see if node responds
-        var request = URLRequest(url: url.appendingPathComponent("get_info"))
+        // Use JSON-RPC format that Monero nodes expect
+        let rpcURL = baseURL.appendingPathComponent("json_rpc")
+        var request = URLRequest(url: rpcURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = "{}".data(using: .utf8)
+        request.httpBody = #"{"jsonrpc":"2.0","id":"0","method":"get_info"}"#.data(using: .utf8)
         request.timeoutInterval = 10
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             if let httpResponse = response as? HTTPURLResponse,
-               (200...299).contains(httpResponse.statusCode) {
+               (200...299).contains(httpResponse.statusCode),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               json["result"] != nil {
                 connectionStatus = .connected
             } else {
                 connectionStatus = .failed("Node not responding")

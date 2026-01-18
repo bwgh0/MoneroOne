@@ -39,6 +39,16 @@ struct SettingsView: View {
         SyncMode(rawValue: syncMode)?.rawValue ?? "Lite Mode"
     }
 
+    private var syncStatusText: String {
+        switch walletManager.syncState {
+        case .synced: return "Synced"
+        case .syncing(let progress, _): return "\(Int(progress))%"
+        case .connecting: return "Connecting"
+        case .error: return "Error"
+        case .idle: return "Idle"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -98,45 +108,18 @@ struct SettingsView: View {
                 // Sync Section
                 Section("Sync") {
                     NavigationLink {
-                        SyncModeView()
-                    } label: {
-                        HStack {
-                            SettingsRow(
-                                icon: "bolt.fill",
-                                title: "Sync Mode",
-                                color: .yellow
-                            )
-                            Spacer()
-                            Text(currentSyncMode)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    NavigationLink {
-                        BackgroundSyncView()
+                        SyncSettingsView()
                     } label: {
                         HStack {
                             SettingsRow(
                                 icon: "arrow.triangle.2.circlepath",
-                                title: "Background Sync",
+                                title: "Sync Settings",
                                 color: .orange
                             )
                             Spacer()
-                            if BackgroundSyncManager.shared.isEnabled {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                            }
+                            Text(syncStatusText)
+                                .foregroundColor(.secondary)
                         }
-                    }
-
-                    NavigationLink {
-                        NodeSettingsView()
-                    } label: {
-                        SettingsRow(
-                            icon: "server.rack",
-                            title: "Remote Node",
-                            color: .purple
-                        )
                     }
                 }
 

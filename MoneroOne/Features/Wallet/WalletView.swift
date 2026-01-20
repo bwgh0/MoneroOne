@@ -89,8 +89,12 @@ struct WalletView: View {
                 }
                 .padding(.top)
             }
-            .navigationTitle("Wallet")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    EmptyView()
+                }
+            }
             .refreshable {
                 await walletManager.refresh()
                 await priceService.fetchPrice()

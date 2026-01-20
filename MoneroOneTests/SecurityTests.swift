@@ -263,14 +263,19 @@ final class SecurityTests: XCTestCase {
 final class ServerConfigurationTests: XCTestCase {
 
     func testServerURLsAreNotHardcoded() {
-        // Verify that server URLs come from configuration, not hardcoded
+        // Verify that server URLs come from configuration, not hardcoded IPs
         let testnetURL = ServerConfiguration.testnetLWSServerURL
         let mainnetURL = ServerConfiguration.mainnetLWSServerURL
 
-        // In debug builds, these should be localhost
-        // The important thing is they're not the production IP
-        XCTAssertFalse(testnetURL.contains("REDACTED_IP"), "Testnet URL should not contain hardcoded IP")
-        XCTAssertFalse(mainnetURL.contains("REDACTED_IP"), "Mainnet URL should not contain hardcoded IP")
+        // Check that URLs don't contain raw IP addresses (pattern: digits.digits.digits.digits)
+        let ipPattern = #"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"#
+        let ipRegex = try! NSRegularExpression(pattern: ipPattern)
+
+        let testnetRange = NSRange(testnetURL.startIndex..., in: testnetURL)
+        let mainnetRange = NSRange(mainnetURL.startIndex..., in: mainnetURL)
+
+        XCTAssertNil(ipRegex.firstMatch(in: testnetURL, range: testnetRange), "Testnet URL should not contain hardcoded IP")
+        XCTAssertNil(ipRegex.firstMatch(in: mainnetURL, range: mainnetRange), "Mainnet URL should not contain hardcoded IP")
     }
 
     func testServerURLHelper() {

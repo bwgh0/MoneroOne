@@ -9,8 +9,8 @@ final class MyMoneroCoreTests: XCTestCase {
 
     // MARK: - Test Configuration
 
-    /// LWS server URL
-    static let lwsURL = URL(string: "http://REDACTED_IP:3000")!
+    /// LWS server URL (uses app configuration)
+    static let lwsURL = URL(string: ServerConfiguration.lwsServerURL(isTestnet: true))!
 
     /// Test wallet address
     static let testAddress = "9uACtnkMLeJP3iRsijiHNSCgsXKWqFif7g3B22Es1vtTUan9iFC1Uz3BEpjkNjQJcVc2a1vcRYPrNij6AJx45vNm5TGKeR7"

@@ -9,8 +9,8 @@ final class LWSTransactionTests: XCTestCase {
 
     // MARK: - Test Configuration
 
-    /// LWS server URL
-    static let lwsURL = URL(string: "http://REDACTED_IP:3000")!
+    /// LWS server URL (uses app configuration)
+    static let lwsURL = URL(string: ServerConfiguration.lwsServerURL(isTestnet: true))!
 
     /// Test mnemonic (testnet wallet with funds)
     static let testMnemonic = "pond industry exit mirror hobby pole stand mutual rubber vendor asthma fold rain behind indicate above voice fix glare toddler motion describe caution budget".split(separator: " ").map(String.init)

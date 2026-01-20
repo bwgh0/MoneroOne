@@ -13,7 +13,7 @@ struct BackupSeedView: View {
     @State private var clipboardClearTask: DispatchWorkItem?
     @FocusState private var isPinFocused: Bool
 
-    private let clipboardClearDelay: TimeInterval = 60 // Clear clipboard after 60 seconds
+    private let clipboardClearDelay: TimeInterval = 300 // Clear clipboard after 5 minutes
 
     var body: some View {
         VStack(spacing: 24) {
@@ -152,7 +152,7 @@ struct BackupSeedView: View {
                 }
                 .padding(.horizontal)
 
-                Text("Warning: Copying to clipboard may expose your seed to other apps. Clipboard will be cleared in 60 seconds.")
+                Text("Warning: Copying to clipboard may expose your seed to other apps. Clipboard will be cleared in 5 minutes.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -163,7 +163,7 @@ struct BackupSeedView: View {
         .alert("Seed Copied", isPresented: $showCopiedAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Your seed phrase has been copied. The clipboard will be automatically cleared in 60 seconds for security.")
+            Text("Your seed phrase has been copied. The clipboard will be automatically cleared in 5 minutes for security.")
         }
         .onDisappear {
             // Cancel any pending clipboard clear when view disappears

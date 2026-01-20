@@ -535,8 +535,9 @@ struct RestoreHeightSheet: View {
         isUpdating = true
         let newHeight = effectiveHeight
 
-        // Save to UserDefaults
-        UserDefaults.standard.set(Int(newHeight), forKey: "restoreHeight")
+        // Save to UserDefaults (network-specific)
+        let networkPrefix = walletManager.isTestnet ? "testnet_" : "mainnet_"
+        UserDefaults.standard.set(Int(newHeight), forKey: "\(networkPrefix)restoreHeight")
 
         // Re-register with server if in lite mode
         Task {

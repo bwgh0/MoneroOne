@@ -38,6 +38,11 @@ class WalletManager: ObservableObject {
         isTestnet ? .testnet : .mainnet
     }
 
+    /// Network-specific prefix for UserDefaults keys to keep testnet/mainnet data separate
+    private var networkPrefix: String {
+        isTestnet ? "testnet_" : "mainnet_"
+    }
+
     // MARK: - Sync Mode
     var syncMode: SyncMode {
         SyncMode(rawValue: UserDefaults.standard.string(forKey: "syncMode") ?? SyncMode.lite.rawValue) ?? .lite
@@ -81,9 +86,9 @@ class WalletManager: ObservableObject {
         let seedPhrase = mnemonic.joined(separator: " ")
         try keychain.saveSeed(seedPhrase, pin: pin)
 
-        // Save restore height if provided
+        // Save restore height if provided (network-specific)
         if let height = restoreHeight {
-            UserDefaults.standard.set(height, forKey: "restoreHeight")
+            UserDefaults.standard.set(height, forKey: "\(networkPrefix)restoreHeight")
         }
 
         hasWallet = true
@@ -97,10 +102,10 @@ class WalletManager: ObservableObject {
         let seedPhrase = mnemonic.joined(separator: " ")
         try keychain.saveSeed(seedPhrase, pin: pin)
 
-        // Calculate restore height from date
+        // Calculate restore height from date (network-specific)
         if let date = restoreDate {
             let restoreHeight = MoneroWallet.restoreHeight(for: date)
-            UserDefaults.standard.set(restoreHeight, forKey: "restoreHeight")
+            UserDefaults.standard.set(restoreHeight, forKey: "\(networkPrefix)restoreHeight")
         }
 
         hasWallet = true
@@ -144,8 +149,8 @@ class WalletManager: ObservableObject {
     }
 
     private func startLiteMode(mnemonic: [String]) throws {
-        let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "restoreHeight"))
-        let resetCount = UserDefaults.standard.integer(forKey: "syncResetCount")
+        let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
 
         // Create MoneroWallet in light wallet mode - connects to LWS for output fetching
@@ -192,8 +197,8 @@ class WalletManager: ObservableObject {
         liteWalletManager = liteManager
         bindToLiteWallet(liteManager)
 
-        // Get restore height from UserDefaults (set during restore flow)
-        let savedRestoreHeight = UserDefaults.standard.integer(forKey: "restoreHeight")
+        // Get restore height from UserDefaults (set during restore flow, network-specific)
+        let savedRestoreHeight = UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight")
         let startHeight: UInt64? = savedRestoreHeight > 0 ? UInt64(savedRestoreHeight) : nil
 
         // Start async sync for balance/transaction display - use PRIMARY address to match wallet2
@@ -254,8 +259,8 @@ class WalletManager: ObservableObject {
 
     private func startPrivacyMode(mnemonic: [String]) throws {
         let wallet = MoneroWallet()
-        let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "restoreHeight"))
-        let resetCount = UserDefaults.standard.integer(forKey: "syncResetCount")
+        let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
 
         do {
@@ -577,9 +582,9 @@ class WalletManager: ObservableObject {
             // Clear MoneroKit wallet data directory for light wallet
             clearWalletCache()
 
-            // Increment reset counter to force new walletId
-            let resetCount = UserDefaults.standard.integer(forKey: "syncResetCount") + 1
-            UserDefaults.standard.set(resetCount, forKey: "syncResetCount")
+            // Increment reset counter to force new walletId (network-specific)
+            let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount") + 1
+            UserDefaults.standard.set(resetCount, forKey: "\(networkPrefix)syncResetCount")
 
             do {
                 try startLiteMode(mnemonic: seed)
@@ -594,12 +599,12 @@ class WalletManager: ObservableObject {
             // Clear MoneroKit wallet data directory
             clearWalletCache()
 
-            // Increment reset counter to force new walletId
-            let resetCount = UserDefaults.standard.integer(forKey: "syncResetCount") + 1
-            UserDefaults.standard.set(resetCount, forKey: "syncResetCount")
+            // Increment reset counter to force new walletId (network-specific)
+            let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount") + 1
+            UserDefaults.standard.set(resetCount, forKey: "\(networkPrefix)syncResetCount")
 
-            // Get restore height from UserDefaults
-            let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "restoreHeight"))
+            // Get restore height from UserDefaults (network-specific)
+            let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
 
             do {
                 let wallet = MoneroWallet()
@@ -638,8 +643,54 @@ class WalletManager: ObservableObject {
     func deleteWallet() {
         lock()
         keychain.deleteSeed()
-        UserDefaults.standard.removeObject(forKey: "restoreHeight")
+        // Clear network-specific data for both networks
+        UserDefaults.standard.removeObject(forKey: "mainnet_restoreHeight")
+        UserDefaults.standard.removeObject(forKey: "testnet_restoreHeight")
+        UserDefaults.standard.removeObject(forKey: "mainnet_syncResetCount")
+        UserDefaults.standard.removeObject(forKey: "testnet_syncResetCount")
         hasWallet = false
+    }
+
+    // MARK: - Network Switching
+
+    /// Switch networks without clearing sync cache - each network maintains separate sync state
+    func switchNetwork() {
+        guard let seed = currentSeed else {
+            syncState = .error("No wallet to switch")
+            return
+        }
+
+        // Stop current wallet without clearing cache
+        liteWalletManager?.stop()
+        liteWalletManager = nil
+        moneroWallet?.stop()
+        moneroWallet = nil
+        cancellables.removeAll()
+
+        // Reset UI state
+        balance = 0
+        unlockedBalance = 0
+        transactions = []
+        syncState = .connecting
+        isSendReady = false
+        sendSyncProgress = 0
+        sendSyncStatus = "Connecting..."
+
+        // Reinitialize with new network (will use different walletId due to network suffix)
+        // Note: isTestnet has already been toggled by the caller
+        if currentSyncMode == .lite {
+            do {
+                try startLiteMode(mnemonic: seed)
+            } catch {
+                syncState = .error("Failed to start lite mode: \(error.localizedDescription)")
+            }
+        } else {
+            do {
+                try startPrivacyMode(mnemonic: seed)
+            } catch {
+                syncState = .error("Failed to start privacy mode: \(error.localizedDescription)")
+            }
+        }
     }
 }
 

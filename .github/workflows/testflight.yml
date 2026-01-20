@@ -20,8 +20,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bwgh0/MoneroKit.Swift
-          path: ../MoneroKit.Swift
-          token: ${{ secrets.PUBLIC_REPO_PAT }}
+          path: MoneroKit.Swift
+
+      - name: Fix MoneroKit path for CI
+        run: |
+          # Update project.yml to use local path instead of sibling
+          sed -i '' 's|path: ../MoneroKit.Swift|path: MoneroKit.Swift|' project.yml
+          # Regenerate Xcode project
+          brew install xcodegen
+          xcodegen generate
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1

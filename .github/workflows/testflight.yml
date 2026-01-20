@@ -2,8 +2,8 @@ name: Deploy to TestFlight
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'  # Trigger on version tags (v1.0.0, v1.2.3, etc.)
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for sync
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -70,3 +72,48 @@ jobs:
           path: |
             ~/Library/Logs/DiagnosticReports/
             /var/folders/**/MoneroOne_*.xcdistributionlogs
+
+  sync-to-public:
+    needs: build-and-upload
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')  # Only sync on version tags
+
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync to public repo
+        env:
+          PUBLIC_REPO_PAT: ${{ secrets.PUBLIC_REPO_PAT }}
+        run: |
+          # Get the tag name
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+
+          # Configure git
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # Clone public repo
+          git clone https://x-access-token:${PUBLIC_REPO_PAT}@github.com/bwgh0/MoneroOne-public.git public-repo
+
+          # Copy files (excluding .git and private files)
+          rsync -av --delete \
+            --exclude='.git' \
+            --exclude='ICON_SETUP.md' \
+            --exclude='.build' \
+            --exclude='build' \
+            --exclude='DerivedData' \
+            --exclude='*.xcuserstate' \
+            --exclude='xcuserdata' \
+            ./ public-repo/
+
+          # Commit and push
+          cd public-repo
+          git add -A
+          git commit -m "Release ${TAG_NAME}" || echo "No changes to commit"
+          git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}" || echo "Tag already exists"
+          git push origin main --tags
+
+          echo "✅ Synced ${TAG_NAME} to public repo"

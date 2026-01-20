@@ -5,6 +5,7 @@ struct TransactionListView: View {
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
     @State private var showFilters = false
+    @State private var selectedTransaction: MoneroTransaction?
 
     enum FilterType: String, CaseIterable {
         case all = "All"
@@ -104,14 +105,18 @@ struct TransactionListView: View {
                     .listRowBackground(Color.clear)
             } else {
                 ForEach(filteredTransactions) { transaction in
-                    NavigationLink(value: transaction) {
+                    Button {
+                        selectedTransaction = transaction
+                    } label: {
                         TransactionRow(transaction: transaction)
                     }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
             }
         }
         .listStyle(.plain)
-        .navigationDestination(for: MoneroTransaction.self) { transaction in
+        .navigationDestination(item: $selectedTransaction) { transaction in
             TransactionDetailView(transaction: transaction)
         }
     }

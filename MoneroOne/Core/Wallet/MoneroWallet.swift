@@ -388,6 +388,15 @@ class MoneroWallet: ObservableObject {
         return transactions.first?.id ?? ""
     }
 
+    // MARK: - Subaddresses
+
+    /// Create a new subaddress for receiving payments
+    /// - Returns: The newly created SubAddress, or nil if creation failed
+    func createSubaddress() -> MoneroKit.SubAddress? {
+        guard let kit = kit else { return nil }
+        return kit.createSubaddress()
+    }
+
     // MARK: - Validation
 
     static func isValidAddress(_ address: String, networkType: MoneroKit.NetworkType = .mainnet) -> Bool {

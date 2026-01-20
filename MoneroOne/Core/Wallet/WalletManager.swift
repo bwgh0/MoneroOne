@@ -478,6 +478,15 @@ class WalletManager: ObservableObject {
         return try await wallet.sendAll(to: address, memo: memo)
     }
 
+    // MARK: - Subaddresses
+
+    /// Create a new subaddress for receiving payments
+    /// - Returns: The newly created SubAddress, or nil if creation failed
+    func createSubaddress() -> MoneroKit.SubAddress? {
+        guard let wallet = moneroWallet else { return nil }
+        return wallet.createSubaddress()
+    }
+
     // MARK: - Validation
 
     func isValidAddress(_ address: String) -> Bool {

@@ -197,6 +197,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 struct SubaddressListView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var copiedAddress: String?
+    @State private var isCreating = false
 
     var body: some View {
         List {
@@ -214,7 +215,7 @@ struct SubaddressListView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("No subaddresses yet")
                             .foregroundColor(.secondary)
-                        Text("Subaddresses are created automatically when you receive transactions.")
+                        Text("Tap + to create a new subaddress for receiving payments.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -236,6 +237,50 @@ struct SubaddressListView: View {
             }
         }
         .navigationTitle("Addresses")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    createNewSubaddress()
+                } label: {
+                    if isCreating {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "plus")
+                    }
+                }
+                .disabled(isCreating)
+            }
+        }
+    }
+
+    private func createNewSubaddress() {
+        isCreating = true
+
+        Task {
+            let result = walletManager.createSubaddress()
+
+            await MainActor.run {
+                isCreating = false
+
+                if let newAddr = result {
+                    // Provide haptic feedback
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+
+                    // Briefly highlight the new address by copying it
+                    copiedAddress = newAddr.address
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        if copiedAddress == newAddr.address {
+                            copiedAddress = nil
+                        }
+                    }
+                } else {
+                    // Error feedback
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.error)
+                }
+            }
+        }
     }
 }
 

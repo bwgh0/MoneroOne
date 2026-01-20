@@ -25,29 +25,24 @@ struct TransactionDetailView: View {
                     }
                 }
 
-                // Confirmations
-                HStack {
-                    Text("Confirmations")
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(confirmationColor)
-                            .frame(width: 8, height: 8)
-                        Text(confirmationText)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
                 // Status
                 HStack {
                     Text("Status")
                     Spacer()
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(statusColor)
+                            .fill(combinedStatusColor)
                             .frame(width: 8, height: 8)
-                        Text(statusText)
+                        Text(combinedStatusText)
                     }
+                }
+
+                // Confirmations
+                HStack {
+                    Text("Confirmations")
+                    Spacer()
+                    Text("\(transaction.confirmations)")
+                        .foregroundColor(.secondary)
                 }
 
                 // Memo
@@ -119,37 +114,27 @@ struct TransactionDetailView: View {
         return formatter.string(from: transaction.timestamp)
     }
 
-    private var statusText: String {
-        switch transaction.status {
-        case .pending: return "Pending"
-        case .confirmed: return "Confirmed"
-        case .failed: return "Failed"
+    private var combinedStatusText: String {
+        if transaction.status == .failed {
+            return "Failed"
         }
-    }
-
-    private var statusColor: Color {
-        switch transaction.status {
-        case .pending: return .orange
-        case .confirmed: return .green
-        case .failed: return .red
-        }
-    }
-
-    private var confirmationText: String {
         let confs = transaction.confirmations
         if confs == 0 {
-            return "Unconfirmed"
+            return "Pending"
         } else if confs < 10 {
-            return "\(confs)/10 (locked)"
+            return "\(confs)/10 confirmations (locked)"
         } else {
-            return "\(confs) (unlocked)"
+            return "Confirmed (\(confs) confirmations)"
         }
     }
 
-    private var confirmationColor: Color {
+    private var combinedStatusColor: Color {
+        if transaction.status == .failed {
+            return .red
+        }
         let confs = transaction.confirmations
         if confs == 0 {
-            return .red
+            return .orange
         } else if confs < 10 {
             return .orange
         } else {

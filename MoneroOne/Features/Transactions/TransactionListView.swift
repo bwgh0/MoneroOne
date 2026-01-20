@@ -104,15 +104,16 @@ struct TransactionListView: View {
                     .listRowBackground(Color.clear)
             } else {
                 ForEach(filteredTransactions) { transaction in
-                    NavigationLink {
-                        TransactionDetailView(transaction: transaction)
-                    } label: {
+                    NavigationLink(value: transaction) {
                         TransactionRow(transaction: transaction)
                     }
                 }
             }
         }
         .listStyle(.plain)
+        .navigationDestination(for: MoneroTransaction.self) { transaction in
+            TransactionDetailView(transaction: transaction)
+        }
     }
 }
 
@@ -160,6 +161,7 @@ struct TransactionRow: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 
     private var formattedDate: String {

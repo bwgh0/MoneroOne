@@ -12,8 +12,10 @@ class WalletManager: ObservableObject {
     @Published var balance: Decimal = 0
     @Published var unlockedBalance: Decimal = 0
     @Published var address: String = ""
+    @Published var primaryAddress: String = ""
     @Published var syncState: SyncState = .idle
     @Published var transactions: [MoneroTransaction] = []
+    @Published var subaddresses: [MoneroKit.SubAddress] = []
     @Published var currentSyncMode: SyncMode = .lite
     @Published var isSendReady: Bool = false
     @Published var sendSyncProgress: Double = 0
@@ -300,6 +302,13 @@ class WalletManager: ObservableObject {
         wallet.$transactions
             .receive(on: DispatchQueue.main)
             .assign(to: &$transactions)
+
+        wallet.$subaddresses
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$subaddresses)
+
+        // Set primary address
+        primaryAddress = wallet.primaryAddress
     }
 
     private func bindToLiteWallet(_ manager: LiteWalletManager) {
@@ -403,8 +412,10 @@ class WalletManager: ObservableObject {
         balance = 0
         unlockedBalance = 0
         address = ""
+        primaryAddress = ""
         syncState = .idle
         transactions = []
+        subaddresses = []
         isSendReady = false
         sendSyncProgress = 0
         sendSyncStatus = "Connecting..."

@@ -103,6 +103,13 @@ struct SendView: View {
                             TextField("0.0", text: $amount)
                                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                                 .keyboardType(.decimalPad)
+                                .onChange(of: amount) { oldValue, newValue in
+                                    // Filter to only allow valid decimal input
+                                    let filtered = filterDecimalInput(newValue)
+                                    if filtered != newValue {
+                                        amount = filtered
+                                    }
+                                }
 
                             Text("XMR")
                                 .font(.headline)
@@ -326,6 +333,31 @@ struct SendView: View {
     private func formatAddress(_ addr: String) -> String {
         guard addr.count > 20 else { return addr }
         return "\(addr.prefix(12))...\(addr.suffix(8))"
+    }
+
+    private func filterDecimalInput(_ input: String) -> String {
+        // Allow only digits and one decimal point
+        var hasDecimal = false
+        var result = ""
+
+        for char in input {
+            if char.isNumber {
+                result.append(char)
+            } else if char == "." && !hasDecimal {
+                hasDecimal = true
+                result.append(char)
+            }
+        }
+
+        // Limit decimal places to 12 (Monero's precision)
+        if let decimalIndex = result.firstIndex(of: ".") {
+            let afterDecimal = result.distance(from: decimalIndex, to: result.endIndex) - 1
+            if afterDecimal > 12 {
+                result = String(result.prefix(result.count - (afterDecimal - 12)))
+            }
+        }
+
+        return result
     }
 }
 

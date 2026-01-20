@@ -13,6 +13,7 @@ class MoneroWallet: ObservableObject {
     @Published var address: String = ""
     @Published var syncState: SyncState = .idle
     @Published var transactions: [MoneroTransaction] = []
+    @Published var subaddresses: [MoneroKit.SubAddress] = []
 
     /// Secret view key (hex string) - used for lite mode
     var secretViewKey: String? {
@@ -292,6 +293,31 @@ class MoneroWallet: ObservableObject {
         let amount = Decimal(info.amount) / coinRate
         let fee = Decimal(info.fee) / coinRate
 
+        // Calculate confirmations from block height
+        let confirmations: Int
+        if info.isPending || info.blockHeight == 0 {
+            confirmations = 0
+        } else if let kit = kit {
+            let currentHeight = kit.lastBlockInfo
+            if currentHeight > info.blockHeight {
+                confirmations = Int(currentHeight - info.blockHeight)
+            } else {
+                confirmations = 10 // Assume confirmed if we can't calculate
+            }
+        } else {
+            confirmations = 10 // Default to confirmed if kit unavailable
+        }
+
+        // Determine status based on isPending from MoneroKit (this is accurate!)
+        let status: MoneroTransaction.TransactionStatus
+        if info.isFailed {
+            status = .failed
+        } else if info.isPending {
+            status = .pending
+        } else {
+            status = .confirmed
+        }
+
         return MoneroTransaction(
             id: info.hash,
             type: info.type == .incoming ? .incoming : .outgoing,
@@ -299,8 +325,8 @@ class MoneroWallet: ObservableObject {
             fee: fee,
             address: info.recipientAddress ?? "",
             timestamp: Date(timeIntervalSince1970: Double(info.timestamp)),
-            confirmations: 0, // Would need block height comparison
-            status: info.isFailed ? .failed : .confirmed,
+            confirmations: confirmations,
+            status: status,
             memo: info.memo
         )
     }
@@ -394,7 +420,9 @@ class MoneroWallet: ObservableObject {
 
 extension MoneroWallet: MoneroKitDelegate {
     nonisolated func subAddressesUpdated(subaddresses: [MoneroKit.SubAddress]) {
-        // Not using subaddresses for now
+        Task { @MainActor in
+            self.subaddresses = subaddresses
+        }
     }
 
     nonisolated func balanceDidChange(balanceInfo: MoneroKit.BalanceInfo) {
@@ -418,7 +446,7 @@ extension MoneroWallet: MoneroKitDelegate {
 
 // MARK: - Transaction Model
 
-struct MoneroTransaction: Identifiable, Equatable {
+struct MoneroTransaction: Identifiable, Equatable, Hashable {
     let id: String
     let type: TransactionType
     let amount: Decimal
@@ -429,12 +457,12 @@ struct MoneroTransaction: Identifiable, Equatable {
     let status: TransactionStatus
     let memo: String?
 
-    enum TransactionType {
+    enum TransactionType: Hashable {
         case incoming
         case outgoing
     }
 
-    enum TransactionStatus {
+    enum TransactionStatus: Hashable {
         case pending
         case confirmed
         case failed
@@ -442,5 +470,9 @@ struct MoneroTransaction: Identifiable, Equatable {
 
     static func == (lhs: MoneroTransaction, rhs: MoneroTransaction) -> Bool {
         lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }

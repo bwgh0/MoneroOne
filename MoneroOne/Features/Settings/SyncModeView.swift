@@ -32,38 +32,39 @@ struct SyncModeView: View {
             Section {
                 // Lite Mode - Coming Soon (disabled, not selectable)
                 HStack(spacing: 12) {
-                    Image(systemName: "bolt.fill")
-                        .font(.title2)
-                        .foregroundColor(.gray)
-                        .frame(width: 40)
+                    ZStack {
+                        Image(systemName: "bolt.fill")
+                            .font(.title2)
+                            .foregroundColor(.gray.opacity(0.4))
+                            .frame(width: 40)
+                    }
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text("Lite Mode")
                                 .font(.headline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.gray)
 
                             Text("Coming Soon")
                                 .font(.caption2)
-                                .fontWeight(.medium)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.gray.opacity(0.2))
-                                .foregroundColor(.secondary)
-                                .cornerRadius(4)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.orange.opacity(0.15))
+                                .foregroundColor(.orange)
+                                .cornerRadius(6)
                         }
 
                         Text("Fast sync using Light Wallet Server. Your view key is shared with the server.")
                             .font(.caption)
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .foregroundColor(.gray.opacity(0.6))
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer()
                 }
                 .padding(.vertical, 8)
-                .opacity(0.5)
-                .allowsHitTesting(false)
+                .listRowBackground(Color(.systemGray6))
 
                 // Privacy Mode - selectable
                 Button {

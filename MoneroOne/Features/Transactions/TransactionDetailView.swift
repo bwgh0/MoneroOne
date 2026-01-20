@@ -122,9 +122,9 @@ struct TransactionDetailView: View {
         if confs == 0 {
             return "Pending"
         } else if confs < 10 {
-            return "\(confs)/10 confirmations (locked)"
+            return "Locked"
         } else {
-            return "Confirmed (\(confs) confirmations)"
+            return "Confirmed"
         }
     }
 

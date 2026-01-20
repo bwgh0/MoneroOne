@@ -280,16 +280,20 @@ struct RecentTransactionCard: View {
                 Spacer()
 
                 // Amount & Status
-                VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: .trailing, spacing: 4) {
                     Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(transaction.type == .incoming ? .green : .primary)
 
-                    if transaction.status == .pending {
-                        Text("Pending")
+                    // Status indicator with dot
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 6, height: 6)
+                        Text(statusText)
                             .font(.caption2)
-                            .foregroundColor(.orange)
+                            .foregroundColor(statusColor)
                     }
                 }
 
@@ -299,17 +303,28 @@ struct RecentTransactionCard: View {
                     .foregroundColor(.secondary.opacity(0.5))
             }
             .padding(14)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(.white.opacity(0.15), lineWidth: 1)
-            )
         }
-        .buttonStyle(RecentTransactionButtonStyle())
+        .buttonStyle(.glass)
     }
 
     private var iconColor: Color {
         transaction.type == .incoming ? .green : .orange
+    }
+
+    private var statusText: String {
+        switch transaction.status {
+        case .pending: return "Pending"
+        case .confirmed: return "Confirmed"
+        case .failed: return "Failed"
+        }
+    }
+
+    private var statusColor: Color {
+        switch transaction.status {
+        case .pending: return .orange
+        case .confirmed: return .green
+        case .failed: return .red
+        }
     }
 
     private var formattedDate: String {
@@ -324,15 +339,6 @@ struct RecentTransactionCard: View {
         formatter.minimumFractionDigits = 4
         formatter.maximumFractionDigits = 4
         return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
-    }
-}
-
-struct RecentTransactionButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

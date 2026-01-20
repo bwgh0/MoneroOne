@@ -172,9 +172,19 @@ struct CompactActionButton: View {
 /// Recent transactions section for homepage
 struct RecentTransactionsSection: View {
     @EnvironmentObject var walletManager: WalletManager
+    @State private var selectedTransaction: MoneroTransaction?
 
     private var recentTransactions: [MoneroTransaction] {
         Array(walletManager.transactions.prefix(5))
+    }
+
+    private var isSyncing: Bool {
+        switch walletManager.syncState {
+        case .syncing, .connecting:
+            return true
+        default:
+            return false
+        }
     }
 
     var body: some View {
@@ -185,7 +195,7 @@ struct RecentTransactionsSection: View {
                 Spacer()
                 if !walletManager.transactions.isEmpty {
                     NavigationLink {
-                        FullTransactionListView()
+                        TransactionListView()
                     } label: {
                         Text("See All")
                             .font(.subheadline)
@@ -195,18 +205,22 @@ struct RecentTransactionsSection: View {
             }
 
             if recentTransactions.isEmpty {
-                VStack(spacing: 8) {
-                    if case .syncing = walletManager.syncState {
-                        // Still scanning - show scanning message
+                VStack(spacing: 12) {
+                    if isSyncing {
+                        // Still syncing - show syncing message
                         ProgressView()
                             .tint(.orange)
-                        Text("Looking for transactions...")
+                        Text("Syncing transactions...")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                        Text("Your transactions will appear here once synced")
+                            .font(.caption)
+                            .foregroundColor(.secondary.opacity(0.7))
+                            .multilineTextAlignment(.center)
                     } else {
                         // Synced but no transactions
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(.title)
+                            .font(.largeTitle)
                             .foregroundColor(.secondary)
                         Text("No transactions yet")
                             .font(.subheadline)
@@ -214,70 +228,88 @@ struct RecentTransactionsSection: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
+                .padding(.vertical, 32)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
             } else {
-                VStack(spacing: 0) {
+                VStack(spacing: 8) {
                     ForEach(recentTransactions) { transaction in
-                        NavigationLink {
-                            TransactionDetailView(transaction: transaction)
-                        } label: {
-                            CompactTransactionRow(transaction: transaction)
-                        }
-                        .buttonStyle(.plain)
-
-                        if transaction.id != recentTransactions.last?.id {
-                            Divider()
-                                .padding(.leading, 52)
+                        RecentTransactionCard(transaction: transaction) {
+                            selectedTransaction = transaction
                         }
                     }
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(12)
             }
+        }
+        .navigationDestination(item: $selectedTransaction) { transaction in
+            TransactionDetailView(transaction: transaction)
         }
     }
 }
 
-/// Compact transaction row for homepage
-struct CompactTransactionRow: View {
+/// Liquid glass transaction card for home page
+struct RecentTransactionCard: View {
     let transaction: MoneroTransaction
+    let onTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon
-            Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
-                .font(.subheadline)
-                .foregroundColor(transaction.type == .incoming ? .green : .orange)
-                .frame(width: 32, height: 32)
-                .background(
-                    (transaction.type == .incoming ? Color.green : Color.orange)
-                        .opacity(0.15)
-                )
-                .cornerRadius(8)
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(iconColor.opacity(0.2))
+                        .frame(width: 40, height: 40)
 
-            // Details
-            VStack(alignment: .leading, spacing: 2) {
-                Text(transaction.type == .incoming ? "Received" : "Sent")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
+                    Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(iconColor)
+                }
 
-                Text(formattedDate)
+                // Details
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(transaction.type == .incoming ? "Received" : "Sent")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+
+                    Text(formattedDate)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Amount & Status
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(transaction.type == .incoming ? .green : .primary)
+
+                    if transaction.status == .pending {
+                        Text("Pending")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                }
+
+                // Chevron
+                Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondary.opacity(0.5))
             }
-
-            Spacer()
-
-            // Amount
-            Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(transaction.type == .incoming ? .green : .primary)
+            .padding(14)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+            )
         }
-        .padding(.vertical, 8)
+        .buttonStyle(RecentTransactionButtonStyle())
+    }
+
+    private var iconColor: Color {
+        transaction.type == .incoming ? .green : .orange
     }
 
     private var formattedDate: String {
@@ -295,28 +327,12 @@ struct CompactTransactionRow: View {
     }
 }
 
-/// Full transaction list view (accessible from "See All")
-struct FullTransactionListView: View {
-    @EnvironmentObject var walletManager: WalletManager
-    @State private var selectedTransaction: MoneroTransaction?
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(walletManager.transactions) { transaction in
-                    TransactionCard(transaction: transaction) {
-                        selectedTransaction = transaction
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-        }
-        .navigationTitle("All Transactions")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(item: $selectedTransaction) { transaction in
-            TransactionDetailView(transaction: transaction)
-        }
+struct RecentTransactionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

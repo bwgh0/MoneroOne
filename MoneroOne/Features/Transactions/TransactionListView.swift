@@ -4,7 +4,6 @@ struct TransactionListView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
-    @State private var selectedTransaction: MoneroTransaction?
 
     enum FilterType: String, CaseIterable {
         case all = "All"
@@ -41,154 +40,128 @@ struct TransactionListView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if walletManager.transactions.isEmpty {
-                    emptyState
-                } else {
-                    transactionList
+        List {
+            if filteredTransactions.isEmpty {
+                emptyState
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(filteredTransactions) { transaction in
+                    NavigationLink {
+                        TransactionDetailView(transaction: transaction)
+                    } label: {
+                        TransactionRow(transaction: transaction)
+                    }
                 }
             }
-            .navigationTitle("History")
-            .searchable(text: $searchText, prompt: "Search transactions")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(FilterType.allCases, id: \.self) { type in
-                            Button {
-                                filterType = type
-                            } label: {
-                                HStack {
-                                    Text(type.rawValue)
-                                    if filterType == type {
-                                        Image(systemName: "checkmark")
-                                    }
+        }
+        .listStyle(.plain)
+        .navigationTitle("All Transactions")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "Search by ID, address, or memo")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    ForEach(FilterType.allCases, id: \.self) { type in
+                        Button {
+                            filterType = type
+                        } label: {
+                            HStack {
+                                Text(type.rawValue)
+                                if filterType == type {
+                                    Image(systemName: "checkmark")
                                 }
                             }
                         }
-                    } label: {
-                        Image(systemName: filterType == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-                            .foregroundColor(filterType == .all ? .primary : .orange)
                     }
+                } label: {
+                    Image(systemName: filterType == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        .foregroundColor(filterType == .all ? .primary : .orange)
                 }
-            }
-            .navigationDestination(item: $selectedTransaction) { transaction in
-                TransactionDetailView(transaction: transaction)
             }
         }
     }
 
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-
-            Text("No Transactions")
-                .font(.headline)
-
-            Text("Your transaction history will appear here")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
-    }
-
-    private var transactionList: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                if filteredTransactions.isEmpty && !searchText.isEmpty {
-                    Text("No results for \"\(searchText)\"")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 40)
-                } else {
-                    ForEach(filteredTransactions) { transaction in
-                        TransactionCard(transaction: transaction) {
-                            selectedTransaction = transaction
-                        }
-                    }
-                }
+        VStack(spacing: 12) {
+            if !searchText.isEmpty {
+                Image(systemName: "magnifyingglass")
+                    .font(.largeTitle)
+                    .foregroundColor(.secondary)
+                Text("No results for \"\(searchText)\"")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else if filterType != .all {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.largeTitle)
+                    .foregroundColor(.secondary)
+                Text("No \(filterType.rawValue.lowercased()) transactions")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.largeTitle)
+                    .foregroundColor(.secondary)
+                Text("No transactions yet")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
         }
-        .refreshable {
-            await walletManager.refresh()
-        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
 }
 
-// MARK: - Transaction Card (Liquid Glass Style)
+// MARK: - Transaction Row (Standard List Style)
 
-struct TransactionCard: View {
+struct TransactionRow: View {
     let transaction: MoneroTransaction
-    let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.2))
-                        .frame(width: 44, height: 44)
+        HStack(spacing: 12) {
+            // Icon
+            Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(transaction.type == .incoming ? .green : .orange)
+                .frame(width: 36, height: 36)
+                .background(
+                    (transaction.type == .incoming ? Color.green : Color.orange)
+                        .opacity(0.15)
+                )
+                .cornerRadius(8)
 
-                    Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(iconColor)
-                }
+            // Details
+            VStack(alignment: .leading, spacing: 4) {
+                Text(transaction.type == .incoming ? "Received" : "Sent")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
 
-                // Details
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(transaction.type == .incoming ? "Received" : "Sent")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-
-                    Text(formattedDate)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                // Amount & Status
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(transaction.type == .incoming ? .green : .primary)
-
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 6, height: 6)
-                        Text(statusText)
-                            .font(.caption2)
-                            .foregroundColor(statusColor)
-                    }
-                }
-
-                // Chevron
-                Image(systemName: "chevron.right")
+                Text(formattedDate)
                     .font(.caption)
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundColor(.secondary)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(.white.opacity(0.2), lineWidth: 1)
-            )
-        }
-        .buttonStyle(TransactionCardButtonStyle())
-    }
 
-    private var iconColor: Color {
-        transaction.type == .incoming ? .green : .orange
+            Spacer()
+
+            // Amount & Status
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(transaction.type == .incoming ? .green : .primary)
+
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
+                    Text(statusText)
+                        .font(.caption2)
+                        .foregroundColor(statusColor)
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private var formattedDate: String {
@@ -223,18 +196,9 @@ struct TransactionCard: View {
     }
 }
 
-// MARK: - Custom Button Style for Cards
-
-struct TransactionCardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
 #Preview {
-    TransactionListView()
-        .environmentObject(WalletManager())
+    NavigationStack {
+        TransactionListView()
+            .environmentObject(WalletManager())
+    }
 }

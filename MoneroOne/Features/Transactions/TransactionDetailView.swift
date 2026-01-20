@@ -2,6 +2,17 @@ import SwiftUI
 
 struct TransactionDetailView: View {
     let transaction: MoneroTransaction
+    @AppStorage("isTestnet") private var isTestnet = false
+
+    private var blockExplorerURL: URL? {
+        if isTestnet {
+            // Testnet block explorer
+            return URL(string: "https://testnet.xmrchain.net/tx/\(transaction.id)")
+        } else {
+            // Mainnet block explorer
+            return URL(string: "https://xmrchain.net/tx/\(transaction.id)")
+        }
+    }
 
     var body: some View {
         List {
@@ -95,10 +106,16 @@ struct TransactionDetailView: View {
                     }
                 }
 
-                Link(destination: URL(string: "https://blockchair.com/monero/transaction/\(transaction.id)")!) {
-                    HStack {
-                        Image(systemName: "safari")
-                        Text("View in Block Explorer")
+                if let url = blockExplorerURL {
+                    Link(destination: url) {
+                        HStack {
+                            Image(systemName: "safari")
+                            Text("View in Block Explorer")
+                            Spacer()
+                            Text(isTestnet ? "Testnet" : "")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }

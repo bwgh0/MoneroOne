@@ -196,7 +196,7 @@ struct SettingsView: View {
                     } label: {
                         SettingsRow(
                             icon: "trash",
-                            title: "Delete Wallet",
+                            title: "Remove Wallet from Device",
                             color: .red
                         )
                     }
@@ -211,18 +211,32 @@ struct SettingsView: View {
             } message: {
                 Text("This will clear all sync progress and re-sync from the beginning. Your wallet and keys are not affected.")
             }
-            .alert("Delete Wallet?", isPresented: $showDeleteConfirmation) {
+            .alert("Remove Wallet from Device?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
+                Button("Remove", role: .destructive) {
                     walletManager.deleteWallet()
                 }
             } message: {
-                Text("This will remove all wallet data from this device. Make sure you have backed up your seed phrase!")
+                Text("This removes wallet data from this device only. Your wallet still exists on the blockchain and can be recovered with your seed phrase.")
             }
             .alert(isTestnet ? "Switch to Mainnet?" : "Switch to Testnet?", isPresented: $showNetworkChangeAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Switch & Reset", role: .destructive) {
                     isTestnet.toggle()
+
+                    // Auto-select first node for the new network
+                    if isTestnet {
+                        // Switched TO testnet, select first testnet node
+                        if let firstTestnetNode = MoneroWallet.testnetNodes.first {
+                            UserDefaults.standard.set(firstTestnetNode.url, forKey: "selectedTestnetNodeURL")
+                        }
+                    } else {
+                        // Switched TO mainnet, select first mainnet node
+                        if let firstMainnetNode = MoneroWallet.publicNodes.first {
+                            UserDefaults.standard.set(firstMainnetNode.url, forKey: "selectedNodeURL")
+                        }
+                    }
+
                     walletManager.resetSyncData()
                 }
             } message: {

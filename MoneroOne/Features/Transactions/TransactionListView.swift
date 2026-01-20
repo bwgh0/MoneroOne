@@ -4,7 +4,6 @@ struct TransactionListView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
-    @State private var showFilters = false
     @State private var selectedTransaction: MoneroTransaction?
 
     enum FilterType: String, CaseIterable {
@@ -73,8 +72,8 @@ struct TransactionListView: View {
                     }
                 }
             }
-            .refreshable {
-                await walletManager.refresh()
+            .navigationDestination(item: $selectedTransaction) { transaction in
+                TransactionDetailView(transaction: transaction)
             }
         }
     }
@@ -97,76 +96,99 @@ struct TransactionListView: View {
     }
 
     private var transactionList: some View {
-        List {
-            if filteredTransactions.isEmpty && !searchText.isEmpty {
-                Text("No results for \"\(searchText)\"")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .listRowBackground(Color.clear)
-            } else {
-                ForEach(filteredTransactions) { transaction in
-                    Button {
-                        selectedTransaction = transaction
-                    } label: {
-                        TransactionRow(transaction: transaction)
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                if filteredTransactions.isEmpty && !searchText.isEmpty {
+                    Text("No results for \"\(searchText)\"")
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 40)
+                } else {
+                    ForEach(filteredTransactions) { transaction in
+                        TransactionCard(transaction: transaction) {
+                            selectedTransaction = transaction
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
         }
-        .listStyle(.plain)
-        .navigationDestination(item: $selectedTransaction) { transaction in
-            TransactionDetailView(transaction: transaction)
+        .refreshable {
+            await walletManager.refresh()
         }
     }
 }
 
-// MARK: - Transaction Row
+// MARK: - Transaction Card (Liquid Glass Style)
 
-struct TransactionRow: View {
+struct TransactionCard: View {
     let transaction: MoneroTransaction
+    let onTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon
-            Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
-                .font(.title3)
-                .foregroundColor(transaction.type == .incoming ? .green : .orange)
-                .frame(width: 40, height: 40)
-                .background(
-                    (transaction.type == .incoming ? Color.green : Color.orange)
-                        .opacity(0.15)
-                )
-                .cornerRadius(10)
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(iconColor.opacity(0.2))
+                        .frame(width: 44, height: 44)
 
-            // Details
-            VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.type == .incoming ? "Received" : "Sent")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(iconColor)
+                }
 
-                Text(formattedDate)
+                // Details
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(transaction.type == .incoming ? "Received" : "Sent")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+
+                    Text(formattedDate)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Amount & Status
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(transaction.type == .incoming ? .green : .primary)
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 6, height: 6)
+                        Text(statusText)
+                            .font(.caption2)
+                            .foregroundColor(statusColor)
+                    }
+                }
+
+                // Chevron
+                Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondary.opacity(0.5))
             }
-
-            Spacer()
-
-            // Amount
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(transaction.type == .incoming ? .green : .primary)
-
-                Text(statusText)
-                    .font(.caption2)
-                    .foregroundColor(statusColor)
-            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(.white.opacity(0.2), lineWidth: 1)
+            )
         }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
+        .buttonStyle(TransactionCardButtonStyle())
+    }
+
+    private var iconColor: Color {
+        transaction.type == .incoming ? .green : .orange
     }
 
     private var formattedDate: String {
@@ -198,6 +220,17 @@ struct TransactionRow: View {
         formatter.minimumFractionDigits = 4
         formatter.maximumFractionDigits = 8
         return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
+    }
+}
+
+// MARK: - Custom Button Style for Cards
+
+struct TransactionCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

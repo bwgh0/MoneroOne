@@ -6,13 +6,26 @@ struct ReceiveView: View {
     @State private var copied = false
     @State private var requestAmount = ""
     @State private var showShareSheet = false
-    @State private var showingSubaddress = true
+    @State private var selectedAddressIndex: Int = 1 // Default to first subaddress (index 1)
 
     private var currentAddress: String {
-        if showingSubaddress {
-            return walletManager.address.isEmpty ? "Loading..." : walletManager.address
-        } else {
+        if selectedAddressIndex == 0 {
             return walletManager.primaryAddress.isEmpty ? "Loading..." : walletManager.primaryAddress
+        } else {
+            // Find the subaddress with this index
+            if let subaddr = walletManager.subaddresses.first(where: { $0.index == selectedAddressIndex }) {
+                return subaddr.address
+            }
+            // Fallback to default receive address
+            return walletManager.address.isEmpty ? "Loading..." : walletManager.address
+        }
+    }
+
+    private var addressLabel: String {
+        if selectedAddressIndex == 0 {
+            return "Main Address"
+        } else {
+            return "Subaddress #\(selectedAddressIndex)"
         }
     }
 
@@ -34,7 +47,7 @@ struct ReceiveView: View {
                         .fontWeight(.bold)
 
                     // QR Code
-                    if !walletManager.address.isEmpty {
+                    if !currentAddress.isEmpty && currentAddress != "Loading..." {
                         QRCodeView(content: qrContent)
                             .frame(width: 220, height: 220)
                             .padding()
@@ -71,49 +84,47 @@ struct ReceiveView: View {
                     }
                     .padding(.horizontal)
 
-                    // Address Type Picker
-                    Picker("Address Type", selection: $showingSubaddress) {
-                        Text("Subaddress").tag(true)
-                        Text("Main Address").tag(false)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-
-                    // Address Display
-                    VStack(spacing: 8) {
-                        Text(showingSubaddress ? "Your Subaddress" : "Your Main Address")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        Text(currentAddress)
-                            .font(.system(.caption, design: .monospaced))
-                            .multilineTextAlignment(.center)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(12)
-                            .textSelection(.enabled)
-
-                        if !showingSubaddress {
-                            Text("Main address links all your transactions. Use subaddresses for better privacy.")
-                                .font(.caption2)
-                                .foregroundColor(.orange)
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // Manage Addresses Link
+                    // Selected Address Card - Tap to change
                     NavigationLink {
-                        SubaddressListView()
+                        AddressPickerView(selectedIndex: $selectedAddressIndex)
                     } label: {
-                        HStack {
-                            Image(systemName: "list.bullet.rectangle")
-                            Text("Manage Addresses")
+                        VStack(spacing: 8) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(addressLabel)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
+
+                                    Text(formatAddress(currentAddress))
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                VStack(spacing: 2) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            if selectedAddressIndex == 0 {
+                                HStack {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.caption2)
+                                    Text("Main address links all transactions. Use subaddresses for privacy.")
+                                        .font(.caption2)
+                                }
+                                .foregroundColor(.orange)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
-                        .font(.subheadline)
-                        .foregroundColor(.orange)
+                        .padding()
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     }
-                    .padding(.top, 4)
+                    .padding(.horizontal)
 
                     // Action Buttons
                     HStack(spacing: 16) {
@@ -169,6 +180,11 @@ struct ReceiveView: View {
         }
     }
 
+    private func formatAddress(_ addr: String) -> String {
+        guard addr.count > 24 else { return addr }
+        return "\(addr.prefix(12))...\(addr.suffix(8))"
+    }
+
     private func copyAddress() {
         UIPasteboard.general.string = currentAddress
         let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -192,65 +208,91 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-// MARK: - Subaddress List View
+// MARK: - Address Picker View
 
-struct SubaddressListView: View {
+struct AddressPickerView: View {
     @EnvironmentObject var walletManager: WalletManager
-    @State private var copiedAddress: String?
+    @Environment(\.dismiss) var dismiss
+    @Binding var selectedIndex: Int
     @State private var isCreating = false
 
     var body: some View {
-        List {
-            Section("Main Address") {
-                AddressRow(
-                    label: "Primary",
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                // Main Address Card
+                AddressCard(
+                    label: "Main Address",
                     address: walletManager.primaryAddress,
                     index: 0,
-                    copiedAddress: $copiedAddress
-                )
-            }
+                    isSelected: selectedIndex == 0,
+                    showWarning: true
+                ) {
+                    selectedIndex = 0
+                    dismiss()
+                }
 
-            Section {
-                if walletManager.subaddresses.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("No subaddresses yet")
-                            .foregroundColor(.secondary)
-                        Text("Tap + to create a new subaddress for receiving payments.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                // Section Header for Subaddresses
+                HStack {
+                    Text("Subaddresses")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Button {
+                        createNewSubaddress()
+                    } label: {
+                        if isCreating {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Label("New", systemImage: "plus")
+                                .font(.subheadline)
+                        }
                     }
-                    .padding(.vertical, 4)
+                    .disabled(isCreating)
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+
+                // Subaddress Cards
+                if walletManager.subaddresses.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "rectangle.stack.badge.plus")
+                            .font(.largeTitle)
+                            .foregroundColor(.secondary)
+
+                        Text("No subaddresses yet")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        Text("Create subaddresses for better privacy when receiving payments.")
+                            .font(.caption)
+                            .foregroundColor(.secondary.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
                 } else {
                     ForEach(walletManager.subaddresses, id: \.index) { subaddr in
-                        AddressRow(
-                            label: "Subaddress \(subaddr.index)",
+                        AddressCard(
+                            label: "Subaddress #\(subaddr.index)",
                             address: subaddr.address,
                             index: subaddr.index,
-                            copiedAddress: $copiedAddress
-                        )
+                            isSelected: selectedIndex == subaddr.index,
+                            showWarning: false
+                        ) {
+                            selectedIndex = subaddr.index
+                            dismiss()
+                        }
                     }
                 }
-            } header: {
-                Text("Subaddresses")
-            } footer: {
-                Text("Subaddresses provide privacy by allowing you to receive payments to different addresses that are all linked to your wallet.")
             }
+            .padding(16)
         }
-        .navigationTitle("Addresses")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    createNewSubaddress()
-                } label: {
-                    if isCreating {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "plus")
-                    }
-                }
-                .disabled(isCreating)
-            }
-        }
+        .navigationTitle("Select Address")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func createNewSubaddress() {
@@ -262,20 +304,10 @@ struct SubaddressListView: View {
             await MainActor.run {
                 isCreating = false
 
-                if let newAddr = result {
-                    // Provide haptic feedback
+                if result != nil {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-
-                    // Briefly highlight the new address by copying it
-                    copiedAddress = newAddr.address
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        if copiedAddress == newAddr.address {
-                            copiedAddress = nil
-                        }
-                    }
                 } else {
-                    // Error feedback
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.error)
                 }
@@ -284,96 +316,95 @@ struct SubaddressListView: View {
     }
 }
 
-struct AddressRow: View {
+// MARK: - Address Card (Liquid Glass Style)
+
+struct AddressCard: View {
     let label: String
     let address: String
     let index: Int
-    @Binding var copiedAddress: String?
-
-    private var isCopied: Bool {
-        copiedAddress == address
-    }
+    let isSelected: Bool
+    let showWarning: Bool
+    let onSelect: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(label)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(label)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
 
-                Spacer()
+                            if index == 0 {
+                                Text("Primary")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.orange)
+                                    .cornerRadius(4)
+                            }
+                        }
 
-                if index == 0 {
-                    Text("Primary")
-                        .font(.caption2)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange)
-                        .cornerRadius(4)
+                        Text(formatAddress(address))
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.green)
+                    } else {
+                        Circle()
+                            .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
+                            .frame(width: 24, height: 24)
+                    }
                 }
 
-                if isCopied {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.caption)
+                if showWarning {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text("Links all transactions together")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.orange)
                 }
             }
-
-            Text(formatAddress(address))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundColor(.secondary)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.regularMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(isSelected ? Color.green.opacity(0.5) : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                    )
+            )
         }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .contextMenu {
-            Button {
-                copyAddress()
-            } label: {
-                Label("Copy Full Address", systemImage: "doc.on.doc")
-            }
-
-            Button {
-                shareAddress()
-            } label: {
-                Label("Share Address", systemImage: "square.and.arrow.up")
-            }
-        }
-        .swipeActions(edge: .trailing) {
-            Button {
-                copyAddress()
-            } label: {
-                Label("Copy", systemImage: "doc.on.doc")
-            }
-            .tint(.orange)
-        }
+        .buttonStyle(AddressCardButtonStyle())
     }
 
     private func formatAddress(_ addr: String) -> String {
         guard addr.count > 24 else { return addr }
         return "\(addr.prefix(16))...\(addr.suffix(8))"
     }
+}
 
-    private func copyAddress() {
-        UIPasteboard.general.string = address
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
+// MARK: - Custom Button Style
 
-        copiedAddress = address
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            if copiedAddress == address {
-                copiedAddress = nil
-            }
-        }
-    }
-
-    private func shareAddress() {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first,
-              let rootVC = window.rootViewController else { return }
-
-        let activityVC = UIActivityViewController(activityItems: [address], applicationActivities: nil)
-        rootVC.present(activityVC, animated: true)
+struct AddressCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

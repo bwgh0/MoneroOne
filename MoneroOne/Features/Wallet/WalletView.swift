@@ -298,20 +298,25 @@ struct CompactTransactionRow: View {
 /// Full transaction list view (accessible from "See All")
 struct FullTransactionListView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @State private var selectedTransaction: MoneroTransaction?
 
     var body: some View {
-        List {
-            ForEach(walletManager.transactions) { transaction in
-                NavigationLink {
-                    TransactionDetailView(transaction: transaction)
-                } label: {
-                    TransactionRow(transaction: transaction)
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(walletManager.transactions) { transaction in
+                    TransactionCard(transaction: transaction) {
+                        selectedTransaction = transaction
+                    }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
         }
-        .listStyle(.plain)
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedTransaction) { transaction in
+            TransactionDetailView(transaction: transaction)
+        }
     }
 }
 

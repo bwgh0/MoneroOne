@@ -12,16 +12,14 @@ struct SendConfirmationView: View {
     }
 
     var body: some View {
-        VStack(spacing: 24) {
-            // Header with proper spacing for sheet drag indicator
-            Spacer()
-                .frame(height: 8)
-
+        VStack(spacing: 16) {
+            // Header - extra top padding for drag indicator
             Text("Confirm Send")
                 .font(.title2.weight(.semibold))
+                .padding(.top, 20)
 
             // Details
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
                 // Amount
                 HStack {
                     Text("Amount")
@@ -59,7 +57,7 @@ struct SendConfirmationView: View {
             .cornerRadius(12)
 
             // Recipient
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Recipient")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -73,10 +71,8 @@ struct SendConfirmationView: View {
             .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
 
-            Spacer()
-
             // Buttons
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 Button {
                     onConfirm()
                 } label: {
@@ -88,7 +84,7 @@ struct SendConfirmationView: View {
                     }
                     .foregroundColor(.orange)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, 14)
                 }
                 .buttonStyle(.glass)
 
@@ -99,12 +95,13 @@ struct SendConfirmationView: View {
                         .font(.callout.weight(.medium))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 10)
                 }
             }
+            .padding(.top, 4)
         }
         .padding()
-        .presentationDetents([.medium])
+        .presentationDetents([.height(420)])
         .presentationDragIndicator(.visible)
     }
 

@@ -155,18 +155,24 @@ class MoneroWallet: ObservableObject {
     private func defaultNode(for networkType: MoneroKit.NetworkType = .mainnet) -> MoneroKit.Node {
         if networkType == .testnet {
             // Testnet node (port 28081)
-            let testnetURL = UserDefaults.standard.string(forKey: "selectedTestnetNodeURL") ?? Self.testnetNodes.first!.url
+            let defaultTestnetURL = Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081"
+            let testnetURL = UserDefaults.standard.string(forKey: "selectedTestnetNodeURL") ?? defaultTestnetURL
+            // Use default if URL is invalid
+            let url = URL(string: testnetURL) ?? URL(string: defaultTestnetURL)!
             return MoneroKit.Node(
-                url: URL(string: testnetURL)!,
+                url: url,
                 isTrusted: false,
                 login: nil,
                 password: nil
             )
         } else {
             // Mainnet - Load from UserDefaults or use default
-            let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? "https://xmr-node.cakewallet.com:18081"
+            let defaultMainnetURL = "https://xmr-node.cakewallet.com:18081"
+            let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? defaultMainnetURL
+            // Use default if URL is invalid
+            let url = URL(string: savedURL) ?? URL(string: defaultMainnetURL)!
             return MoneroKit.Node(
-                url: URL(string: savedURL)!,
+                url: url,
                 isTrusted: false,
                 login: nil,
                 password: nil
@@ -207,8 +213,9 @@ class MoneroWallet: ObservableObject {
     // MARK: - Lifecycle
 
     deinit {
-        NSLog("[MoneroWallet] DEINIT called - wallet being deallocated!")
-        Thread.callStackSymbols.prefix(15).forEach { NSLog("[MoneroWallet] deinit stack: \($0)") }
+        #if DEBUG
+        print("[MoneroWallet] deinit called")
+        #endif
     }
 
     func start() {
@@ -216,8 +223,9 @@ class MoneroWallet: ObservableObject {
     }
 
     func stop() {
-        NSLog("[MoneroWallet] stop() called")
-        Thread.callStackSymbols.prefix(10).forEach { NSLog("[MoneroWallet] stack: \($0)") }
+        #if DEBUG
+        print("[MoneroWallet] stop() called")
+        #endif
         kit?.stop()
     }
 
@@ -354,7 +362,10 @@ class MoneroWallet: ObservableObject {
     }
 
     private func writeDebugLog(_ message: String) {
-        let logFile = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("debug.log")
+        guard let documentDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return
+        }
+        let logFile = documentDir.appendingPathComponent("debug.log")
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let logMessage = "[\(timestamp)] \(message)\n"
         if let data = logMessage.data(using: .utf8) {

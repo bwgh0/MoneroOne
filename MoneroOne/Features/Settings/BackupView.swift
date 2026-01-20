@@ -7,7 +7,11 @@ struct BackupView: View {
     @State private var seedPhrase: [String] = []
     @State private var errorMessage: String?
     @State private var showCopiedFeedback = false
+    @State private var showCopiedAlert = false
+    @State private var clipboardClearTask: DispatchWorkItem?
     @FocusState private var isPinFocused: Bool
+
+    private let clipboardClearDelay: TimeInterval = 60 // Clear clipboard after 60 seconds
 
     var body: some View {
         VStack(spacing: 24) {
@@ -93,14 +97,7 @@ struct BackupView: View {
                 .cornerRadius(16)
 
             Button {
-                let fullPhrase = seedPhrase.joined(separator: " ")
-                UIPasteboard.general.string = fullPhrase
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                showCopiedFeedback = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showCopiedFeedback = false
-                }
+                copyToClipboard()
             } label: {
                 HStack {
                     Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
@@ -117,11 +114,49 @@ struct BackupView: View {
 
             Spacer()
 
-            Text("Warning: Anyone with this phrase can access your funds!")
+            Text("Warning: Anyone with this phrase can access your funds! Clipboard clears in 60s.")
                 .font(.caption)
                 .foregroundColor(.red)
                 .multilineTextAlignment(.center)
         }
+        .alert("Seed Copied", isPresented: $showCopiedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Your seed phrase has been copied. The clipboard will be automatically cleared in 60 seconds for security.")
+        }
+        .onDisappear {
+            clipboardClearTask?.cancel()
+        }
+    }
+
+    private func copyToClipboard() {
+        let fullPhrase = seedPhrase.joined(separator: " ")
+
+        // Cancel any existing clear task
+        clipboardClearTask?.cancel()
+
+        // Copy to clipboard
+        UIPasteboard.general.string = fullPhrase
+
+        // Haptic feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+
+        // Show feedback
+        showCopiedFeedback = true
+        showCopiedAlert = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            showCopiedFeedback = false
+        }
+
+        // Schedule clipboard clear after delay
+        let clearTask = DispatchWorkItem { [fullPhrase] in
+            if UIPasteboard.general.string == fullPhrase {
+                UIPasteboard.general.string = ""
+            }
+        }
+        clipboardClearTask = clearTask
+        DispatchQueue.main.asyncAfter(deadline: .now() + clipboardClearDelay, execute: clearTask)
     }
 
     private func unlockSeed() {

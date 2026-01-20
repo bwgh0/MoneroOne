@@ -26,7 +26,7 @@
 		<false/>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>REDACTED_IP</key>
+			<key>localhost</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
@@ -49,6 +49,10 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>LWS_TESTNET_URL</key>
+	<string>$(LWS_TESTNET_URL)</string>
+	<key>LWS_MAINNET_URL</key>
+	<string>$(LWS_MAINNET_URL)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera is used to scan QR codes</string>
 	<key>NSFaceIDUsageDescription</key>

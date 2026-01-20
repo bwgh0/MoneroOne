@@ -11,11 +11,9 @@ struct WalletView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Header with wallet icon and greeting
+                    // Header with greeting and wallet button
                     HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            DynamicGreeting()
-                        }
+                        DynamicGreeting()
                         Spacer()
                         // Wallet switcher button
                         Button {
@@ -29,24 +27,6 @@ struct WalletView: View {
                         .buttonStyle(.glass)
                     }
                     .padding(.horizontal)
-
-                    // Testnet Banner
-                    if walletManager.isTestnet {
-                        TestnetBanner()
-                            .padding(.horizontal)
-                    }
-
-                    // Error Banners
-                    VStack(spacing: 8) {
-                        OfflineBanner()
-                        SyncErrorBanner(syncState: walletManager.syncState) {
-                            Task {
-                                await walletManager.refresh()
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                    .animation(.easeInOut, value: walletManager.syncState)
 
                     // Balance Card
                     BalanceCard(
@@ -89,11 +69,24 @@ struct WalletView: View {
                 }
                 .padding(.top)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    EmptyView()
+            .safeAreaBar(edge: .top, spacing: 0) {
+                // Floating banners with progressive blur as content scrolls underneath
+                VStack(spacing: 8) {
+                    // Testnet Banner
+                    if walletManager.isTestnet {
+                        TestnetBanner()
+                    }
+
+                    // Error Banners
+                    OfflineBanner()
+                    SyncErrorBanner(syncState: walletManager.syncState) {
+                        Task {
+                            await walletManager.refresh()
+                        }
+                    }
                 }
+                .padding(.horizontal)
+                .animation(.easeInOut, value: walletManager.syncState)
             }
             .refreshable {
                 await walletManager.refresh()

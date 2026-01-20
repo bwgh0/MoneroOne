@@ -151,7 +151,10 @@ class WalletManager: ObservableObject {
         // Create MoneroWallet in light wallet mode - connects to LWS for output fetching
         // wallet2 will use LWS endpoints: /get_unspent_outs, /get_random_outs, /submit_raw_tx
         let wallet = MoneroWallet()
-        let lwsURL = URL(string: LiteWalletServerClient.testnetServerURL)! // TODO: Use mainnet URL when available
+        let lwsURLString = ServerConfiguration.lwsServerURL(isTestnet: isTestnet)
+        guard let lwsURL = URL(string: lwsURLString) else {
+            throw WalletError.invalidMnemonic // TODO: Add proper error type for invalid URL
+        }
 
         do {
             try wallet.createLightWallet(
@@ -169,8 +172,9 @@ class WalletManager: ObservableObject {
         // Both should use the same legacySeedFromBip39 conversion
         let walletAddress = wallet.primaryAddress
         let runtimeAddr = wallet.runtimePrimaryAddress
-        NSLog("[WalletManager] Lite mode - storage address: \(walletAddress.prefix(20))...")
-        NSLog("[WalletManager] Lite mode - runtime address: \(runtimeAddr.isEmpty ? "(empty - not ready)" : String(runtimeAddr.prefix(20)) + "...")")
+        #if DEBUG
+        print("[WalletManager] Lite mode initialized")
+        #endif
 
         // Get view key for LiteWalletManager (balance/tx display)
         guard let viewKey = getViewKey(from: wallet) else {
@@ -267,7 +271,9 @@ class WalletManager: ObservableObject {
     private func getViewKey(from wallet: MoneroWallet) -> String? {
         // MoneroKit exposes the secret view key through the kit
         let viewKey = wallet.secretViewKey
-        NSLog("LWS: getViewKey returned: \(viewKey != nil ? "valid key (\(viewKey!.prefix(8))...)" : "nil")")
+        #if DEBUG
+        print("[WalletManager] getViewKey returned: \(viewKey != nil ? "valid" : "nil")")
+        #endif
         return viewKey
     }
 

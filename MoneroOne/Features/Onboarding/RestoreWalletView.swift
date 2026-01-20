@@ -10,6 +10,8 @@ struct RestoreWalletView: View {
     @State private var step: Step = .enterSeed
     @State private var errorMessage: String?
     @State private var isRestoring = false
+    @State private var walletCreationDate: Date = Date()
+    @State private var useCreationDate = true
     @FocusState private var focusedField: PINField?
 
     enum PINField {
@@ -19,15 +21,21 @@ struct RestoreWalletView: View {
 
     enum Step {
         case enterSeed
+        case creationDate
         case setPIN
         case restoring
     }
+
+    // Monero testnet genesis: approximately April 2014
+    private static let genesisDate = Date(timeIntervalSince1970: 1397818193)
 
     var body: some View {
         VStack(spacing: 24) {
             switch step {
             case .enterSeed:
                 enterSeedView
+            case .creationDate:
+                creationDateView
             case .setPIN:
                 setPINView
             case .restoring:
@@ -41,7 +49,7 @@ struct RestoreWalletView: View {
 
     private var enterSeedView: some View {
         VStack(spacing: 24) {
-            Text("Enter your 25-word seed phrase")
+            Text("Enter your 24 or 25-word seed phrase")
                 .font(.headline)
 
             TextEditor(text: $seedInput)
@@ -69,11 +77,11 @@ struct RestoreWalletView: View {
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(seedWords.count == 25 ? Color.orange : Color.gray)
+                    .background(isValidSeedCount ? Color.orange : Color.gray)
                     .foregroundColor(.white)
                     .cornerRadius(14)
             }
-            .disabled(seedWords.count != 25)
+            .disabled(!isValidSeedCount)
 
             Spacer()
         }
@@ -170,23 +178,88 @@ struct RestoreWalletView: View {
             .filter { !$0.isEmpty }
     }
 
+    private var isValidSeedCount: Bool {
+        seedWords.count == 24 || seedWords.count == 25
+    }
+
     private var canProceed: Bool {
         pin.count >= 6 && pin == confirmPin
     }
 
     private func validateAndProceed() {
-        if seedWords.count == 25 {
+        if isValidSeedCount {
             errorMessage = nil
-            step = .setPIN
+            step = .creationDate
         } else {
-            errorMessage = "Please enter exactly 25 words"
+            errorMessage = "Please enter 24 or 25 words"
         }
+    }
+
+    private var creationDateView: some View {
+        VStack(spacing: 24) {
+            Text("When did you create this wallet?")
+                .font(.headline)
+
+            Text("This helps speed up transaction scanning by skipping blocks before your wallet existed.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            Toggle("Use wallet creation date", isOn: $useCreationDate)
+                .padding(.horizontal)
+
+            if useCreationDate {
+                DatePicker(
+                    "Creation date",
+                    selection: $walletCreationDate,
+                    in: Self.genesisDate...Date(),
+                    displayedComponents: [.date]
+                )
+                .datePickerStyle(.graphical)
+                .padding(.horizontal)
+            } else {
+                Text("Will scan from the beginning (slower)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Button {
+                step = .setPIN
+            } label: {
+                Text("Continue")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.orange)
+                    .foregroundColor(.white)
+                    .cornerRadius(14)
+            }
+            .padding(.horizontal)
+
+            Spacer()
+        }
+    }
+
+    /// Convert a date to approximate Monero block height
+    /// Monero block time ≈ 2 minutes (120 seconds)
+    private func blockHeightFromDate(_ date: Date) -> UInt64 {
+        let secondsSinceGenesis = date.timeIntervalSince(Self.genesisDate)
+        guard secondsSinceGenesis > 0 else { return 0 }
+        let blocks = UInt64(secondsSinceGenesis / 120) // 2 min per block
+        return blocks
+    }
+
+    var startHeight: UInt64? {
+        guard useCreationDate else { return nil }
+        return blockHeightFromDate(walletCreationDate)
     }
 
     private func restoreWallet() {
         Task {
             do {
-                try walletManager.restoreWallet(mnemonic: seedWords, pin: pin)
+                let restoreDate = useCreationDate ? walletCreationDate : nil
+                try walletManager.restoreWallet(mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
                 try walletManager.unlock(pin: pin)
             } catch {
                 await MainActor.run {

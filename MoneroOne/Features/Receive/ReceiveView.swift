@@ -6,12 +6,36 @@ struct ReceiveView: View {
     @State private var copied = false
     @State private var requestAmount = ""
     @State private var showShareSheet = false
+    @State private var selectedAddressIndex: Int = 1 // Default to first subaddress (index 1)
+
+    private var currentAddress: String {
+        if selectedAddressIndex == 0 {
+            return walletManager.primaryAddress.isEmpty ? "Loading..." : walletManager.primaryAddress
+        } else {
+            // Find the subaddress with this index
+            if let subaddr = walletManager.subaddresses.first(where: { $0.index == selectedAddressIndex }) {
+                return subaddr.address
+            }
+            // Fallback to default receive address
+            return walletManager.address.isEmpty ? "Loading..." : walletManager.address
+        }
+    }
+
+    private var addressLabel: String {
+        if selectedAddressIndex == 0 {
+            return "Main Address"
+        } else {
+            return "Subaddress #\(selectedAddressIndex)"
+        }
+    }
 
     private var qrContent: String {
+        let addr = currentAddress
+        if addr == "Loading..." { return "" }
         if let amount = Decimal(string: requestAmount), amount > 0 {
-            return "monero:\(walletManager.address)?tx_amount=\(amount)"
+            return "monero:\(addr)?tx_amount=\(amount)"
         }
-        return walletManager.address
+        return addr
     }
 
     var body: some View {
@@ -23,7 +47,7 @@ struct ReceiveView: View {
                         .fontWeight(.bold)
 
                     // QR Code
-                    if !walletManager.address.isEmpty {
+                    if !currentAddress.isEmpty && currentAddress != "Loading..." {
                         QRCodeView(content: qrContent)
                             .frame(width: 220, height: 220)
                             .padding()
@@ -60,19 +84,45 @@ struct ReceiveView: View {
                     }
                     .padding(.horizontal)
 
-                    // Address Display
-                    VStack(spacing: 8) {
-                        Text("Your Address")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                    // Selected Address Card - Tap to change
+                    NavigationLink {
+                        AddressPickerView(selectedIndex: $selectedAddressIndex)
+                    } label: {
+                        VStack(spacing: 8) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(addressLabel)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
 
-                        Text(walletManager.address.isEmpty ? "Loading..." : walletManager.address)
-                            .font(.system(.caption2, design: .monospaced))
-                            .multilineTextAlignment(.center)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(12)
-                            .textSelection(.enabled)
+                                    Text(formatAddress(currentAddress))
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                VStack(spacing: 2) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            if selectedAddressIndex == 0 {
+                                HStack {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.caption2)
+                                    Text("Main address links all transactions. Use subaddresses for privacy.")
+                                        .font(.caption2)
+                                }
+                                .foregroundColor(.orange)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding()
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     }
                     .padding(.horizontal)
 
@@ -111,7 +161,7 @@ struct ReceiveView: View {
                         .buttonStyle(.glass)
                     }
                     .padding(.horizontal)
-                    .disabled(walletManager.address.isEmpty)
+                    .disabled(currentAddress == "Loading...")
 
                     Spacer(minLength: 40)
                 }
@@ -130,8 +180,13 @@ struct ReceiveView: View {
         }
     }
 
+    private func formatAddress(_ addr: String) -> String {
+        guard addr.count > 24 else { return addr }
+        return "\(addr.prefix(12))...\(addr.suffix(8))"
+    }
+
     private func copyAddress() {
-        UIPasteboard.general.string = walletManager.address
+        UIPasteboard.general.string = currentAddress
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         copied = true
@@ -151,6 +206,206 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Address Picker View
+
+struct AddressPickerView: View {
+    @EnvironmentObject var walletManager: WalletManager
+    @Environment(\.dismiss) var dismiss
+    @Binding var selectedIndex: Int
+    @State private var isCreating = false
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                // Main Address Card
+                AddressCard(
+                    label: "Main Address",
+                    address: walletManager.primaryAddress,
+                    index: 0,
+                    isSelected: selectedIndex == 0,
+                    showWarning: true
+                ) {
+                    selectedIndex = 0
+                    dismiss()
+                }
+
+                // Section Header for Subaddresses
+                HStack {
+                    Text("Subaddresses")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Button {
+                        createNewSubaddress()
+                    } label: {
+                        if isCreating {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Label("New", systemImage: "plus")
+                                .font(.subheadline)
+                        }
+                    }
+                    .disabled(isCreating)
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+
+                // Subaddress Cards
+                if walletManager.subaddresses.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "rectangle.stack.badge.plus")
+                            .font(.largeTitle)
+                            .foregroundColor(.secondary)
+
+                        Text("No subaddresses yet")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        Text("Create subaddresses for better privacy when receiving payments.")
+                            .font(.caption)
+                            .foregroundColor(.secondary.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                } else {
+                    ForEach(walletManager.subaddresses, id: \.index) { subaddr in
+                        AddressCard(
+                            label: "Subaddress #\(subaddr.index)",
+                            address: subaddr.address,
+                            index: subaddr.index,
+                            isSelected: selectedIndex == subaddr.index,
+                            showWarning: false
+                        ) {
+                            selectedIndex = subaddr.index
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .navigationTitle("Select Address")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func createNewSubaddress() {
+        isCreating = true
+
+        Task {
+            let result = walletManager.createSubaddress()
+
+            await MainActor.run {
+                isCreating = false
+
+                if result != nil {
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                } else {
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.error)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Address Card (Liquid Glass Style)
+
+struct AddressCard: View {
+    let label: String
+    let address: String
+    let index: Int
+    let isSelected: Bool
+    let showWarning: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(label)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+
+                            if index == 0 {
+                                Text("Primary")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.orange)
+                                    .cornerRadius(4)
+                            }
+                        }
+
+                        Text(formatAddress(address))
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.green)
+                    } else {
+                        Circle()
+                            .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
+                            .frame(width: 24, height: 24)
+                    }
+                }
+
+                if showWarning {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text("Links all transactions together")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.orange)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.regularMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(isSelected ? Color.green.opacity(0.5) : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                    )
+            )
+        }
+        .buttonStyle(AddressCardButtonStyle())
+    }
+
+    private func formatAddress(_ addr: String) -> String {
+        guard addr.count > 24 else { return addr }
+        return "\(addr.prefix(16))...\(addr.suffix(8))"
+    }
+}
+
+// MARK: - Custom Button Style
+
+struct AddressCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
 }
 
 #Preview {

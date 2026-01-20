@@ -168,11 +168,28 @@ struct CreateWalletView: View {
     private func createWallet() {
         Task {
             do {
-                try walletManager.saveWallet(mnemonic: mnemonic, pin: pin)
+                // For new wallets, fetch current chain height so we skip scanning
+                // (no transactions can exist before the wallet was created)
+                let chainHeight = await fetchCurrentChainHeight()
+
+                try walletManager.saveWallet(mnemonic: mnemonic, pin: pin, restoreHeight: chainHeight)
                 try walletManager.unlock(pin: pin)
             } catch {
                 print("Error creating wallet: \(error)")
             }
+        }
+    }
+
+    /// Fetch current chain height from the LWS for instant sync of new wallets
+    private func fetchCurrentChainHeight() async -> UInt64? {
+        let client = LiteWalletServerClient(isTestnet: walletManager.isTestnet)
+        do {
+            let heightResponse = try await client.getBlockchainHeight()
+            return heightResponse.height
+        } catch {
+            print("Failed to fetch chain height: \(error)")
+            // Fall back to nil - wallet will scan from beginning
+            return nil
         }
     }
 }

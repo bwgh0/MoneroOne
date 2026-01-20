@@ -2,6 +2,17 @@ import SwiftUI
 
 struct TransactionDetailView: View {
     let transaction: MoneroTransaction
+    @AppStorage("isTestnet") private var isTestnet = false
+
+    private var blockExplorerURL: URL? {
+        if isTestnet {
+            // Testnet block explorer
+            return URL(string: "https://testnet.xmrchain.net/tx/\(transaction.id)")
+        } else {
+            // Mainnet block explorer
+            return URL(string: "https://xmrchain.net/tx/\(transaction.id)")
+        }
+    }
 
     var body: some View {
         List {
@@ -31,10 +42,18 @@ struct TransactionDetailView: View {
                     Spacer()
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(statusColor)
+                            .fill(combinedStatusColor)
                             .frame(width: 8, height: 8)
-                        Text(statusText)
+                        Text(combinedStatusText)
                     }
+                }
+
+                // Confirmations
+                HStack {
+                    Text("Confirmations")
+                    Spacer()
+                    Text("\(transaction.confirmations)")
+                        .foregroundColor(.secondary)
                 }
 
                 // Memo
@@ -87,10 +106,16 @@ struct TransactionDetailView: View {
                     }
                 }
 
-                Link(destination: URL(string: "https://blockchair.com/monero/transaction/\(transaction.id)")!) {
-                    HStack {
-                        Image(systemName: "safari")
-                        Text("View in Block Explorer")
+                if let url = blockExplorerURL {
+                    Link(destination: url) {
+                        HStack {
+                            Image(systemName: "safari")
+                            Text("View in Block Explorer")
+                            Spacer()
+                            Text(isTestnet ? "Testnet" : "")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
@@ -106,19 +131,31 @@ struct TransactionDetailView: View {
         return formatter.string(from: transaction.timestamp)
     }
 
-    private var statusText: String {
-        switch transaction.status {
-        case .pending: return "Pending"
-        case .confirmed: return "Confirmed"
-        case .failed: return "Failed"
+    private var combinedStatusText: String {
+        if transaction.status == .failed {
+            return "Failed"
+        }
+        let confs = transaction.confirmations
+        if confs == 0 {
+            return "Pending"
+        } else if confs < 10 {
+            return "Locked"
+        } else {
+            return "Confirmed"
         }
     }
 
-    private var statusColor: Color {
-        switch transaction.status {
-        case .pending: return .orange
-        case .confirmed: return .green
-        case .failed: return .red
+    private var combinedStatusColor: Color {
+        if transaction.status == .failed {
+            return .red
+        }
+        let confs = transaction.confirmations
+        if confs == 0 {
+            return .orange
+        } else if confs < 10 {
+            return .orange
+        } else {
+            return .green
         }
     }
 

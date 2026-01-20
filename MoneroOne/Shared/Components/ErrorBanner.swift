@@ -86,6 +86,32 @@ struct SyncErrorBanner: View {
     }
 }
 
+struct WalletPreparingBanner: View {
+    let progress: Double
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(.orange)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Preparing wallet for sending...")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+
+                Text("\(Int(progress))% complete")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding()
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(12)
+    }
+}
+
 #Preview("Error Banner") {
     VStack(spacing: 16) {
         ErrorBanner(
@@ -104,6 +130,8 @@ struct SyncErrorBanner: View {
             type: .warning,
             retryAction: { }
         )
+
+        WalletPreparingBanner(progress: 45)
     }
     .padding()
 }

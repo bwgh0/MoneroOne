@@ -10,10 +10,12 @@ struct SendView: View {
     @State private var memo = ""
     @State private var showScanner = false
     @State private var showConfirmation = false
+    @State private var showProgress = false
     @State private var isSending = false
     @State private var errorMessage: String?
     @State private var estimatedFee: Decimal?
-    @State private var sendSuccess = false
+    @State private var transactionHash: String?
+    @State private var sendError: String?
 
     var body: some View {
         NavigationStack {
@@ -25,6 +27,11 @@ struct SendView: View {
                             message: "No internet connection. Cannot send.",
                             type: .offline
                         )
+                    }
+
+                    // Wallet Preparing Banner (only in lite mode when not ready)
+                    if walletManager.currentSyncMode == .lite && !walletManager.isSendReady {
+                        WalletPreparingBanner(progress: walletManager.sendSyncProgress)
                     }
 
                     // Address Input
@@ -96,6 +103,13 @@ struct SendView: View {
                             TextField("0.0", text: $amount)
                                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                                 .keyboardType(.decimalPad)
+                                .onChange(of: amount) { oldValue, newValue in
+                                    // Filter to only allow valid decimal input
+                                    let filtered = filterDecimalInput(newValue)
+                                    if filtered != newValue {
+                                        amount = filtered
+                                    }
+                                }
 
                             Text("XMR")
                                 .font(.headline)
@@ -187,21 +201,35 @@ struct SendView: View {
                     address = scannedAddress
                 }
             }
-            .alert("Confirm Send", isPresented: $showConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Send", role: .destructive) {
-                    sendTransaction()
-                }
-            } message: {
-                let feeText = estimatedFee.map { " + \(formatXMR($0)) fee" } ?? ""
-                Text("Send \(amount) XMR\(feeText) to:\n\(formatAddress(address))")
+            .sheet(isPresented: $showConfirmation) {
+                SendConfirmationView(
+                    amount: Decimal(string: amount) ?? 0,
+                    fee: estimatedFee ?? 0,
+                    address: address,
+                    onConfirm: {
+                        showConfirmation = false
+                        showProgress = true
+                        sendTransaction()
+                    },
+                    onCancel: {
+                        showConfirmation = false
+                    }
+                )
             }
-            .alert("Success", isPresented: $sendSuccess) {
-                Button("Done") {
-                    dismiss()
-                }
-            } message: {
-                Text("Transaction submitted successfully")
+            .sheet(isPresented: $showProgress) {
+                TransactionProgressView(
+                    state: transactionState,
+                    onDone: {
+                        showProgress = false
+                        if transactionHash != nil {
+                            dismiss()
+                        }
+                    },
+                    onRetry: sendError != nil ? {
+                        sendError = nil
+                        sendTransaction()
+                    } : nil
+                )
             }
         }
     }
@@ -210,12 +238,23 @@ struct SendView: View {
         walletManager.isValidAddress(address)
     }
 
+    private var transactionState: TransactionProgressView.TransactionState {
+        if let hash = transactionHash {
+            return .success(txHash: hash)
+        } else if let error = sendError {
+            return .error(message: error)
+        } else {
+            return .sending
+        }
+    }
+
     private var isValidInput: Bool {
         networkMonitor.isConnected &&
         isValidAddress &&
         !amount.isEmpty &&
         (Decimal(string: amount) ?? 0) > 0 &&
-        (Decimal(string: amount) ?? 0) <= walletManager.unlockedBalance
+        (Decimal(string: amount) ?? 0) <= walletManager.unlockedBalance &&
+        (walletManager.currentSyncMode == .privacy || walletManager.isSendReady)
     }
 
     private func validateAddress() {
@@ -257,10 +296,11 @@ struct SendView: View {
 
     private func sendTransaction() {
         isSending = true
-        errorMessage = nil
+        transactionHash = nil
+        sendError = nil
 
         guard let amountDecimal = Decimal(string: amount) else {
-            errorMessage = "Invalid amount"
+            sendError = "Invalid amount"
             isSending = false
             return
         }
@@ -273,10 +313,10 @@ struct SendView: View {
                     memo: memo.isEmpty ? nil : memo
                 )
                 print("Transaction sent: \(txHash)")
+                transactionHash = txHash
                 isSending = false
-                sendSuccess = true
             } catch {
-                errorMessage = "Send failed: \(error.localizedDescription)"
+                sendError = "Send failed: \(error.localizedDescription)"
                 isSending = false
             }
         }
@@ -293,6 +333,31 @@ struct SendView: View {
     private func formatAddress(_ addr: String) -> String {
         guard addr.count > 20 else { return addr }
         return "\(addr.prefix(12))...\(addr.suffix(8))"
+    }
+
+    private func filterDecimalInput(_ input: String) -> String {
+        // Allow only digits and one decimal point
+        var hasDecimal = false
+        var result = ""
+
+        for char in input {
+            if char.isNumber {
+                result.append(char)
+            } else if char == "." && !hasDecimal {
+                hasDecimal = true
+                result.append(char)
+            }
+        }
+
+        // Limit decimal places to 12 (Monero's precision)
+        if let decimalIndex = result.firstIndex(of: ".") {
+            let afterDecimal = result.distance(from: decimalIndex, to: result.endIndex) - 1
+            if afterDecimal > 12 {
+                result = String(result.prefix(result.count - (afterDecimal - 12)))
+            }
+        }
+
+        return result
     }
 }
 

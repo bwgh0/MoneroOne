@@ -55,11 +55,14 @@ struct BalanceCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(formatXMR(balance))
                             .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
 
                         Text("XMR")
                             .font(.headline)
                             .foregroundColor(.secondary)
                     }
+                    .fixedSize(horizontal: false, vertical: true)
 
                     // Fiat value
                     if let fiatValue = priceService.formatFiatValue(balance) {
@@ -133,7 +136,7 @@ struct BalanceCard: View {
         switch syncState {
         case .idle: return "Idle"
         case .connecting: return "Connecting..."
-        case .syncing: return "Syncing..."
+        case .syncing: return "Scanning for transactions..."
         case .synced: return "Synced"
         case .error(let msg): return "Error: \(msg)"
         }

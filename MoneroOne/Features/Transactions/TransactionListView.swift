@@ -4,7 +4,6 @@ struct TransactionListView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
-    @State private var showFilters = false
 
     enum FilterType: String, CaseIterable {
         case all = "All"
@@ -41,67 +40,11 @@ struct TransactionListView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if walletManager.transactions.isEmpty {
-                    emptyState
-                } else {
-                    transactionList
-                }
-            }
-            .navigationTitle("History")
-            .searchable(text: $searchText, prompt: "Search transactions")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(FilterType.allCases, id: \.self) { type in
-                            Button {
-                                filterType = type
-                            } label: {
-                                HStack {
-                                    Text(type.rawValue)
-                                    if filterType == type {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: filterType == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-                            .foregroundColor(filterType == .all ? .primary : .orange)
-                    }
-                }
-            }
-            .refreshable {
-                walletManager.refresh()
-            }
-        }
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-
-            Text("No Transactions")
-                .font(.headline)
-
-            Text("Your transaction history will appear here")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
-    }
-
-    private var transactionList: some View {
         List {
-            if filteredTransactions.isEmpty && !searchText.isEmpty {
-                Text("No results for \"\(searchText)\"")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
+            if filteredTransactions.isEmpty {
+                emptyState
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             } else {
                 ForEach(filteredTransactions) { transaction in
                     NavigationLink {
@@ -113,10 +56,64 @@ struct TransactionListView: View {
             }
         }
         .listStyle(.plain)
+        .navigationTitle("All Transactions")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "Search by ID, address, or memo")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    ForEach(FilterType.allCases, id: \.self) { type in
+                        Button {
+                            filterType = type
+                        } label: {
+                            HStack {
+                                Text(type.rawValue)
+                                if filterType == type {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: filterType == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        .foregroundColor(filterType == .all ? .primary : .orange)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            if !searchText.isEmpty {
+                Image(systemName: "magnifyingglass")
+                    .font(.largeTitle)
+                    .foregroundColor(.secondary)
+                Text("No results for \"\(searchText)\"")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else if filterType != .all {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.largeTitle)
+                    .foregroundColor(.secondary)
+                Text("No \(filterType.rawValue.lowercased()) transactions")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.largeTitle)
+                    .foregroundColor(.secondary)
+                Text("No transactions yet")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
 }
 
-// MARK: - Transaction Row
+// MARK: - Transaction Row (Standard List Style)
 
 struct TransactionRow: View {
     let transaction: MoneroTransaction
@@ -125,14 +122,14 @@ struct TransactionRow: View {
         HStack(spacing: 12) {
             // Icon
             Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
-                .font(.title3)
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(transaction.type == .incoming ? .green : .orange)
-                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
                 .background(
                     (transaction.type == .incoming ? Color.green : Color.orange)
                         .opacity(0.15)
                 )
-                .cornerRadius(10)
+                .cornerRadius(8)
 
             // Details
             VStack(alignment: .leading, spacing: 4) {
@@ -147,16 +144,21 @@ struct TransactionRow: View {
 
             Spacer()
 
-            // Amount
+            // Amount & Status
             VStack(alignment: .trailing, spacing: 4) {
                 Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(transaction.type == .incoming ? .green : .primary)
 
-                Text(statusText)
-                    .font(.caption2)
-                    .foregroundColor(statusColor)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
+                    Text(statusText)
+                        .font(.caption2)
+                        .foregroundColor(statusColor)
+                }
             }
         }
         .padding(.vertical, 4)
@@ -195,6 +197,8 @@ struct TransactionRow: View {
 }
 
 #Preview {
-    TransactionListView()
-        .environmentObject(WalletManager())
+    NavigationStack {
+        TransactionListView()
+            .environmentObject(WalletManager())
+    }
 }

@@ -1,0 +1,6 @@
+2026-01-18 15:44:51.644 Df MoneroOne[32876:2560716] (Foundation) [MoneroCore] Initializing wallet with daemon: http://REDACTED_IP:3000, useSSL=false, lightWallet=true
+2026-01-18 15:45:17.754 Df MoneroOne[32876:2560716] (Foundation) [MoneroCore] Wallet initialized successfully with daemon, self=0x0000600003e2b400
+2026-01-18 15:45:18.576 Df MoneroOne[32876:2560716] (Foundation) [MoneroCore] Light wallet login successful, isNewWallet=false
+2026-01-18 15:45:18.578 Df MoneroOne[32876:2560716] (Foundation) [MoneroCore] Starting background refresh to fetch outputs from LWS...
+2026-01-18 15:45:18.579 Df MoneroOne[32876:2560716] (Foundation) [MoneroCore] Initialization loop skipped (FIX APPLIED)
+2026-01-18 15:45:18.580 Df MoneroOne[32876:2560716] (Foundation) [MoneroCore] Wallet primary address: 9uACtnkMLeJP3iRsijiHNSCgsXKWqFif7g3B22Es1vtTUan9iFC1Uz3BEpjkNjQJcVc2a1vcRYPrNij6AJx45vNm5TGKeR7

@@ -5,8 +5,10 @@ import Foundation
 actor LiteWalletServerClient {
     // MARK: - Server Configuration
 
-    static let testnetServerURL = "http://REDACTED_IP:3000"
-    static let mainnetServerURL = "http://REDACTED_IP:3000" // TODO: Deploy mainnet server
+    /// Get the server URL from centralized configuration
+    static func serverURL(isTestnet: Bool) -> String {
+        ServerConfiguration.lwsServerURL(isTestnet: isTestnet)
+    }
 
     private let session: URLSession
     private let baseURL: String
@@ -16,7 +18,7 @@ actor LiteWalletServerClient {
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
         self.session = URLSession(configuration: config)
-        self.baseURL = isTestnet ? Self.testnetServerURL : Self.mainnetServerURL
+        self.baseURL = Self.serverURL(isTestnet: isTestnet)
     }
 
     // MARK: - API Endpoints
@@ -238,4 +240,53 @@ struct LWSSyncStatusResponse: Decodable {
     let scannedHeight: UInt64
     let chainHeight: UInt64
     let percentComplete: Int
+}
+
+// MARK: - Server Configuration
+
+/// Centralized server configuration
+/// URLs are read from Info.plist which can be configured via xcconfig or build settings
+/// This keeps sensitive URLs out of source code for open source releases
+enum ServerConfiguration {
+
+    /// LWS server URL for testnet
+    static var testnetLWSServerURL: String {
+        // Read from Info.plist, fall back to environment variable, then default
+        if let url = Bundle.main.object(forInfoDictionaryKey: "LWS_TESTNET_URL") as? String,
+           !url.isEmpty, !url.hasPrefix("$") {
+            return url
+        }
+        if let url = ProcessInfo.processInfo.environment["LWS_TESTNET_URL"],
+           !url.isEmpty {
+            return url
+        }
+        // Default for development - this should be overridden in production builds
+        #if DEBUG
+        return "http://localhost:3000"
+        #else
+        fatalError("LWS_TESTNET_URL not configured. Set in Info.plist or environment.")
+        #endif
+    }
+
+    /// LWS server URL for mainnet
+    static var mainnetLWSServerURL: String {
+        if let url = Bundle.main.object(forInfoDictionaryKey: "LWS_MAINNET_URL") as? String,
+           !url.isEmpty, !url.hasPrefix("$") {
+            return url
+        }
+        if let url = ProcessInfo.processInfo.environment["LWS_MAINNET_URL"],
+           !url.isEmpty {
+            return url
+        }
+        #if DEBUG
+        return "http://localhost:3000"
+        #else
+        fatalError("LWS_MAINNET_URL not configured. Set in Info.plist or environment.")
+        #endif
+    }
+
+    /// Get the appropriate LWS URL based on network
+    static func lwsServerURL(isTestnet: Bool) -> String {
+        isTestnet ? testnetLWSServerURL : mainnetLWSServerURL
+    }
 }

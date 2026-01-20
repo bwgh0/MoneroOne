@@ -11,14 +11,27 @@ class BackgroundSyncManager: NSObject, ObservableObject {
     @Published var isEnabled: Bool = false
     @Published var isSyncing: Bool = false
     @Published var lastSyncTime: Date?
+    @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
     private var locationManager: CLLocationManager?
+    private var statusCheckManager: CLLocationManager? // For checking status without starting updates
     private var walletManager: WalletManager?
     private let enabledKey = "backgroundSyncEnabled"
 
     private override init() {
         super.init()
         isEnabled = UserDefaults.standard.bool(forKey: enabledKey)
+        // Create a temporary manager just to check authorization status
+        checkAuthorizationStatus()
+    }
+
+    /// Check the current authorization status without starting location updates
+    private func checkAuthorizationStatus() {
+        if statusCheckManager == nil {
+            statusCheckManager = CLLocationManager()
+            statusCheckManager?.delegate = self
+        }
+        authorizationStatus = statusCheckManager?.authorizationStatus ?? .notDetermined
     }
 
     func configure(walletManager: WalletManager) {
@@ -124,10 +137,6 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         }
     }
 
-    var authorizationStatus: CLAuthorizationStatus {
-        locationManager?.authorizationStatus ?? .notDetermined
-    }
-
     var needsAuthorization: Bool {
         let status = authorizationStatus
         return status == .notDetermined || status == .denied || status == .restricted
@@ -139,6 +148,12 @@ extension BackgroundSyncManager: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor in
+            // Always update the published status so UI reflects changes
+            authorizationStatus = status
+
+            // Only act on the main location manager (not the status check manager)
+            guard manager === locationManager else { return }
+
             switch status {
             case .authorizedAlways:
                 // Now we can safely enable background updates

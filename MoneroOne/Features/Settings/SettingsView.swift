@@ -221,7 +221,7 @@ struct SettingsView: View {
             }
             .alert(isTestnet ? "Switch to Mainnet?" : "Switch to Testnet?", isPresented: $showNetworkChangeAlert) {
                 Button("Cancel", role: .cancel) { }
-                Button("Switch & Reset", role: .destructive) {
+                Button("Switch Network") {
                     isTestnet.toggle()
 
                     // Auto-select first node for the new network
@@ -237,13 +237,13 @@ struct SettingsView: View {
                         }
                     }
 
-                    walletManager.resetSyncData()
+                    walletManager.switchNetwork()
                 }
             } message: {
                 if isTestnet {
-                    Text("Switching to mainnet will reset sync progress. Your wallet seed remains the same but will sync on the main Monero network.")
+                    Text("Switching to mainnet. Your sync progress for each network is saved separately.")
                 } else {
-                    Text("Switching to testnet will reset sync progress. Testnet XMR has no real value. Note: Testnet nodes are often unreliable.")
+                    Text("Switching to testnet. Testnet XMR has no real value. Your mainnet sync progress will be preserved.")
                 }
             }
         }

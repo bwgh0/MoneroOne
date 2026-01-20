@@ -1,0 +1,11 @@
+// Debug configuration for MoneroOne
+// These values are for development/testing only
+
+// Light Wallet Server URLs
+// For local development, use localhost
+// For testing against remote server, set actual URL here
+LWS_TESTNET_URL = http://localhost:3000
+LWS_MAINNET_URL = http://localhost:3000
+
+// Note: For production builds, create a Release.xcconfig with actual server URLs
+// Never commit production server URLs to source control

@@ -50,54 +50,85 @@ struct SyncSettingsView: View {
 
             // Sync Mode Selection
             Section {
-                ForEach(SyncMode.allCases, id: \.self) { mode in
-                    Button {
-                        selectMode(mode)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: mode.icon)
-                                .font(.title3)
-                                .foregroundColor(mode == .lite ? .orange : .blue)
-                                .frame(width: 32)
+                // Lite Mode - Coming Soon (disabled)
+                HStack(spacing: 12) {
+                    Image(systemName: "bolt.fill")
+                        .font(.title3)
+                        .foregroundColor(.gray.opacity(0.4))
+                        .frame(width: 32)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(mode.rawValue)
-                                        .font(.body)
-                                        .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text("Lite Mode")
+                                .font(.body)
+                                .foregroundColor(.gray)
 
-                                    if mode == walletManager.currentSyncMode {
-                                        Text("Active")
-                                            .font(.caption2)
-                                            .fontWeight(.medium)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Color.green.opacity(0.2))
-                                            .foregroundColor(.green)
-                                            .cornerRadius(4)
-                                    }
-                                }
-
-                                Text(mode.description)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            Spacer()
-
-                            if syncMode == mode.rawValue {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(.orange)
-                            }
+                            Text("Coming Soon")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.15))
+                                .foregroundColor(.orange)
+                                .cornerRadius(4)
                         }
-                        .contentShape(Rectangle())
+
+                        Text("Fast sync using Light Wallet Server. Your view key is shared with the server.")
+                            .font(.caption)
+                            .foregroundColor(.gray.opacity(0.6))
                     }
-                    .buttonStyle(.plain)
+
+                    Spacer()
                 }
+                .listRowBackground(Color(.systemGray6))
+
+                // Privacy Mode - selectable
+                Button {
+                    selectMode(.privacy)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "shield.fill")
+                            .font(.title3)
+                            .foregroundColor(.blue)
+                            .frame(width: 32)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text("Privacy Mode")
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+
+                                if walletManager.currentSyncMode == .privacy {
+                                    Text("Active")
+                                        .font(.caption2)
+                                        .fontWeight(.medium)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.green.opacity(0.2))
+                                        .foregroundColor(.green)
+                                        .cornerRadius(4)
+                                }
+                            }
+
+                            Text("Full privacy sync using remote node. Slower but your keys stay local.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        if syncMode == SyncMode.privacy.rawValue {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             } header: {
                 Text("Sync Mode")
             } footer: {
-                Text("Lite Mode syncs faster but shares your view key with a server. Privacy Mode keeps all keys local.")
+                Text("Privacy Mode syncs directly with a remote node. Your keys never leave your device.")
             }
 
             // Restore Height
@@ -138,14 +169,7 @@ struct SyncSettingsView: View {
                     set: { syncManager.setEnabled($0) }
                 )) {
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Background Sync")
-                            if syncManager.isEnabled {
-                                Text(permissionStatus)
-                                    .font(.caption)
-                                    .foregroundColor(permissionColor)
-                            }
-                        }
+                        Text("Background Sync")
                     } icon: {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .foregroundColor(.orange)
@@ -153,13 +177,51 @@ struct SyncSettingsView: View {
                 }
                 .tint(.orange)
 
-                if syncManager.isEnabled && syncManager.needsAuthorization {
-                    Button {
-                        openSettings()
-                    } label: {
-                        Label("Grant Location Permission", systemImage: "gear")
-                            .foregroundColor(.orange)
+                // Always show permission status
+                HStack {
+                    Text("Location Permission")
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(permissionColor)
+                            .frame(width: 8, height: 8)
+                        Text(permissionStatus)
+                            .foregroundColor(permissionColor)
                     }
+                }
+
+                // Show warning and action button if not authorized always
+                if syncManager.authorizationStatus != .authorizedAlways {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text("Action Required")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                        }
+
+                        Text(permissionWarningText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Button {
+                            openSettings()
+                        } label: {
+                            HStack {
+                                Image(systemName: "gear")
+                                Text("Open Settings")
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption)
+                            }
+                            .padding()
+                            .background(Color.orange)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                    }
+                    .padding(.vertical, 4)
                 }
 
                 Button {
@@ -266,6 +328,21 @@ struct SyncSettingsView: View {
         case .authorizedAlways: return .green
         case .authorizedWhenInUse: return .orange
         default: return .red
+        }
+    }
+
+    private var permissionWarningText: String {
+        switch syncManager.authorizationStatus {
+        case .authorizedWhenInUse:
+            return "Background sync requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable background syncing."
+        case .denied:
+            return "Location access was denied. Go to Settings > Location and enable location access, then select \"Always\"."
+        case .restricted:
+            return "Location access is restricted on this device. Check your device settings or parental controls."
+        case .notDetermined:
+            return "Location permission hasn't been granted yet. Go to Settings > Location and select \"Always\"."
+        default:
+            return "Please enable \"Always\" location access in Settings to use background sync."
         }
     }
 

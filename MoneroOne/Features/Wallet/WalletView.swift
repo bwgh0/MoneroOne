@@ -89,7 +89,8 @@ struct WalletView: View {
                 }
                 .padding(.top)
             }
-            .navigationBarHidden(true)
+            .navigationTitle("Wallet")
+            .navigationBarTitleDisplayMode(.inline)
             .refreshable {
                 await walletManager.refresh()
                 await priceService.fetchPrice()
@@ -205,31 +206,36 @@ struct RecentTransactionsSection: View {
             }
 
             if recentTransactions.isEmpty {
-                VStack(spacing: 12) {
-                    if isSyncing {
-                        // Still syncing - show syncing message
-                        ProgressView()
-                            .tint(.orange)
-                        Text("Syncing transactions...")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Text("Your transactions will appear here once synced")
-                            .font(.caption)
-                            .foregroundColor(.secondary.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                    } else {
-                        // Synced but no transactions
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.largeTitle)
-                            .foregroundColor(.secondary)
-                        Text("No transactions yet")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                Button(action: {}) {
+                    VStack(spacing: 12) {
+                        if isSyncing {
+                            // Still syncing - show syncing message
+                            ProgressView()
+                                .tint(.orange)
+                            Text("Syncing transactions...")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                            Text("Your transactions will appear here once synced")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        } else {
+                            // Synced but no transactions
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.largeTitle)
+                                .foregroundStyle(.secondary)
+                            Text("No transactions yet")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 32)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .buttonStyle(.glass)
+                .disabled(true)
             } else {
                 VStack(spacing: 8) {
                     ForEach(recentTransactions) { transaction in

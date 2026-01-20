@@ -2,7 +2,26 @@ import SwiftUI
 
 struct TransactionDetailView: View {
     let transaction: MoneroTransaction
+    @EnvironmentObject var walletManager: WalletManager
     @AppStorage("isTestnet") private var isTestnet = false
+
+    /// For incoming transactions, determine which subaddress received the funds
+    private var receivingSubaddressLabel: String? {
+        guard transaction.type == .incoming, !transaction.address.isEmpty else { return nil }
+
+        // Check if it's the main address
+        if transaction.address == walletManager.primaryAddress {
+            return "Main Address"
+        }
+
+        // Try to find matching subaddress
+        if let subaddr = walletManager.subaddresses.first(where: { $0.address == transaction.address }) {
+            return "Subaddress #\(subaddr.index)"
+        }
+
+        // Address found but not in our current list (might be old)
+        return "Subaddress"
+    }
 
     private var blockExplorerURL: URL? {
         if isTestnet {
@@ -84,10 +103,37 @@ struct TransactionDetailView: View {
                         .textSelection(.enabled)
                 }
 
-                // Address
-                if !transaction.address.isEmpty {
+                // For incoming: show which subaddress received the funds
+                if transaction.type == .incoming && !transaction.address.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(transaction.type == .incoming ? "From" : "To")
+                        HStack {
+                            Text("Received on")
+                            Spacer()
+                            if let label = receivingSubaddressLabel {
+                                Text(label)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Text(transaction.address)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                    }
+
+                    // Privacy note about sender
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.shield")
+                            .foregroundColor(.green)
+                        Text("Sender address hidden by Monero privacy")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // For outgoing: show recipient if available
+                if transaction.type == .outgoing && !transaction.address.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Sent to")
                         Text(transaction.address)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.secondary)
@@ -181,5 +227,6 @@ struct TransactionDetailView: View {
             status: .confirmed,
             memo: nil
         ))
+        .environmentObject(WalletManager())
     }
 }

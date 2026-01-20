@@ -10,6 +10,8 @@ struct CreateWalletView: View {
     @State private var pin = ""
     @State private var confirmPin = ""
     @State private var step: Step = .setPIN
+    @State private var errorMessage: String?
+    @State private var showErrorAlert = false
     @FocusState private var focusedField: PINField?
 
     enum PINField {
@@ -39,6 +41,13 @@ struct CreateWalletView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             mnemonic = walletManager.generateNewWallet()
+        }
+        .alert("Error Creating Wallet", isPresented: $showErrorAlert) {
+            Button("Try Again") {
+                step = .setPIN
+            }
+        } message: {
+            Text(errorMessage ?? "An unknown error occurred. Please try again.")
         }
     }
 
@@ -175,7 +184,10 @@ struct CreateWalletView: View {
                 try walletManager.saveWallet(mnemonic: mnemonic, pin: pin, restoreHeight: chainHeight)
                 try walletManager.unlock(pin: pin)
             } catch {
-                print("Error creating wallet: \(error)")
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showErrorAlert = true
+                }
             }
         }
     }
@@ -187,7 +199,9 @@ struct CreateWalletView: View {
             let heightResponse = try await client.getBlockchainHeight()
             return heightResponse.height
         } catch {
+            #if DEBUG
             print("Failed to fetch chain height: \(error)")
+            #endif
             // Fall back to nil - wallet will scan from beginning
             return nil
         }

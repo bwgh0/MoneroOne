@@ -1,0 +1,14 @@
+// Release configuration for MoneroOne
+//
+// IMPORTANT: Set these values before building for production
+// Do NOT commit actual server URLs to source control
+//
+// Options:
+// 1. Set via environment variables in CI/CD
+// 2. Create a local Release.local.xcconfig (gitignored) that includes this file
+// 3. Set in Xcode build settings
+
+// Light Wallet Server URLs - MUST be configured before release
+// Use HTTPS in production!
+LWS_TESTNET_URL = $(LWS_TESTNET_URL)
+LWS_MAINNET_URL = $(LWS_MAINNET_URL)

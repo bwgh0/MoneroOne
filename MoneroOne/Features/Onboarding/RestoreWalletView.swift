@@ -9,6 +9,7 @@ struct RestoreWalletView: View {
     @State private var confirmPin = ""
     @State private var step: Step = .enterSeed
     @State private var errorMessage: String?
+    @State private var showErrorAlert = false
     @State private var isRestoring = false
     @State private var walletCreationDate: Date = Date()
     @State private var useCreationDate = true
@@ -45,6 +46,13 @@ struct RestoreWalletView: View {
         .padding()
         .navigationTitle("Restore Wallet")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Error Restoring Wallet", isPresented: $showErrorAlert) {
+            Button("OK") {
+                step = .enterSeed
+            }
+        } message: {
+            Text(errorMessage ?? "An unknown error occurred. Please check your seed phrase and try again.")
+        }
     }
 
     private var enterSeedView: some View {
@@ -264,7 +272,7 @@ struct RestoreWalletView: View {
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
-                    step = .enterSeed
+                    showErrorAlert = true
                 }
             }
         }

@@ -110,7 +110,9 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
         previewLayer?.frame = view.layer.bounds
         previewLayer?.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(previewLayer!)
+        if let layer = previewLayer {
+            view.layer.addSublayer(layer)
+        }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.captureSession?.startRunning()

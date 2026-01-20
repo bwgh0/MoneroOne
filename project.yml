@@ -51,9 +51,9 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
           NSExceptionDomains:
-            REDACTED_IP:
+            lws.monero.one:
               NSExceptionAllowsInsecureHTTPLoads: true
-              NSIncludesSubdomains: false
+              NSIncludesSubdomains: true
     settings:
       base:
         INFOPLIST_FILE: MoneroOne/Info.plist

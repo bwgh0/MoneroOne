@@ -98,15 +98,6 @@ struct UnlockView: View {
             }
 
             Spacer()
-
-            // Delete Wallet Option
-            Button {
-                // This should show a confirmation dialog
-            } label: {
-                Text("Forgot PIN?")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
         }
         .padding()
         .onAppear {

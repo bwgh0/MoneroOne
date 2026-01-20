@@ -20,7 +20,7 @@ struct AnimatedMoneroLogo: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
                 .overlay {
-                    // Shine sweep
+                    // Shine sweep - clipped to circle so it doesn't extend beyond the logo
                     GeometryReader { geo in
                         LinearGradient(
                             colors: [
@@ -37,11 +37,7 @@ struct AnimatedMoneroLogo: View {
                         .blur(radius: 8)
                         .offset(x: shineOffset * geo.size.width)
                     }
-                    .mask {
-                        Image(imageName)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    }
+                    .clipShape(Circle())
                 }
                 .offset(y: floating ? -10 : 10)
 

@@ -58,8 +58,9 @@ class NodeManager: ObservableObject {
         let nodeKey = testnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
         let nodes = testnet ? Self.defaultTestnetNodes : Self.defaultNodes
 
-        // Load selected node from UserDefaults
-        let savedURL = UserDefaults.standard.string(forKey: nodeKey) ?? nodes[0].url
+        // Load selected node from UserDefaults (use first default node as fallback)
+        let defaultURL = nodes.first?.url ?? "https://xmr-node.cakewallet.com:18081"
+        let savedURL = UserDefaults.standard.string(forKey: nodeKey) ?? defaultURL
         if let node = nodes.first(where: { $0.url == savedURL }) {
             selectedNode = node
         } else {
@@ -89,7 +90,9 @@ class NodeManager: ObservableObject {
 
         // If removed node was selected, switch to default
         if selectedNode.id == node.id {
-            selectNode(currentDefaultNodes[0])
+            if let defaultNode = currentDefaultNodes.first {
+                selectNode(defaultNode)
+            }
         }
     }
 

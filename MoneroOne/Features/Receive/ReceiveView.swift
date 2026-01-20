@@ -16,8 +16,8 @@ struct ReceiveView: View {
             if let subaddr = walletManager.subaddresses.first(where: { $0.index == selectedAddressIndex }) {
                 return subaddr.address
             }
-            // Fallback to default receive address
-            return walletManager.address.isEmpty ? "Loading..." : walletManager.address
+            // Subaddress not loaded yet - show loading instead of wrong address
+            return "Loading..."
         }
     }
 
@@ -38,6 +38,24 @@ struct ReceiveView: View {
         return addr
     }
 
+    private var shareItems: [Any] {
+        var items: [Any] = []
+
+        // Generate QR code image
+        if let qrImage = QRCodeRenderer.renderToImage(content: qrContent) {
+            items.append(qrImage)
+        }
+
+        // Create share message
+        var message = "Send me Monero (XMR) at this address:\n\n\(currentAddress)"
+        if let amount = Decimal(string: requestAmount), amount > 0 {
+            message = "Send me \(requestAmount) XMR at this address:\n\n\(currentAddress)"
+        }
+        items.append(message)
+
+        return items
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -49,16 +67,13 @@ struct ReceiveView: View {
                     // QR Code
                     if !currentAddress.isEmpty && currentAddress != "Loading..." {
                         QRCodeView(content: qrContent)
-                            .frame(width: 220, height: 220)
-                            .padding()
-                            .background(Color.white)
-                            .cornerRadius(16)
+                            .frame(width: 280, height: 280)
                             .shadow(color: .black.opacity(0.1), radius: 10)
                     } else {
                         Rectangle()
                             .fill(Color(.secondarySystemBackground))
-                            .frame(width: 220, height: 220)
-                            .cornerRadius(16)
+                            .frame(width: 280, height: 280)
+                            .cornerRadius(20)
                             .overlay {
                                 ProgressView()
                             }
@@ -175,7 +190,7 @@ struct ReceiveView: View {
                 }
             }
             .sheet(isPresented: $showShareSheet) {
-                ShareSheet(items: [qrContent])
+                ShareSheet(items: shareItems)
             }
         }
     }
@@ -256,8 +271,10 @@ struct AddressPickerView: View {
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
 
-                // Subaddress Cards
-                if walletManager.subaddresses.isEmpty {
+                // Subaddress Cards (filter out index 0 since it's the main address shown above)
+                let actualSubaddresses = walletManager.subaddresses.filter { $0.index > 0 }
+
+                if actualSubaddresses.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "rectangle.stack.badge.plus")
                             .font(.largeTitle)
@@ -275,7 +292,7 @@ struct AddressPickerView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
                 } else {
-                    ForEach(walletManager.subaddresses, id: \.index) { subaddr in
+                    ForEach(actualSubaddresses, id: \.index) { subaddr in
                         AddressCard(
                             label: "Subaddress #\(subaddr.index)",
                             address: subaddr.address,

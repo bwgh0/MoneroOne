@@ -9,22 +9,89 @@ DerivedData/
 *.mode2v3
 *.perspectivev3
 xcuserdata/
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
 
 # Swift Package Manager
 .build/
 .swiftpm/
 Package.resolved
 
-# CocoaPods (if used later)
+# CocoaPods
 Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts/
 
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
 *.swp
 *~
+.Spotlight-V100
+.Trashes
 
-# Secrets
+# Secrets & Credentials - NEVER COMMIT
 *.env
+*.env.*
+.env.local
+secrets/
+credentials/
+*.p12
+*.mobileprovision
+*.provisionprofile
+AuthKey_*.p8
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
 
-# Claude plans
+# API Keys
+**/APIKeys.swift
+**/Secrets.swift
+
+# Debug & Log files - NEVER COMMIT
+*_logs.txt
+*.log
+logs/
+*.crash
+crash_reports/
+debug_output/
+
+# Test artifacts
+*.xcresult
+coverage/
+test_output/
+
+# IDE & Editor
+.idea/
+*.iml
+.vscode/
+*.sublime-*
+.nova/
+
+# Claude & AI
 .claude/
+*.plan
+*.plan.md
+
+# Archives
+*.xcarchive
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Scripts with hardcoded values (create from .example)
+test_*.sh
+!scripts/*.sh

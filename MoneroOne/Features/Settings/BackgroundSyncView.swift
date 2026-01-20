@@ -24,6 +24,41 @@ struct BackgroundSyncView: View {
             }
 
             if syncManager.isEnabled {
+                // Show warning if not "Always" permission
+                if syncManager.authorizationStatus != .authorizedAlways {
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                Text("Location Access Required")
+                                    .font(.headline)
+                            }
+
+                            Text(permissionWarningText)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            Button {
+                                openSettings()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "gear")
+                                    Text("Open Settings")
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption)
+                                }
+                                .padding()
+                                .background(Color.orange)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+
                 Section("Status") {
                     HStack {
                         Text("Permission")
@@ -49,20 +84,6 @@ struct BackgroundSyncView: View {
                             Spacer()
                             Text(lastSync, style: .relative)
                                 .foregroundColor(.secondary)
-                        }
-                    }
-                }
-
-                if syncManager.needsAuthorization {
-                    Section {
-                        Button {
-                            openSettings()
-                        } label: {
-                            HStack {
-                                Image(systemName: "gear")
-                                Text("Open Settings to Grant Permission")
-                            }
-                            .foregroundColor(.orange)
                         }
                     }
                 }
@@ -112,6 +133,21 @@ struct BackgroundSyncView: View {
             return .orange
         default:
             return .red
+        }
+    }
+
+    private var permissionWarningText: String {
+        switch syncManager.authorizationStatus {
+        case .authorizedWhenInUse:
+            return "Background sync requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable background syncing."
+        case .denied:
+            return "Location access was denied. Go to Settings > Location and enable location access, then select \"Always\"."
+        case .restricted:
+            return "Location access is restricted on this device. Check your device settings or parental controls."
+        case .notDetermined:
+            return "Location permission hasn't been granted yet. Go to Settings > Location and select \"Always\"."
+        default:
+            return "Please enable \"Always\" location access in Settings to use background sync."
         }
     }
 

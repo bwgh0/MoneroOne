@@ -31,52 +31,89 @@ struct SyncModeView: View {
         List {
             Section {
                 ForEach(SyncMode.allCases, id: \.self) { mode in
-                    Button {
-                        selectMode(mode)
-                    } label: {
+                    if mode == .lite {
+                        // Lite Mode - Coming Soon (disabled)
                         HStack(spacing: 12) {
                             Image(systemName: mode.icon)
                                 .font(.title2)
-                                .foregroundColor(mode == .lite ? .orange : .blue)
+                                .foregroundColor(.gray)
                                 .frame(width: 40)
 
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
                                     Text(mode.rawValue)
                                         .font(.headline)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(.secondary)
 
-                                    if mode == walletManager.currentSyncMode {
-                                        Text("Active")
-                                            .font(.caption2)
-                                            .fontWeight(.medium)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Color.green.opacity(0.2))
-                                            .foregroundColor(.green)
-                                            .cornerRadius(4)
-                                    }
+                                    Text("Coming Soon")
+                                        .font(.caption2)
+                                        .fontWeight(.medium)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.gray.opacity(0.2))
+                                        .foregroundColor(.secondary)
+                                        .cornerRadius(4)
                                 }
 
                                 Text(mode.description)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.secondary.opacity(0.7))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
 
                             Spacer()
-
-                            if syncMode == mode.rawValue {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.orange)
-                            }
                         }
                         .padding(.vertical, 8)
+                        .opacity(0.6)
+                    } else {
+                        // Privacy Mode - selectable
+                        Button {
+                            selectMode(mode)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: mode.icon)
+                                    .font(.title2)
+                                    .foregroundColor(.blue)
+                                    .frame(width: 40)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(mode.rawValue)
+                                            .font(.headline)
+                                            .foregroundColor(.primary)
+
+                                        if mode == walletManager.currentSyncMode {
+                                            Text("Active")
+                                                .font(.caption2)
+                                                .fontWeight(.medium)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.green.opacity(0.2))
+                                                .foregroundColor(.green)
+                                                .cornerRadius(4)
+                                        }
+                                    }
+
+                                    Text(mode.description)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                Spacer()
+
+                                if syncMode == mode.rawValue {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.orange)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
                     }
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Lite Mode is recommended for most users. Privacy Mode offers maximum privacy but requires more bandwidth and time.")
+                    Text("Privacy Mode syncs directly with a remote node. Your keys never leave your device.")
 
                     if walletManager.isUnlocked {
                         Text("Switching modes will restart your wallet sync.")

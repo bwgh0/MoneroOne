@@ -95,3 +95,6 @@ temp/
 # Scripts with hardcoded values (create from .example)
 test_*.sh
 !scripts/*.sh
+
+# Local docs for Claude
+ICON_SETUP.md

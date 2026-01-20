@@ -3,11 +3,13 @@ import SwiftUI
 struct UnlockView: View {
     @EnvironmentObject var walletManager: WalletManager
     @StateObject private var biometricAuth = BiometricAuthManager()
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var pin = ""
     @State private var errorMessage: String?
     @State private var isUnlocking = false
     @State private var attempts = 0
+    @State private var hasAttemptedBiometrics = false
     @FocusState private var isPinFocused: Bool
 
     var body: some View {
@@ -108,13 +110,29 @@ struct UnlockView: View {
         }
         .padding()
         .onAppear {
-            // Auto-trigger biometrics if enabled
-            if biometricAuth.canUseBiometrics && walletManager.hasBiometricPinStored {
-                unlockWithBiometrics()
-            } else {
-                // Focus PIN field if not using biometrics
-                isPinFocused = true
+            triggerBiometricsIfAvailable()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                // Reset flag when becoming active so we can try biometrics again
+                hasAttemptedBiometrics = false
+                triggerBiometricsIfAvailable()
             }
+        }
+    }
+
+    private func triggerBiometricsIfAvailable() {
+        guard !hasAttemptedBiometrics else { return }
+        guard !isUnlocking else { return }
+
+        if biometricAuth.canUseBiometrics && walletManager.hasBiometricPinStored {
+            hasAttemptedBiometrics = true
+            // Small delay to let the UI settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                unlockWithBiometrics()
+            }
+        } else {
+            isPinFocused = true
         }
     }
 

@@ -23,9 +23,13 @@ jobs:
           path: MoneroKit.Swift
 
       - name: Fix MoneroKit path for CI
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           # Update project.yml to use local path instead of sibling
           sed -i '' 's|path: ../MoneroKit.Swift|path: MoneroKit.Swift|' project.yml
+          # Set development team for signing
+          sed -i '' "s|DEVELOPMENT_TEAM: \"\"|DEVELOPMENT_TEAM: \"$TEAM_ID\"|" project.yml
           # Regenerate Xcode project
           brew install xcodegen
           xcodegen generate

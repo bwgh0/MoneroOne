@@ -6,7 +6,7 @@ struct ReceiveView: View {
     @State private var copied = false
     @State private var requestAmount = ""
     @State private var showShareSheet = false
-    @State private var selectedAddressIndex: Int = 1 // Default to first subaddress (index 1)
+    @State private var selectedAddressIndex: Int = 0 // Default to main address
 
     private var currentAddress: String {
         if selectedAddressIndex == 0 {

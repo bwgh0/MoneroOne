@@ -315,18 +315,30 @@ struct RecentTransactionCard: View {
     }
 
     private var statusText: String {
-        switch transaction.status {
-        case .pending: return "Pending"
-        case .confirmed: return "Confirmed"
-        case .failed: return "Failed"
+        if transaction.status == .failed {
+            return "Failed"
+        }
+        let confs = transaction.confirmations
+        if confs == 0 {
+            return "Pending"
+        } else if confs < 10 {
+            return "Locked"
+        } else {
+            return "Confirmed"
         }
     }
 
     private var statusColor: Color {
-        switch transaction.status {
-        case .pending: return .orange
-        case .confirmed: return .green
-        case .failed: return .red
+        if transaction.status == .failed {
+            return .red
+        }
+        let confs = transaction.confirmations
+        if confs == 0 {
+            return .orange
+        } else if confs < 10 {
+            return .orange
+        } else {
+            return .green
         }
     }
 

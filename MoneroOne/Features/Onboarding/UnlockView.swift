@@ -9,7 +9,7 @@ struct UnlockView: View {
     @State private var errorMessage: String?
     @State private var isUnlocking = false
     @State private var attempts = 0
-    @State private var hasAttemptedBiometrics = false
+    @State private var lastBiometricAttempt: Date?
     @FocusState private var isPinFocused: Bool
 
     var body: some View {
@@ -105,19 +105,20 @@ struct UnlockView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                // Reset flag when becoming active so we can try biometrics again
-                hasAttemptedBiometrics = false
                 triggerBiometricsIfAvailable()
             }
         }
     }
 
     private func triggerBiometricsIfAvailable() {
-        guard !hasAttemptedBiometrics else { return }
+        // Debounce: don't retry within 2 seconds
+        if let last = lastBiometricAttempt, Date().timeIntervalSince(last) < 2 {
+            return
+        }
         guard !isUnlocking else { return }
 
         if biometricAuth.canUseBiometrics && walletManager.hasBiometricPinStored {
-            hasAttemptedBiometrics = true
+            lastBiometricAttempt = Date()
             // Small delay to let the UI settle
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 unlockWithBiometrics()

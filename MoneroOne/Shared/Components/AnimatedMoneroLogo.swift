@@ -19,6 +19,8 @@ struct AnimatedMoneroLogo: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
+                .scaleEffect(1.15)  // Scale up before clipping for tighter crop
+                .clipShape(Circle())
                 .overlay {
                     // Shine sweep - clipped to circle so it doesn't extend beyond the logo
                     GeometryReader { geo in

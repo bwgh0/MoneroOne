@@ -166,6 +166,9 @@ struct TransactionDetailView: View {
                 }
             }
         }
+        .refreshable {
+            await walletManager.refresh()
+        }
         .navigationTitle(transaction.type == .incoming ? "Received" : "Sent")
         .navigationBarTitleDisplayMode(.inline)
     }

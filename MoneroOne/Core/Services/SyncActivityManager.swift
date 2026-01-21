@@ -8,18 +8,29 @@ class SyncActivityManager: ObservableObject {
 
     @Published var isActivityRunning = false
     private var currentActivity: Activity<SyncActivityAttributes>?
+    private var isStartingActivity = false
 
     private init() {}
 
     /// Start a new Live Activity for sync progress
-    func startActivity() {
+    func startActivity() async {
+        // Prevent concurrent calls
+        guard !isStartingActivity else { return }
+        isStartingActivity = true
+        defer { isStartingActivity = false }
+
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             print("Live Activities not enabled")
             return
         }
 
-        // End any existing activity
-        endActivity()
+        // Check for existing activity first - reuse if found
+        if let existing = Activity<SyncActivityAttributes>.activities.first {
+            currentActivity = existing
+            isActivityRunning = true
+            print("Reusing existing sync Live Activity")
+            return
+        }
 
         let attributes = SyncActivityAttributes(walletName: "Monero One")
         let initialState = SyncActivityAttributes.ContentState(
@@ -78,8 +89,15 @@ class SyncActivityManager: ObservableObject {
         }
     }
 
-    /// End the Live Activity
+    /// End the Live Activity (fire and forget)
     func endActivity() {
+        Task {
+            await endActivityAsync()
+        }
+    }
+
+    /// End the Live Activity and wait for completion
+    func endActivityAsync() async {
         guard let activity = currentActivity else { return }
 
         let finalState = SyncActivityAttributes.ContentState(
@@ -89,13 +107,11 @@ class SyncActivityManager: ObservableObject {
             lastUpdated: Date()
         )
 
-        Task {
-            await activity.end(
-                ActivityContent(state: finalState, staleDate: nil),
-                dismissalPolicy: .immediate
-            )
-            currentActivity = nil
-            isActivityRunning = false
-        }
+        await activity.end(
+            ActivityContent(state: finalState, staleDate: nil),
+            dismissalPolicy: .immediate
+        )
+        currentActivity = nil
+        isActivityRunning = false
     }
 }

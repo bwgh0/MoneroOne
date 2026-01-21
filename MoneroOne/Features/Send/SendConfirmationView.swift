@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SendConfirmationView: View {
+    @EnvironmentObject var priceService: PriceService
+
     let amount: Decimal
     let fee: Decimal
     let address: String
@@ -25,8 +27,15 @@ struct SendConfirmationView: View {
                     Text("Amount")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text("\(formatXMR(amount)) XMR")
-                        .fontWeight(.medium)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(formatXMR(amount)) XMR")
+                            .fontWeight(.medium)
+                        if let fiatAmount = priceService.formatFiatValue(amount) {
+                            Text("≈ \(fiatAmount)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
 
                 Divider()
@@ -36,8 +45,15 @@ struct SendConfirmationView: View {
                     Text("Network Fee")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text("\(formatXMR(fee)) XMR")
-                        .fontWeight(.medium)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(formatXMR(fee)) XMR")
+                            .fontWeight(.medium)
+                        if let fiatFee = priceService.formatFiatValue(fee) {
+                            Text("≈ \(fiatFee)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
 
                 Divider()
@@ -47,9 +63,16 @@ struct SendConfirmationView: View {
                     Text("Total")
                         .fontWeight(.semibold)
                     Spacer()
-                    Text("\(formatXMR(total)) XMR")
-                        .fontWeight(.semibold)
-                        .foregroundColor(.orange)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(formatXMR(total)) XMR")
+                            .fontWeight(.semibold)
+                            .foregroundColor(.orange)
+                        if let fiatTotal = priceService.formatFiatValue(total) {
+                            Text("≈ \(fiatTotal)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
             .padding()
@@ -127,4 +150,5 @@ struct SendConfirmationView: View {
         onConfirm: {},
         onCancel: {}
     )
+    .environmentObject(PriceService())
 }

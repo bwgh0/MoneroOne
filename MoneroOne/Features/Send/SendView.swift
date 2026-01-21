@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SendView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var priceService: PriceService
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
 
@@ -119,9 +120,25 @@ struct SendView: View {
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
 
-                        Text("Available: \(formatXMR(walletManager.unlockedBalance)) XMR")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        // Fiat equivalent of entered amount
+                        if let amountDecimal = Decimal(string: amount),
+                           amountDecimal > 0,
+                           let fiatValue = priceService.formatFiatValue(amountDecimal) {
+                            Text("≈ \(fiatValue)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Text("Available: \(formatXMR(walletManager.unlockedBalance)) XMR")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            if let fiatAvailable = priceService.formatFiatValue(walletManager.unlockedBalance) {
+                                Text("(\(fiatAvailable))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
 
                     // Memo (optional)
@@ -138,12 +155,22 @@ struct SendView: View {
 
                     // Fee estimate
                     if let fee = estimatedFee {
-                        HStack {
-                            Text("Estimated Fee")
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Text("\(formatXMR(fee)) XMR")
-                                .fontWeight(.medium)
+                        VStack(spacing: 4) {
+                            HStack {
+                                Text("Estimated Fee")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("\(formatXMR(fee)) XMR")
+                                    .fontWeight(.medium)
+                            }
+                            if let fiatFee = priceService.formatFiatValue(fee) {
+                                HStack {
+                                    Spacer()
+                                    Text("≈ \(fiatFee)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                         .font(.subheadline)
                         .padding()
@@ -314,6 +341,7 @@ struct SendView: View {
                 )
                 print("Transaction sent: \(txHash)")
                 transactionHash = txHash
+                await walletManager.refresh()  // Refresh to show the new transaction
                 isSending = false
             } catch {
                 sendError = "Send failed: \(error.localizedDescription)"
@@ -364,4 +392,5 @@ struct SendView: View {
 #Preview {
     SendView()
         .environmentObject(WalletManager())
+        .environmentObject(PriceService())
 }

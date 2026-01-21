@@ -95,7 +95,9 @@ class BackgroundSyncManager: NSObject, ObservableObject {
 
         // Start Live Activity if not already running
         if isEnabled && !SyncActivityManager.shared.isActivityRunning {
-            SyncActivityManager.shared.startActivity()
+            Task {
+                await SyncActivityManager.shared.startActivity()
+            }
         }
     }
 
@@ -106,7 +108,9 @@ class BackgroundSyncManager: NSObject, ObservableObject {
             guard isEnabled else { return }
             // Start Live Activity if not running
             if !SyncActivityManager.shared.isActivityRunning {
-                SyncActivityManager.shared.startActivity()
+                Task {
+                    await SyncActivityManager.shared.startActivity()
+                }
             }
             // Update Live Activity with progress
             SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining)
@@ -128,7 +132,9 @@ class BackgroundSyncManager: NSObject, ObservableObject {
             guard isEnabled else { return }
             // Start Live Activity when connecting
             if !SyncActivityManager.shared.isActivityRunning {
-                SyncActivityManager.shared.startActivity()
+                Task {
+                    await SyncActivityManager.shared.startActivity()
+                }
             }
 
         case .idle:

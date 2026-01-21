@@ -75,14 +75,37 @@ jobs:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          xcodebuild -exportArchive \
-            -archivePath build/MoneroOne.xcarchive \
-            -exportPath build/export \
-            -exportOptionsPlist ExportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8 \
-            -authenticationKeyID "$API_KEY_ID" \
-            -authenticationKeyIssuerID "$API_ISSUER_ID"
+          max_attempts=5
+          attempt=1
+          backoff=30
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt of $max_attempts..."
+
+            if xcodebuild -exportArchive \
+              -archivePath build/MoneroOne.xcarchive \
+              -exportPath build/export \
+              -exportOptionsPlist ExportOptions.plist \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8 \
+              -authenticationKeyID "$API_KEY_ID" \
+              -authenticationKeyIssuerID "$API_ISSUER_ID"; then
+              echo "Upload succeeded!"
+              exit 0
+            fi
+
+            if [ $attempt -lt $max_attempts ]; then
+              echo "Upload failed. Retrying in ${backoff}s..."
+              sleep $backoff
+              backoff=$((backoff * 2))
+              rm -rf build/export  # Clean up for retry
+            fi
+
+            attempt=$((attempt + 1))
+          done
+
+          echo "All $max_attempts attempts failed."
+          exit 1
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

@@ -226,14 +226,16 @@ class KeychainStorage {
             throw KeychainError.saveFailed
         }
 
-        // Hash PIN before storing (don't store plaintext even with biometrics)
-        let pinHash = hashPinForBiometrics(pin)
+        // Store PIN with biometric protection
+        // Security comes from keychain access control (Face ID required), not encryption
+        guard let pinData = pin.data(using: .utf8) else {
+            throw KeychainError.saveFailed
+        }
 
-        // Store hashed PIN with biometric protection
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: biometricPinKey,
-            kSecValueData as String: pinHash,
+            kSecValueData as String: pinData,
             kSecAttrAccessControl as String: accessControl
         ]
 
@@ -257,22 +259,12 @@ class KeychainStorage {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         guard status == errSecSuccess,
-              let pinData = result as? Data else {
+              let pinData = result as? Data,
+              let pin = String(data: pinData, encoding: .utf8) else {
             return nil
         }
 
-        // Check if this is legacy plaintext PIN
-        if let plainPin = String(data: pinData, encoding: .utf8),
-           plainPin.count <= 6, plainPin.allSatisfy({ $0.isNumber }) {
-            // Legacy plaintext PIN - migrate to hashed version
-            try? savePinForBiometrics(plainPin)
-            return plainPin
-        }
-
-        // For hashed PINs, we can't reverse them
-        // The biometric PIN is now used as a marker; actual PIN verification
-        // happens through verifyPin() with the PIN hash stored separately
-        return nil
+        return pin
     }
 
     /// Verify PIN matches biometrically stored hash

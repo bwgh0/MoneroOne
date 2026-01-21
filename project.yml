@@ -80,7 +80,7 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: MoneroOneWidgets/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: one.monero.MoneroOne.Widgets
+        PRODUCT_BUNDLE_IDENTIFIER: one.monero.MoneroOne.WidgetsExtension
         SWIFT_EMIT_LOC_STRINGS: true
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"

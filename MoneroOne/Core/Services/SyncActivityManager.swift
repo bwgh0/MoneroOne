@@ -2,6 +2,7 @@ import Foundation
 import ActivityKit
 
 /// Manages Live Activity for sync progress in Dynamic Island
+@available(iOS 16.2, *)
 @MainActor
 class SyncActivityManager: ObservableObject {
     static let shared = SyncActivityManager()

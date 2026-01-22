@@ -96,7 +96,7 @@ struct AddPriceAlertView: View {
                 }
                 isTextFieldFocused = true
             }
-            .onChange(of: alertType) { _, newType in
+            .onChange(of: alertType) { newType in
                 // Update suggested price when type changes
                 if let price = priceService.xmrPrice {
                     let suggestedPrice = newType == .above

@@ -46,7 +46,7 @@ struct SendView: View {
                                 .font(.system(.caption, design: .monospaced))
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
-                                .onChange(of: address) { _, _ in
+                                .onChange(of: address) { _ in
                                     validateAddress()
                                 }
 
@@ -104,7 +104,7 @@ struct SendView: View {
                             TextField("0.0", text: $amount)
                                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                                 .keyboardType(.decimalPad)
-                                .onChange(of: amount) { oldValue, newValue in
+                                .onChange(of: amount) { newValue in
                                     // Filter to only allow valid decimal input
                                     let filtered = filterDecimalInput(newValue)
                                     if filtered != newValue {
@@ -209,7 +209,7 @@ struct SendView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                     }
-                    .buttonStyle(.glass)
+                    .glassButtonStyle()
                     .disabled(!isValidInput || isSending)
                 }
                 .padding()

@@ -3,6 +3,7 @@ import ActivityKit
 
 /// Shared Live Activity attributes for sync progress
 /// Used by both main app and widget extension
+/// Note: Requires iOS 16.1+ - main app wraps usages with availability checks
 public struct SyncActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         public var progress: Double

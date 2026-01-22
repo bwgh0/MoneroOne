@@ -260,11 +260,11 @@ enum ServerConfiguration {
            !url.isEmpty {
             return url
         }
-        // Default for development - this should be overridden in production builds
+        // Default testnet server
         #if DEBUG
         return "http://localhost:3000"
         #else
-        fatalError("LWS_TESTNET_URL not configured. Set in Info.plist or environment.")
+        return "https://lws-testnet.monero.one"
         #endif
     }
 
@@ -278,10 +278,11 @@ enum ServerConfiguration {
            !url.isEmpty {
             return url
         }
+        // Default mainnet server
         #if DEBUG
         return "http://localhost:3000"
         #else
-        fatalError("LWS_MAINNET_URL not configured. Set in Info.plist or environment.")
+        return "https://lws.monero.one"
         #endif
     }
 

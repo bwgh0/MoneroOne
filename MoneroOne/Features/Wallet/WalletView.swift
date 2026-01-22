@@ -25,7 +25,7 @@ struct WalletView: View {
                                 .foregroundStyle(.orange)
                                 .frame(width: 44, height: 44)
                         }
-                        .buttonStyle(.glass)
+                        .glassButtonStyle()
                     }
                     .padding(.horizontal)
 
@@ -73,8 +73,8 @@ struct WalletView: View {
                 }
                 .padding(.top)
             }
-            .safeAreaBar(edge: .top, spacing: 0) {
-                // Floating banners with progressive blur as content scrolls underneath
+            .safeAreaInset(edge: .top, spacing: 0) {
+                // Floating banners
                 VStack(spacing: 8) {
                     // Testnet Banner
                     if walletManager.isTestnet {
@@ -150,7 +150,7 @@ struct ActionButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
         }
-        .buttonStyle(.glass)
+        .glassButtonStyle()
     }
 }
 
@@ -173,7 +173,7 @@ struct CompactActionButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
-        .buttonStyle(.glass)
+        .glassButtonStyle()
     }
 }
 
@@ -241,7 +241,7 @@ struct RecentTransactionsSection: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
                 }
-                .buttonStyle(.glass)
+                .glassButtonStyle()
                 .disabled(true)
             } else {
                 VStack(spacing: 8) {
@@ -253,8 +253,10 @@ struct RecentTransactionsSection: View {
                 }
             }
         }
-        .navigationDestination(item: $selectedTransaction) { transaction in
-            TransactionDetailView(transaction: transaction)
+        .sheet(item: $selectedTransaction) { transaction in
+            NavigationStack {
+                TransactionDetailView(transaction: transaction)
+            }
         }
     }
 }
@@ -317,7 +319,7 @@ struct RecentTransactionCard: View {
             }
             .padding(14)
         }
-        .buttonStyle(.glass)
+        .glassButtonStyle()
     }
 
     private var iconColor: Color {

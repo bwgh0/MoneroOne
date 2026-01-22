@@ -66,7 +66,7 @@ struct PriceChartView: View {
             .task {
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
             }
-            .onChange(of: selectedTimeRange) { _, newValue in
+            .onChange(of: selectedTimeRange) { newValue in
                 selectedDate = nil
                 priceService.chartData = [] // Clear for loading state
                 Task {
@@ -256,7 +256,7 @@ struct PriceChartView: View {
                     }
                 }
                 .chartYScale(domain: chartYDomain)
-                .chartXSelection(value: $selectedDate)
+                .chartXSelectionIfAvailable(value: $selectedDate)
                 .frame(height: 240)
             }
         }
@@ -381,6 +381,20 @@ struct StatCard: View {
         .padding()
         .background(Color(.tertiarySystemGroupedBackground))
         .cornerRadius(12)
+    }
+}
+
+// MARK: - iOS 16 Compatibility
+
+extension View {
+    /// Applies chartXSelection on iOS 17+, no-op on iOS 16
+    @ViewBuilder
+    func chartXSelectionIfAvailable(value: Binding<Date?>) -> some View {
+        if #available(iOS 17.0, *) {
+            self.chartXSelection(value: value)
+        } else {
+            self
+        }
     }
 }
 

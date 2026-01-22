@@ -27,7 +27,7 @@ struct SettingsView: View {
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceAlertService: PriceAlertService
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
-    @AppStorage("syncMode") private var syncMode: String = SyncMode.lite.rawValue
+    @AppStorage("syncMode") private var syncMode: String = SyncMode.privacy.rawValue
     @State private var showBackup = false
     @State private var showSecurity = false
     @State private var showSyncMode = false

@@ -517,6 +517,14 @@ struct RestoreHeightSheet: View {
     }
 
     private func fetchChainHeight() async {
+        // Only fetch from LWS in lite mode
+        guard walletManager.currentSyncMode == .lite else {
+            await MainActor.run {
+                isLoadingHeight = false
+            }
+            return
+        }
+
         let client = LiteWalletServerClient(isTestnet: walletManager.isTestnet)
         do {
             let response = try await client.getBlockchainHeight()

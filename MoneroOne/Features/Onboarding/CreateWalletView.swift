@@ -68,13 +68,6 @@ struct CreateWalletView: View {
                         focusedField = .confirmPin
                     }
                 }
-                .onKeyPress(.return) {
-                    if pin.count >= 6 {
-                        focusedField = .confirmPin
-                        return .handled
-                    }
-                    return .ignored
-                }
 
             SecureField("Confirm PIN", text: $confirmPin)
                 .keyboardType(.numberPad)
@@ -86,13 +79,6 @@ struct CreateWalletView: View {
                     if canProceed {
                         step = .showSeed
                     }
-                }
-                .onKeyPress(.return) {
-                    if canProceed {
-                        step = .showSeed
-                        return .handled
-                    }
-                    return .ignored
                 }
 
             Button {
@@ -108,7 +94,7 @@ struct CreateWalletView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
-            .buttonStyle(.glass)
+            .glassButtonStyle()
             .disabled(!canProceed)
             .padding(.horizontal)
 
@@ -149,7 +135,7 @@ struct CreateWalletView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
-            .buttonStyle(.glass)
+            .glassButtonStyle()
             .disabled(!confirmed)
             .padding(.horizontal)
         }
@@ -193,7 +179,13 @@ struct CreateWalletView: View {
     }
 
     /// Fetch current chain height from the LWS for instant sync of new wallets
+    /// Only called in lite mode - privacy mode skips this optimization
     private func fetchCurrentChainHeight() async -> UInt64? {
+        // Only use LWS if in lite mode
+        guard walletManager.syncMode == .lite else {
+            return nil
+        }
+
         let client = LiteWalletServerClient(isTestnet: walletManager.isTestnet)
         do {
             let heightResponse = try await client.getBlockchainHeight()

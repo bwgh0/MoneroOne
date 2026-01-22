@@ -45,7 +45,7 @@ class WalletManager: ObservableObject {
 
     // MARK: - Sync Mode
     var syncMode: SyncMode {
-        SyncMode(rawValue: UserDefaults.standard.string(forKey: "syncMode") ?? SyncMode.lite.rawValue) ?? .lite
+        SyncMode(rawValue: UserDefaults.standard.string(forKey: "syncMode") ?? SyncMode.privacy.rawValue) ?? .privacy
     }
 
     // MARK: - Private
@@ -438,9 +438,11 @@ class WalletManager: ObservableObject {
     func switchSyncMode(to mode: SyncMode) {
         guard let seed = currentSeed, mode != currentSyncMode else { return }
 
-        // Stop current sync
+        // Stop current sync and release references
         moneroWallet?.stop()
+        moneroWallet = nil
         liteWalletManager?.stop()
+        liteWalletManager = nil
         cancellables.removeAll()
 
         // Reset state

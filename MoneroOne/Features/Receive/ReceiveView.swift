@@ -157,7 +157,7 @@ struct ReceiveView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                         }
-                        .buttonStyle(.glass)
+                        .glassButtonStyle()
 
                         // Share Button
                         Button {
@@ -173,7 +173,7 @@ struct ReceiveView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                         }
-                        .buttonStyle(.glass)
+                        .glassButtonStyle()
                     }
                     .padding(.horizontal)
                     .disabled(currentAddress == "Loading...")

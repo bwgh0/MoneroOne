@@ -94,9 +94,11 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         }
 
         // Start Live Activity if not already running
-        if isEnabled && !SyncActivityManager.shared.isActivityRunning {
-            Task {
-                await SyncActivityManager.shared.startActivity()
+        if #available(iOS 16.2, *) {
+            if isEnabled && !SyncActivityManager.shared.isActivityRunning {
+                Task {
+                    await SyncActivityManager.shared.startActivity()
+                }
             }
         }
     }
@@ -107,20 +109,24 @@ class BackgroundSyncManager: NSObject, ObservableObject {
             isSyncing = true
             guard isEnabled else { return }
             // Start Live Activity if not running
-            if !SyncActivityManager.shared.isActivityRunning {
-                Task {
-                    await SyncActivityManager.shared.startActivity()
+            if #available(iOS 16.2, *) {
+                if !SyncActivityManager.shared.isActivityRunning {
+                    Task {
+                        await SyncActivityManager.shared.startActivity()
+                    }
                 }
+                // Update Live Activity with progress
+                SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining)
             }
-            // Update Live Activity with progress
-            SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining)
 
         case .synced:
             isSyncing = false
             lastSyncTime = Date()
             guard isEnabled else { return }
             // Mark as synced
-            SyncActivityManager.shared.markSynced()
+            if #available(iOS 16.2, *) {
+                SyncActivityManager.shared.markSynced()
+            }
 
         case .error:
             isSyncing = false
@@ -131,9 +137,11 @@ class BackgroundSyncManager: NSObject, ObservableObject {
             isSyncing = true
             guard isEnabled else { return }
             // Start Live Activity when connecting
-            if !SyncActivityManager.shared.isActivityRunning {
-                Task {
-                    await SyncActivityManager.shared.startActivity()
+            if #available(iOS 16.2, *) {
+                if !SyncActivityManager.shared.isActivityRunning {
+                    Task {
+                        await SyncActivityManager.shared.startActivity()
+                    }
                 }
             }
 

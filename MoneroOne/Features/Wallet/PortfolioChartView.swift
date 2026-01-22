@@ -94,7 +94,7 @@ struct PortfolioChartView: View {
             .task {
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
             }
-            .onChange(of: selectedTimeRange) { _, newValue in
+            .onChange(of: selectedTimeRange) { newValue in
                 selectedDate = nil
                 priceService.chartData = []
                 Task {
@@ -255,7 +255,7 @@ struct PortfolioChartView: View {
                     }
                 }
                 .chartYScale(domain: chartYDomain)
-                .chartXSelection(value: $selectedDate)
+                .chartXSelectionIfAvailable(value: $selectedDate)
                 .frame(height: 240)
             }
         }

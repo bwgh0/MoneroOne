@@ -38,7 +38,7 @@ struct WelcomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                     }
-                    .buttonStyle(.glass)
+                    .glassButtonStyle()
 
                     Button {
                         showRestore = true
@@ -53,7 +53,7 @@ struct WelcomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                     }
-                    .buttonStyle(.glass)
+                    .glassButtonStyle()
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 32)

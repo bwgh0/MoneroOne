@@ -42,13 +42,6 @@ struct UnlockView: View {
                             unlockWithPIN()
                         }
                     }
-                    .onKeyPress(.return) {
-                        if pin.count >= 6 && !isUnlocking {
-                            unlockWithPIN()
-                            return .handled
-                        }
-                        return .ignored
-                    }
 
                 if let error = errorMessage {
                     Text(error)
@@ -74,7 +67,7 @@ struct UnlockView: View {
                     .frame(width: 200)
                     .padding(.vertical, 12)
                 }
-                .buttonStyle(.glass)
+                .glassButtonStyle()
                 .disabled(pin.count < 6 || isUnlocking)
             }
 
@@ -93,7 +86,7 @@ struct UnlockView: View {
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
                 }
-                .buttonStyle(.glass)
+                .glassButtonStyle()
                 .disabled(isUnlocking)
             }
 
@@ -103,7 +96,7 @@ struct UnlockView: View {
         .onAppear {
             triggerBiometricsIfAvailable()
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 triggerBiometricsIfAvailable()
             }

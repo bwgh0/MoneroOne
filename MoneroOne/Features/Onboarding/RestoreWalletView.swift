@@ -111,13 +111,6 @@ struct RestoreWalletView: View {
                         focusedField = .confirmPin
                     }
                 }
-                .onKeyPress(.return) {
-                    if pin.count >= 6 {
-                        focusedField = .confirmPin
-                        return .handled
-                    }
-                    return .ignored
-                }
 
             SecureField("Confirm PIN", text: $confirmPin)
                 .keyboardType(.numberPad)
@@ -130,14 +123,6 @@ struct RestoreWalletView: View {
                         step = .restoring
                         restoreWallet()
                     }
-                }
-                .onKeyPress(.return) {
-                    if canProceed {
-                        step = .restoring
-                        restoreWallet()
-                        return .handled
-                    }
-                    return .ignored
                 }
 
             Button {

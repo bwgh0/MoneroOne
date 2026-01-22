@@ -40,12 +40,12 @@ struct MoneroOneApp: App {
                     schedulePriceCheck()
                 }
         }
-        .onChange(of: scenePhase) { oldPhase, newPhase in
-            handleScenePhaseChange(from: oldPhase, to: newPhase)
+        .onChange(of: scenePhase) { newPhase in
+            handleScenePhaseChange(newPhase: newPhase)
         }
     }
 
-    private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
+    private func handleScenePhaseChange(newPhase: ScenePhase) {
         guard walletManager.isUnlocked else { return }
         guard autoLockMinutes != -1 else { return } // Never lock
 

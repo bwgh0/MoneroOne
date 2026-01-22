@@ -46,13 +46,6 @@ struct BackupView: View {
                         unlockSeed()
                     }
                 }
-                .onKeyPress(.return) {
-                    if pin.count >= 6 {
-                        unlockSeed()
-                        return .handled
-                    }
-                    return .ignored
-                }
 
             if let error = errorMessage {
                 Text(error)

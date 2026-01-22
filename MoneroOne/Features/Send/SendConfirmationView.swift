@@ -109,7 +109,7 @@ struct SendConfirmationView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                 }
-                .buttonStyle(.glass)
+                .glassButtonStyle()
 
                 Button {
                     onCancel()

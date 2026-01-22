@@ -25,6 +25,7 @@ enum AppearanceMode: Int, CaseIterable {
 struct SettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
+    @EnvironmentObject var priceAlertService: PriceAlertService
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
     @AppStorage("syncMode") private var syncMode: String = SyncMode.lite.rawValue
     @State private var showBackup = false
@@ -101,6 +102,26 @@ struct SettingsView: View {
                             Spacer()
                             Text(priceService.selectedCurrency.uppercased())
                                 .foregroundColor(.secondary)
+                        }
+                    }
+
+                    NavigationLink {
+                        PriceAlertsView(
+                            priceAlertService: priceAlertService,
+                            priceService: priceService
+                        )
+                    } label: {
+                        HStack {
+                            SettingsRow(
+                                icon: "bell.badge",
+                                title: "Price Alerts",
+                                color: .pink
+                            )
+                            Spacer()
+                            if !priceAlertService.alerts.isEmpty {
+                                Text("\(priceAlertService.alerts.filter { $0.isEnabled }.count)")
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                 }
@@ -273,4 +294,5 @@ struct SettingsRow: View {
     SettingsView()
         .environmentObject(WalletManager())
         .environmentObject(PriceService())
+        .environmentObject(PriceAlertService())
 }

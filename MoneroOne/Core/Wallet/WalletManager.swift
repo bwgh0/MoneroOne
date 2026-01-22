@@ -438,10 +438,9 @@ class WalletManager: ObservableObject {
     func switchSyncMode(to mode: SyncMode) {
         guard let seed = currentSeed, mode != currentSyncMode else { return }
 
-        // Stop current sync and release references
-        moneroWallet?.stop()
+        // Release references - deinit handles cleanup
+        // Don't call stop() here as deinit will do it (avoids double-close crash)
         moneroWallet = nil
-        liteWalletManager?.stop()
         liteWalletManager = nil
         cancellables.removeAll()
 

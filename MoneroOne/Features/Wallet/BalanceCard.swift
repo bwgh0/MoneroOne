@@ -6,6 +6,7 @@ struct BalanceCard: View {
     let syncState: WalletManager.SyncState
     @ObservedObject var priceService: PriceService
     var onPriceChangeTap: (() -> Void)? = nil
+    var onCardTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -130,6 +131,10 @@ struct BalanceCard: View {
                     x: 0,
                     y: 4
                 )
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onCardTap?()
         }
     }
 

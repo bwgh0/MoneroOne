@@ -5,6 +5,7 @@ struct WalletView: View {
     @EnvironmentObject var priceService: PriceService
     @State private var showReceive = false
     @State private var showSend = false
+    @State private var showPortfolio = false
     @Binding var selectedTab: MainTabView.Tab
 
     var body: some View {
@@ -36,6 +37,9 @@ struct WalletView: View {
                         priceService: priceService,
                         onPriceChangeTap: {
                             selectedTab = .chart
+                        },
+                        onCardTap: {
+                            showPortfolio = true
                         }
                     )
                     .padding(.horizontal)
@@ -97,6 +101,12 @@ struct WalletView: View {
             }
             .sheet(isPresented: $showSend) {
                 SendView()
+            }
+            .sheet(isPresented: $showPortfolio) {
+                PortfolioChartView(
+                    balance: walletManager.balance,
+                    priceService: priceService
+                )
             }
         }
     }

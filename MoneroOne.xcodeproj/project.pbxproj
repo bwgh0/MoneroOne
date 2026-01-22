@@ -71,6 +71,10 @@
 		F96859B54E738595BB0571EC /* PriceServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */; };
 		FB5F8533851FF83B35C4E6A6 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E494E802F7171F1946F2FA45 /* QRScannerView.swift */; };
 		FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF818FE69F2EC0B444D26754 /* QRCodeView.swift */; };
+		38EF6D4C9296582339CC5D28 /* PriceAlertService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CA133B479795A42672C8EE /* PriceAlertService.swift */; };
+		27F2288664820A6459EB6BFA /* PriceAlertNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB700F361681920A8264054 /* PriceAlertNotificationManager.swift */; };
+		E1E2FFC0755EDA8C6361030A /* PriceAlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E7915E0418DDB7E5C2CF41 /* PriceAlertsView.swift */; };
+		9A3FBBDFE779DA61228F2740 /* AddPriceAlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 932D464F71BA094935D66902 /* AddPriceAlertView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -179,6 +183,10 @@
 		F9AB3AE90F479675274F4E9D /* MoneroOneTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoneroOneTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		FF6022942E141D54562F131E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		50CA133B479795A42672C8EE /* PriceAlertService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertService.swift; sourceTree = "<group>"; };
+		DEB700F361681920A8264054 /* PriceAlertNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertNotificationManager.swift; sourceTree = "<group>"; };
+		D7E7915E0418DDB7E5C2CF41 /* PriceAlertsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertsView.swift; sourceTree = "<group>"; };
+		932D464F71BA094935D66902 /* AddPriceAlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPriceAlertView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -234,6 +242,8 @@
 				023F1A125362A99814A7939A /* BackupSeedView.swift */,
 				39D836D865F70A7477790100 /* BackupView.swift */,
 				DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */,
+				932D464F71BA094935D66902 /* AddPriceAlertView.swift */,
+				D7E7915E0418DDB7E5C2CF41 /* PriceAlertsView.swift */,
 				B03E2005118D429FE332C194 /* NodeSettingsView.swift */,
 				09AA838F4EF37023CE4794A9 /* SecurityView.swift */,
 				7BE0BF27D62647071D8D9F0E /* SettingsView.swift */,
@@ -335,6 +345,8 @@
 				8EE7C972F4CD3C984FC4FFE9 /* NetworkMonitor.swift */,
 				D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */,
 				FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */,
+				DEB700F361681920A8264054 /* PriceAlertNotificationManager.swift */,
+				50CA133B479795A42672C8EE /* PriceAlertService.swift */,
 				B970167B0BFA69D181797B60 /* SyncActivityManager.swift */,
 			);
 			path = Services;
@@ -651,6 +663,10 @@
 				3FA12723C8F524DD76D5080C /* NodeSettingsView.swift in Sources */,
 				7EFE00922F8A910BDA499EC1 /* PriceChartView.swift in Sources */,
 				AD0F7D6C1B7BB344FE46EEEA /* PriceService.swift in Sources */,
+				38EF6D4C9296582339CC5D28 /* PriceAlertService.swift in Sources */,
+				27F2288664820A6459EB6BFA /* PriceAlertNotificationManager.swift in Sources */,
+				E1E2FFC0755EDA8C6361030A /* PriceAlertsView.swift in Sources */,
+				9A3FBBDFE779DA61228F2740 /* AddPriceAlertView.swift in Sources */,
 				FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */,
 				FB5F8533851FF83B35C4E6A6 /* QRScannerView.swift in Sources */,
 				D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */,

@@ -16,8 +16,14 @@ struct ReceiveView: View {
             if let subaddr = walletManager.subaddresses.first(where: { $0.index == selectedAddressIndex }) {
                 return subaddr.address
             }
-            // Subaddress not loaded yet - show loading instead of wrong address
-            return "Loading..."
+            // CRITICAL: If subaddress doesn't exist in current wallet, reset to main address
+            // This can happen after switching wallets where new wallet has fewer subaddresses
+            // Using async to avoid modifying state during view computation
+            DispatchQueue.main.async {
+                self.selectedAddressIndex = 0
+            }
+            // Return main address while reset is in progress
+            return walletManager.primaryAddress.isEmpty ? "Loading..." : walletManager.primaryAddress
         }
     }
 
@@ -272,7 +278,8 @@ struct AddressPickerView: View {
                 .padding(.top, 8)
 
                 // Subaddress Cards (filter out index 0 since it's the main address shown above)
-                let actualSubaddresses = walletManager.subaddresses.filter { $0.index > 0 }
+                // Also filter out empty addresses (can happen during polyseed wallet init)
+                let actualSubaddresses = walletManager.subaddresses.filter { $0.index > 0 && !$0.address.isEmpty }
 
                 if actualSubaddresses.isEmpty {
                     VStack(spacing: 8) {

@@ -79,6 +79,7 @@
 		27F2288664820A6459EB6BFA /* PriceAlertNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB700F361681920A8264054 /* PriceAlertNotificationManager.swift */; };
 		E1E2FFC0755EDA8C6361030A /* PriceAlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E7915E0418DDB7E5C2CF41 /* PriceAlertsView.swift */; };
 		9A3FBBDFE779DA61228F2740 /* AddPriceAlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 932D464F71BA094935D66902 /* AddPriceAlertView.swift */; };
+		SEC7A8B2D1E4F6C90A3B5E71 /* SecurityAuditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SEC3F9E8A2B7C1D4056E9FA3 /* SecurityAuditTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -195,6 +196,7 @@
 		DEB700F361681920A8264054 /* PriceAlertNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertNotificationManager.swift; sourceTree = "<group>"; };
 		D7E7915E0418DDB7E5C2CF41 /* PriceAlertsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertsView.swift; sourceTree = "<group>"; };
 		932D464F71BA094935D66902 /* AddPriceAlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPriceAlertView.swift; sourceTree = "<group>"; };
+		SEC3F9E8A2B7C1D4056E9FA3 /* SecurityAuditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityAuditTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -226,6 +228,7 @@
 				6A5A1C5565C8122238D41E47 /* NetworkMonitorTests.swift */,
 				70806977F6367D918B532021 /* NodeManagerTests.swift */,
 				09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */,
+				SEC3F9E8A2B7C1D4056E9FA3 /* SecurityAuditTests.swift */,
 				9698D5ECB87A0302392684C6 /* WalletIntegrationTests.swift */,
 				84E684EE43DA20220CE2D58B /* WalletManagerTests.swift */,
 			);
@@ -630,6 +633,7 @@
 				CEF72F50673F6D89DA08FB52 /* NetworkMonitorTests.swift in Sources */,
 				6B3AD2E53A2A967DFDB3A407 /* NodeManagerTests.swift in Sources */,
 				F96859B54E738595BB0571EC /* PriceServiceTests.swift in Sources */,
+				SEC7A8B2D1E4F6C90A3B5E71 /* SecurityAuditTests.swift in Sources */,
 				7324C5B0F049E590C2DC176D /* WalletIntegrationTests.swift in Sources */,
 				56577DF4FAD66E7D92F18767 /* WalletManagerTests.swift in Sources */,
 			);

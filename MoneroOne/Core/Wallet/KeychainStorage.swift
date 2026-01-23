@@ -4,10 +4,32 @@ import CryptoKit
 import CommonCrypto
 
 class KeychainStorage {
-    private let seedKey = "one.monero.MoneroOne.seed"
-    private let pinHashKey = "one.monero.MoneroOne.pinhash"
+    // MARK: - Network-Prefixed Keychain Keys
+    // CRITICAL: Each network (mainnet/testnet) must have separate seed storage
+    // to prevent users from backing up the wrong seed after switching networks
+
+    private var isTestnet: Bool {
+        UserDefaults.standard.bool(forKey: "isTestnet")
+    }
+
+    private var networkPrefix: String {
+        isTestnet ? "testnet" : "mainnet"
+    }
+
+    private var seedKey: String {
+        "one.monero.MoneroOne.\(networkPrefix).seed"
+    }
+
+    private var pinHashKey: String {
+        "one.monero.MoneroOne.\(networkPrefix).pinhash"
+    }
+
+    private var saltKey: String {
+        "one.monero.MoneroOne.\(networkPrefix).salt"
+    }
+
+    // Biometric PIN is shared across networks (same PIN unlocks both)
     private let biometricPinKey = "one.monero.MoneroOne.biometricpin"
-    private let saltKey = "one.monero.MoneroOne.salt"
 
     // MARK: - Rate Limiting
 

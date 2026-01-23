@@ -389,8 +389,20 @@ class WalletManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: &$subaddresses)
 
-        // Set primary address
+        // Set primary address immediately if available
         primaryAddress = wallet.primaryAddress
+
+        // Also update primaryAddress when sync state changes (kit may not be ready initially)
+        wallet.$syncState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                let addr = wallet.primaryAddress
+                if !addr.isEmpty && self.primaryAddress.isEmpty {
+                    self.primaryAddress = addr
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func bindToLiteWallet(_ manager: LiteWalletManager) {
@@ -509,6 +521,11 @@ class WalletManager: ObservableObject {
     func switchSyncMode(to mode: SyncMode) {
         guard let seed = currentSeed, mode != currentSyncMode else { return }
 
+        // CRITICAL: Clear address fields FIRST to prevent stale address display if init fails
+        address = ""
+        primaryAddress = ""
+        subaddresses = []
+
         // Release references - deinit handles cleanup
         // Don't call stop() here as deinit will do it (avoids double-close crash)
         moneroWallet = nil
@@ -608,7 +625,20 @@ class WalletManager: ObservableObject {
         guard let seedPhrase = try keychain.getSeed(pin: pin) else {
             return nil
         }
-        return seedPhrase.split(separator: " ").map(String.init)
+        let mnemonic = seedPhrase.split(separator: " ").map(String.init)
+
+        // CRITICAL: Verify seed matches the currently unlocked wallet
+        // This is defense-in-depth since Fix #1 (network-prefixed keychain keys) already
+        // prevents cross-network seed confusion. This check catches any remaining edge cases.
+        if !primaryAddress.isEmpty, let currentSeedMnemonic = currentSeed {
+            // Compare with the seed that was used to unlock the current wallet
+            if mnemonic != currentSeedMnemonic {
+                NSLog("[WalletManager] CRITICAL: Keychain seed doesn't match unlocked wallet seed!")
+                throw WalletError.seedMismatch
+            }
+        }
+
+        return mnemonic
     }
 
     // MARK: - Biometric Unlock
@@ -740,6 +770,11 @@ class WalletManager: ObservableObject {
             return
         }
 
+        // CRITICAL: Clear address fields FIRST to prevent stale address display if init fails
+        address = ""
+        primaryAddress = ""
+        subaddresses = []
+
         // Stop current wallet without clearing cache
         liteWalletManager?.stop()
         liteWalletManager = nil
@@ -782,6 +817,7 @@ enum WalletError: LocalizedError {
     case saveFailed
     case notUnlocked
     case biometricFailed
+    case seedMismatch  // Seed doesn't match current wallet address
 
     var errorDescription: String? {
         switch self {
@@ -790,6 +826,7 @@ enum WalletError: LocalizedError {
         case .saveFailed: return "Failed to save wallet"
         case .notUnlocked: return "Wallet is locked"
         case .biometricFailed: return "Biometric authentication failed"
+        case .seedMismatch: return "Seed phrase doesn't match current wallet"
         }
     }
 }

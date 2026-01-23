@@ -63,6 +63,7 @@
 		E2276935B7E0FA16D8904A2E /* RestoreWalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFDF397CD9F75684D51EA38 /* RestoreWalletView.swift */; };
 		E3AAAA2781637EFF950CCADE /* ScrambledText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029F663A58F5CE2B18C3B33C /* ScrambledText.swift */; };
 		GLASS1234567890ABCDEF1234 /* GlassButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = GLASS9876543210FEDCBA9876 /* GlassButtonStyle.swift */; };
+		GLASSPKR001BLD01234567890 /* GlassSegmentedPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = GLASSPKR001FIL01234567890 /* GlassSegmentedPicker.swift */; };
 		E7106F3BC27599F634D24964 /* ErrorBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B3390E2738445B8D347933 /* ErrorBanner.swift */; };
 		E7C33EC8082FAB9206BD8A0B /* BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D836D865F70A7477790100 /* BackupView.swift */; };
 		E8E7018CE585AB43B38F22C5 /* SyncActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B970167B0BFA69D181797B60 /* SyncActivityManager.swift */; };
@@ -126,6 +127,7 @@
 		023F1A125362A99814A7939A /* BackupSeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSeedView.swift; sourceTree = "<group>"; };
 		029F663A58F5CE2B18C3B33C /* ScrambledText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrambledText.swift; sourceTree = "<group>"; };
 		GLASS9876543210FEDCBA9876 /* GlassButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassButtonStyle.swift; sourceTree = "<group>"; };
+		GLASSPKR001FIL01234567890 /* GlassSegmentedPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSegmentedPicker.swift; sourceTree = "<group>"; };
 		03B1E4D64130CA8B6677FA95 /* TransactionProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionProgressView.swift; sourceTree = "<group>"; };
 		0522BFB54176E930AB3D4A9B /* MoneroOneWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MoneroOneWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		05799DCC87A0172BABA5972C /* MoneroOneUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneUITestsLaunchTests.swift; sourceTree = "<group>"; };
@@ -321,6 +323,7 @@
 			children = (
 				7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */,
 				C2B3390E2738445B8D347933 /* ErrorBanner.swift */,
+				GLASSPKR001FIL01234567890 /* GlassSegmentedPicker.swift */,
 				E494E802F7171F1946F2FA45 /* QRScannerView.swift */,
 				029F663A58F5CE2B18C3B33C /* ScrambledText.swift */,
 			);
@@ -692,6 +695,7 @@
 				E2276935B7E0FA16D8904A2E /* RestoreWalletView.swift in Sources */,
 				E3AAAA2781637EFF950CCADE /* ScrambledText.swift in Sources */,
 				GLASS1234567890ABCDEF1234 /* GlassButtonStyle.swift in Sources */,
+				GLASSPKR001BLD01234567890 /* GlassSegmentedPicker.swift in Sources */,
 				474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */,
 				39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */,
 				D5C81DC6A8A3C7E64770CC88 /* SendConfirmationView.swift in Sources */,

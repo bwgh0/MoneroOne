@@ -1,0 +1,216 @@
+import SwiftUI
+import Charts
+
+/// Compact price chart card for iPad Command Center
+/// Embeddable widget with integrated time range selector
+struct CompactPriceChartCard: View {
+    @EnvironmentObject var priceService: PriceService
+    @State private var selectedTimeRange: TimeRange = .week
+    @State private var selectedDate: Date?
+
+    private var selectedPoint: PriceDataPoint? {
+        guard let selectedDate = selectedDate else { return nil }
+        return priceService.chartData.min(by: {
+            abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate))
+        })
+    }
+
+    enum TimeRange: String, CaseIterable {
+        case day = "24H"
+        case week = "1W"
+        case month = "1M"
+        case year = "1Y"
+
+        var apiRange: String {
+            switch self {
+            case .day: return "1D"
+            case .week: return "7D"
+            case .month: return "1M"
+            case .year: return "1Y"
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Header with price
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("XMR Price")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if let price = selectedPoint?.price ?? priceService.xmrPrice {
+                        Text(formatPrice(price))
+                            .font(.title2.weight(.bold))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    } else {
+                        Text("--")
+                            .font(.title2.weight(.bold))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                // 24h change badge
+                if selectedPoint == nil, let change = priceService.priceChange24h {
+                    HStack(spacing: 2) {
+                        Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.caption2)
+                        Text(priceService.formatPriceChange() ?? "")
+                            .font(.caption)
+                    }
+                    .foregroundColor(change >= 0 ? .green : .red)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
+                    .cornerRadius(8)
+                }
+            }
+
+            // Time range selector (compact)
+            HStack(spacing: 4) {
+                ForEach(TimeRange.allCases, id: \.self) { range in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedTimeRange = range
+                        }
+                    } label: {
+                        Text(range.rawValue)
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(selectedTimeRange == range ? .white : .secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(
+                                selectedTimeRange == range ?
+                                Color.orange : Color.clear
+                            )
+                            .cornerRadius(6)
+                    }
+                }
+            }
+            .padding(3)
+            .background(Color(.tertiarySystemGroupedBackground))
+            .cornerRadius(8)
+
+            // Chart
+            chartView
+                .frame(height: 140)
+        }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(16)
+        .task {
+            await priceService.fetchChartData(range: selectedTimeRange.apiRange)
+        }
+        .onChange(of: selectedTimeRange) { newValue in
+            selectedDate = nil
+            priceService.chartData = []
+            Task {
+                await priceService.fetchChartData(range: newValue.apiRange)
+            }
+        }
+    }
+
+    // MARK: - Chart View
+
+    private var chartPriceRange: (min: Double, max: Double) {
+        let prices = priceService.chartData.map { $0.price }
+        guard let minPrice = prices.min(), let maxPrice = prices.max() else {
+            return (0, 100)
+        }
+        return (minPrice, maxPrice)
+    }
+
+    private var chartYDomain: ClosedRange<Double> {
+        let (minPrice, maxPrice) = chartPriceRange
+        let range = maxPrice - minPrice
+        let padding = range * 0.05
+        return (minPrice - padding)...(maxPrice + padding)
+    }
+
+    @ViewBuilder
+    private var chartView: some View {
+        if priceService.isLoadingChart && priceService.chartData.isEmpty {
+            VStack {
+                ProgressView()
+                Text("Loading...")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if priceService.chartData.isEmpty {
+            VStack(spacing: 4) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.title2)
+                    .foregroundColor(.secondary)
+                Text("No data")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Chart {
+                ForEach(priceService.chartData) { point in
+                    AreaMark(
+                        x: .value("Time", point.timestamp),
+                        yStart: .value("Min", chartYDomain.lowerBound),
+                        yEnd: .value("Price", point.price)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.0)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .interpolationMethod(.catmullRom)
+
+                    LineMark(
+                        x: .value("Time", point.timestamp),
+                        y: .value("Price", point.price)
+                    )
+                    .foregroundStyle(Color.orange)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .interpolationMethod(.catmullRom)
+                }
+
+                if let selectedPoint = selectedPoint {
+                    RuleMark(x: .value("Selected", selectedPoint.timestamp))
+                        .foregroundStyle(Color.secondary.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 2]))
+
+                    PointMark(
+                        x: .value("Time", selectedPoint.timestamp),
+                        y: .value("Price", selectedPoint.price)
+                    )
+                    .foregroundStyle(Color.orange)
+                    .symbolSize(80)
+                }
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartYScale(domain: chartYDomain)
+            .chartXSelectionIfAvailable(value: $selectedDate)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func formatPrice(_ price: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = priceService.selectedCurrency.uppercased()
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: price)) ?? "\(price)"
+    }
+}
+
+#Preview {
+    CompactPriceChartCard()
+        .environmentObject(PriceService())
+        .padding()
+}

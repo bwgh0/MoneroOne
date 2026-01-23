@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DASH0003BLDCMD01234567890 /* CommandCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DASH0002FILECMD0123456789 /* CommandCenterView.swift */; };
+		DASH0005BLDCHRT1234567890 /* CompactPriceChartCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DASH0004FILECHRT123456789 /* CompactPriceChartCard.swift */; };
+		DASH0007BLDTXN01234567890 /* TransactionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DASH0006FILETXN0123456789 /* TransactionsPanelView.swift */; };
+		DASH0009BLDQCK01234567890 /* QuickActionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DASH0008FILEQCK0123456789 /* QuickActionsCard.swift */; };
 		0078BD68A0F42B7F096CC5B0 /* BiometricAuthManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78543F60FF832ABD15C47107 /* BiometricAuthManagerTests.swift */; };
 		09CB96E72F20366200832FE5 /* monero-one.icon in Resources */ = {isa = PBXBuildFile; fileRef = 09CB96E62F20366200832FE5 /* monero-one.icon */; };
 		0D932221213145AEDB7B5082 /* AnimatedMoneroLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */; };
@@ -115,6 +119,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		DASH0002FILECMD0123456789 /* CommandCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandCenterView.swift; sourceTree = "<group>"; };
+		DASH0004FILECHRT123456789 /* CompactPriceChartCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactPriceChartCard.swift; sourceTree = "<group>"; };
+		DASH0006FILETXN0123456789 /* TransactionsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsPanelView.swift; sourceTree = "<group>"; };
+		DASH0008FILEQCK0123456789 /* QuickActionsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionsCard.swift; sourceTree = "<group>"; };
 		023F1A125362A99814A7939A /* BackupSeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSeedView.swift; sourceTree = "<group>"; };
 		029F663A58F5CE2B18C3B33C /* ScrambledText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrambledText.swift; sourceTree = "<group>"; };
 		GLASS9876543210FEDCBA9876 /* GlassButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassButtonStyle.swift; sourceTree = "<group>"; };
@@ -286,6 +294,17 @@
 			path = Chart;
 			sourceTree = "<group>";
 		};
+		DASH0001GROUP00123456789A /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				DASH0002FILECMD0123456789 /* CommandCenterView.swift */,
+				DASH0004FILECHRT123456789 /* CompactPriceChartCard.swift */,
+				DASH0008FILEQCK0123456789 /* QuickActionsCard.swift */,
+				DASH0006FILETXN0123456789 /* TransactionsPanelView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
 		432D23DB096C7905BD8F9105 /* MoneroOneWidgets */ = {
 			isa = PBXGroup;
 			children = (
@@ -381,6 +400,7 @@
 			isa = PBXGroup;
 			children = (
 				3D083592F630A320E86ED8AF /* Chart */,
+				DASH0001GROUP00123456789A /* Dashboard */,
 				E60BB1617649DB1D49B6DDB9 /* Onboarding */,
 				0DF3D7EFD61EFEAC3E7DEBC3 /* Receive */,
 				BC0EDD05073CA3C3B9CEFE47 /* Send */,
@@ -635,6 +655,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DASH0003BLDCMD01234567890 /* CommandCenterView.swift in Sources */,
+				DASH0005BLDCHRT1234567890 /* CompactPriceChartCard.swift in Sources */,
+				DASH0009BLDQCK01234567890 /* QuickActionsCard.swift in Sources */,
+				DASH0007BLDTXN01234567890 /* TransactionsPanelView.swift in Sources */,
 				0D932221213145AEDB7B5082 /* AnimatedMoneroLogo.swift in Sources */,
 				D78301AFEE705847B38A55DD /* BackgroundSyncManager.swift in Sources */,
 				326517A0B392547A7BA61678 /* BackgroundSyncView.swift in Sources */,

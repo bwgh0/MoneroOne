@@ -237,6 +237,7 @@ struct PriceChartView: View {
                 }
                 .chartYScale(domain: chartYDomain)
                 .chartXSelectionIfAvailable(value: $selectedDate)
+                .animation(.smooth(duration: 0.15), value: selectedPoint?.id)
                 .frame(height: 240)
             }
         }

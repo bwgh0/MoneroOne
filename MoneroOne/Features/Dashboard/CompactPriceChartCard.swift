@@ -45,6 +45,7 @@ struct CompactPriceChartCard: View {
                             .font(.title2.weight(.bold))
                             .monospacedDigit()
                             .contentTransition(.numericText())
+                            .animation(.easeInOut(duration: 0.15), value: price)
                     } else {
                         Text("--")
                             .font(.title2.weight(.bold))
@@ -174,6 +175,7 @@ struct CompactPriceChartCard: View {
             .chartYAxis(.hidden)
             .chartYScale(domain: chartYDomain)
             .chartXSelectionIfAvailable(value: $selectedDate)
+            .animation(.smooth(duration: 0.15), value: selectedPoint?.id)
         }
     }
 

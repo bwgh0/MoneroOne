@@ -16,7 +16,7 @@ class WalletManager: ObservableObject {
     @Published var syncState: SyncState = .idle
     @Published var transactions: [MoneroTransaction] = []
     @Published var subaddresses: [MoneroKit.SubAddress] = []
-    @Published var currentSyncMode: SyncMode = .lite
+    @Published var currentSyncMode: SyncMode = .privacy
     @Published var isSendReady: Bool = false
     @Published var sendSyncProgress: Double = 0
     @Published var sendSyncStatus: String = "Connecting..."
@@ -54,6 +54,7 @@ class WalletManager: ObservableObject {
     private var liteWalletManager: LiteWalletManager?
     private var cancellables = Set<AnyCancellable>()
     private var currentSeed: [String]?
+    private var isRefreshing = false
 
     // MARK: - Init
 
@@ -508,6 +509,10 @@ class WalletManager: ObservableObject {
     // MARK: - Refresh
 
     func refresh() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
         if currentSyncMode == .lite {
             await liteWalletManager?.refresh()
         } else {
@@ -517,12 +522,14 @@ class WalletManager: ObservableObject {
 
     // MARK: - Node Management
 
-    /// Node changes take effect immediately by restarting the connection
-    func setNode(url: String, isTrusted: Bool = false) {
+    /// Save new node URL - takes effect on next app restart
+    /// Returns true if restart is needed for change to take effect
+    @discardableResult
+    func setNode(url: String, isTrusted: Bool = false) -> Bool {
         UserDefaults.standard.set(url, forKey: "selectedNodeURL")
-        // Restart sync with new node
-        moneroWallet?.stop()
-        moneroWallet?.start()
+        // Node change saved - will take effect on next app restart
+        // We don't restart immediately to avoid race conditions with MoneroKit's internal sync loop
+        return true
     }
 
     // MARK: - Seed Access

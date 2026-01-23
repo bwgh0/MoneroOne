@@ -205,6 +205,7 @@ class MoneroWallet: ObservableObject {
         updateBalance(kit.balanceInfo)
         address = kit.receiveAddress
         updateSyncState(kit.walletState)
+        subaddresses = kit.usedAddresses
 
         // Start syncing
         kit.start()

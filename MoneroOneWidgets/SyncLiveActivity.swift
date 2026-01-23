@@ -74,7 +74,6 @@ struct SyncLiveActivity: Widget {
             } minimal: {
                 Image(systemName: context.state.isSynced ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
                     .foregroundColor(context.state.isSynced ? .green : .orange)
-                    .symbolEffect(.rotate, options: .repeat(.continuous), isActive: !context.state.isSynced)
             }
         }
     }
@@ -140,9 +139,11 @@ struct LockScreenView: View {
     }
 }
 
-#Preview("Live Activity", as: .content, using: SyncActivityAttributes(walletName: "Monero One")) {
-    SyncLiveActivity()
-} contentStates: {
-    SyncActivityAttributes.ContentState(progress: 45, blocksRemaining: 12500, isSynced: false, lastUpdated: Date())
-    SyncActivityAttributes.ContentState(progress: 100, blocksRemaining: 0, isSynced: true, lastUpdated: Date())
-}
+// Live Activity preview requires iOS 17+ for contentStates builder
+// Uncomment when building with iOS 17+ deployment target
+//#Preview("Live Activity", as: .content, using: SyncActivityAttributes(walletName: "Monero One")) {
+//    SyncLiveActivity()
+//} contentStates: {
+//    SyncActivityAttributes.ContentState(progress: 45, blocksRemaining: 12500, isSynced: false, lastUpdated: Date())
+//    SyncActivityAttributes.ContentState(progress: 100, blocksRemaining: 0, isSynced: true, lastUpdated: Date())
+//}

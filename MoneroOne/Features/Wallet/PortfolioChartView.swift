@@ -1,18 +1,18 @@
 import SwiftUI
 import Charts
 
-struct PriceChartView: View {
-    @EnvironmentObject var priceService: PriceService
+struct PortfolioDataPoint: Identifiable {
+    let id = UUID()
+    let timestamp: Date
+    let value: Double
+}
+
+struct PortfolioChartView: View {
+    let balance: Decimal
+    @ObservedObject var priceService: PriceService
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTimeRange: TimeRange = .week
     @State private var selectedDate: Date?
-
-    private var selectedPoint: PriceDataPoint? {
-        guard let selectedDate = selectedDate else { return nil }
-        // Find the closest point to the selected date
-        return priceService.chartData.min(by: {
-            abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate))
-        })
-    }
 
     enum TimeRange: String, CaseIterable {
         case day = "24H"
@@ -30,96 +30,108 @@ struct PriceChartView: View {
             case .all: return "All"
             }
         }
+    }
 
-        /// Expected time span in seconds for filtering
-        var expectedSeconds: TimeInterval? {
-            switch self {
-            case .day: return 24 * 60 * 60
-            case .week: return 7 * 24 * 60 * 60
-            case .month: return 30 * 24 * 60 * 60
-            case .year: return 365 * 24 * 60 * 60
-            case .all: return nil // No filter for All
-            }
+    private var balanceDouble: Double {
+        (balance as NSDecimalNumber).doubleValue
+    }
+
+    private var portfolioData: [PortfolioDataPoint] {
+        priceService.chartData.map { point in
+            PortfolioDataPoint(
+                timestamp: point.timestamp,
+                value: balanceDouble * point.price
+            )
         }
+    }
+
+    private var selectedPoint: PortfolioDataPoint? {
+        guard let selectedDate = selectedDate else { return nil }
+        return portfolioData.min(by: {
+            abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate))
+        })
+    }
+
+    private var currentPortfolioValue: Double? {
+        guard let price = priceService.xmrPrice else { return nil }
+        return balanceDouble * price
+    }
+
+    private var portfolioRange: (min: Double, max: Double)? {
+        guard !portfolioData.isEmpty else { return nil }
+        let values = portfolioData.map { $0.value }
+        return (values.min() ?? 0, values.max() ?? 0)
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Current Price Header
-                    priceHeader
+                    // Portfolio Value Header
+                    portfolioHeader
 
                     // Time Range Selector
                     timeRangeSelector
 
-                    // Price Chart
+                    // Chart
                     chartSection
 
-                    // Price Statistics
+                    // Stats
                     statsSection
                 }
                 .padding()
             }
-            .navigationTitle("Monero Price")
+            .navigationTitle("Portfolio")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
             .task {
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
             }
             .onChange(of: selectedTimeRange) { newValue in
                 selectedDate = nil
-                priceService.chartData = [] // Clear for loading state
+                priceService.chartData = []
                 Task {
                     await priceService.fetchChartData(range: newValue.apiRange)
                 }
             }
-            .refreshable {
-                await priceService.fetchPrice()
-                await priceService.fetchChartData(range: selectedTimeRange.apiRange)
-            }
         }
     }
 
-    // MARK: - Price Header
+    // MARK: - Portfolio Header
 
-    private var displayPrice: Double? {
-        selectedPoint?.price ?? priceService.xmrPrice
+    private var displayValue: Double? {
+        selectedPoint?.value ?? currentPortfolioValue
     }
 
-    private var priceHeader: some View {
+    private var portfolioHeader: some View {
         VStack(spacing: 8) {
-            if let price = displayPrice {
-                Text(formatPrice(price))
+            if balanceDouble == 0 {
+                // Zero balance state
+                Text("Add XMR to track portfolio")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+            } else if let value = displayValue {
+                Text(formatCurrency(value))
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.1), value: price)
+                    .animation(.easeInOut(duration: 0.1), value: value)
 
                 if let selectedPoint = selectedPoint {
-                    // Show selected date when interacting
                     Text(formatSelectedDate(selectedPoint.timestamp))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 } else {
-                    // Show 24h change when not interacting
-                    HStack(spacing: 16) {
-                        if let change = priceService.priceChange24h {
-                            HStack(spacing: 4) {
-                                Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                Text(priceService.formatPriceChange() ?? "")
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(change >= 0 ? .green : .red)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
-                            .cornerRadius(8)
-                        }
-
-                        Text("24h")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    Text(formatXMR(balance) + " XMR")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
             } else {
                 ProgressView()
@@ -147,44 +159,52 @@ struct PriceChartView: View {
     // MARK: - Time Range Selector
 
     private var timeRangeSelector: some View {
-        GlassSegmentedPicker(selection: $selectedTimeRange) { range in
-            range.rawValue
+        HStack(spacing: 0) {
+            ForEach(TimeRange.allCases, id: \.self) { range in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTimeRange = range
+                    }
+                } label: {
+                    Text(range.rawValue)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(selectedTimeRange == range ? .white : .secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            selectedTimeRange == range ?
+                            Color.orange : Color.clear
+                        )
+                        .cornerRadius(8)
+                }
+            }
         }
+        .padding(4)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 
     // MARK: - Chart Section
 
-    private var chartPriceRange: (min: Double, max: Double) {
-        let prices = priceService.chartData.map { $0.price }
-        guard let minPrice = prices.min(), let maxPrice = prices.max() else {
-            return (0, 100)
-        }
-        return (minPrice, maxPrice)
-    }
-
     private var chartYDomain: ClosedRange<Double> {
-        let (minPrice, maxPrice) = chartPriceRange
-        // Add 5% padding on top and bottom for better visualization
-        let range = maxPrice - minPrice
-        let padding = range * 0.05
-        return (minPrice - padding)...(maxPrice + padding)
+        guard let range = portfolioRange else { return 0...100 }
+        let padding = (range.max - range.min) * 0.05
+        return (range.min - padding)...(range.max + padding)
     }
 
     private var chartSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if priceService.isLoadingChart && priceService.chartData.isEmpty {
+            if priceService.isLoadingChart && portfolioData.isEmpty {
                 chartPlaceholder
-            } else if priceService.chartData.isEmpty {
+            } else if portfolioData.isEmpty || balanceDouble == 0 {
                 emptyChartState
             } else {
-                // Apple Swift Charts
                 Chart {
-                    // Area fill - use yStart to prevent going below x-axis
-                    ForEach(priceService.chartData) { point in
+                    ForEach(portfolioData) { point in
                         AreaMark(
                             x: .value("Time", point.timestamp),
                             yStart: .value("Min", chartYDomain.lowerBound),
-                            yEnd: .value("Price", point.price)
+                            yEnd: .value("Value", point.value)
                         )
                         .foregroundStyle(
                             LinearGradient(
@@ -197,14 +217,13 @@ struct PriceChartView: View {
 
                         LineMark(
                             x: .value("Time", point.timestamp),
-                            y: .value("Price", point.price)
+                            y: .value("Value", point.value)
                         )
                         .foregroundStyle(Color.orange)
                         .lineStyle(StrokeStyle(lineWidth: 2))
                         .interpolationMethod(.catmullRom)
                     }
 
-                    // Selection indicator - vertical line and dot
                     if let selectedPoint = selectedPoint {
                         RuleMark(x: .value("Selected", selectedPoint.timestamp))
                             .foregroundStyle(Color.secondary.opacity(0.5))
@@ -212,14 +231,14 @@ struct PriceChartView: View {
 
                         PointMark(
                             x: .value("Time", selectedPoint.timestamp),
-                            y: .value("Price", selectedPoint.price)
+                            y: .value("Value", selectedPoint.value)
                         )
                         .foregroundStyle(Color.orange)
                         .symbolSize(100)
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
                         AxisGridLine()
                         AxisValueLabel(format: xAxisFormat)
                     }
@@ -229,7 +248,7 @@ struct PriceChartView: View {
                         AxisGridLine()
                         AxisValueLabel {
                             if let price = value.as(Double.self) {
-                                Text(formatCompactPrice(price))
+                                Text(formatCompactCurrency(price))
                                     .font(.caption2)
                             }
                         }
@@ -261,14 +280,6 @@ struct PriceChartView: View {
         }
     }
 
-    private func formatCompactPrice(_ price: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = priceService.selectedCurrency.uppercased()
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: price)) ?? "\(Int(price))"
-    }
-
     private var chartPlaceholder: some View {
         VStack {
             ProgressView()
@@ -284,9 +295,15 @@ struct PriceChartView: View {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.largeTitle)
                 .foregroundColor(.secondary)
-            Text("Unable to load chart")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            if balanceDouble == 0 {
+                Text("Add XMR to see portfolio chart")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("Unable to load chart")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -296,89 +313,71 @@ struct PriceChartView: View {
     private var statsSection: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("Statistics")
+                Text("Portfolio Range")
                     .font(.headline)
                 Spacer()
             }
 
-            if let range = priceService.priceRange {
+            if let range = portfolioRange, balanceDouble > 0 {
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
                     GridItem(.flexible())
                 ], spacing: 12) {
                     StatCard(
                         title: "\(selectedTimeRange.rawValue) High",
-                        value: formatPrice(range.max),
+                        value: formatCurrency(range.max),
                         color: .green
                     )
 
                     StatCard(
                         title: "\(selectedTimeRange.rawValue) Low",
-                        value: formatPrice(range.min),
+                        value: formatCurrency(range.min),
                         color: .red
                     )
                 }
-            }
-
-            if let lastUpdated = priceService.lastUpdated {
-                Text("Last updated \(lastUpdated, style: .relative) ago")
-                    .font(.caption)
+            } else {
+                Text("No data available")
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .cornerRadius(12)
             }
         }
     }
 
     // MARK: - Helpers
 
-    private func formatPrice(_ price: Double) -> String {
+    private func formatCurrency(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = priceService.selectedCurrency.uppercased()
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: price)) ?? "\(price)"
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
-}
 
-// MARK: - Stat Card
-
-struct StatCard: View {
-    let title: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(color)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Color(.tertiarySystemGroupedBackground))
-        .cornerRadius(12)
+    private func formatCompactCurrency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = priceService.selectedCurrency.uppercased()
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value))"
     }
-}
 
-// MARK: - iOS 16 Compatibility
-
-extension View {
-    /// Applies chartXSelection on iOS 17+, no-op on iOS 16
-    @ViewBuilder
-    func chartXSelectionIfAvailable(value: Binding<Date?>) -> some View {
-        if #available(iOS 17.0, *) {
-            self.chartXSelection(value: value)
-        } else {
-            self
-        }
+    private func formatXMR(_ value: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 4
+        formatter.maximumFractionDigits = 4
+        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
     }
 }
 
 #Preview {
-    PriceChartView()
-        .environmentObject(PriceService())
+    PortfolioChartView(
+        balance: 1.234567,
+        priceService: PriceService()
+    )
 }

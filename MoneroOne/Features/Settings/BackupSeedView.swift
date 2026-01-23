@@ -58,13 +58,6 @@ struct BackupSeedView: View {
                         verifySeedAccess()
                     }
                 }
-                .onKeyPress(.return) {
-                    if pin.count >= 6 && !isVerifying {
-                        verifySeedAccess()
-                        return .handled
-                    }
-                    return .ignored
-                }
                 .onAppear {
                     isPinFocused = true
                 }

@@ -23,7 +23,7 @@ enum SyncMode: String, CaseIterable {
 
 struct SyncModeView: View {
     @EnvironmentObject var walletManager: WalletManager
-    @AppStorage("syncMode") private var syncMode: String = SyncMode.lite.rawValue
+    @AppStorage("syncMode") private var syncMode: String = SyncMode.privacy.rawValue
     @State private var showingConfirmation = false
     @State private var pendingMode: SyncMode?
 

@@ -9,9 +9,10 @@ struct CreateWalletView: View {
     @State private var confirmed = false
     @State private var pin = ""
     @State private var confirmPin = ""
-    @State private var step: Step = .setPIN
+    @State private var step: Step = .seedType
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
+    @State private var selectedSeedType: WalletManager.SeedType = .polyseed
     @FocusState private var focusedField: PINField?
 
     enum PINField {
@@ -20,6 +21,7 @@ struct CreateWalletView: View {
     }
 
     enum Step {
+        case seedType
         case setPIN
         case showSeed
         case confirmSeed
@@ -28,6 +30,8 @@ struct CreateWalletView: View {
     var body: some View {
         VStack(spacing: 24) {
             switch step {
+            case .seedType:
+                seedTypeView
             case .setPIN:
                 setPINView
             case .showSeed:
@@ -39,15 +43,101 @@ struct CreateWalletView: View {
         .padding()
         .navigationTitle("Create Wallet")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            mnemonic = walletManager.generateNewWallet()
-        }
         .alert("Error Creating Wallet", isPresented: $showErrorAlert) {
             Button("Try Again") {
-                step = .setPIN
+                step = .seedType
             }
         } message: {
             Text(errorMessage ?? "An unknown error occurred. Please try again.")
+        }
+    }
+
+    private var seedTypeView: some View {
+        VStack(spacing: 24) {
+            Text("Choose Seed Format")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 16) {
+                // Polyseed option (recommended)
+                Button {
+                    selectedSeedType = .polyseed
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("Polyseed")
+                                    .font(.headline)
+                                Text("Recommended")
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(Color.orange.opacity(0.2))
+                                    .foregroundColor(.orange)
+                                    .cornerRadius(4)
+                            }
+                            Text("16 words with embedded wallet birthday")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Text("Faster restoration, same security")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: selectedSeedType == .polyseed ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(selectedSeedType == .polyseed ? .orange : .gray)
+                            .font(.title2)
+                    }
+                    .padding()
+                    .background(selectedSeedType == .polyseed ? Color.orange.opacity(0.1) : Color(.secondarySystemBackground))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+
+                // Standard option
+                Button {
+                    selectedSeedType = .bip39
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Standard")
+                                .font(.headline)
+                            Text("24 words (BIP39 format)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Text("Compatible with more wallets")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: selectedSeedType == .bip39 ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(selectedSeedType == .bip39 ? .orange : .gray)
+                            .font(.title2)
+                    }
+                    .padding()
+                    .background(selectedSeedType == .bip39 ? Color.orange.opacity(0.1) : Color(.secondarySystemBackground))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                mnemonic = walletManager.generateNewWallet(type: selectedSeedType)
+                step = .setPIN
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Continue")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(Color.orange)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            }
+            .glassButtonStyle()
+            .padding(.horizontal)
+
+            Spacer()
         }
     }
 
@@ -68,13 +158,6 @@ struct CreateWalletView: View {
                         focusedField = .confirmPin
                     }
                 }
-                .onKeyPress(.return) {
-                    if pin.count >= 6 {
-                        focusedField = .confirmPin
-                        return .handled
-                    }
-                    return .ignored
-                }
 
             SecureField("Confirm PIN", text: $confirmPin)
                 .keyboardType(.numberPad)
@@ -86,13 +169,6 @@ struct CreateWalletView: View {
                     if canProceed {
                         step = .showSeed
                     }
-                }
-                .onKeyPress(.return) {
-                    if canProceed {
-                        step = .showSeed
-                        return .handled
-                    }
-                    return .ignored
                 }
 
             Button {
@@ -108,7 +184,7 @@ struct CreateWalletView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
-            .buttonStyle(.glass)
+            .glassButtonStyle()
             .disabled(!canProceed)
             .padding(.horizontal)
 
@@ -149,7 +225,7 @@ struct CreateWalletView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
-            .buttonStyle(.glass)
+            .glassButtonStyle()
             .disabled(!confirmed)
             .padding(.horizontal)
         }
@@ -193,7 +269,13 @@ struct CreateWalletView: View {
     }
 
     /// Fetch current chain height from the LWS for instant sync of new wallets
+    /// Only called in lite mode - privacy mode skips this optimization
     private func fetchCurrentChainHeight() async -> UInt64? {
+        // Only use LWS if in lite mode
+        guard walletManager.syncMode == .lite else {
+            return nil
+        }
+
         let client = LiteWalletServerClient(isTestnet: walletManager.isTestnet)
         do {
             let heightResponse = try await client.getBlockchainHeight()

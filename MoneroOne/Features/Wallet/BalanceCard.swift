@@ -6,6 +6,7 @@ struct BalanceCard: View {
     let syncState: WalletManager.SyncState
     @ObservedObject var priceService: PriceService
     var onPriceChangeTap: (() -> Void)? = nil
+    var onCardTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -77,19 +78,30 @@ struct BalanceCard: View {
 
             // Unlocked Balance
             if unlockedBalance != balance {
-                HStack {
-                    Text("Available:")
-                        .foregroundColor(.secondary)
-                    Text(formatXMR(unlockedBalance))
-                        .fontWeight(.medium)
-                    Text("XMR")
-                        .foregroundColor(.secondary)
-                    if let fiat = priceService.formatFiatValue(unlockedBalance) {
-                        Text("(\(fiat))")
+                VStack(spacing: 4) {
+                    HStack {
+                        Text("Available:")
                             .foregroundColor(.secondary)
+                        Text(formatXMR(unlockedBalance))
+                            .fontWeight(.medium)
+                        Text("XMR")
+                            .foregroundColor(.secondary)
+                        if let fiat = priceService.formatFiatValue(unlockedBalance) {
+                            Text("(\(fiat))")
+                                .foregroundColor(.secondary)
+                        }
                     }
+                    .font(.subheadline)
+
+                    // Explanation for locked funds
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                        Text("Locked until recent transactions confirm")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.orange)
                 }
-                .font(.subheadline)
             }
 
             // Sync Progress
@@ -119,6 +131,10 @@ struct BalanceCard: View {
                     x: 0,
                     y: 4
                 )
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onCardTap?()
         }
     }
 

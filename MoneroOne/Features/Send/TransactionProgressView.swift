@@ -118,7 +118,7 @@ struct TransactionProgressView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                     }
-                    .buttonStyle(.glass)
+                    .glassButtonStyle()
 
                 case .error:
                     if let onRetry = onRetry {
@@ -134,7 +134,7 @@ struct TransactionProgressView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                         }
-                        .buttonStyle(.glass)
+                        .glassButtonStyle()
                     }
 
                     Button {

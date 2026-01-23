@@ -21,6 +21,9 @@ class PriceService: ObservableObject {
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 60 // 1 minute
 
+    // Optional alert service for triggering price alerts
+    weak var priceAlertService: PriceAlertService?
+
     static let supportedCurrencies = ["usd", "eur", "gbp", "cad", "aud", "jpy", "cny"]
 
     static let currencySymbols: [String: String] = [
@@ -100,6 +103,17 @@ class PriceService: ObservableObject {
                 xmrPrice = moneroData[selectedCurrency]
                 priceChange24h = moneroData["\(selectedCurrency)_24h_change"]
                 lastUpdated = Date()
+
+                // Check price alerts
+                if let price = xmrPrice, let alertService = priceAlertService {
+                    let triggered = alertService.checkAlerts(
+                        currentPrice: price,
+                        currency: selectedCurrency
+                    )
+                    for alert in triggered {
+                        PriceAlertNotificationManager.shared.sendAlert(alert, currentPrice: price)
+                    }
+                }
             }
         } catch {
             self.error = "Failed to fetch price"

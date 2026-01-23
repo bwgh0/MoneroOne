@@ -5,6 +5,7 @@ struct WalletView: View {
     @EnvironmentObject var priceService: PriceService
     @State private var showReceive = false
     @State private var showSend = false
+    @State private var showPortfolio = false
     @Binding var selectedTab: MainTabView.Tab
 
     var body: some View {
@@ -24,7 +25,7 @@ struct WalletView: View {
                                 .foregroundStyle(.orange)
                                 .frame(width: 44, height: 44)
                         }
-                        .buttonStyle(.glass)
+                        .glassButtonStyle()
                     }
                     .padding(.horizontal)
 
@@ -36,6 +37,9 @@ struct WalletView: View {
                         priceService: priceService,
                         onPriceChangeTap: {
                             selectedTab = .chart
+                        },
+                        onCardTap: {
+                            showPortfolio = true
                         }
                     )
                     .padding(.horizontal)
@@ -69,8 +73,8 @@ struct WalletView: View {
                 }
                 .padding(.top)
             }
-            .safeAreaBar(edge: .top, spacing: 0) {
-                // Floating banners with progressive blur as content scrolls underneath
+            .safeAreaInset(edge: .top, spacing: 0) {
+                // Floating banners
                 VStack(spacing: 8) {
                     // Testnet Banner
                     if walletManager.isTestnet {
@@ -97,6 +101,12 @@ struct WalletView: View {
             }
             .sheet(isPresented: $showSend) {
                 SendView()
+            }
+            .sheet(isPresented: $showPortfolio) {
+                PortfolioChartView(
+                    balance: walletManager.balance,
+                    priceService: priceService
+                )
             }
         }
     }
@@ -140,7 +150,7 @@ struct ActionButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
         }
-        .buttonStyle(.glass)
+        .glassButtonStyle()
     }
 }
 
@@ -163,7 +173,7 @@ struct CompactActionButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
-        .buttonStyle(.glass)
+        .glassButtonStyle()
     }
 }
 
@@ -231,7 +241,7 @@ struct RecentTransactionsSection: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
                 }
-                .buttonStyle(.glass)
+                .glassButtonStyle()
                 .disabled(true)
             } else {
                 VStack(spacing: 8) {
@@ -243,8 +253,10 @@ struct RecentTransactionsSection: View {
                 }
             }
         }
-        .navigationDestination(item: $selectedTransaction) { transaction in
-            TransactionDetailView(transaction: transaction)
+        .sheet(item: $selectedTransaction) { transaction in
+            NavigationStack {
+                TransactionDetailView(transaction: transaction)
+            }
         }
     }
 }
@@ -307,7 +319,7 @@ struct RecentTransactionCard: View {
             }
             .padding(14)
         }
-        .buttonStyle(.glass)
+        .glassButtonStyle()
     }
 
     private var iconColor: Color {
@@ -315,18 +327,30 @@ struct RecentTransactionCard: View {
     }
 
     private var statusText: String {
-        switch transaction.status {
-        case .pending: return "Pending"
-        case .confirmed: return "Confirmed"
-        case .failed: return "Failed"
+        if transaction.status == .failed {
+            return "Failed"
+        }
+        let confs = transaction.confirmations
+        if confs == 0 {
+            return "Pending"
+        } else if confs < 10 {
+            return "Locked"
+        } else {
+            return "Confirmed"
         }
     }
 
     private var statusColor: Color {
-        switch transaction.status {
-        case .pending: return .orange
-        case .confirmed: return .green
-        case .failed: return .red
+        if transaction.status == .failed {
+            return .red
+        }
+        let confs = transaction.confirmations
+        if confs == 0 {
+            return .orange
+        } else if confs < 10 {
+            return .orange
+        } else {
+            return .green
         }
     }
 

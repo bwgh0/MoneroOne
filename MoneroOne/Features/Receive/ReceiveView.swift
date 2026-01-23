@@ -6,7 +6,7 @@ struct ReceiveView: View {
     @State private var copied = false
     @State private var requestAmount = ""
     @State private var showShareSheet = false
-    @State private var selectedAddressIndex: Int = 1 // Default to first subaddress (index 1)
+    @AppStorage("selectedSubaddressIndex") private var selectedAddressIndex: Int = 0
 
     private var currentAddress: String {
         if selectedAddressIndex == 0 {
@@ -157,7 +157,7 @@ struct ReceiveView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                         }
-                        .buttonStyle(.glass)
+                        .glassButtonStyle()
 
                         // Share Button
                         Button {
@@ -173,7 +173,7 @@ struct ReceiveView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                         }
-                        .buttonStyle(.glass)
+                        .glassButtonStyle()
                     }
                     .padding(.horizontal)
                     .disabled(currentAddress == "Loading...")

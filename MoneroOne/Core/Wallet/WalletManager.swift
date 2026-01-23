@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 import HdWalletKit
 import MoneroKit
+import CMonero
 
 @MainActor
 class WalletManager: ObservableObject {
@@ -16,7 +17,7 @@ class WalletManager: ObservableObject {
     @Published var syncState: SyncState = .idle
     @Published var transactions: [MoneroTransaction] = []
     @Published var subaddresses: [MoneroKit.SubAddress] = []
-    @Published var currentSyncMode: SyncMode = .lite
+    @Published var currentSyncMode: SyncMode = .privacy
     @Published var isSendReady: Bool = false
     @Published var sendSyncProgress: Double = 0
     @Published var sendSyncStatus: String = "Connecting..."
@@ -27,6 +28,31 @@ class WalletManager: ObservableObject {
         case syncing(progress: Double, remaining: Int?)
         case synced
         case error(String)
+    }
+
+    /// Seed type for wallet creation/restoration
+    enum SeedType: String, CaseIterable {
+        case polyseed = "polyseed"  // 16 words with embedded birthday
+        case bip39 = "bip39"        // 24 words (standard)
+        case legacy = "legacy"      // 25 words (old Monero format)
+
+        var wordCount: Int {
+            switch self {
+            case .polyseed: return 16
+            case .bip39: return 24
+            case .legacy: return 25
+            }
+        }
+
+        /// Detect seed type from word count
+        static func detect(from wordCount: Int) -> SeedType? {
+            switch wordCount {
+            case 16: return .polyseed
+            case 24: return .bip39
+            case 25: return .legacy
+            default: return nil
+            }
+        }
     }
 
     // MARK: - Network Type
@@ -45,7 +71,7 @@ class WalletManager: ObservableObject {
 
     // MARK: - Sync Mode
     var syncMode: SyncMode {
-        SyncMode(rawValue: UserDefaults.standard.string(forKey: "syncMode") ?? SyncMode.lite.rawValue) ?? .lite
+        SyncMode(rawValue: UserDefaults.standard.string(forKey: "syncMode") ?? SyncMode.privacy.rawValue) ?? .privacy
     }
 
     // MARK: - Private
@@ -54,6 +80,7 @@ class WalletManager: ObservableObject {
     private var liteWalletManager: LiteWalletManager?
     private var cancellables = Set<AnyCancellable>()
     private var currentSeed: [String]?
+    private var isRefreshing = false
 
     // MARK: - Init
 
@@ -67,24 +94,57 @@ class WalletManager: ObservableObject {
 
     // MARK: - Wallet Creation
 
-    /// Generate a new 25-word Monero mnemonic using HdWalletKit
-    func generateNewWallet() -> [String] {
-        // Monero uses 25-word seeds (256 bits entropy + checksum)
-        // HdWalletKit generates standard BIP39 mnemonics
+    /// Generate a new 16-word Polyseed mnemonic using MoneroKit's native polyseed support
+    /// Polyseed includes an embedded wallet birthday for faster restoration
+    func generatePolyseed() -> [String] {
+        guard let seedPtr = MONERO_Wallet_createPolyseed("English") else {
+            print("Polyseed generation failed: null pointer returned")
+            return []
+        }
+        let seedString = String(cString: seedPtr)
+        let words = seedString.split(separator: " ").map(String.init)
+
+        // Polyseed should always be 16 words
+        guard words.count == 16 else {
+            print("Polyseed generation failed: expected 16 words, got \(words.count)")
+            return []
+        }
+
+        return words
+    }
+
+    /// Generate a new 24-word BIP39 mnemonic using HdWalletKit
+    /// This is the standard format, kept for backward compatibility
+    func generateBip39Seed() -> [String] {
         do {
             let mnemonic = try Mnemonic.generate(wordCount: .twentyFour, language: .english)
-            // Monero typically uses 25 words, but we'll use 24-word BIP39 which MoneroKit accepts
             return mnemonic
         } catch {
-            // Fallback to simpler generation if HdWalletKit fails
-            print("Mnemonic generation failed: \(error)")
+            print("BIP39 mnemonic generation failed: \(error)")
             return []
+        }
+    }
+
+    /// Generate a new wallet seed (defaults to Polyseed for new wallets)
+    /// - Parameter type: The seed type to generate (defaults to polyseed)
+    /// - Returns: Array of seed words
+    func generateNewWallet(type: SeedType = .polyseed) -> [String] {
+        switch type {
+        case .polyseed:
+            return generatePolyseed()
+        case .bip39, .legacy:
+            return generateBip39Seed()
         }
     }
 
     func saveWallet(mnemonic: [String], pin: String, restoreHeight: UInt64? = nil) throws {
         let seedPhrase = mnemonic.joined(separator: " ")
         try keychain.saveSeed(seedPhrase, pin: pin)
+
+        // Auto-detect and save seed type based on word count
+        if let seedType = SeedType.detect(from: mnemonic.count) {
+            UserDefaults.standard.set(seedType.rawValue, forKey: "\(networkPrefix)seedType")
+        }
 
         // Save restore height if provided (network-specific)
         if let height = restoreHeight {
@@ -102,7 +162,13 @@ class WalletManager: ObservableObject {
         let seedPhrase = mnemonic.joined(separator: " ")
         try keychain.saveSeed(seedPhrase, pin: pin)
 
+        // Auto-detect and save seed type based on word count
+        if let seedType = SeedType.detect(from: mnemonic.count) {
+            UserDefaults.standard.set(seedType.rawValue, forKey: "\(networkPrefix)seedType")
+        }
+
         // Calculate restore height from date (network-specific)
+        // Note: Polyseed (16 words) has embedded birthday, so restoreDate is optional for it
         if let date = restoreDate {
             let restoreHeight = MoneroWallet.restoreHeight(for: date)
             UserDefaults.standard.set(restoreHeight, forKey: "\(networkPrefix)restoreHeight")
@@ -112,16 +178,21 @@ class WalletManager: ObservableObject {
     }
 
     private func validateMnemonic(_ mnemonic: [String]) -> Bool {
-        // Accept 12, 24, or 25 word mnemonics
-        let validCounts = [12, 24, 25]
+        // Accept 16 (polyseed), 24 (BIP39), or 25 (legacy Monero) word mnemonics
+        let validCounts = [16, 24, 25]
         guard validCounts.contains(mnemonic.count) else { return false }
 
-        // Validate against BIP39 word list
+        // Polyseed (16 words) uses its own word list, so skip BIP39 validation
+        if mnemonic.count == 16 {
+            return true
+        }
+
+        // Validate against BIP39 word list for 24-word seeds
         do {
             try Mnemonic.validate(words: mnemonic)
             return true
         } catch {
-            // Allow 25-word Monero seeds which may not pass BIP39 validation
+            // Allow 25-word legacy Monero seeds which don't pass BIP39 validation
             return mnemonic.count == 25
         }
     }
@@ -438,9 +509,10 @@ class WalletManager: ObservableObject {
     func switchSyncMode(to mode: SyncMode) {
         guard let seed = currentSeed, mode != currentSyncMode else { return }
 
-        // Stop current sync
-        moneroWallet?.stop()
-        liteWalletManager?.stop()
+        // Release references - deinit handles cleanup
+        // Don't call stop() here as deinit will do it (avoids double-close crash)
+        moneroWallet = nil
+        liteWalletManager = nil
         cancellables.removeAll()
 
         // Reset state
@@ -507,6 +579,10 @@ class WalletManager: ObservableObject {
     // MARK: - Refresh
 
     func refresh() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
         if currentSyncMode == .lite {
             await liteWalletManager?.refresh()
         } else {
@@ -516,12 +592,14 @@ class WalletManager: ObservableObject {
 
     // MARK: - Node Management
 
-    /// Node changes take effect immediately by restarting the connection
-    func setNode(url: String, isTrusted: Bool = false) {
+    /// Save new node URL - takes effect on next app restart
+    /// Returns true if restart is needed for change to take effect
+    @discardableResult
+    func setNode(url: String, isTrusted: Bool = false) -> Bool {
         UserDefaults.standard.set(url, forKey: "selectedNodeURL")
-        // Restart sync with new node
-        moneroWallet?.stop()
-        moneroWallet?.start()
+        // Node change saved - will take effect on next app restart
+        // We don't restart immediately to avoid race conditions with MoneroKit's internal sync loop
+        return true
     }
 
     // MARK: - Seed Access
@@ -648,6 +726,8 @@ class WalletManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "testnet_restoreHeight")
         UserDefaults.standard.removeObject(forKey: "mainnet_syncResetCount")
         UserDefaults.standard.removeObject(forKey: "testnet_syncResetCount")
+        UserDefaults.standard.removeObject(forKey: "mainnet_seedType")
+        UserDefaults.standard.removeObject(forKey: "testnet_seedType")
         hasWallet = false
     }
 

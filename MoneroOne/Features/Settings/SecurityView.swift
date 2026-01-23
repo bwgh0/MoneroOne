@@ -23,7 +23,7 @@ struct SecurityView: View {
                         }
                     }
                     .tint(.orange)
-                    .onChange(of: useBiometrics) { _, newValue in
+                    .onChange(of: useBiometrics) { newValue in
                         if newValue {
                             showPINPrompt = true
                         } else {

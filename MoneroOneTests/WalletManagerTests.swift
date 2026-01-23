@@ -15,13 +15,82 @@ final class WalletManagerTests: XCTestCase {
         walletManager = nil
     }
 
-    // MARK: - Mnemonic Generation Tests
+    // MARK: - SeedType Enum Tests
 
-    func testGenerateNewWalletReturns24Words() async {
+    func testSeedTypeWordCounts() async {
+        XCTAssertEqual(WalletManager.SeedType.polyseed.wordCount, 16)
+        XCTAssertEqual(WalletManager.SeedType.bip39.wordCount, 24)
+        XCTAssertEqual(WalletManager.SeedType.legacy.wordCount, 25)
+    }
+
+    func testSeedTypeDetectionFromWordCount() async {
+        XCTAssertEqual(WalletManager.SeedType.detect(from: 16), .polyseed)
+        XCTAssertEqual(WalletManager.SeedType.detect(from: 24), .bip39)
+        XCTAssertEqual(WalletManager.SeedType.detect(from: 25), .legacy)
+        XCTAssertNil(WalletManager.SeedType.detect(from: 12))
+        XCTAssertNil(WalletManager.SeedType.detect(from: 0))
+        XCTAssertNil(WalletManager.SeedType.detect(from: 20))
+    }
+
+    // MARK: - Polyseed Generation Tests
+
+    func testGeneratePolyseedReturns16Words() async {
+        let mnemonic = walletManager.generatePolyseed()
+
+        XCTAssertEqual(mnemonic.count, 16, "Polyseed should generate exactly 16 words")
+    }
+
+    func testGeneratePolyseedWordsAreNotEmpty() async {
+        let mnemonic = walletManager.generatePolyseed()
+
+        for word in mnemonic {
+            XCTAssertFalse(word.isEmpty, "Each polyseed word should not be empty")
+        }
+    }
+
+    func testGeneratePolyseedProducesUniqueResults() async {
+        let mnemonic1 = walletManager.generatePolyseed()
+        let mnemonic2 = walletManager.generatePolyseed()
+
+        XCTAssertNotEqual(mnemonic1, mnemonic2, "Each polyseed generation should produce unique mnemonic")
+    }
+
+    // MARK: - BIP39 Generation Tests
+
+    func testGenerateBip39SeedReturns24Words() async {
+        let mnemonic = walletManager.generateBip39Seed()
+
+        XCTAssertEqual(mnemonic.count, 24, "BIP39 seed should generate exactly 24 words")
+    }
+
+    // MARK: - generateNewWallet with SeedType Tests
+
+    func testGenerateNewWalletDefaultsToPolyseed() async {
         let mnemonic = walletManager.generateNewWallet()
 
-        XCTAssertEqual(mnemonic.count, 24, "Should generate 24-word BIP39 mnemonic")
+        XCTAssertEqual(mnemonic.count, 16, "Default wallet generation should produce 16-word polyseed")
     }
+
+    func testGenerateNewWalletWithPolyseedType() async {
+        let mnemonic = walletManager.generateNewWallet(type: .polyseed)
+
+        XCTAssertEqual(mnemonic.count, 16, "Polyseed type should generate 16 words")
+    }
+
+    func testGenerateNewWalletWithBip39Type() async {
+        let mnemonic = walletManager.generateNewWallet(type: .bip39)
+
+        XCTAssertEqual(mnemonic.count, 24, "BIP39 type should generate 24 words")
+    }
+
+    func testGenerateNewWalletWithLegacyType() async {
+        let mnemonic = walletManager.generateNewWallet(type: .legacy)
+
+        // Legacy uses BIP39 generation internally (24 words)
+        XCTAssertEqual(mnemonic.count, 24, "Legacy type should generate 24 words (uses BIP39 internally)")
+    }
+
+    // MARK: - Mnemonic Generation Tests (Backward Compatibility)
 
     func testGenerateNewWalletWordsAreNotEmpty() async {
         let mnemonic = walletManager.generateNewWallet()

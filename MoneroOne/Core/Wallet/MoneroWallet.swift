@@ -52,7 +52,7 @@ class MoneroWallet: ObservableObject {
 
     /// Create a new wallet from seed words
     /// - Parameters:
-    ///   - seed: BIP39 seed words
+    ///   - seed: Seed words (16 for polyseed, 24 for BIP39, 25 for legacy)
     ///   - restoreHeight: Block height to restore from (0 for full sync)
     ///   - node: Optional custom node
     ///   - resetSuffix: Optional suffix to force new walletId (used for reset sync)
@@ -69,8 +69,17 @@ class MoneroWallet: ObservableObject {
             walletId = Self.stableWalletId(for: seed.joined(separator: " ") + networkSuffix)
         }
 
-        // Store credentials for view key extraction
-        let credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
+        // Detect seed type and create appropriate credentials
+        // 16 words = polyseed, 24 words = bip39, 25 words = legacy
+        let credentials: MoneroKit.MoneroWallet
+        switch seed.count {
+        case 16:
+            credentials = MoneroKit.MoneroWallet.polyseed(seed: seed, passphrase: "")
+        case 25:
+            credentials = MoneroKit.MoneroWallet.legacy(seed: seed, passphrase: "")
+        default:
+            credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
+        }
         walletCredentials = credentials
 
         kit = try MoneroKit.Kit(
@@ -110,7 +119,7 @@ class MoneroWallet: ObservableObject {
     /// Create wallet in light wallet mode connected to LWS server
     /// The LWS handles blockchain scanning; wallet2 fetches outputs from LWS endpoints
     /// - Parameters:
-    ///   - seed: BIP39 seed words
+    ///   - seed: Seed words (16 for polyseed, 24 for BIP39, 25 for legacy)
     ///   - lwsURL: Light Wallet Server URL
     ///   - restoreHeight: Block height to restore from
     ///   - resetSuffix: Optional suffix to force new walletId
@@ -134,8 +143,17 @@ class MoneroWallet: ObservableObject {
             walletId = Self.stableWalletId(for: seed.joined(separator: " ") + modeSuffix + networkSuffix)
         }
 
-        // Store credentials for view key extraction
-        let credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
+        // Detect seed type and create appropriate credentials
+        // 16 words = polyseed, 24 words = bip39, 25 words = legacy
+        let credentials: MoneroKit.MoneroWallet
+        switch seed.count {
+        case 16:
+            credentials = MoneroKit.MoneroWallet.polyseed(seed: seed, passphrase: "")
+        case 25:
+            credentials = MoneroKit.MoneroWallet.legacy(seed: seed, passphrase: "")
+        default:
+            credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
+        }
         walletCredentials = credentials
 
         kit = try MoneroKit.Kit(

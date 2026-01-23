@@ -11,6 +11,7 @@
 		DASH0005BLDCHRT1234567890 /* CompactPriceChartCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DASH0004FILECHRT123456789 /* CompactPriceChartCard.swift */; };
 		DASH0007BLDTXN01234567890 /* TransactionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DASH0006FILETXN0123456789 /* TransactionsPanelView.swift */; };
 		DASH0009BLDQCK01234567890 /* QuickActionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DASH0008FILEQCK0123456789 /* QuickActionsCard.swift */; };
+		CHRT0011BLDCHRTSW123456789 /* ChartSwitcherCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHRT0010FILECHRTSW12345678 /* ChartSwitcherCard.swift */; };
 		0078BD68A0F42B7F096CC5B0 /* BiometricAuthManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78543F60FF832ABD15C47107 /* BiometricAuthManagerTests.swift */; };
 		09CB96E72F20366200832FE5 /* monero-one.icon in Resources */ = {isa = PBXBuildFile; fileRef = 09CB96E62F20366200832FE5 /* monero-one.icon */; };
 		0D932221213145AEDB7B5082 /* AnimatedMoneroLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */; };
@@ -125,6 +126,7 @@
 		DASH0004FILECHRT123456789 /* CompactPriceChartCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactPriceChartCard.swift; sourceTree = "<group>"; };
 		DASH0006FILETXN0123456789 /* TransactionsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsPanelView.swift; sourceTree = "<group>"; };
 		DASH0008FILEQCK0123456789 /* QuickActionsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionsCard.swift; sourceTree = "<group>"; };
+		CHRT0010FILECHRTSW12345678 /* ChartSwitcherCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartSwitcherCard.swift; sourceTree = "<group>"; };
 		023F1A125362A99814A7939A /* BackupSeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSeedView.swift; sourceTree = "<group>"; };
 		029F663A58F5CE2B18C3B33C /* ScrambledText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrambledText.swift; sourceTree = "<group>"; };
 		GLASS9876543210FEDCBA9876 /* GlassButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassButtonStyle.swift; sourceTree = "<group>"; };
@@ -302,6 +304,7 @@
 		DASH0001GROUP00123456789A /* Dashboard */ = {
 			isa = PBXGroup;
 			children = (
+				CHRT0010FILECHRTSW12345678 /* ChartSwitcherCard.swift */,
 				DASH0002FILECMD0123456789 /* CommandCenterView.swift */,
 				DASH0004FILECHRT123456789 /* CompactPriceChartCard.swift */,
 				DASH0008FILEQCK0123456789 /* QuickActionsCard.swift */,
@@ -662,6 +665,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CHRT0011BLDCHRTSW123456789 /* ChartSwitcherCard.swift in Sources */,
 				DASH0003BLDCMD01234567890 /* CommandCenterView.swift in Sources */,
 				DASH0005BLDCHRT1234567890 /* CompactPriceChartCard.swift in Sources */,
 				DASH0009BLDQCK01234567890 /* QuickActionsCard.swift in Sources */,

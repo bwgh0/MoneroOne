@@ -51,10 +51,9 @@ struct TransactionsPanelView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
                 }
+                .scrollContentBackground(.hidden)
             }
         }
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(16)
         .sheet(item: $selectedTransaction) { transaction in
             NavigationStack {
                 TransactionDetailView(transaction: transaction)

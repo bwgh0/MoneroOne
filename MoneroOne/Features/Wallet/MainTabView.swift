@@ -32,12 +32,6 @@ struct MainTabView: View {
                 }
                 .tag(Tab.wallet)
 
-            PriceChartView()
-                .tabItem {
-                    Label("Chart", systemImage: "chart.line.uptrend.xyaxis")
-                }
-                .tag(Tab.chart)
-
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")

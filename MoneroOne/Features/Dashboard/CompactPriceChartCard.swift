@@ -71,29 +71,9 @@ struct CompactPriceChartCard: View {
             }
 
             // Time range selector (compact)
-            HStack(spacing: 4) {
-                ForEach(TimeRange.allCases, id: \.self) { range in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedTimeRange = range
-                        }
-                    } label: {
-                        Text(range.rawValue)
-                            .font(.caption.weight(.medium))
-                            .foregroundColor(selectedTimeRange == range ? .white : .secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(
-                                selectedTimeRange == range ?
-                                Color.orange : Color.clear
-                            )
-                            .cornerRadius(6)
-                    }
-                }
+            CompactGlassSegmentedPicker(selection: $selectedTimeRange) { range in
+                range.rawValue
             }
-            .padding(3)
-            .background(Color(.tertiarySystemGroupedBackground))
-            .cornerRadius(8)
 
             // Chart
             chartView

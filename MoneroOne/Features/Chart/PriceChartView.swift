@@ -147,29 +147,9 @@ struct PriceChartView: View {
     // MARK: - Time Range Selector
 
     private var timeRangeSelector: some View {
-        HStack(spacing: 0) {
-            ForEach(TimeRange.allCases, id: \.self) { range in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedTimeRange = range
-                    }
-                } label: {
-                    Text(range.rawValue)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(selectedTimeRange == range ? .white : .secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            selectedTimeRange == range ?
-                            Color.orange : Color.clear
-                        )
-                        .cornerRadius(8)
-                }
-            }
+        GlassSegmentedPicker(selection: $selectedTimeRange) { range in
+            range.rawValue
         }
-        .padding(4)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
     }
 
     // MARK: - Chart Section

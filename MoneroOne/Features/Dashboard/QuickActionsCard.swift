@@ -6,31 +6,21 @@ struct QuickActionsCard: View {
     let onReceive: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Quick Actions")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(spacing: 12) {
+            QuickActionButton(
+                title: "Send",
+                icon: "arrow.up.circle.fill",
+                color: .orange,
+                action: onSend
+            )
 
-            HStack(spacing: 12) {
-                QuickActionButton(
-                    title: "Send",
-                    icon: "arrow.up.circle.fill",
-                    color: .orange,
-                    action: onSend
-                )
-
-                QuickActionButton(
-                    title: "Receive",
-                    icon: "arrow.down.circle.fill",
-                    color: .green,
-                    action: onReceive
-                )
-            }
+            QuickActionButton(
+                title: "Receive",
+                icon: "arrow.down.circle.fill",
+                color: .green,
+                action: onReceive
+            )
         }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(16)
     }
 }
 

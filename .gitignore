@@ -98,3 +98,7 @@ test_*.sh
 
 # Local docs for Claude
 ICON_SETUP.md
+
+# Documentation & Marketing
+docs/
+promo-video/

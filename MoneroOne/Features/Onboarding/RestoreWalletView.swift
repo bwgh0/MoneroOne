@@ -57,8 +57,13 @@ struct RestoreWalletView: View {
 
     private var enterSeedView: some View {
         VStack(spacing: 24) {
-            Text("Enter your 24 or 25-word seed phrase")
+            Text("Enter your seed phrase")
                 .font(.headline)
+
+            Text("16 words (Polyseed), 24 words (BIP39), or 25 words (Legacy)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
 
             TextEditor(text: $seedInput)
                 .frame(height: 150)
@@ -172,7 +177,13 @@ struct RestoreWalletView: View {
     }
 
     private var isValidSeedCount: Bool {
-        seedWords.count == 24 || seedWords.count == 25
+        // Accept 16 (polyseed), 24 (BIP39), or 25 (legacy) words
+        [16, 24, 25].contains(seedWords.count)
+    }
+
+    /// Check if the seed is a polyseed (16 words)
+    private var isPolyseed: Bool {
+        seedWords.count == 16
     }
 
     private var canProceed: Bool {
@@ -182,9 +193,14 @@ struct RestoreWalletView: View {
     private func validateAndProceed() {
         if isValidSeedCount {
             errorMessage = nil
-            step = .creationDate
+            // Skip date picker for polyseed - birthday is embedded in the seed
+            if isPolyseed {
+                step = .setPIN
+            } else {
+                step = .creationDate
+            }
         } else {
-            errorMessage = "Please enter 24 or 25 words"
+            errorMessage = "Please enter 16, 24, or 25 words"
         }
     }
 
@@ -251,7 +267,14 @@ struct RestoreWalletView: View {
     private func restoreWallet() {
         Task {
             do {
-                let restoreDate = useCreationDate ? walletCreationDate : nil
+                // For polyseed (16 words), the wallet birthday is embedded in the seed
+                // so we don't need a restore date - wallet2 will extract it automatically
+                let restoreDate: Date?
+                if isPolyseed {
+                    restoreDate = nil
+                } else {
+                    restoreDate = useCreationDate ? walletCreationDate : nil
+                }
                 try walletManager.restoreWallet(mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
                 try walletManager.unlock(pin: pin)
             } catch {

@@ -166,6 +166,38 @@ struct SettingsView: View {
                     }
                 }
 
+                // Support the Developer Section
+                Section("Support the Developer") {
+                    NavigationLink {
+                        DonationView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.fill")
+                                .font(.body)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.pink, .orange, .yellow],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 28, height: 28)
+                                .background(Color(.secondarySystemBackground))
+                                .cornerRadius(6)
+
+                            Text("Donate XMR")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.pink, .orange, .yellow],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .fontWeight(.medium)
+                        }
+                    }
+                }
+
                 // Developer Section
                 Section {
                     Toggle(isOn: Binding(

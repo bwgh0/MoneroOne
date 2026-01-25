@@ -83,7 +83,11 @@ struct PriceChartView: View {
     // MARK: - Price Header
 
     private var displayPrice: Double? {
-        selectedPoint?.price ?? priceService.xmrPrice
+        // Chart data is in USD, convert selectedPoint to selected currency
+        if let selectedPoint = selectedPoint {
+            return selectedPoint.price * priceService.usdToSelectedRate
+        }
+        return priceService.xmrPrice
     }
 
     private var priceHeader: some View {
@@ -155,7 +159,9 @@ struct PriceChartView: View {
     // MARK: - Chart Section
 
     private var chartPriceRange: (min: Double, max: Double) {
-        let prices = priceService.chartData.map { $0.price }
+        // Apply currency conversion (chart data is always in USD from CMC API)
+        let rate = priceService.usdToSelectedRate
+        let prices = priceService.chartData.map { $0.price * rate }
         guard let minPrice = prices.min(), let maxPrice = prices.max() else {
             return (0, 100)
         }
@@ -178,13 +184,15 @@ struct PriceChartView: View {
                 emptyChartState
             } else {
                 // Apple Swift Charts
+                // Note: Chart data is in USD, apply currency conversion
+                let rate = priceService.usdToSelectedRate
                 Chart {
                     // Area fill - use yStart to prevent going below x-axis
                     ForEach(priceService.chartData) { point in
                         AreaMark(
                             x: .value("Time", point.timestamp),
                             yStart: .value("Min", chartYDomain.lowerBound),
-                            yEnd: .value("Price", point.price)
+                            yEnd: .value("Price", point.price * rate)
                         )
                         .foregroundStyle(
                             LinearGradient(
@@ -197,7 +205,7 @@ struct PriceChartView: View {
 
                         LineMark(
                             x: .value("Time", point.timestamp),
-                            y: .value("Price", point.price)
+                            y: .value("Price", point.price * rate)
                         )
                         .foregroundStyle(Color.orange)
                         .lineStyle(StrokeStyle(lineWidth: 2))
@@ -212,7 +220,7 @@ struct PriceChartView: View {
 
                         PointMark(
                             x: .value("Time", selectedPoint.timestamp),
-                            y: .value("Price", selectedPoint.price)
+                            y: .value("Price", selectedPoint.price * rate)
                         )
                         .foregroundStyle(Color.orange)
                         .symbolSize(100)

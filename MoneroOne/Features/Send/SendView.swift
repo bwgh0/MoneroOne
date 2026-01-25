@@ -6,7 +6,7 @@ struct SendView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
 
-    @State private var address = ""
+    @State private var recipientAddress = ""
     @State private var amount = ""
     @State private var memo = ""
     @State private var showScanner = false
@@ -42,11 +42,11 @@ struct SendView: View {
                             .foregroundColor(.secondary)
 
                         HStack {
-                            TextField("Enter XMR address", text: $address)
+                            TextField("Enter XMR address", text: $recipientAddress)
                                 .font(.system(.caption, design: .monospaced))
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
-                                .onChange(of: address) { _ in
+                                .onChange(of: recipientAddress) { _ in
                                     validateAddress()
                                 }
 
@@ -60,7 +60,7 @@ struct SendView: View {
 
                             Button {
                                 if let clipboard = UIPasteboard.general.string {
-                                    address = clipboard
+                                    recipientAddress = clipboard
                                 }
                             } label: {
                                 Image(systemName: "doc.on.clipboard")
@@ -73,7 +73,7 @@ struct SendView: View {
                         .cornerRadius(12)
 
                         // Address validation indicator
-                        if !address.isEmpty {
+                        if !recipientAddress.isEmpty {
                             HStack(spacing: 4) {
                                 Image(systemName: isValidAddress ? "checkmark.circle.fill" : "xmark.circle.fill")
                                     .foregroundColor(isValidAddress ? .green : .red)
@@ -225,14 +225,14 @@ struct SendView: View {
             }
             .sheet(isPresented: $showScanner) {
                 QRScannerView { scannedAddress in
-                    address = scannedAddress
+                    recipientAddress = scannedAddress
                 }
             }
             .sheet(isPresented: $showConfirmation) {
                 SendConfirmationView(
                     amount: Decimal(string: amount) ?? 0,
                     fee: estimatedFee ?? 0,
-                    address: address,
+                    address: recipientAddress,
                     onConfirm: {
                         showConfirmation = false
                         showProgress = true
@@ -258,11 +258,21 @@ struct SendView: View {
                     } : nil
                 )
             }
+            .onAppear {
+                if let addr = walletManager.prefillSendAddress {
+                    recipientAddress = addr
+                    walletManager.prefillSendAddress = nil
+                }
+                if let amt = walletManager.prefillSendAmount {
+                    amount = amt
+                    walletManager.prefillSendAmount = nil
+                }
+            }
         }
     }
 
     private var isValidAddress: Bool {
-        walletManager.isValidAddress(address)
+        walletManager.isValidAddress(recipientAddress)
     }
 
     private var transactionState: TransactionProgressView.TransactionState {
@@ -286,7 +296,7 @@ struct SendView: View {
 
     private func validateAddress() {
         errorMessage = nil
-        if !address.isEmpty && !isValidAddress {
+        if !recipientAddress.isEmpty && !isValidAddress {
             errorMessage = "Invalid Monero address"
         }
     }
@@ -313,7 +323,7 @@ struct SendView: View {
         // Estimate fee before confirming
         Task {
             do {
-                estimatedFee = try await walletManager.estimateFee(to: address, amount: amountDecimal)
+                estimatedFee = try await walletManager.estimateFee(to: recipientAddress, amount: amountDecimal)
                 showConfirmation = true
             } catch {
                 errorMessage = "Failed to estimate fee: \(error.localizedDescription)"
@@ -335,7 +345,7 @@ struct SendView: View {
         Task {
             do {
                 let txHash = try await walletManager.send(
-                    to: address,
+                    to: recipientAddress,
                     amount: amountDecimal,
                     memo: memo.isEmpty ? nil : memo
                 )

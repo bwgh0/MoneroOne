@@ -22,6 +22,11 @@ class WalletManager: ObservableObject {
     @Published var sendSyncProgress: Double = 0
     @Published var sendSyncStatus: String = "Connecting..."
 
+    // Send prefill properties (for donation flow)
+    @Published var prefillSendAddress: String?
+    @Published var prefillSendAmount: String?
+    @Published var shouldShowSendView: Bool = false
+
     enum SyncState: Equatable {
         case idle
         case connecting

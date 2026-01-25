@@ -26,6 +26,7 @@
 		42B3FDC8C5DE699F5A9B4ABB /* HdWalletKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4BC8724B0D2F0107CA711C57 /* HdWalletKit */; };
 		4694ED2DC8BB7AB49669AFFE /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE7C972F4CD3C984FC4FFE9 /* NetworkMonitor.swift */; };
 		474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AA838F4EF37023CE4794A9 /* SecurityView.swift */; };
+		DONA0001BLDDON01234567890 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DONA0002FILEDON123456789 /* DonationView.swift */; };
 		53961F04EC40C1BB78F573E5 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885C8AC405766D0B3663F27F /* MainTabView.swift */; };
 		56577DF4FAD66E7D92F18767 /* WalletManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E684EE43DA20220CE2D58B /* WalletManagerTests.swift */; };
 		5BAC935479DA77D9B89EB6AB /* BackupSeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 023F1A125362A99814A7939A /* BackupSeedView.swift */; };
@@ -136,6 +137,7 @@
 		05799DCC87A0172BABA5972C /* MoneroOneUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		066F201548A5A5EA2351656E /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		09AA838F4EF37023CE4794A9 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
+		DONA0002FILEDON123456789 /* DonationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonationView.swift; sourceTree = "<group>"; };
 		09CB96E62F20366200832FE5 /* monero-one.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "monero-one.icon"; sourceTree = "<group>"; };
 		09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceServiceTests.swift; sourceTree = "<group>"; };
 		0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendConfirmationView.swift; sourceTree = "<group>"; };
@@ -253,6 +255,7 @@
 				023F1A125362A99814A7939A /* BackupSeedView.swift */,
 				39D836D865F70A7477790100 /* BackupView.swift */,
 				DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */,
+				DONA0002FILEDON123456789 /* DonationView.swift */,
 				932D464F71BA094935D66902 /* AddPriceAlertView.swift */,
 				D7E7915E0418DDB7E5C2CF41 /* PriceAlertsView.swift */,
 				B03E2005118D429FE332C194 /* NodeSettingsView.swift */,
@@ -705,6 +708,7 @@
 				GLASS1234567890ABCDEF1234 /* GlassButtonStyle.swift in Sources */,
 				GLASSPKR001BLD01234567890 /* GlassSegmentedPicker.swift in Sources */,
 				474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */,
+				DONA0001BLDDON01234567890 /* DonationView.swift in Sources */,
 				39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */,
 				D5C81DC6A8A3C7E64770CC88 /* SendConfirmationView.swift in Sources */,
 				A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */,

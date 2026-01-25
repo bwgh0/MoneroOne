@@ -40,7 +40,14 @@ struct CompactPriceChartCard: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    if let price = selectedPoint?.price ?? priceService.xmrPrice {
+                    // Chart data is in USD, convert selectedPoint to selected currency
+                    let displayPrice: Double? = {
+                        if let selectedPoint = selectedPoint {
+                            return selectedPoint.price * priceService.usdToSelectedRate
+                        }
+                        return priceService.xmrPrice
+                    }()
+                    if let price = displayPrice {
                         Text(formatPrice(price))
                             .font(.title2.weight(.bold))
                             .monospacedDigit()
@@ -98,7 +105,9 @@ struct CompactPriceChartCard: View {
     // MARK: - Chart View
 
     private var chartPriceRange: (min: Double, max: Double) {
-        let prices = priceService.chartData.map { $0.price }
+        // Apply currency conversion (chart data is always in USD from CMC API)
+        let rate = priceService.usdToSelectedRate
+        let prices = priceService.chartData.map { $0.price * rate }
         guard let minPrice = prices.min(), let maxPrice = prices.max() else {
             return (0, 100)
         }
@@ -133,12 +142,14 @@ struct CompactPriceChartCard: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
+            // Note: Chart data is in USD, apply currency conversion
+            let rate = priceService.usdToSelectedRate
             Chart {
                 ForEach(priceService.chartData) { point in
                     AreaMark(
                         x: .value("Time", point.timestamp),
                         yStart: .value("Min", chartYDomain.lowerBound),
-                        yEnd: .value("Price", point.price)
+                        yEnd: .value("Price", point.price * rate)
                     )
                     .foregroundStyle(
                         LinearGradient(
@@ -151,7 +162,7 @@ struct CompactPriceChartCard: View {
 
                     LineMark(
                         x: .value("Time", point.timestamp),
-                        y: .value("Price", point.price)
+                        y: .value("Price", point.price * rate)
                     )
                     .foregroundStyle(Color.orange)
                     .lineStyle(StrokeStyle(lineWidth: 2))
@@ -165,7 +176,7 @@ struct CompactPriceChartCard: View {
 
                     PointMark(
                         x: .value("Time", selectedPoint.timestamp),
-                        y: .value("Price", selectedPoint.price)
+                        y: .value("Price", selectedPoint.price * rate)
                     )
                     .foregroundStyle(Color.orange)
                     .symbolSize(80)

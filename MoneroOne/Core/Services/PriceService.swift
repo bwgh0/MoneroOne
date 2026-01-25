@@ -17,6 +17,7 @@ class PriceService: ObservableObject {
     @Published var error: String?
     @Published var chartData: [PriceDataPoint] = []
     @Published var isLoadingChart = false
+    @Published var usdToSelectedRate: Double = 1.0
 
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 60 // 1 minute
@@ -79,7 +80,9 @@ class PriceService: ObservableObject {
         isLoading = true
         error = nil
 
-        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=\(selectedCurrency)&include_24hr_change=true"
+        // Fetch both selected currency and USD (for chart conversion)
+        let currencies = selectedCurrency == "usd" ? "usd" : "\(selectedCurrency),usd"
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=\(currencies)&include_24hr_change=true"
 
         guard let url = URL(string: urlString) else {
             error = "Invalid URL"
@@ -103,6 +106,16 @@ class PriceService: ObservableObject {
                 xmrPrice = moneroData[selectedCurrency]
                 priceChange24h = moneroData["\(selectedCurrency)_24h_change"]
                 lastUpdated = Date()
+
+                // Calculate USD to selected currency conversion rate for chart data
+                if selectedCurrency == "usd" {
+                    usdToSelectedRate = 1.0
+                } else if let selectedPrice = moneroData[selectedCurrency],
+                          let usdPrice = moneroData["usd"],
+                          usdPrice > 0 {
+                    // Rate = selectedCurrency / USD (e.g., GBP/USD)
+                    usdToSelectedRate = selectedPrice / usdPrice
+                }
 
                 // Check price alerts
                 if let price = xmrPrice, let alertService = priceAlertService {
@@ -244,7 +257,8 @@ class PriceService: ObservableObject {
 
     var priceRange: (min: Double, max: Double)? {
         guard !chartData.isEmpty else { return nil }
-        let prices = chartData.map { $0.price }
+        // Apply currency conversion (chart data is always in USD from CMC API)
+        let prices = chartData.map { $0.price * usdToSelectedRate }
         return (prices.min() ?? 0, prices.max() ?? 0)
     }
 }

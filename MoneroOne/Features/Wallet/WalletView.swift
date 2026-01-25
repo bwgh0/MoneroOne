@@ -102,6 +102,12 @@ struct WalletView: View {
             .sheet(isPresented: $showSend) {
                 SendView()
             }
+            .onChange(of: walletManager.shouldShowSendView) { show in
+                if show {
+                    showSend = true
+                    walletManager.shouldShowSendView = false
+                }
+            }
             .sheet(isPresented: $showPortfolio) {
                 PortfolioChartView(
                     balance: walletManager.balance,

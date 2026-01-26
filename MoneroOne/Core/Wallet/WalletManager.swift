@@ -608,8 +608,25 @@ class WalletManager: ObservableObject {
         if currentSyncMode == .lite {
             await liteWalletManager?.refresh()
         } else {
+            // Set connecting state to trigger Live Activity update immediately
+            if case .synced = syncState {
+                syncState = .connecting
+            }
+            // Restart sync state checking to detect new blocks
+            moneroWallet?.startSync()
             moneroWallet?.refresh()
         }
+        // Note: Live Activity is updated by BackgroundSyncManager.handleSyncStateChange()
+        // when sync state transitions to .synced - no need to call markSynced() here
+    }
+
+    /// Restart sync to check for new blocks
+    func startSync() {
+        if currentSyncMode == .lite {
+            // Lite mode handles this differently - refresh triggers sync
+            return
+        }
+        moneroWallet?.startSync()
     }
 
     // MARK: - Node Management

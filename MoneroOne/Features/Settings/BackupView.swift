@@ -46,6 +46,11 @@ struct BackupView: View {
                         unlockSeed()
                     }
                 }
+                .onChange(of: pin) { newValue in
+                    if newValue.count == 6 {
+                        unlockSeed()
+                    }
+                }
 
             if let error = errorMessage {
                 Text(error)

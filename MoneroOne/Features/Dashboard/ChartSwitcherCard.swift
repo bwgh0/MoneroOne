@@ -9,6 +9,10 @@ struct ChartSwitcherCard: View {
     @State private var chartMode: ChartMode = .portfolio
     @State private var selectedTimeRange: TimeRange = .week
     @State private var selectedDate: Date?
+    @State private var selectedPricePoint: PriceDataPoint?
+    @State private var portfolioData: [PortfolioPoint] = []
+    @State private var selectedPortfolioPoint: PortfolioPoint?
+    @State private var cachedYDomain: ClosedRange<Double> = 0...100
 
     enum ChartMode: String, CaseIterable {
         case portfolio = "Portfolio"
@@ -35,33 +39,32 @@ struct ChartSwitcherCard: View {
         (balance as NSDecimalNumber).doubleValue
     }
 
-    // MARK: - Price Data
-
-    private var selectedPricePoint: PriceDataPoint? {
-        guard let selectedDate = selectedDate else { return nil }
-        return priceService.chartData.min(by: {
-            abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate))
-        })
-    }
-
-    // MARK: - Portfolio Data
-
-    private var portfolioData: [PortfolioPoint] {
-        priceService.chartData.map { point in
-            PortfolioPoint(id: point.id, timestamp: point.timestamp, value: balanceDouble * point.price)
-        }
-    }
-
-    private var selectedPortfolioPoint: PortfolioPoint? {
-        guard let selectedDate = selectedDate else { return nil }
-        return portfolioData.min(by: {
-            abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate))
-        })
-    }
-
     private var currentPortfolioValue: Double? {
         guard let price = priceService.xmrPrice else { return nil }
         return balanceDouble * price
+    }
+
+    /// Calculate percentage change based on chart data for selected time range
+    private var chartPriceChange: Double? {
+        guard priceService.chartData.count >= 2 else { return nil }
+        guard let firstPrice = priceService.chartData.first?.price,
+              let lastPrice = priceService.chartData.last?.price,
+              firstPrice > 0 else { return nil }
+        return ((lastPrice - firstPrice) / firstPrice) * 100
+    }
+
+    /// Calculate portfolio percentage change for selected time range
+    private var portfolioValueChange: Double? {
+        guard portfolioData.count >= 2 else { return nil }
+        guard let firstValue = portfolioData.first?.value,
+              let lastValue = portfolioData.last?.value,
+              firstValue > 0 else { return nil }
+        return ((lastValue - firstValue) / firstValue) * 100
+    }
+
+    private func formatChange(_ change: Double) -> String {
+        let sign = change >= 0 ? "+" : ""
+        return "\(sign)\(String(format: "%.2f", change))%"
     }
 
     var body: some View {
@@ -83,19 +86,31 @@ struct ChartSwitcherCard: View {
 
                 Spacer()
 
-                // 24h change badge (only for price mode when not selecting)
-                if chartMode == .price, selectedDate == nil, let change = priceService.priceChange24h {
-                    HStack(spacing: 2) {
-                        Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                // Change badge for selected time range (works for both modes)
+                if selectedDate == nil {
+                    let change = chartMode == .price ? chartPriceChange : portfolioValueChange
+                    HStack(spacing: 8) {
+                        if let change = change {
+                            HStack(spacing: 2) {
+                                Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                    .font(.caption2)
+                                Text(formatChange(change))
+                                    .font(.caption)
+                            }
+                            .foregroundColor(change >= 0 ? .green : .red)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
+                            .cornerRadius(8)
+                        } else if priceService.isLoadingChart {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        }
+
+                        Text(selectedTimeRange.rawValue)
                             .font(.caption2)
-                        Text(priceService.formatPriceChange() ?? "")
-                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
-                    .foregroundColor(change >= 0 ? .green : .red)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
-                    .cornerRadius(8)
                 }
             }
 
@@ -114,8 +129,15 @@ struct ChartSwitcherCard: View {
         .task {
             await priceService.fetchChartData(range: selectedTimeRange.apiRange)
         }
+        .onAppear {
+            portfolioData = priceService.chartData.map { point in
+                PortfolioPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
+            }
+        }
         .onChange(of: selectedTimeRange) { newValue in
             selectedDate = nil
+            selectedPricePoint = nil
+            selectedPortfolioPoint = nil
             priceService.chartData = []
             Task {
                 await priceService.fetchChartData(range: newValue.apiRange)
@@ -123,6 +145,25 @@ struct ChartSwitcherCard: View {
         }
         .onChange(of: chartMode) { _ in
             selectedDate = nil
+            selectedPricePoint = nil
+            selectedPortfolioPoint = nil
+            updateCachedYDomain()
+        }
+        .onChange(of: priceService.chartData.count) { _ in
+            portfolioData = priceService.chartData.map { point in
+                PortfolioPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
+            }
+            updateCachedYDomain()
+        }
+        .onChange(of: selectedDate) { newDate in
+            guard let date = newDate else {
+                selectedPricePoint = nil
+                selectedPortfolioPoint = nil
+                return
+            }
+            // O(log n) binary search instead of O(n) linear search
+            selectedPricePoint = priceService.chartData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
+            selectedPortfolioPoint = portfolioData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
         }
     }
 
@@ -189,9 +230,13 @@ struct ChartSwitcherCard: View {
     }
 
     private var chartYDomain: ClosedRange<Double> {
+        cachedYDomain
+    }
+
+    private func updateCachedYDomain() {
         let range = chartMode == .price ? chartPriceRange : chartPortfolioRange
         let padding = (range.max - range.min) * 0.05
-        return (range.min - padding)...(range.max + padding)
+        cachedYDomain = (range.min - padding)...(range.max + padding)
     }
 
     @ViewBuilder
@@ -296,7 +341,6 @@ struct ChartSwitcherCard: View {
             .chartYAxis(.hidden)
             .chartYScale(domain: chartYDomain)
             .chartXSelectionIfAvailable(value: $selectedDate)
-            .animation(.smooth(duration: 0.15), value: selectedPricePoint?.id)
         }
     }
 
@@ -314,8 +358,8 @@ struct ChartSwitcherCard: View {
 
 // MARK: - Portfolio Point
 
-private struct PortfolioPoint: Identifiable {
-    let id: UUID
+private struct PortfolioPoint: Identifiable, Equatable {
+    var id: Double { timestamp.timeIntervalSince1970 }
     let timestamp: Date
     let value: Double
 }

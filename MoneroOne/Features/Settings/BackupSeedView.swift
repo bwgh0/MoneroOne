@@ -11,7 +11,6 @@ struct BackupSeedView: View {
     @State private var showSeed = false
     @State private var showCopiedAlert = false
     @State private var clipboardClearTask: DispatchWorkItem?
-    @FocusState private var isPinFocused: Bool
 
     private let clipboardClearDelay: TimeInterval = 300 // Clear clipboard after 5 minutes
 
@@ -46,26 +45,17 @@ struct BackupSeedView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            SecureField("Enter PIN", text: $pin)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 200)
-                .multilineTextAlignment(.center)
-                .focused($isPinFocused)
-                .submitLabel(.go)
-                .onSubmit {
-                    if pin.count >= 6 && !isVerifying {
+            PINEntryView(
+                pin: $pin,
+                length: 6,
+                label: "",
+                autoFocus: true,
+                onComplete: {
+                    if !isVerifying {
                         verifySeedAccess()
                     }
                 }
-                .onChange(of: pin) { newValue in
-                    if newValue.count == 6 && !isVerifying {
-                        verifySeedAccess()
-                    }
-                }
-                .onAppear {
-                    isPinFocused = true
-                }
+            )
 
             if let error = errorMessage {
                 Text(error)

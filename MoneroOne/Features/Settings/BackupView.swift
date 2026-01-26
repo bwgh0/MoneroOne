@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BackupView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @AppStorage("preferredPINLength") private var preferredPINLength = 6
     @State private var pin = ""
     @State private var isUnlocked = false
     @State private var seedPhrase: [String] = []
@@ -9,7 +10,6 @@ struct BackupView: View {
     @State private var showCopiedFeedback = false
     @State private var showCopiedAlert = false
     @State private var clipboardClearTask: DispatchWorkItem?
-    @FocusState private var isPinFocused: Bool
 
     private let clipboardClearDelay: TimeInterval = 300 // Clear clipboard after 5 minutes
 
@@ -35,22 +35,15 @@ struct BackupView: View {
             Text("Enter PIN to view seed phrase")
                 .font(.headline)
 
-            SecureField("PIN", text: $pin)
-                .textFieldStyle(.roundedBorder)
-                .keyboardType(.numberPad)
-                .padding(.horizontal)
-                .focused($isPinFocused)
-                .submitLabel(.go)
-                .onSubmit {
-                    if pin.count >= 6 {
-                        unlockSeed()
-                    }
+            PINEntryView(
+                pin: $pin,
+                length: preferredPINLength,
+                label: "",
+                autoFocus: true,
+                onComplete: {
+                    unlockSeed()
                 }
-                .onChange(of: pin) { newValue in
-                    if newValue.count == 6 {
-                        unlockSeed()
-                    }
-                }
+            )
 
             if let error = errorMessage {
                 Text(error)
@@ -65,17 +58,14 @@ struct BackupView: View {
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(pin.count >= 6 ? Color.orange : Color.gray)
+                    .background(pin.count >= preferredPINLength ? Color.orange : Color.gray)
                     .foregroundColor(.white)
                     .cornerRadius(14)
             }
-            .disabled(pin.count < 6)
+            .disabled(pin.count < preferredPINLength)
             .padding(.horizontal)
 
             Spacer()
-        }
-        .onAppear {
-            isPinFocused = true
         }
     }
 

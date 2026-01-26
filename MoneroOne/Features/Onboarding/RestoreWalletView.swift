@@ -1,4 +1,5 @@
 import SwiftUI
+import LocalAuthentication
 
 struct RestoreWalletView: View {
     @EnvironmentObject var walletManager: WalletManager
@@ -17,6 +18,11 @@ struct RestoreWalletView: View {
     @State private var selectedPINLength = 6
     @FocusState private var focusedField: PINField?
 
+    // Biometrics
+    @State private var biometricsAvailable = false
+    @State private var biometricType: LABiometryType = .none
+    @State private var enableBiometrics = false
+
     enum PINField {
         case pin
         case confirmPin
@@ -26,7 +32,26 @@ struct RestoreWalletView: View {
         case enterSeed
         case creationDate
         case setPIN
+        case biometricSetup
         case restoring
+    }
+
+    private var biometricIcon: String {
+        switch biometricType {
+        case .faceID: return "faceid"
+        case .touchID: return "touchid"
+        case .opticID: return "opticid"
+        @unknown default: return "lock.fill"
+        }
+    }
+
+    private var biometricName: String {
+        switch biometricType {
+        case .faceID: return "Face ID"
+        case .touchID: return "Touch ID"
+        case .opticID: return "Optic ID"
+        @unknown default: return "Biometrics"
+        }
     }
 
     // Monero testnet genesis: approximately April 2014
@@ -41,6 +66,8 @@ struct RestoreWalletView: View {
                 creationDateView
             case .setPIN:
                 setPINView
+            case .biometricSetup:
+                biometricSetupView
             case .restoring:
                 restoringView
             }
@@ -191,8 +218,7 @@ struct RestoreWalletView: View {
                     if canProceed {
                         // Save the selected PIN length preference
                         preferredPINLength = selectedPINLength
-                        step = .restoring
-                        restoreWallet()
+                        proceedAfterPIN()
                     }
                 }
             )
@@ -206,8 +232,7 @@ struct RestoreWalletView: View {
             Button {
                 // Save the selected PIN length preference
                 preferredPINLength = selectedPINLength
-                step = .restoring
-                restoreWallet()
+                proceedAfterPIN()
             } label: {
                 HStack(spacing: 8) {
                     Text("Restore Wallet")
@@ -228,6 +253,56 @@ struct RestoreWalletView: View {
         .onAppear {
             // Always default to 6 digits (recommended) for new wallets
             focusedField = .pin
+        }
+    }
+
+    private var biometricSetupView: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            Image(systemName: biometricIcon)
+                .font(.system(size: 80))
+                .foregroundColor(.orange)
+
+            Text("Enable \(biometricName)?")
+                .font(.title2.weight(.semibold))
+
+            Text("Unlock your wallet quickly and securely with \(biometricName) instead of entering your PIN.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            VStack(spacing: 12) {
+                Button {
+                    authenticateBiometrics()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: biometricIcon)
+                            .font(.callout.weight(.semibold))
+                        Text("Enable \(biometricName)")
+                            .font(.callout.weight(.semibold))
+                    }
+                    .foregroundStyle(Color.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                }
+                .glassButtonStyle()
+
+                Button {
+                    enableBiometrics = false
+                    step = .restoring
+                    restoreWallet()
+                } label: {
+                    Text("Skip for Now")
+                        .font(.callout.weight(.medium))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 12)
+                }
+            }
+            .padding(.horizontal)
+
+            Spacer()
         }
     }
 
@@ -267,6 +342,53 @@ struct RestoreWalletView: View {
 
     private var canProceed: Bool {
         pin.count == selectedPINLength && pin == confirmPin
+    }
+
+    private func checkBiometrics() {
+        let context = LAContext()
+        var error: NSError?
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            biometricsAvailable = true
+            biometricType = context.biometryType
+        } else {
+            biometricsAvailable = false
+            biometricType = .none
+        }
+    }
+
+    private func proceedAfterPIN() {
+        checkBiometrics()
+        if biometricsAvailable {
+            step = .biometricSetup
+        } else {
+            step = .restoring
+            restoreWallet()
+        }
+    }
+
+    private func authenticateBiometrics() {
+        let context = LAContext()
+        context.localizedCancelTitle = "Cancel"
+
+        Task {
+            do {
+                let success = try await context.evaluatePolicy(
+                    .deviceOwnerAuthenticationWithBiometrics,
+                    localizedReason: "Verify \(biometricName) to enable quick unlock"
+                )
+                await MainActor.run {
+                    if success {
+                        enableBiometrics = true
+                        step = .restoring
+                        restoreWallet()
+                    }
+                }
+            } catch {
+                // User cancelled or biometrics failed - stay on this screen
+                // They can try again or skip
+            }
+        }
     }
 
     private func validateAndProceed() {
@@ -355,6 +477,12 @@ struct RestoreWalletView: View {
                     restoreDate = useCreationDate ? walletCreationDate : nil
                 }
                 try walletManager.restoreWallet(mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
+
+                // Enable biometrics if user opted in
+                if enableBiometrics {
+                    try walletManager.enableBiometricUnlock(pin: pin)
+                }
+
                 try walletManager.unlock(pin: pin)
             } catch {
                 await MainActor.run {

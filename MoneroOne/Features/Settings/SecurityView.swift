@@ -4,6 +4,7 @@ import LocalAuthentication
 struct SecurityView: View {
     @EnvironmentObject var walletManager: WalletManager
     @AppStorage("autoLockMinutes") private var autoLockMinutes = 5
+    @AppStorage("preferredPINLength") private var preferredPINLength = 6
     @State private var biometricsAvailable = false
     @State private var biometricType: LABiometryType = .none
     @State private var useBiometrics = false
@@ -131,46 +132,105 @@ struct SecurityView: View {
 struct ChangePINView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
+    @AppStorage("preferredPINLength") private var preferredPINLength = 6
     @State private var currentPIN = ""
     @State private var newPIN = ""
     @State private var confirmPIN = ""
     @State private var errorMessage: String?
     @State private var isChanging = false
+    @State private var selectedPINLength = 6
     @FocusState private var focusedField: Field?
 
     enum Field { case current, new, confirm }
 
     var body: some View {
-        VStack(spacing: 24) {
-            SecureField("Current PIN", text: $currentPIN)
-                .textFieldStyle(.roundedBorder)
-                .keyboardType(.numberPad)
-                .focused($focusedField, equals: .current)
-                .onChange(of: currentPIN) { newValue in
-                    if newValue.count == 6 {
-                        focusedField = .new
-                    }
-                }
+        VStack(spacing: 32) {
+            Spacer()
 
-            SecureField("New PIN (6+ digits)", text: $newPIN)
-                .textFieldStyle(.roundedBorder)
-                .keyboardType(.numberPad)
-                .focused($focusedField, equals: .new)
-                .onChange(of: newPIN) { newValue in
-                    if newValue.count == 6 {
-                        focusedField = .confirm
-                    }
+            PINEntryFieldView(
+                pin: $currentPIN,
+                length: preferredPINLength,
+                label: "Current PIN",
+                field: Field.current,
+                focusedField: $focusedField,
+                onComplete: {
+                    focusedField = .new
                 }
+            )
 
-            SecureField("Confirm New PIN", text: $confirmPIN)
-                .textFieldStyle(.roundedBorder)
-                .keyboardType(.numberPad)
-                .focused($focusedField, equals: .confirm)
-                .onChange(of: confirmPIN) { newValue in
-                    if newValue.count == 6 && canChange {
+            VStack(spacing: 8) {
+                Text("New PIN Length")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 12) {
+                    // 4 digits option
+                    Button {
+                        selectedPINLength = 4
+                        newPIN = ""
+                        confirmPIN = ""
+                    } label: {
+                        Text("4 Digits")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(selectedPINLength == 4 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
+                            .foregroundColor(selectedPINLength == 4 ? .orange : .primary)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(selectedPINLength == 4 ? Color.orange : Color.clear, lineWidth: 1.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    // 6 digits option
+                    Button {
+                        selectedPINLength = 6
+                        newPIN = ""
+                        confirmPIN = ""
+                    } label: {
+                        Text("6 Digits")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(selectedPINLength == 6 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
+                            .foregroundColor(selectedPINLength == 6 ? .orange : .primary)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(selectedPINLength == 6 ? Color.orange : Color.clear, lineWidth: 1.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: 280)
+            }
+            .padding(.vertical, 8)
+
+            PINEntryFieldView(
+                pin: $newPIN,
+                length: selectedPINLength,
+                label: "New PIN",
+                field: Field.new,
+                focusedField: $focusedField,
+                onComplete: {
+                    focusedField = .confirm
+                }
+            )
+
+            PINEntryFieldView(
+                pin: $confirmPIN,
+                length: selectedPINLength,
+                label: "Confirm New PIN",
+                field: Field.confirm,
+                focusedField: $focusedField,
+                onComplete: {
+                    if canChange {
                         changePIN()
                     }
                 }
+            )
 
             if let error = errorMessage {
                 Text(error)
@@ -181,22 +241,24 @@ struct ChangePINView: View {
             Button {
                 changePIN()
             } label: {
-                HStack {
+                HStack(spacing: 8) {
                     if isChanging {
                         ProgressView()
-                            .tint(.white)
+                            .tint(canChange ? Color.orange : Color.gray)
                     } else {
+                        Image(systemName: "lock.rotation")
+                            .font(.callout.weight(.semibold))
                         Text("Change PIN")
-                            .fontWeight(.semibold)
+                            .font(.callout.weight(.semibold))
                     }
                 }
+                .foregroundStyle(canChange ? Color.orange : Color.gray)
                 .frame(maxWidth: .infinity)
-                .padding()
-                .background(canChange ? Color.orange : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(14)
+                .padding(.vertical, 16)
             }
+            .glassButtonStyle()
             .disabled(!canChange || isChanging)
+            .padding(.horizontal)
 
             Spacer()
         }
@@ -204,12 +266,13 @@ struct ChangePINView: View {
         .navigationTitle("Change PIN")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            selectedPINLength = preferredPINLength
             focusedField = .current
         }
     }
 
     private var canChange: Bool {
-        currentPIN.count >= 6 && newPIN.count >= 6 && newPIN == confirmPIN
+        currentPIN.count >= 4 && newPIN.count == selectedPINLength && newPIN == confirmPIN
     }
 
     private func changePIN() {
@@ -231,6 +294,9 @@ struct ChangePINView: View {
             if walletManager.hasBiometricPinStored {
                 try walletManager.enableBiometricUnlock(pin: newPIN)
             }
+
+            // Save new PIN length preference
+            preferredPINLength = selectedPINLength
 
             dismiss()
         } catch {

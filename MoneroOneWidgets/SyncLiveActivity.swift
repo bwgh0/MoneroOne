@@ -23,8 +23,9 @@ struct SyncLiveActivity: Widget {
                             .foregroundColor(.green)
                             .font(.title2)
                     } else if context.state.isConnecting {
-                        ProgressView()
-                            .tint(.orange)
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .foregroundColor(.orange)
+                            .font(.title3)
                     } else {
                         Text("\(Int(context.state.progress))%")
                             .font(.title2.bold())
@@ -51,9 +52,7 @@ struct SyncLiveActivity: Widget {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     } else if context.state.isConnecting {
-                        Text("Checking for new blocks...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        EmptyView()
                     } else {
                         VStack(spacing: 8) {
                             ProgressView(value: context.state.progress, total: 100)
@@ -145,10 +144,6 @@ struct LockScreenView: View {
                     Text("Connecting")
                         .font(.headline)
                         .foregroundColor(.primary)
-
-                    Text("Checking for new blocks...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 } else {
                     Text("Syncing Wallet")
                         .font(.headline)
@@ -172,8 +167,9 @@ struct LockScreenView: View {
                     .font(.title)
                     .foregroundColor(.green)
             } else if context.state.isConnecting {
-                ProgressView()
-                    .tint(.orange)
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.title2)
+                    .foregroundColor(.orange)
             } else {
                 Text("\(Int(context.state.progress))%")
                     .font(.title2.bold())

@@ -42,6 +42,11 @@ struct UnlockView: View {
                             unlockWithPIN()
                         }
                     }
+                    .onChange(of: pin) { newValue in
+                        if newValue.count == 6 && !isUnlocking {
+                            unlockWithPIN()
+                        }
+                    }
 
                 if let error = errorMessage {
                     Text(error)

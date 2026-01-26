@@ -1,8 +1,8 @@
 import Foundation
 import Combine
 
-struct PriceDataPoint: Identifiable {
-    let id = UUID()
+struct PriceDataPoint: Identifiable, Equatable {
+    var id: Double { timestamp.timeIntervalSince1970 }
     let timestamp: Date
     let price: Double
 }

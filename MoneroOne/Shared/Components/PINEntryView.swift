@@ -22,13 +22,20 @@ struct PINEntryView: View {
             // Dot indicators
             HStack(spacing: 12) {
                 ForEach(0..<length, id: \.self) { index in
+                    let isFilled = index < pin.count
+                    let isNextDot = index == pin.count && isFocused
                     Circle()
-                        .fill(index < pin.count ? Color.orange : Color.gray.opacity(0.3))
+                        .fill(isFilled ? Color.orange : Color.gray.opacity(0.3))
                         .frame(width: 16, height: 16)
                         .overlay(
                             Circle()
-                                .strokeBorder(index < pin.count ? Color.orange : Color.gray.opacity(0.5), lineWidth: 1)
+                                .strokeBorder(
+                                    isNextDot ? Color.orange : (isFilled ? Color.orange : Color.gray.opacity(0.5)),
+                                    lineWidth: isNextDot ? 2 : 1
+                                )
                         )
+                        .scaleEffect(isNextDot ? 1.2 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: isNextDot)
                         .animation(.spring(response: 0.2), value: pin.count)
                 }
             }
@@ -81,6 +88,10 @@ struct PINEntryFieldView<Field: Hashable>: View {
     var focusedField: FocusState<Field?>.Binding
     var onComplete: (() -> Void)? = nil
 
+    private var isFieldFocused: Bool {
+        focusedField.wrappedValue == field
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             // Label
@@ -91,13 +102,20 @@ struct PINEntryFieldView<Field: Hashable>: View {
             // Dot indicators
             HStack(spacing: 12) {
                 ForEach(0..<length, id: \.self) { index in
+                    let isFilled = index < pin.count
+                    let isNextDot = index == pin.count && isFieldFocused
                     Circle()
-                        .fill(index < pin.count ? Color.orange : Color.gray.opacity(0.3))
+                        .fill(isFilled ? Color.orange : Color.gray.opacity(0.3))
                         .frame(width: 16, height: 16)
                         .overlay(
                             Circle()
-                                .strokeBorder(index < pin.count ? Color.orange : Color.gray.opacity(0.5), lineWidth: 1)
+                                .strokeBorder(
+                                    isNextDot ? Color.orange : (isFilled ? Color.orange : Color.gray.opacity(0.5)),
+                                    lineWidth: isNextDot ? 2 : 1
+                                )
                         )
+                        .scaleEffect(isNextDot ? 1.2 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: isNextDot)
                         .animation(.spring(response: 0.2), value: pin.count)
                 }
             }

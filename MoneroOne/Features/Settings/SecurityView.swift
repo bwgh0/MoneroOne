@@ -136,20 +136,41 @@ struct ChangePINView: View {
     @State private var confirmPIN = ""
     @State private var errorMessage: String?
     @State private var isChanging = false
+    @FocusState private var focusedField: Field?
+
+    enum Field { case current, new, confirm }
 
     var body: some View {
         VStack(spacing: 24) {
             SecureField("Current PIN", text: $currentPIN)
                 .textFieldStyle(.roundedBorder)
                 .keyboardType(.numberPad)
+                .focused($focusedField, equals: .current)
+                .onChange(of: currentPIN) { newValue in
+                    if newValue.count == 6 {
+                        focusedField = .new
+                    }
+                }
 
             SecureField("New PIN (6+ digits)", text: $newPIN)
                 .textFieldStyle(.roundedBorder)
                 .keyboardType(.numberPad)
+                .focused($focusedField, equals: .new)
+                .onChange(of: newPIN) { newValue in
+                    if newValue.count == 6 {
+                        focusedField = .confirm
+                    }
+                }
 
             SecureField("Confirm New PIN", text: $confirmPIN)
                 .textFieldStyle(.roundedBorder)
                 .keyboardType(.numberPad)
+                .focused($focusedField, equals: .confirm)
+                .onChange(of: confirmPIN) { newValue in
+                    if newValue.count == 6 && canChange {
+                        changePIN()
+                    }
+                }
 
             if let error = errorMessage {
                 Text(error)
@@ -182,6 +203,9 @@ struct ChangePINView: View {
         .padding()
         .navigationTitle("Change PIN")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            focusedField = .current
+        }
     }
 
     private var canChange: Bool {

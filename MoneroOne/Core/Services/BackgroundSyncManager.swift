@@ -18,6 +18,10 @@ class BackgroundSyncManager: NSObject, ObservableObject {
     private var walletManager: WalletManager?
     private let enabledKey = "backgroundSyncEnabled"
 
+    // Timer-based polling for when stationary (location updates won't trigger)
+    private var pollTimer: Timer?
+    private let pollInterval: TimeInterval = 120 // 2 minutes
+
     private override init() {
         super.init()
         isEnabled = UserDefaults.standard.bool(forKey: enabledKey)
@@ -60,6 +64,10 @@ class BackgroundSyncManager: NSObject, ObservableObject {
             startBackgroundSync()
         } else {
             stopBackgroundSync()
+            // End Live Activity when background sync is disabled
+            if #available(iOS 16.2, *) {
+                SyncActivityManager.shared.endActivity()
+            }
         }
     }
 
@@ -79,6 +87,7 @@ class BackgroundSyncManager: NSObject, ObservableObject {
     }
 
     func stopBackgroundSync() {
+        stopPollTimer()
         locationManager?.stopUpdatingLocation()
         locationManager?.stopMonitoringSignificantLocationChanges()
         locationManager = nil
@@ -89,18 +98,42 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         guard let wallet = walletManager, wallet.isUnlocked else { return }
 
         isSyncing = true
-        Task {
-            await wallet.refresh()
-        }
 
-        // Start Live Activity if not already running
-        if #available(iOS 16.2, *) {
-            if isEnabled && !SyncActivityManager.shared.isActivityRunning {
-                Task {
-                    await SyncActivityManager.shared.startActivity()
-                }
+        Task {
+            // 1. Start/reset Live Activity and show connecting
+            if #available(iOS 16.2, *), isEnabled {
+                await SyncActivityManager.shared.startActivity()
+                // startActivity() already sets isConnecting: true
+            }
+
+            // 2. Restart sync state checking to detect new blocks
+            wallet.startSync()
+
+            // 3. Wait for refresh to complete
+            await wallet.refresh()
+
+            // 4. Directly mark as synced (bypasses race conditions from Combine subscription)
+            if #available(iOS 16.2, *), isEnabled {
+                SyncActivityManager.shared.markSynced()
+            }
+
+            isSyncing = false
+            lastSyncTime = Date()
+        }
+    }
+
+    private func startPollTimer() {
+        stopPollTimer()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.performSync()
             }
         }
+    }
+
+    private func stopPollTimer() {
+        pollTimer?.invalidate()
+        pollTimer = nil
     }
 
     private func handleSyncStateChange(_ state: WalletManager.SyncState) {
@@ -108,22 +141,18 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         case .syncing(let progress, let remaining):
             isSyncing = true
             guard isEnabled else { return }
-            // Start Live Activity if not running
             if #available(iOS 16.2, *) {
-                if !SyncActivityManager.shared.isActivityRunning {
-                    Task {
-                        await SyncActivityManager.shared.startActivity()
-                    }
+                Task {
+                    // Ensure activity is started/reconnected before updating progress
+                    await SyncActivityManager.shared.startActivity()
+                    SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining)
                 }
-                // Update Live Activity with progress
-                SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining)
             }
 
         case .synced:
             isSyncing = false
             lastSyncTime = Date()
             guard isEnabled else { return }
-            // Mark as synced
             if #available(iOS 16.2, *) {
                 SyncActivityManager.shared.markSynced()
             }
@@ -136,12 +165,11 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         case .connecting:
             isSyncing = true
             guard isEnabled else { return }
-            // Start Live Activity when connecting
+            // Start Live Activity and show connecting state
             if #available(iOS 16.2, *) {
-                if !SyncActivityManager.shared.isActivityRunning {
-                    Task {
-                        await SyncActivityManager.shared.startActivity()
-                    }
+                Task {
+                    await SyncActivityManager.shared.startActivity()
+                    SyncActivityManager.shared.markConnecting()
                 }
             }
 
@@ -173,6 +201,8 @@ extension BackgroundSyncManager: CLLocationManagerDelegate {
                 // Now we can safely enable background updates
                 locationManager?.allowsBackgroundLocationUpdates = true
                 locationManager?.startUpdatingLocation()
+                // Start timed polling for when stationary
+                startPollTimer()
             case .authorizedWhenInUse:
                 // Need "Always" for background - prompt upgrade
                 locationManager?.requestAlwaysAuthorization()

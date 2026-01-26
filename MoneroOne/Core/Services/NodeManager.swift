@@ -109,6 +109,14 @@ class NodeManager: ObservableObject {
         UserDefaults.standard.set(data, forKey: customNodesKey)
     }
 
+    // Custom session that allows older TLS versions (matches wallet2 behavior)
+    private lazy var testSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 15
+        return URLSession(configuration: config, delegate: TLSDelegate(), delegateQueue: nil)
+    }()
+
     func testConnection() async {
         connectionStatus = .testing
 
@@ -117,7 +125,51 @@ class NodeManager: ObservableObject {
             return
         }
 
-        // Use JSON-RPC format that Monero nodes expect
+        // Try the /get_info endpoint first (works with most public nodes)
+        let infoURL = baseURL.appendingPathComponent("get_info")
+        var request = URLRequest(url: infoURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10
+
+        do {
+            let (data, response) = try await testSession.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                if (200...299).contains(httpResponse.statusCode) {
+                    // Check if response contains expected fields
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       json["height"] != nil || json["status"] != nil {
+                        connectionStatus = .connected
+                        return
+                    }
+                }
+                // Try JSON-RPC as fallback
+                await testConnectionViaJsonRpc(baseURL: baseURL)
+            } else {
+                connectionStatus = .failed("Invalid response")
+            }
+        } catch let error as URLError {
+            // Provide more specific error messages
+            switch error.code {
+            case .notConnectedToInternet:
+                connectionStatus = .failed("No internet")
+            case .timedOut:
+                connectionStatus = .failed("Timed out")
+            case .cannotConnectToHost:
+                connectionStatus = .failed("Can't connect")
+            case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateNotYetValid, .serverCertificateHasUnknownRoot:
+                // Try JSON-RPC as fallback for SSL issues
+                await testConnectionViaJsonRpc(baseURL: baseURL)
+            default:
+                connectionStatus = .failed("Network error")
+            }
+        } catch {
+            // Try JSON-RPC as fallback
+            await testConnectionViaJsonRpc(baseURL: baseURL)
+        }
+    }
+
+    private func testConnectionViaJsonRpc(baseURL: URL) async {
         let rpcURL = baseURL.appendingPathComponent("json_rpc")
         var request = URLRequest(url: rpcURL)
         request.httpMethod = "POST"
@@ -126,17 +178,30 @@ class NodeManager: ObservableObject {
         request.timeoutInterval = 10
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await testSession.data(for: request)
             if let httpResponse = response as? HTTPURLResponse,
                (200...299).contains(httpResponse.statusCode),
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                json["result"] != nil {
                 connectionStatus = .connected
             } else {
-                connectionStatus = .failed("Node not responding")
+                connectionStatus = .failed("Not responding")
             }
         } catch {
-            connectionStatus = .failed(error.localizedDescription)
+            connectionStatus = .failed("RPC failed")
+        }
+    }
+}
+
+// Delegate to handle TLS certificate validation (matches wallet2 behavior)
+private class TLSDelegate: NSObject, URLSessionDelegate {
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        // Accept server certificates for Monero nodes (wallet2 does the same)
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let serverTrust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
         }
     }
 }

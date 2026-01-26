@@ -1,8 +1,8 @@
 import SwiftUI
 import Charts
 
-struct PortfolioDataPoint: Identifiable {
-    let id = UUID()
+struct PortfolioDataPoint: Identifiable, Equatable {
+    var id: Double { timestamp.timeIntervalSince1970 }
     let timestamp: Date
     let value: Double
 }
@@ -13,6 +13,9 @@ struct PortfolioChartView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTimeRange: TimeRange = .week
     @State private var selectedDate: Date?
+    @State private var portfolioData: [PortfolioDataPoint] = []
+    @State private var selectedPoint: PortfolioDataPoint?
+    @State private var cachedYDomain: ClosedRange<Double> = 0...100
 
     enum TimeRange: String, CaseIterable {
         case day = "24H"
@@ -34,22 +37,6 @@ struct PortfolioChartView: View {
 
     private var balanceDouble: Double {
         (balance as NSDecimalNumber).doubleValue
-    }
-
-    private var portfolioData: [PortfolioDataPoint] {
-        priceService.chartData.map { point in
-            PortfolioDataPoint(
-                timestamp: point.timestamp,
-                value: balanceDouble * point.price
-            )
-        }
-    }
-
-    private var selectedPoint: PortfolioDataPoint? {
-        guard let selectedDate = selectedDate else { return nil }
-        return portfolioData.min(by: {
-            abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate))
-        })
     }
 
     private var currentPortfolioValue: Double? {
@@ -94,12 +81,32 @@ struct PortfolioChartView: View {
             .task {
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
             }
+            .onAppear {
+                portfolioData = priceService.chartData.map { point in
+                    PortfolioDataPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
+                }
+            }
             .onChange(of: selectedTimeRange) { newValue in
                 selectedDate = nil
+                selectedPoint = nil
                 priceService.chartData = []
                 Task {
                     await priceService.fetchChartData(range: newValue.apiRange)
                 }
+            }
+            .onChange(of: priceService.chartData.count) { _ in
+                portfolioData = priceService.chartData.map { point in
+                    PortfolioDataPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
+                }
+                updateCachedYDomain()
+            }
+            .onChange(of: selectedDate) { newDate in
+                guard let date = newDate else {
+                    selectedPoint = nil
+                    return
+                }
+                // O(log n) binary search instead of O(n) linear search
+                selectedPoint = portfolioData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
             }
         }
     }
@@ -108,6 +115,20 @@ struct PortfolioChartView: View {
 
     private var displayValue: Double? {
         selectedPoint?.value ?? currentPortfolioValue
+    }
+
+    /// Calculate percentage change based on portfolio data for selected time range
+    private var portfolioValueChange: Double? {
+        guard portfolioData.count >= 2 else { return nil }
+        guard let firstValue = portfolioData.first?.value,
+              let lastValue = portfolioData.last?.value,
+              firstValue > 0 else { return nil }
+        return ((lastValue - firstValue) / firstValue) * 100
+    }
+
+    private func formatValueChange(_ change: Double) -> String {
+        let sign = change >= 0 ? "+" : ""
+        return "\(sign)\(String(format: "%.2f", change))%"
     }
 
     private var portfolioHeader: some View {
@@ -129,9 +150,32 @@ struct PortfolioChartView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 } else {
-                    Text(formatXMR(balance) + " XMR")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    // Show portfolio change for selected time range
+                    HStack(spacing: 12) {
+                        Text(formatXMR(balance) + " XMR")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        if let change = portfolioValueChange {
+                            HStack(spacing: 4) {
+                                Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                Text(formatValueChange(change))
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(change >= 0 ? .green : .red)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
+                            .cornerRadius(6)
+                        } else if priceService.isLoadingChart {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        }
+
+                        Text(selectedTimeRange.rawValue)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
             } else {
                 ProgressView()
@@ -187,9 +231,16 @@ struct PortfolioChartView: View {
     // MARK: - Chart Section
 
     private var chartYDomain: ClosedRange<Double> {
-        guard let range = portfolioRange else { return 0...100 }
+        cachedYDomain
+    }
+
+    private func updateCachedYDomain() {
+        guard let range = portfolioRange else {
+            cachedYDomain = 0...100
+            return
+        }
         let padding = (range.max - range.min) * 0.05
-        return (range.min - padding)...(range.max + padding)
+        cachedYDomain = (range.min - padding)...(range.max + padding)
     }
 
     private var chartSection: some View {

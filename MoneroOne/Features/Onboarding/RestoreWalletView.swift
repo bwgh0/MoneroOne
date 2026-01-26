@@ -116,6 +116,11 @@ struct RestoreWalletView: View {
                         focusedField = .confirmPin
                     }
                 }
+                .onChange(of: pin) { newValue in
+                    if newValue.count == 6 {
+                        focusedField = .confirmPin
+                    }
+                }
 
             SecureField("Confirm PIN", text: $confirmPin)
                 .keyboardType(.numberPad)
@@ -125,6 +130,12 @@ struct RestoreWalletView: View {
                 .submitLabel(.go)
                 .onSubmit {
                     if canProceed {
+                        step = .restoring
+                        restoreWallet()
+                    }
+                }
+                .onChange(of: confirmPin) { newValue in
+                    if newValue.count == 6 && pin == confirmPin {
                         step = .restoring
                         restoreWallet()
                     }

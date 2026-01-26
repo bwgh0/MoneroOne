@@ -109,7 +109,19 @@ class LiteWalletManager: ObservableObject {
     }
 
     func refresh() async {
-        guard isRunning, client != nil else { return }
+        logger.info("refresh() called, current state: \(String(describing: self.syncState))")
+        guard isRunning, client != nil else {
+            logger.warning("refresh() skipped - isRunning: \(self.isRunning), hasClient: \(self.client != nil)")
+            return
+        }
+
+        // Set connecting state to trigger Live Activity update
+        // This shows "Syncing..." immediately while we check for new blocks
+        if case .synced = syncState {
+            logger.info("Transitioning from .synced to .connecting for refresh")
+            syncState = .connecting
+        }
+
         await fetchBalanceAndTransactions()
     }
 

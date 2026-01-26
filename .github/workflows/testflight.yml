@@ -24,9 +24,8 @@ jobs:
 
       - name: Fix MoneroKit path for CI
         run: |
-          # Update the local package reference path in pbxproj
-          sed -i '' 's|path = "../MoneroKit.Swift"|path = "MoneroKit.Swift"|g' MoneroOne.xcodeproj/project.pbxproj
-          sed -i '' 's|"../MoneroKit.Swift"|"MoneroKit.Swift"|g' MoneroOne.xcodeproj/project.pbxproj
+          # Update all local package reference paths in pbxproj (with and without quotes)
+          sed -i '' 's|\.\./MoneroKit\.Swift|MoneroKit.Swift|g' MoneroOne.xcodeproj/project.pbxproj
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1

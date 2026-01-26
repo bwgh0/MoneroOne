@@ -3,6 +3,7 @@ import Charts
 
 struct PriceChartView: View {
     @EnvironmentObject var priceService: PriceService
+    @EnvironmentObject var priceAlertService: PriceAlertService
     @State private var selectedTimeRange: TimeRange = .week
     @State private var selectedDate: Date?
     @State private var selectedPoint: PriceDataPoint?
@@ -91,6 +92,18 @@ struct PriceChartView: View {
             .refreshable {
                 await priceService.fetchPrice()
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink {
+                        PriceAlertsView(
+                            priceAlertService: priceAlertService,
+                            priceService: priceService
+                        )
+                    } label: {
+                        Image(systemName: "bell")
+                    }
+                }
             }
         }
     }
@@ -418,4 +431,5 @@ extension View {
 #Preview {
     PriceChartView()
         .environmentObject(PriceService())
+        .environmentObject(PriceAlertService())
 }

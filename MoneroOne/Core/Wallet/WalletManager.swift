@@ -608,11 +608,8 @@ class WalletManager: ObservableObject {
         if currentSyncMode == .lite {
             await liteWalletManager?.refresh()
         } else {
-            // Set connecting state to trigger Live Activity update immediately
-            if case .synced = syncState {
-                syncState = .connecting
-            }
-            // Restart sync state checking to detect new blocks
+            // Let MoneroKit determine actual sync state via walletStateDidChange() callback
+            // Don't force .connecting - if already synced and no new blocks, stay synced
             moneroWallet?.startSync()
             moneroWallet?.refresh()
         }

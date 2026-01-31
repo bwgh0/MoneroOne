@@ -4,13 +4,13 @@ struct UnlockView: View {
     @EnvironmentObject var walletManager: WalletManager
     @StateObject private var biometricAuth = BiometricAuthManager()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("preferredPINLength") private var preferredPINLength = 6
 
     @State private var pin = ""
     @State private var errorMessage: String?
     @State private var isUnlocking = false
     @State private var attempts = 0
     @State private var lastBiometricAttempt: Date?
-    @FocusState private var isPinFocused: Bool
 
     var body: some View {
         VStack(spacing: 32) {
@@ -23,30 +23,24 @@ struct UnlockView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("Enter your PIN to unlock")
-                .foregroundColor(.secondary)
-
-            // PIN Entry
-            VStack(spacing: 16) {
-                SecureField("PIN", text: $pin)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 200)
-                    .multilineTextAlignment(.center)
-                    .font(.title2)
-                    .disabled(isUnlocking)
-                    .focused($isPinFocused)
-                    .submitLabel(.go)
-                    .onSubmit {
-                        if pin.count >= 6 && !isUnlocking {
-                            unlockWithPIN()
-                        }
+            // PIN Entry with dots
+            VStack(spacing: 20) {
+                PINEntryView(
+                    pin: $pin,
+                    length: preferredPINLength,
+                    label: "Enter your PIN to unlock",
+                    autoFocus: true,
+                    onComplete: {
+                        unlockWithPIN()
                     }
+                )
+                .disabled(isUnlocking)
 
                 if let error = errorMessage {
                     Text(error)
                         .foregroundColor(.red)
                         .font(.caption)
+                        .transition(.opacity)
                 }
 
                 Button {
@@ -55,7 +49,7 @@ struct UnlockView: View {
                     HStack(spacing: 8) {
                         if isUnlocking {
                             ProgressView()
-                                .tint(pin.count >= 6 ? Color.orange : Color.gray)
+                                .tint(pin.count >= 4 ? Color.orange : Color.gray)
                         } else {
                             Image(systemName: "lock.open.fill")
                                 .font(.callout.weight(.semibold))
@@ -63,12 +57,12 @@ struct UnlockView: View {
                                 .font(.callout.weight(.semibold))
                         }
                     }
-                    .foregroundStyle(pin.count >= 6 ? Color.orange : Color.gray)
+                    .foregroundStyle(pin.count >= 4 ? Color.orange : Color.gray)
                     .frame(width: 200)
                     .padding(.vertical, 12)
                 }
                 .glassButtonStyle()
-                .disabled(pin.count < 6 || isUnlocking)
+                .disabled(pin.count < 4 || isUnlocking)
             }
 
             // Biometric Button
@@ -116,9 +110,8 @@ struct UnlockView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 unlockWithBiometrics()
             }
-        } else {
-            isPinFocused = true
         }
+        // autoFocus on PINEntryView handles keyboard focus
     }
 
     private func unlockWithPIN() {

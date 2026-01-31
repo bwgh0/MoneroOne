@@ -1,8 +1,10 @@
 import SwiftUI
+import LocalAuthentication
 
 struct RestoreWalletView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
+    @AppStorage("preferredPINLength") private var preferredPINLength = 6
 
     @State private var seedInput = ""
     @State private var pin = ""
@@ -13,7 +15,13 @@ struct RestoreWalletView: View {
     @State private var isRestoring = false
     @State private var walletCreationDate: Date = Date()
     @State private var useCreationDate = true
+    @State private var selectedPINLength = 6
     @FocusState private var focusedField: PINField?
+
+    // Biometrics
+    @State private var biometricsAvailable = false
+    @State private var biometricType: LABiometryType = .none
+    @State private var enableBiometrics = false
 
     enum PINField {
         case pin
@@ -24,7 +32,26 @@ struct RestoreWalletView: View {
         case enterSeed
         case creationDate
         case setPIN
+        case biometricSetup
         case restoring
+    }
+
+    private var biometricIcon: String {
+        switch biometricType {
+        case .faceID: return "faceid"
+        case .touchID: return "touchid"
+        case .opticID: return "opticid"
+        @unknown default: return "lock.fill"
+        }
+    }
+
+    private var biometricName: String {
+        switch biometricType {
+        case .faceID: return "Face ID"
+        case .touchID: return "Touch ID"
+        case .opticID: return "Optic ID"
+        @unknown default: return "Biometrics"
+        }
     }
 
     // Monero testnet genesis: approximately April 2014
@@ -39,6 +66,8 @@ struct RestoreWalletView: View {
                 creationDateView
             case .setPIN:
                 setPINView
+            case .biometricSetup:
+                biometricSetupView
             case .restoring:
                 restoringView
             }
@@ -104,51 +133,176 @@ struct RestoreWalletView: View {
         VStack(spacing: 24) {
             Text("Set a PIN to secure your wallet")
                 .font(.headline)
+                .multilineTextAlignment(.center)
 
-            SecureField("Enter PIN (6+ digits)", text: $pin)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-                .focused($focusedField, equals: .pin)
-                .submitLabel(.next)
-                .onSubmit {
-                    if pin.count >= 6 {
-                        focusedField = .confirmPin
+            // PIN Length Selection
+            VStack(spacing: 8) {
+                Text("PIN Length")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 12) {
+                    // 4 digits option
+                    Button {
+                        selectedPINLength = 4
+                        pin = ""
+                        confirmPin = ""
+                        focusedField = .pin
+                    } label: {
+                        Text("4 Digits")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(selectedPINLength == 4 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
+                            .foregroundColor(selectedPINLength == 4 ? .orange : .primary)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(selectedPINLength == 4 ? Color.orange : Color.clear, lineWidth: 1.5)
+                            )
                     }
-                }
+                    .buttonStyle(.plain)
 
-            SecureField("Confirm PIN", text: $confirmPin)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-                .focused($focusedField, equals: .confirmPin)
-                .submitLabel(.go)
-                .onSubmit {
+                    // 6 digits option (recommended)
+                    Button {
+                        selectedPINLength = 6
+                        pin = ""
+                        confirmPin = ""
+                        focusedField = .pin
+                    } label: {
+                        VStack(spacing: 4) {
+                            Text("6 Digits")
+                                .font(.subheadline.weight(.medium))
+                            Text("Recommended")
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.2))
+                                .foregroundColor(.orange)
+                                .cornerRadius(4)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(selectedPINLength == 6 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
+                        .foregroundColor(selectedPINLength == 6 ? .orange : .primary)
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(selectedPINLength == 6 ? Color.orange : Color.clear, lineWidth: 1.5)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+            }
+
+            // PIN Entry
+            PINEntryFieldView(
+                pin: $pin,
+                length: selectedPINLength,
+                label: "Enter PIN",
+                field: PINField.pin,
+                focusedField: $focusedField,
+                onComplete: {
+                    focusedField = .confirmPin
+                }
+            )
+
+            PINEntryFieldView(
+                pin: $confirmPin,
+                length: selectedPINLength,
+                label: "Confirm PIN",
+                field: PINField.confirmPin,
+                focusedField: $focusedField,
+                onComplete: {
                     if canProceed {
-                        step = .restoring
-                        restoreWallet()
+                        // Save the selected PIN length preference
+                        preferredPINLength = selectedPINLength
+                        proceedAfterPIN()
                     }
                 }
+            )
+
+            if pin.count == selectedPINLength && confirmPin.count == selectedPINLength && pin != confirmPin {
+                Text("PINs don't match")
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
 
             Button {
-                step = .restoring
-                restoreWallet()
+                // Save the selected PIN length preference
+                preferredPINLength = selectedPINLength
+                proceedAfterPIN()
             } label: {
-                Text("Restore Wallet")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(canProceed ? Color.orange : Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
+                HStack(spacing: 8) {
+                    Text("Restore Wallet")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(canProceed ? Color.orange : Color.gray)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
             }
+            .glassButtonStyle()
             .disabled(!canProceed)
             .padding(.horizontal)
 
             Spacer()
         }
         .onAppear {
+            // Always default to 6 digits (recommended) for new wallets
             focusedField = .pin
+        }
+    }
+
+    private var biometricSetupView: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            Image(systemName: biometricIcon)
+                .font(.system(size: 80))
+                .foregroundColor(.orange)
+
+            Text("Enable \(biometricName)?")
+                .font(.title2.weight(.semibold))
+
+            Text("Unlock your wallet quickly and securely with \(biometricName) instead of entering your PIN.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            VStack(spacing: 12) {
+                Button {
+                    authenticateBiometrics()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: biometricIcon)
+                            .font(.callout.weight(.semibold))
+                        Text("Enable \(biometricName)")
+                            .font(.callout.weight(.semibold))
+                    }
+                    .foregroundStyle(Color.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                }
+                .glassButtonStyle()
+
+                Button {
+                    enableBiometrics = false
+                    step = .restoring
+                    restoreWallet()
+                } label: {
+                    Text("Skip for Now")
+                        .font(.callout.weight(.medium))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 12)
+                }
+            }
+            .padding(.horizontal)
+
+            Spacer()
         }
     }
 
@@ -187,7 +341,54 @@ struct RestoreWalletView: View {
     }
 
     private var canProceed: Bool {
-        pin.count >= 6 && pin == confirmPin
+        pin.count == selectedPINLength && pin == confirmPin
+    }
+
+    private func checkBiometrics() {
+        let context = LAContext()
+        var error: NSError?
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            biometricsAvailable = true
+            biometricType = context.biometryType
+        } else {
+            biometricsAvailable = false
+            biometricType = .none
+        }
+    }
+
+    private func proceedAfterPIN() {
+        checkBiometrics()
+        if biometricsAvailable {
+            step = .biometricSetup
+        } else {
+            step = .restoring
+            restoreWallet()
+        }
+    }
+
+    private func authenticateBiometrics() {
+        let context = LAContext()
+        context.localizedCancelTitle = "Cancel"
+
+        Task {
+            do {
+                let success = try await context.evaluatePolicy(
+                    .deviceOwnerAuthenticationWithBiometrics,
+                    localizedReason: "Verify \(biometricName) to enable quick unlock"
+                )
+                await MainActor.run {
+                    if success {
+                        enableBiometrics = true
+                        step = .restoring
+                        restoreWallet()
+                    }
+                }
+            } catch {
+                // User cancelled or biometrics failed - stay on this screen
+                // They can try again or skip
+            }
+        }
     }
 
     private func validateAndProceed() {
@@ -276,6 +477,12 @@ struct RestoreWalletView: View {
                     restoreDate = useCreationDate ? walletCreationDate : nil
                 }
                 try walletManager.restoreWallet(mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
+
+                // Enable biometrics if user opted in
+                if enableBiometrics {
+                    try walletManager.enableBiometricUnlock(pin: pin)
+                }
+
                 try walletManager.unlock(pin: pin)
             } catch {
                 await MainActor.run {

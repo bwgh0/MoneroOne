@@ -3,16 +3,11 @@ import Charts
 
 struct PriceChartView: View {
     @EnvironmentObject var priceService: PriceService
+    @EnvironmentObject var priceAlertService: PriceAlertService
     @State private var selectedTimeRange: TimeRange = .week
     @State private var selectedDate: Date?
-
-    private var selectedPoint: PriceDataPoint? {
-        guard let selectedDate = selectedDate else { return nil }
-        // Find the closest point to the selected date
-        return priceService.chartData.min(by: {
-            abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate))
-        })
-    }
+    @State private var selectedPoint: PriceDataPoint?
+    @State private var cachedYDomain: ClosedRange<Double> = 0...100
 
     enum TimeRange: String, CaseIterable {
         case day = "24H"
@@ -64,18 +59,59 @@ struct PriceChartView: View {
             .navigationTitle("Monero Price")
             .navigationBarTitleDisplayMode(.inline)
             .task {
+                // Set loading synchronously before async work to avoid blank state
+                if priceService.chartDataCache[selectedTimeRange.apiRange] == nil {
+                    priceService.isLoadingChart = true
+                }
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
             }
             .onChange(of: selectedTimeRange) { newValue in
                 selectedDate = nil
-                priceService.chartData = [] // Clear for loading state
+                selectedPoint = nil
+                priceService.currentChartRange = newValue.apiRange
+                // Only show loading if not cached
+                if priceService.chartDataCache[newValue.apiRange] == nil {
+                    priceService.isLoadingChart = true
+                }
                 Task {
                     await priceService.fetchChartData(range: newValue.apiRange)
                 }
             }
+            .onChange(of: selectedDate) { newDate in
+                guard let date = newDate else {
+                    selectedPoint = nil
+                    return
+                }
+                // O(log n) binary search instead of O(n) linear search
+                selectedPoint = priceService.chartData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
+            }
+            .onChange(of: priceService.chartData.count) { _ in
+                // Recalculate domain only when data changes
+                let rate = priceService.usdToSelectedRate
+                let prices = priceService.chartData.map { $0.price * rate }
+                guard let minPrice = prices.min(), let maxPrice = prices.max() else {
+                    cachedYDomain = 0...100
+                    return
+                }
+                let range = maxPrice - minPrice
+                let padding = range * 0.05
+                cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+            }
             .refreshable {
                 await priceService.fetchPrice()
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink {
+                        PriceAlertsView(
+                            priceAlertService: priceAlertService,
+                            priceService: priceService
+                        )
+                    } label: {
+                        Image(systemName: "bell")
+                    }
+                }
             }
         }
     }
@@ -83,7 +119,26 @@ struct PriceChartView: View {
     // MARK: - Price Header
 
     private var displayPrice: Double? {
-        selectedPoint?.price ?? priceService.xmrPrice
+        // Chart data is in USD, convert selectedPoint to selected currency
+        if let selectedPoint = selectedPoint {
+            return selectedPoint.price * priceService.usdToSelectedRate
+        }
+        return priceService.xmrPrice
+    }
+
+    /// Calculate percentage change based on chart data for selected time range
+    private var chartPriceChange: Double? {
+        guard priceService.chartData.count >= 2 else { return nil }
+        let rate = priceService.usdToSelectedRate
+        guard let firstPrice = priceService.chartData.first?.price,
+              let lastPrice = priceService.chartData.last?.price,
+              firstPrice > 0 else { return nil }
+        return ((lastPrice - firstPrice) / firstPrice) * 100
+    }
+
+    private func formatChartPriceChange(_ change: Double) -> String {
+        let sign = change >= 0 ? "+" : ""
+        return "\(sign)\(String(format: "%.2f", change))%"
     }
 
     private var priceHeader: some View {
@@ -101,12 +156,12 @@ struct PriceChartView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 } else {
-                    // Show 24h change when not interacting
+                    // Show price change for selected time range
                     HStack(spacing: 16) {
-                        if let change = priceService.priceChange24h {
+                        if let change = chartPriceChange {
                             HStack(spacing: 4) {
                                 Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                Text(priceService.formatPriceChange() ?? "")
+                                Text(formatChartPriceChange(change))
                             }
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(change >= 0 ? .green : .red)
@@ -114,9 +169,12 @@ struct PriceChartView: View {
                             .padding(.vertical, 6)
                             .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
                             .cornerRadius(8)
+                        } else if priceService.isLoadingChart {
+                            ProgressView()
+                                .scaleEffect(0.8)
                         }
 
-                        Text("24h")
+                        Text(selectedTimeRange.rawValue)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -155,7 +213,9 @@ struct PriceChartView: View {
     // MARK: - Chart Section
 
     private var chartPriceRange: (min: Double, max: Double) {
-        let prices = priceService.chartData.map { $0.price }
+        // Apply currency conversion (chart data is always in USD from CMC API)
+        let rate = priceService.usdToSelectedRate
+        let prices = priceService.chartData.map { $0.price * rate }
         guard let minPrice = prices.min(), let maxPrice = prices.max() else {
             return (0, 100)
         }
@@ -163,11 +223,7 @@ struct PriceChartView: View {
     }
 
     private var chartYDomain: ClosedRange<Double> {
-        let (minPrice, maxPrice) = chartPriceRange
-        // Add 5% padding on top and bottom for better visualization
-        let range = maxPrice - minPrice
-        let padding = range * 0.05
-        return (minPrice - padding)...(maxPrice + padding)
+        cachedYDomain
     }
 
     private var chartSection: some View {
@@ -178,13 +234,15 @@ struct PriceChartView: View {
                 emptyChartState
             } else {
                 // Apple Swift Charts
+                // Note: Chart data is in USD, apply currency conversion
+                let rate = priceService.usdToSelectedRate
                 Chart {
                     // Area fill - use yStart to prevent going below x-axis
                     ForEach(priceService.chartData) { point in
                         AreaMark(
                             x: .value("Time", point.timestamp),
                             yStart: .value("Min", chartYDomain.lowerBound),
-                            yEnd: .value("Price", point.price)
+                            yEnd: .value("Price", point.price * rate)
                         )
                         .foregroundStyle(
                             LinearGradient(
@@ -197,7 +255,7 @@ struct PriceChartView: View {
 
                         LineMark(
                             x: .value("Time", point.timestamp),
-                            y: .value("Price", point.price)
+                            y: .value("Price", point.price * rate)
                         )
                         .foregroundStyle(Color.orange)
                         .lineStyle(StrokeStyle(lineWidth: 2))
@@ -212,7 +270,7 @@ struct PriceChartView: View {
 
                         PointMark(
                             x: .value("Time", selectedPoint.timestamp),
-                            y: .value("Price", selectedPoint.price)
+                            y: .value("Price", selectedPoint.price * rate)
                         )
                         .foregroundStyle(Color.orange)
                         .symbolSize(100)
@@ -381,4 +439,5 @@ extension View {
 #Preview {
     PriceChartView()
         .environmentObject(PriceService())
+        .environmentObject(PriceAlertService())
 }

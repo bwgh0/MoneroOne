@@ -22,6 +22,10 @@ struct SyncLiveActivity: Widget {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
                             .font(.title2)
+                    } else if context.state.isConnecting {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .foregroundColor(.orange)
+                            .font(.title3)
                     } else {
                         Text("\(Int(context.state.progress))%")
                             .font(.title2.bold())
@@ -30,12 +34,26 @@ struct SyncLiveActivity: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.center) {
-                    Text(context.state.isSynced ? "Synced" : "Syncing Wallet")
-                        .font(.headline)
+                    if context.state.isSynced {
+                        Text("Synced")
+                            .font(.headline)
+                    } else if context.state.isConnecting {
+                        Text("Connecting")
+                            .font(.headline)
+                    } else {
+                        Text("Syncing Wallet")
+                            .font(.headline)
+                    }
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
-                    if !context.state.isSynced {
+                    if context.state.isSynced {
+                        Text("Updated \(context.state.lastUpdated, style: .relative) ago")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else if context.state.isConnecting {
+                        EmptyView()
+                    } else {
                         VStack(spacing: 8) {
                             ProgressView(value: context.state.progress, total: 100)
                                 .tint(.orange)
@@ -56,12 +74,16 @@ struct SyncLiveActivity: Widget {
                     .frame(width: 18, height: 18)
                     .clipShape(Circle())
             } compactTrailing: {
-                HStack(spacing: 4) {
-                    if context.state.isSynced {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .font(.caption)
-                    } else {
+                if context.state.isSynced {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
+                } else if context.state.isConnecting {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                } else {
+                    HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .foregroundColor(.orange)
                             .font(.caption2)
@@ -72,8 +94,16 @@ struct SyncLiveActivity: Widget {
                     }
                 }
             } minimal: {
-                Image(systemName: context.state.isSynced ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
-                    .foregroundColor(context.state.isSynced ? .green : .orange)
+                if context.state.isSynced {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else if context.state.isConnecting {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .foregroundColor(.orange)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundColor(.orange)
+                }
             }
         }
     }
@@ -102,15 +132,23 @@ struct LockScreenView: View {
                 .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(context.state.isSynced ? "Wallet Synced" : "Syncing Wallet")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-
                 if context.state.isSynced {
-                    Text("Your wallet is up to date")
+                    Text("Wallet Synced")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    Text("Updated \(context.state.lastUpdated, style: .relative) ago")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                } else if context.state.isConnecting {
+                    Text("Connecting")
+                        .font(.headline)
+                        .foregroundColor(.primary)
                 } else {
+                    Text("Syncing Wallet")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
                     ProgressView(value: context.state.progress, total: 100)
                         .tint(.orange)
 
@@ -128,6 +166,10 @@ struct LockScreenView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title)
                     .foregroundColor(.green)
+            } else if context.state.isConnecting {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.title2)
+                    .foregroundColor(.orange)
             } else {
                 Text("\(Int(context.state.progress))%")
                     .font(.title2.bold())
@@ -138,12 +180,3 @@ struct LockScreenView: View {
         .activityBackgroundTint(Color(.systemBackground))
     }
 }
-
-// Live Activity preview requires iOS 17+ for contentStates builder
-// Uncomment when building with iOS 17+ deployment target
-//#Preview("Live Activity", as: .content, using: SyncActivityAttributes(walletName: "Monero One")) {
-//    SyncLiveActivity()
-//} contentStates: {
-//    SyncActivityAttributes.ContentState(progress: 45, blocksRemaining: 12500, isSynced: false, lastUpdated: Date())
-//    SyncActivityAttributes.ContentState(progress: 100, blocksRemaining: 0, isSynced: true, lastUpdated: Date())
-//}

@@ -9,12 +9,14 @@ public struct SyncActivityAttributes: ActivityAttributes {
         public var progress: Double
         public var blocksRemaining: Int?
         public var isSynced: Bool
+        public var isConnecting: Bool
         public var lastUpdated: Date
 
-        public init(progress: Double, blocksRemaining: Int? = nil, isSynced: Bool, lastUpdated: Date) {
+        public init(progress: Double, blocksRemaining: Int? = nil, isSynced: Bool, isConnecting: Bool = false, lastUpdated: Date) {
             self.progress = progress
             self.blocksRemaining = blocksRemaining
             self.isSynced = isSynced
+            self.isConnecting = isConnecting
             self.lastUpdated = lastUpdated
         }
     }

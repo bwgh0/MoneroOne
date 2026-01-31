@@ -252,6 +252,11 @@ class MoneroWallet: ObservableObject {
         kit?.refresh()
     }
 
+    /// Restart sync to check for new blocks
+    func startSync() {
+        kit?.startSync()
+    }
+
     // MARK: - Balance
 
     private func updateBalance(_ info: MoneroKit.BalanceInfo) {

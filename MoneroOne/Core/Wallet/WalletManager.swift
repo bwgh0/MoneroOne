@@ -4,6 +4,7 @@ import Combine
 import HdWalletKit
 import MoneroKit
 import CMonero
+import WidgetKit
 
 @MainActor
 class WalletManager: ObservableObject {
@@ -359,10 +360,18 @@ class WalletManager: ObservableObject {
     }
 
     private func bindToWallet(_ wallet: MoneroWallet) {
-        // Bind wallet state to manager state
+        // Bind wallet state to manager state with widget updates
         wallet.$balance
             .receive(on: DispatchQueue.main)
-            .assign(to: &$balance)
+            .sink { [weak self] newBalance in
+                guard let self = self else { return }
+                self.balance = newBalance
+                // Update widget when balance changes while synced
+                if case .synced = self.syncState {
+                    self.saveWidgetDataIfEnabled()
+                }
+            }
+            .store(in: &cancellables)
 
         wallet.$unlockedBalance
             .receive(on: DispatchQueue.main)
@@ -374,21 +383,37 @@ class WalletManager: ObservableObject {
 
         wallet.$syncState
             .receive(on: DispatchQueue.main)
-            .map { state -> SyncState in
+            .sink { [weak self] state in
+                guard let self = self else { return }
+                let newState: SyncState
                 switch state {
-                case .idle: return .idle
-                case .connecting: return .connecting
+                case .idle: newState = .idle
+                case .connecting: newState = .connecting
                 case .syncing(let progress, let remaining):
-                    return .syncing(progress: progress, remaining: remaining)
-                case .synced: return .synced
-                case .error(let msg): return .error(msg)
+                    newState = .syncing(progress: progress, remaining: remaining)
+                case .synced: newState = .synced
+                case .error(let msg): newState = .error(msg)
+                }
+                self.syncState = newState
+
+                // Update widget when sync completes
+                if case .synced = newState {
+                    self.saveWidgetDataIfEnabled()
                 }
             }
-            .assign(to: &$syncState)
+            .store(in: &cancellables)
 
         wallet.$transactions
             .receive(on: DispatchQueue.main)
-            .assign(to: &$transactions)
+            .sink { [weak self] newTransactions in
+                guard let self = self else { return }
+                self.transactions = newTransactions
+                // Update widget when transactions change while synced
+                if case .synced = self.syncState {
+                    self.saveWidgetDataIfEnabled()
+                }
+            }
+            .store(in: &cancellables)
 
         wallet.$subaddresses
             .receive(on: DispatchQueue.main)
@@ -518,6 +543,67 @@ class WalletManager: ObservableObject {
         isSendReady = false
         sendSyncProgress = 0
         sendSyncStatus = "Connecting..."
+    }
+
+    // MARK: - Widget Data
+
+    /// Save current wallet data for home screen widget
+    /// - Parameter enabled: Override the enabled state. If nil, reads from UserDefaults.
+    func saveWidgetData(enabled: Bool? = nil) {
+        // Use passed value, or check UserDefaults
+        let isEnabled = enabled ?? UserDefaults.standard.bool(forKey: "widgetEnabled")
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 4
+        formatter.maximumFractionDigits = 4
+
+        let balanceFormatted = formatter.string(from: balance as NSDecimalNumber) ?? "0.0000"
+
+        // Convert sync state to widget sync status
+        let widgetSyncStatus: WidgetData.SyncStatus
+        switch syncState {
+        case .synced:
+            widgetSyncStatus = .synced
+        case .syncing:
+            widgetSyncStatus = .syncing
+        case .connecting:
+            widgetSyncStatus = .connecting
+        case .idle, .error:
+            widgetSyncStatus = .offline
+        }
+
+        // Convert recent transactions
+        let recentTransactions = transactions.prefix(5).map { tx in
+            WidgetTransaction(
+                id: tx.id,
+                isIncoming: tx.type == .incoming,
+                amount: tx.amount,
+                amountFormatted: formatter.string(from: tx.amount as NSDecimalNumber) ?? "0.0000",
+                timestamp: tx.timestamp,
+                isConfirmed: tx.confirmations >= 10
+            )
+        }
+
+        let widgetData = WidgetData(
+            balance: balance,
+            balanceFormatted: balanceFormatted,
+            fiatBalance: nil, // Could add fiat conversion here if price service available
+            syncStatus: widgetSyncStatus,
+            lastUpdated: Date(),
+            recentTransactions: Array(recentTransactions),
+            isTestnet: isTestnet,
+            isEnabled: isEnabled
+        )
+
+        WidgetDataManager.shared.save(widgetData)
+    }
+
+    /// Save widget data if widget is enabled - called during sync cycles
+    private func saveWidgetDataIfEnabled() {
+        guard UserDefaults.standard.bool(forKey: "widgetEnabled") else { return }
+        saveWidgetData()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Sync Mode Switching

@@ -16,8 +16,13 @@ class PriceService: ObservableObject {
     @Published var selectedCurrency: String = "usd"
     @Published var isLoading = false
     @Published var error: String?
-    @Published var chartData: [PriceDataPoint] = []
+    @Published var chartDataCache: [String: [PriceDataPoint]] = [:]
+    @Published var currentChartRange: String = "7D"
     @Published var isLoadingChart = false
+
+    var chartData: [PriceDataPoint] {
+        chartDataCache[currentChartRange] ?? []
+    }
     @Published var usdToSelectedRate: Double = 1.0
 
     private var refreshTimer: Timer?
@@ -161,6 +166,14 @@ class PriceService: ObservableObject {
 
     /// Fetch chart data using CoinMarketCap ranges: "1D", "7D", "1M", "1Y", "All"
     func fetchChartData(range: String = "7D") async {
+        currentChartRange = range
+
+        // Return cached data if available
+        if chartDataCache[range] != nil {
+            isLoadingChart = false
+            return
+        }
+
         isLoadingChart = true
 
         // Map range to interval (matching CMC website)
@@ -252,7 +265,7 @@ class PriceService: ObservableObject {
             }
 
             if !newChartData.isEmpty {
-                chartData = newChartData
+                chartDataCache[range] = newChartData
                 // Save updated chart data for widget
                 savePriceWidgetData()
             }

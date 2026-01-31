@@ -39,146 +39,29 @@ struct PriceProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<PriceEntry>) -> Void) {
         os_log("🔄 getTimeline called for PriceWidget", log: widgetLog, type: .info)
 
-        Task {
-            // Try to fetch fresh data from network
-            let freshData = await fetchPriceData()
+        // Widget extensions have limited runtime (~10-30 seconds) and network is unreliable.
+        // Instead of fetching data ourselves, we rely on cached data prepared by the main app.
+        // The main app's PriceService saves data and triggers WidgetCenter.shared.reloadTimelines().
 
-            let data: WidgetData
-            if let freshData = freshData {
-                os_log("✅ Fetched fresh price data: %{public}@", log: widgetLog, type: .info, String(describing: freshData.currentPrice))
-                // Save fetched data for future use
-                WidgetDataManager.shared.save(freshData)
-                data = freshData
-            } else {
-                // Fall back to cached data, but only if it has price data
-                os_log("⚠️ Using cached data", log: widgetLog, type: .info)
-                if let cached = WidgetDataManager.shared.load(), cached.currentPrice != nil {
-                    data = cached
-                } else {
-                    data = WidgetDataManager.pricePlaceholder
-                }
-            }
-
-            os_log("📊 Price data: %{public}@", log: widgetLog, type: .info, String(describing: data.currentPrice))
-            let entry = PriceEntry(date: Date(), data: data)
-
-            // Determine refresh interval based on data completeness
-            let hasCompleteData = data.currentPrice != nil && (data.priceChartPoints?.count ?? 0) > 1
-            let refreshMinutes = hasCompleteData ? 15 : 2  // Retry sooner if data incomplete
-            os_log("⏱️ Next refresh in %d minutes (complete=%d)", log: widgetLog, type: .info, refreshMinutes, hasCompleteData ? 1 : 0)
-
-            let nextUpdate = Calendar.current.date(byAdding: .minute, value: refreshMinutes, to: Date())!
-            let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
-            completion(timeline)
+        let data: WidgetData
+        if let cached = WidgetDataManager.shared.load(), cached.currentPrice != nil {
+            os_log("✅ Using cached price data: %{public}@", log: widgetLog, type: .info, String(describing: cached.currentPrice))
+            data = cached
+        } else {
+            os_log("⚠️ No cached data available - waiting for main app", log: widgetLog, type: .info)
+            data = WidgetDataManager.pricePlaceholder
         }
-    }
 
-    /// Fetch price data directly from APIs
-    private func fetchPriceData() async -> WidgetData? {
-        // Load existing data to preserve user's currency preference
-        var widgetData = WidgetDataManager.shared.load() ?? WidgetDataManager.placeholder
-        let currency = widgetData.priceCurrency ?? "usd"
+        let entry = PriceEntry(date: Date(), data: data)
 
-        // Fetch current price from CoinGecko
-        let currencies = currency == "usd" ? "usd" : "\(currency),usd"
-        let priceUrlString = "https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=\(currencies)&include_24hr_change=true"
+        // Determine refresh interval based on data availability
+        let hasData = data.currentPrice != nil
+        let refreshMinutes = hasData ? 15 : 2  // Retry sooner if no data (waiting for app)
+        os_log("⏱️ Next refresh in %d minutes (hasData=%d)", log: widgetLog, type: .info, refreshMinutes, hasData ? 1 : 0)
 
-        guard let priceUrl = URL(string: priceUrlString) else { return nil }
-
-        do {
-            let (priceData, priceResponse) = try await URLSession.shared.data(from: priceUrl)
-
-            guard let httpResponse = priceResponse as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
-                return nil
-            }
-
-            // Parse CoinGecko response
-            if let json = try? JSONSerialization.jsonObject(with: priceData) as? [String: Any],
-               let moneroData = json["monero"] as? [String: Double] {
-                widgetData.currentPrice = moneroData[currency]
-                widgetData.priceChange24h = moneroData["\(currency)_24h_change"]
-                widgetData.priceLastUpdated = Date()
-
-                // Calculate USD conversion rate for chart
-                var usdToSelectedRate = 1.0
-                if currency != "usd",
-                   let selectedPrice = moneroData[currency],
-                   let usdPrice = moneroData["usd"],
-                   usdPrice > 0 {
-                    usdToSelectedRate = selectedPrice / usdPrice
-                }
-
-                // Fetch chart data from CoinMarketCap
-                let chartUrlString = "https://api.coinmarketcap.com/data-api/v3.3/cryptocurrency/detail/chart?id=328&interval=5m&convertId=2781&range=1D"
-
-                if let chartUrl = URL(string: chartUrlString) {
-                    var chartRequest = URLRequest(url: chartUrl)
-                    chartRequest.setValue("application/json", forHTTPHeaderField: "accept")
-                    chartRequest.setValue("https://coinmarketcap.com", forHTTPHeaderField: "origin")
-                    chartRequest.setValue("web", forHTTPHeaderField: "platform")
-                    chartRequest.setValue("https://coinmarketcap.com/", forHTTPHeaderField: "referer")
-
-                    if let (chartData, chartResponse) = try? await URLSession.shared.data(for: chartRequest),
-                       let chartHttpResponse = chartResponse as? HTTPURLResponse,
-                       (200...299).contains(chartHttpResponse.statusCode),
-                       let chartJson = try? JSONSerialization.jsonObject(with: chartData) as? [String: Any],
-                       let dataDict = chartJson["data"] as? [String: Any],
-                       let pointsArray = dataDict["points"] as? [[String: Any]] {
-
-                        // Parse chart points - CMC returns an array of point objects
-                        var chartPoints: [(timestamp: Double, price: Double)] = []
-                        for point in pointsArray {
-                            if let timestamp = point["s"] as? String,
-                               let timestampDouble = Double(timestamp),
-                               let values = point["v"] as? [Double],
-                               let price = values.first {
-                                chartPoints.append((timestamp: timestampDouble, price: price))
-                            }
-                        }
-
-                        // Sort by timestamp and filter to last 24 hours
-                        let cutoffDate = Date().addingTimeInterval(-24 * 60 * 60).timeIntervalSince1970
-                        chartPoints = chartPoints
-                            .filter { $0.timestamp >= cutoffDate }
-                            .sorted { $0.timestamp < $1.timestamp }
-
-                        // Convert to prices with currency conversion and downsample to 48 points
-                        let prices = chartPoints.map { $0.price * usdToSelectedRate }
-                        let targetPoints = 48
-
-                        if prices.count > targetPoints {
-                            let step = Double(prices.count) / Double(targetPoints)
-                            var sampledPrices: [Double] = []
-                            for i in 0..<targetPoints {
-                                let index = Int(Double(i) * step)
-                                if index < prices.count {
-                                    sampledPrices.append(prices[index])
-                                }
-                            }
-                            widgetData.priceChartPoints = sampledPrices
-                        } else if !prices.isEmpty {
-                            widgetData.priceChartPoints = prices
-                        }
-
-                        // Calculate high/low
-                        if let chartPrices = widgetData.priceChartPoints, !chartPrices.isEmpty {
-                            widgetData.priceHigh24h = chartPrices.max()
-                            widgetData.priceLow24h = chartPrices.min()
-                        }
-                    }
-                }
-            }
-
-            // Only return if we got a valid price
-            if widgetData.currentPrice != nil {
-                return widgetData
-            }
-            return nil
-        } catch {
-            os_log("❌ Failed to fetch price data: %{public}@", log: widgetLog, type: .error, error.localizedDescription)
-            return nil
-        }
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: refreshMinutes, to: Date())!
+        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+        completion(timeline)
     }
 }
 
@@ -221,7 +104,7 @@ struct PriceWidgetView: View {
             Text("XMR Price")
                 .font(.headline.weight(.semibold))
 
-            Text("Updating...")
+            Text("Open MoneroOne to load")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

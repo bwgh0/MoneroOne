@@ -87,6 +87,7 @@
 		EDA400DA20EDD8E52EA9CC2C /* TransactionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A960D21BC3F24D2F556BE5C9 /* TransactionDetailView.swift */; };
 		EFFC6F8C42D7612A8DE76248 /* GlassButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D3AE9C07684C76F5645BB /* GlassButtonStyle.swift */; };
 		F203826DEF4239A5D60CD9F9 /* BalanceWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50B87EA15DE9A6C8674D5669 /* BalanceWidget.swift */; };
+		PRICEWIDGET1234567890ABCD /* PriceWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = PRICEWIDGETREF123456789A /* PriceWidget.swift */; };
 		F336976B66186C3C48D2922A /* BalanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A39B30F864DF425DCA258A4B /* BalanceCard.swift */; };
 		F65EECC001BAE93898D97CB6 /* WidgetSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41BC6A6608335755705B5E8A /* WidgetSettingsView.swift */; };
 		F6ABA0841FC56C21D8B64743 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE0BF27D62647071D8D9F0E /* SettingsView.swift */; };
@@ -166,6 +167,7 @@
 		4C28FF15F222C2E02553D871 /* TransactionsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsPanelView.swift; sourceTree = "<group>"; };
 		4C85070F2B5AF97C618DAD09 /* Array+BinarySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+BinarySearch.swift"; sourceTree = "<group>"; };
 		50B87EA15DE9A6C8674D5669 /* BalanceWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BalanceWidget.swift; sourceTree = "<group>"; };
+		PRICEWIDGETREF123456789A /* PriceWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceWidget.swift; sourceTree = "<group>"; };
 		51624E6C452EB61B1CB39BE3 /* CompactPriceChartCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactPriceChartCard.swift; sourceTree = "<group>"; };
 		5488A55F65931268A5493C9B /* CreateWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateWalletView.swift; sourceTree = "<group>"; };
 		5B6DB1BCF707C6A91E194AF5 /* SyncLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLiveActivity.swift; sourceTree = "<group>"; };
@@ -350,6 +352,7 @@
 				BA5847FCE9402558A35491F8 /* Info.plist */,
 				80E783520494A8A2ED1812BA /* MoneroOneWidgets.entitlements */,
 				DC58487C5764E22EA877B236 /* MoneroOneWidgetsBundle.swift */,
+				PRICEWIDGETREF123456789A /* PriceWidget.swift */,
 				5B6DB1BCF707C6A91E194AF5 /* SyncLiveActivity.swift */,
 				184E7EF5F71DC832F69F6207 /* TransactionsWidget.swift */,
 			);
@@ -737,6 +740,7 @@
 				F203826DEF4239A5D60CD9F9 /* BalanceWidget.swift in Sources */,
 				1BA4AE0A0A268DE7F27D1308 /* GlassButtonStyle.swift in Sources */,
 				2DE69D71C831027842B0A4CA /* MoneroOneWidgetsBundle.swift in Sources */,
+				PRICEWIDGET1234567890ABCD /* PriceWidget.swift in Sources */,
 				9B8891204A64866A6A3404D2 /* SyncActivityAttributes.swift in Sources */,
 				EC48D2094BD359C95BB6B08E /* SyncLiveActivity.swift in Sources */,
 				9292570B3B97ECD35363E7D2 /* TransactionsWidget.swift in Sources */,

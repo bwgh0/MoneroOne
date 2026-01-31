@@ -124,6 +124,16 @@ struct SettingsView: View {
                             }
                         }
                     }
+
+                    NavigationLink {
+                        WidgetSettingsView()
+                    } label: {
+                        SettingsRow(
+                            icon: "square.stack.3d.up.fill",
+                            title: "Home Screen Widget",
+                            color: .blue
+                        )
+                    }
                 }
 
                 // Sync Section
@@ -163,6 +173,38 @@ struct SettingsView: View {
                             title: "Website",
                             color: .orange
                         )
+                    }
+                }
+
+                // Support the Developer Section
+                Section("Support the Developer") {
+                    NavigationLink {
+                        DonationView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.fill")
+                                .font(.body)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.pink, .orange, .yellow],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 28, height: 28)
+                                .background(Color(.secondarySystemBackground))
+                                .cornerRadius(6)
+
+                            Text("Donate XMR")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.pink, .orange, .yellow],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .fontWeight(.medium)
+                        }
                     }
                 }
 

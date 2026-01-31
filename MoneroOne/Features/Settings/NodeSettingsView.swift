@@ -108,9 +108,15 @@ struct NodeSettingsView: View {
         case .connected:
             Image(systemName: "checkmark.circle.fill")
                 .foregroundColor(.green)
-        case .failed:
-            Image(systemName: "xmark.circle.fill")
-                .foregroundColor(.red)
+        case .failed(let error):
+            HStack(spacing: 4) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                Text(error)
+                    .font(.caption2)
+                    .foregroundColor(.red)
+                    .lineLimit(1)
+            }
         }
     }
 

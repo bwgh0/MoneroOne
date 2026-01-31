@@ -1,5 +1,8 @@
 import SwiftUI
 import BackgroundTasks
+import os.log
+
+private let logger = Logger(subsystem: "one.monero.MoneroOne", category: "App")
 
 @main
 struct MoneroOneApp: App {
@@ -46,20 +49,17 @@ struct MoneroOneApp: App {
     }
 
     private func handleScenePhaseChange(newPhase: ScenePhase) {
-        guard walletManager.isUnlocked else { return }
-        guard autoLockMinutes != -1 else { return } // Never lock
-
         switch newPhase {
         case .inactive:
             // Lock immediately when going inactive (before background)
-            if autoLockMinutes == 0 {
+            if walletManager.isUnlocked && autoLockMinutes == 0 {
                 walletManager.lock()
             }
         case .background:
-            if autoLockMinutes == 0 {
+            if walletManager.isUnlocked && autoLockMinutes == 0 {
                 // Lock immediately (backup in case inactive didn't trigger)
                 walletManager.lock()
-            } else {
+            } else if walletManager.isUnlocked && autoLockMinutes > 0 {
                 // Store time for delayed lock check
                 backgroundTime = Date()
             }
@@ -67,7 +67,7 @@ struct MoneroOneApp: App {
             schedulePriceCheck()
         case .active:
             // Check if we should lock based on time in background
-            if let bgTime = backgroundTime, autoLockMinutes > 0 {
+            if walletManager.isUnlocked, let bgTime = backgroundTime, autoLockMinutes > 0 {
                 let elapsed = Date().timeIntervalSince(bgTime)
                 let lockAfterSeconds = Double(autoLockMinutes * 60)
                 if elapsed >= lockAfterSeconds {
@@ -75,6 +75,16 @@ struct MoneroOneApp: App {
                 }
             }
             backgroundTime = nil
+
+            // Trigger sync refresh when returning to foreground
+            if walletManager.isUnlocked {
+                logger.info("App became active, triggering refresh")
+                Task {
+                    await walletManager.refresh()
+                }
+            } else {
+                logger.info("App became active but wallet is locked, skipping refresh")
+            }
         @unknown default:
             break
         }

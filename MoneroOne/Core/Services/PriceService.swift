@@ -1,8 +1,9 @@
 import Foundation
 import Combine
+import WidgetKit
 
-struct PriceDataPoint: Identifiable {
-    let id = UUID()
+struct PriceDataPoint: Identifiable, Equatable {
+    var id: Double { timestamp.timeIntervalSince1970 }
     let timestamp: Date
     let price: Double
 }
@@ -15,8 +16,14 @@ class PriceService: ObservableObject {
     @Published var selectedCurrency: String = "usd"
     @Published var isLoading = false
     @Published var error: String?
-    @Published var chartData: [PriceDataPoint] = []
+    @Published var chartDataCache: [String: [PriceDataPoint]] = [:]
+    @Published var currentChartRange: String = "7D"
     @Published var isLoadingChart = false
+
+    var chartData: [PriceDataPoint] {
+        chartDataCache[currentChartRange] ?? []
+    }
+    @Published var usdToSelectedRate: Double = 1.0
 
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 60 // 1 minute
@@ -66,6 +73,8 @@ class PriceService: ObservableObject {
     func startAutoRefresh() {
         Task {
             await fetchPrice()
+            // Prefetch default chart data (7D) so it's ready when user opens chart
+            await fetchChartData(range: "7D")
         }
 
         refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
@@ -79,7 +88,9 @@ class PriceService: ObservableObject {
         isLoading = true
         error = nil
 
-        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=\(selectedCurrency)&include_24hr_change=true"
+        // Fetch both selected currency and USD (for chart conversion)
+        let currencies = selectedCurrency == "usd" ? "usd" : "\(selectedCurrency),usd"
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=\(currencies)&include_24hr_change=true"
 
         guard let url = URL(string: urlString) else {
             error = "Invalid URL"
@@ -104,6 +115,16 @@ class PriceService: ObservableObject {
                 priceChange24h = moneroData["\(selectedCurrency)_24h_change"]
                 lastUpdated = Date()
 
+                // Calculate USD to selected currency conversion rate for chart data
+                if selectedCurrency == "usd" {
+                    usdToSelectedRate = 1.0
+                } else if let selectedPrice = moneroData[selectedCurrency],
+                          let usdPrice = moneroData["usd"],
+                          usdPrice > 0 {
+                    // Rate = selectedCurrency / USD (e.g., GBP/USD)
+                    usdToSelectedRate = selectedPrice / usdPrice
+                }
+
                 // Check price alerts
                 if let price = xmrPrice, let alertService = priceAlertService {
                     let triggered = alertService.checkAlerts(
@@ -114,6 +135,9 @@ class PriceService: ObservableObject {
                         PriceAlertNotificationManager.shared.sendAlert(alert, currentPrice: price)
                     }
                 }
+
+                // Save price data for widget
+                savePriceWidgetData()
             }
         } catch {
             self.error = "Failed to fetch price"
@@ -142,6 +166,14 @@ class PriceService: ObservableObject {
 
     /// Fetch chart data using CoinMarketCap ranges: "1D", "7D", "1M", "1Y", "All"
     func fetchChartData(range: String = "7D") async {
+        currentChartRange = range
+
+        // Return cached data if available
+        if chartDataCache[range] != nil {
+            isLoadingChart = false
+            return
+        }
+
         isLoadingChart = true
 
         // Map range to interval (matching CMC website)
@@ -233,7 +265,9 @@ class PriceService: ObservableObject {
             }
 
             if !newChartData.isEmpty {
-                chartData = newChartData
+                chartDataCache[range] = newChartData
+                // Save updated chart data for widget
+                savePriceWidgetData()
             }
         } catch {
             // Keep existing data on error
@@ -244,8 +278,55 @@ class PriceService: ObservableObject {
 
     var priceRange: (min: Double, max: Double)? {
         guard !chartData.isEmpty else { return nil }
-        let prices = chartData.map { $0.price }
+        // Apply currency conversion (chart data is always in USD from CMC API)
+        let prices = chartData.map { $0.price * usdToSelectedRate }
         return (prices.min() ?? 0, prices.max() ?? 0)
+    }
+
+    // MARK: - Widget Data
+
+    /// Save price data to widget data store
+    func savePriceWidgetData() {
+        // Load existing widget data or create new
+        var widgetData = WidgetDataManager.shared.load() ?? WidgetDataManager.placeholder
+
+        // Update with current price data
+        widgetData.currentPrice = xmrPrice
+        widgetData.priceChange24h = priceChange24h
+        widgetData.priceCurrency = selectedCurrency
+        widgetData.priceLastUpdated = lastUpdated
+
+        // Downsample chart data for widget sparkline
+        if !chartData.isEmpty {
+            // Convert chart data to widget format (just Y values, applying currency conversion)
+            let prices = chartData.map { $0.price * usdToSelectedRate }
+
+            // Downsample to 48 points for smoother chart appearance
+            let targetPoints = 48
+            if prices.count > targetPoints {
+                let step = Double(prices.count) / Double(targetPoints)
+                var sampledPrices: [Double] = []
+                for i in 0..<targetPoints {
+                    let index = Int(Double(i) * step)
+                    if index < prices.count {
+                        sampledPrices.append(prices[index])
+                    }
+                }
+                widgetData.priceChartPoints = sampledPrices
+            } else {
+                widgetData.priceChartPoints = prices
+            }
+
+            // Calculate 24h high/low from chart data
+            widgetData.priceHigh24h = prices.max()
+            widgetData.priceLow24h = prices.min()
+        }
+
+        // Save to widget data store
+        WidgetDataManager.shared.save(widgetData)
+
+        // Reload widget timelines
+        WidgetCenter.shared.reloadTimelines(ofKind: "PriceWidget")
     }
 }
 

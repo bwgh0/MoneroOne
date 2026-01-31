@@ -7,13 +7,8 @@ struct CompactPriceChartCard: View {
     @EnvironmentObject var priceService: PriceService
     @State private var selectedTimeRange: TimeRange = .week
     @State private var selectedDate: Date?
-
-    private var selectedPoint: PriceDataPoint? {
-        guard let selectedDate = selectedDate else { return nil }
-        return priceService.chartData.min(by: {
-            abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate))
-        })
-    }
+    @State private var selectedPoint: PriceDataPoint?
+    @State private var cachedYDomain: ClosedRange<Double> = 0...100
 
     enum TimeRange: String, CaseIterable {
         case day = "24H"
@@ -31,6 +26,20 @@ struct CompactPriceChartCard: View {
         }
     }
 
+    /// Calculate percentage change based on chart data for selected time range
+    private var chartPriceChange: Double? {
+        guard priceService.chartData.count >= 2 else { return nil }
+        guard let firstPrice = priceService.chartData.first?.price,
+              let lastPrice = priceService.chartData.last?.price,
+              firstPrice > 0 else { return nil }
+        return ((lastPrice - firstPrice) / firstPrice) * 100
+    }
+
+    private func formatChartPriceChange(_ change: Double) -> String {
+        let sign = change >= 0 ? "+" : ""
+        return "\(sign)\(String(format: "%.2f", change))%"
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             // Header with price
@@ -40,11 +49,19 @@ struct CompactPriceChartCard: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    if let price = selectedPoint?.price ?? priceService.xmrPrice {
+                    // Chart data is in USD, convert selectedPoint to selected currency
+                    let displayPrice: Double? = {
+                        if let selectedPoint = selectedPoint {
+                            return selectedPoint.price * priceService.usdToSelectedRate
+                        }
+                        return priceService.xmrPrice
+                    }()
+                    if let price = displayPrice {
                         Text(formatPrice(price))
                             .font(.title2.weight(.bold))
                             .monospacedDigit()
                             .contentTransition(.numericText())
+                            .animation(.easeInOut(duration: 0.15), value: price)
                     } else {
                         Text("--")
                             .font(.title2.weight(.bold))
@@ -54,19 +71,30 @@ struct CompactPriceChartCard: View {
 
                 Spacer()
 
-                // 24h change badge
-                if selectedPoint == nil, let change = priceService.priceChange24h {
-                    HStack(spacing: 2) {
-                        Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                // Price change badge for selected time range
+                if selectedPoint == nil {
+                    HStack(spacing: 8) {
+                        if let change = chartPriceChange {
+                            HStack(spacing: 2) {
+                                Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                    .font(.caption2)
+                                Text(formatChartPriceChange(change))
+                                    .font(.caption)
+                            }
+                            .foregroundColor(change >= 0 ? .green : .red)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
+                            .cornerRadius(8)
+                        } else if priceService.isLoadingChart {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        }
+
+                        Text(selectedTimeRange.rawValue)
                             .font(.caption2)
-                        Text(priceService.formatPriceChange() ?? "")
-                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
-                    .foregroundColor(change >= 0 ? .green : .red)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
-                    .cornerRadius(8)
                 }
             }
 
@@ -83,21 +111,43 @@ struct CompactPriceChartCard: View {
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .task {
+            // Set loading synchronously before async work to avoid blank state
+            if priceService.chartDataCache[selectedTimeRange.apiRange] == nil {
+                priceService.isLoadingChart = true
+            }
             await priceService.fetchChartData(range: selectedTimeRange.apiRange)
         }
         .onChange(of: selectedTimeRange) { newValue in
             selectedDate = nil
-            priceService.chartData = []
+            selectedPoint = nil
+            priceService.currentChartRange = newValue.apiRange
+            // Only show loading if not cached
+            if priceService.chartDataCache[newValue.apiRange] == nil {
+                priceService.isLoadingChart = true
+            }
             Task {
                 await priceService.fetchChartData(range: newValue.apiRange)
             }
+        }
+        .onChange(of: selectedDate) { newDate in
+            guard let date = newDate else {
+                selectedPoint = nil
+                return
+            }
+            // O(log n) binary search instead of O(n) linear search
+            selectedPoint = priceService.chartData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
+        }
+        .onChange(of: priceService.chartData.count) { _ in
+            updateCachedYDomain()
         }
     }
 
     // MARK: - Chart View
 
     private var chartPriceRange: (min: Double, max: Double) {
-        let prices = priceService.chartData.map { $0.price }
+        // Apply currency conversion (chart data is always in USD from CMC API)
+        let rate = priceService.usdToSelectedRate
+        let prices = priceService.chartData.map { $0.price * rate }
         guard let minPrice = prices.min(), let maxPrice = prices.max() else {
             return (0, 100)
         }
@@ -105,10 +155,14 @@ struct CompactPriceChartCard: View {
     }
 
     private var chartYDomain: ClosedRange<Double> {
+        cachedYDomain
+    }
+
+    private func updateCachedYDomain() {
         let (minPrice, maxPrice) = chartPriceRange
         let range = maxPrice - minPrice
         let padding = range * 0.05
-        return (minPrice - padding)...(maxPrice + padding)
+        cachedYDomain = (minPrice - padding)...(maxPrice + padding)
     }
 
     @ViewBuilder
@@ -132,12 +186,14 @@ struct CompactPriceChartCard: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
+            // Note: Chart data is in USD, apply currency conversion
+            let rate = priceService.usdToSelectedRate
             Chart {
                 ForEach(priceService.chartData) { point in
                     AreaMark(
                         x: .value("Time", point.timestamp),
                         yStart: .value("Min", chartYDomain.lowerBound),
-                        yEnd: .value("Price", point.price)
+                        yEnd: .value("Price", point.price * rate)
                     )
                     .foregroundStyle(
                         LinearGradient(
@@ -150,7 +206,7 @@ struct CompactPriceChartCard: View {
 
                     LineMark(
                         x: .value("Time", point.timestamp),
-                        y: .value("Price", point.price)
+                        y: .value("Price", point.price * rate)
                     )
                     .foregroundStyle(Color.orange)
                     .lineStyle(StrokeStyle(lineWidth: 2))
@@ -164,7 +220,7 @@ struct CompactPriceChartCard: View {
 
                     PointMark(
                         x: .value("Time", selectedPoint.timestamp),
-                        y: .value("Price", selectedPoint.price)
+                        y: .value("Price", selectedPoint.price * rate)
                     )
                     .foregroundStyle(Color.orange)
                     .symbolSize(80)

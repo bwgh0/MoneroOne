@@ -56,6 +56,8 @@ struct BalanceCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(formatXMR(balance))
                             .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
 
@@ -64,12 +66,16 @@ struct BalanceCard: View {
                             .foregroundColor(.secondary)
                     }
                     .fixedSize(horizontal: false, vertical: true)
+                    .animation(.easeInOut(duration: 0.2), value: balance)
 
                     // Fiat value
                     if let fiatValue = priceService.formatFiatValue(balance) {
                         Text("≈ \(fiatValue)")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                            .animation(.easeInOut(duration: 0.2), value: balance)
                     }
                 }
 

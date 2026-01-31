@@ -6,7 +6,6 @@ struct CommandCenterView: View {
     @EnvironmentObject var priceService: PriceService
     @State private var showReceive = false
     @State private var showSend = false
-    @State private var showPortfolio = false
     @State private var showAllTransactions = false
 
     var body: some View {
@@ -36,12 +35,6 @@ struct CommandCenterView: View {
         .sheet(isPresented: $showSend) {
             SendView()
         }
-        .sheet(isPresented: $showPortfolio) {
-            PortfolioChartView(
-                balance: walletManager.balance,
-                priceService: priceService
-            )
-        }
         .sheet(isPresented: $showAllTransactions) {
             NavigationStack {
                 TransactionListView()
@@ -67,9 +60,7 @@ struct CommandCenterView: View {
                     syncState: walletManager.syncState,
                     priceService: priceService,
                     onPriceChangeTap: nil,
-                    onCardTap: {
-                        showPortfolio = true
-                    }
+                    onCardTap: nil
                 )
 
                 QuickActionsCard(
@@ -81,9 +72,9 @@ struct CommandCenterView: View {
             }
             .frame(minWidth: 280, idealWidth: 320, maxWidth: 400)
 
-            // Column 2: Price Chart
+            // Column 2: Chart Switcher (Portfolio / Price)
             VStack(spacing: 16) {
-                CompactPriceChartCard()
+                ChartSwitcherCard(balance: walletManager.balance)
                 Spacer()
             }
             .frame(minWidth: 320, idealWidth: 400)
@@ -114,9 +105,7 @@ struct CommandCenterView: View {
                     syncState: walletManager.syncState,
                     priceService: priceService,
                     onPriceChangeTap: nil,
-                    onCardTap: {
-                        showPortfolio = true
-                    }
+                    onCardTap: nil
                 )
 
                 QuickActionsCard(
@@ -124,7 +113,7 @@ struct CommandCenterView: View {
                     onReceive: { showReceive = true }
                 )
 
-                CompactPriceChartCard()
+                ChartSwitcherCard(balance: walletManager.balance)
 
                 Spacer()
             }

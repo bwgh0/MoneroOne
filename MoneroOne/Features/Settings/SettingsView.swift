@@ -124,6 +124,16 @@ struct SettingsView: View {
                             }
                         }
                     }
+
+                    NavigationLink {
+                        WidgetSettingsView()
+                    } label: {
+                        SettingsRow(
+                            icon: "square.stack.3d.up.fill",
+                            title: "Home Screen Widget",
+                            color: .blue
+                        )
+                    }
                 }
 
                 // Sync Section

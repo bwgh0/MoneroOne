@@ -12,23 +12,6 @@ struct WalletView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Header with greeting and wallet button
-                    HStack {
-                        DynamicGreeting()
-                        Spacer()
-                        // Wallet switcher button
-                        Button {
-                            // Future: wallet switching
-                        } label: {
-                            Image(systemName: "rectangle.stack.fill")
-                                .font(.title2)
-                                .foregroundStyle(.orange)
-                                .frame(width: 44, height: 44)
-                        }
-                        .glassButtonStyle()
-                    }
-                    .padding(.horizontal)
-
                     // Balance Card
                     BalanceCard(
                         balance: walletManager.balance,
@@ -71,25 +54,45 @@ struct WalletView: View {
                     RecentTransactionsSection()
                         .padding(.horizontal)
                 }
-                .padding(.top)
             }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                // Floating banners
+            .safeAreaBar(edge: .top, spacing: 12) {
+                // Floating header with progressive blur - content scrolls underneath
                 VStack(spacing: 8) {
-                    // Testnet Banner
+                    // Top row: Greeting on left, Wallet button on right
+                    HStack {
+                        DynamicGreeting()
+
+                        Spacer()
+
+                        // Wallet switcher button
+                        Button {
+                            // Future: wallet switching
+                        } label: {
+                            Image(systemName: "rectangle.stack.fill")
+                                .font(.title2)
+                                .foregroundStyle(.orange)
+                                .frame(width: 44, height: 44)
+                        }
+                        .glassButtonStyle()
+                    }
+                    .padding(.horizontal)
+
+                    // Banners below the header
                     if walletManager.isTestnet {
                         TestnetBanner()
+                            .padding(.horizontal)
                     }
 
-                    // Error Banners
                     OfflineBanner()
+                        .padding(.horizontal)
+
                     SyncErrorBanner(syncState: walletManager.syncState) {
                         Task {
                             await walletManager.refresh()
                         }
                     }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
                 .animation(.easeInOut, value: walletManager.syncState)
             }
             .refreshable {

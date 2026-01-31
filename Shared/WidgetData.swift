@@ -17,6 +17,15 @@ public struct WidgetData: Codable {
     public var isTestnet: Bool
     public var isEnabled: Bool
 
+    // Price widget data (optional - only populated when price widget enabled)
+    public var currentPrice: Double?
+    public var priceChange24h: Double?
+    public var priceCurrency: String?  // "usd", "eur", etc.
+    public var priceChartPoints: [Double]?  // Simplified: just Y values for sparkline (~24 points for 24h)
+    public var priceHigh24h: Double?
+    public var priceLow24h: Double?
+    public var priceLastUpdated: Date?
+
     public enum SyncStatus: String, Codable {
         case synced
         case syncing
@@ -50,7 +59,14 @@ public struct WidgetData: Codable {
         lastUpdated: Date = Date(),
         recentTransactions: [WidgetTransaction] = [],
         isTestnet: Bool = false,
-        isEnabled: Bool = false
+        isEnabled: Bool = false,
+        currentPrice: Double? = nil,
+        priceChange24h: Double? = nil,
+        priceCurrency: String? = nil,
+        priceChartPoints: [Double]? = nil,
+        priceHigh24h: Double? = nil,
+        priceLow24h: Double? = nil,
+        priceLastUpdated: Date? = nil
     ) {
         self.balance = balance
         self.balanceFormatted = balanceFormatted
@@ -60,9 +76,16 @@ public struct WidgetData: Codable {
         self.recentTransactions = recentTransactions
         self.isTestnet = isTestnet
         self.isEnabled = isEnabled
+        self.currentPrice = currentPrice
+        self.priceChange24h = priceChange24h
+        self.priceCurrency = priceCurrency
+        self.priceChartPoints = priceChartPoints
+        self.priceHigh24h = priceHigh24h
+        self.priceLow24h = priceLow24h
+        self.priceLastUpdated = priceLastUpdated
     }
 
-    // Custom decoder to handle old data without isEnabled field
+    // Custom decoder to handle old data without new fields
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         balance = try container.decode(Decimal.self, forKey: .balance)
@@ -74,10 +97,20 @@ public struct WidgetData: Codable {
         isTestnet = try container.decodeIfPresent(Bool.self, forKey: .isTestnet) ?? false
         // Default to true for existing data (if it was saved, widget was enabled)
         isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+
+        // Price widget fields (optional, backward compatible)
+        currentPrice = try container.decodeIfPresent(Double.self, forKey: .currentPrice)
+        priceChange24h = try container.decodeIfPresent(Double.self, forKey: .priceChange24h)
+        priceCurrency = try container.decodeIfPresent(String.self, forKey: .priceCurrency)
+        priceChartPoints = try container.decodeIfPresent([Double].self, forKey: .priceChartPoints)
+        priceHigh24h = try container.decodeIfPresent(Double.self, forKey: .priceHigh24h)
+        priceLow24h = try container.decodeIfPresent(Double.self, forKey: .priceLow24h)
+        priceLastUpdated = try container.decodeIfPresent(Date.self, forKey: .priceLastUpdated)
     }
 
     private enum CodingKeys: String, CodingKey {
         case balance, balanceFormatted, fiatBalance, syncStatus, lastUpdated, recentTransactions, isTestnet, isEnabled
+        case currentPrice, priceChange24h, priceCurrency, priceChartPoints, priceHigh24h, priceLow24h, priceLastUpdated
     }
 }
 
@@ -175,6 +208,27 @@ public class WidgetDataManager {
             recentTransactions: [],
             isTestnet: false,
             isEnabled: false
+        )
+    }
+
+    /// Placeholder for price widget - no fake prices, will show "unavailable" state
+    public static var pricePlaceholder: WidgetData {
+        WidgetData(
+            balance: 0,
+            balanceFormatted: "0.0000",
+            fiatBalance: nil,
+            syncStatus: .offline,
+            lastUpdated: Date(),
+            recentTransactions: [],
+            isTestnet: false,
+            isEnabled: true,
+            currentPrice: nil,
+            priceChange24h: nil,
+            priceCurrency: "usd",
+            priceChartPoints: nil,
+            priceHigh24h: nil,
+            priceLow24h: nil,
+            priceLastUpdated: nil
         )
     }
 }

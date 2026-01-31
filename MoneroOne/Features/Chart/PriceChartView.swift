@@ -64,6 +64,14 @@ struct PriceChartView: View {
                     priceService.isLoadingChart = true
                 }
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
+                // Calculate domain after initial load (onChange doesn't fire on initial value)
+                let rate = priceService.usdToSelectedRate
+                let prices = priceService.chartData.map { $0.price * rate }
+                if let minPrice = prices.min(), let maxPrice = prices.max() {
+                    let range = maxPrice - minPrice
+                    let padding = range * 0.05
+                    cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+                }
             }
             .onChange(of: selectedTimeRange) { newValue in
                 selectedDate = nil
@@ -87,6 +95,18 @@ struct PriceChartView: View {
             }
             .onChange(of: priceService.chartData.count) { _ in
                 // Recalculate domain only when data changes
+                let rate = priceService.usdToSelectedRate
+                let prices = priceService.chartData.map { $0.price * rate }
+                guard let minPrice = prices.min(), let maxPrice = prices.max() else {
+                    cachedYDomain = 0...100
+                    return
+                }
+                let range = maxPrice - minPrice
+                let padding = range * 0.05
+                cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+            }
+            .onChange(of: priceService.currentChartRange) { _ in
+                // Recalculate domain when range changes (even if count is same)
                 let rate = priceService.usdToSelectedRate
                 let prices = priceService.chartData.map { $0.price * rate }
                 guard let minPrice = prices.min(), let maxPrice = prices.max() else {
@@ -251,7 +271,7 @@ struct PriceChartView: View {
                                 endPoint: .bottom
                             )
                         )
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
 
                         LineMark(
                             x: .value("Time", point.timestamp),
@@ -259,7 +279,7 @@ struct PriceChartView: View {
                         )
                         .foregroundStyle(Color.orange)
                         .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
                     }
 
                     // Selection indicator - vertical line and dot
@@ -277,13 +297,13 @@ struct PriceChartView: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                    AxisMarks(values: .automatic(desiredCount: 3)) { value in
                         AxisGridLine()
                         AxisValueLabel(format: xAxisFormat)
                     }
                 }
                 .chartYAxis {
-                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
+                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
                         AxisGridLine()
                         AxisValueLabel {
                             if let price = value.as(Double.self) {
@@ -307,13 +327,13 @@ struct PriceChartView: View {
     private var xAxisFormat: Date.FormatStyle {
         switch selectedTimeRange {
         case .day:
-            return .dateTime.hour()
+            return .dateTime.hour(.defaultDigits(amPM: .omitted))  // 24-hour: "5", "17"
         case .week:
             return .dateTime.weekday(.abbreviated)
         case .month:
-            return .dateTime.month(.abbreviated).day()
+            return .dateTime.day()  // Just day number: "15", "22"
         case .year:
-            return .dateTime.month(.abbreviated).year(.twoDigits)
+            return .dateTime.month(.abbreviated)  // Just month: "Jan", "Feb"
         case .all:
             return .dateTime.year()
         }

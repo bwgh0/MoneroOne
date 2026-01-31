@@ -127,6 +127,10 @@ struct ChartSwitcherCard: View {
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .task {
+            // Set loading synchronously before async work to avoid blank state
+            if priceService.chartDataCache[selectedTimeRange.apiRange] == nil {
+                priceService.isLoadingChart = true
+            }
             await priceService.fetchChartData(range: selectedTimeRange.apiRange)
         }
         .onAppear {
@@ -138,7 +142,11 @@ struct ChartSwitcherCard: View {
             selectedDate = nil
             selectedPricePoint = nil
             selectedPortfolioPoint = nil
-            priceService.chartData = []
+            priceService.currentChartRange = newValue.apiRange
+            // Only show loading if not cached
+            if priceService.chartDataCache[newValue.apiRange] == nil {
+                priceService.isLoadingChart = true
+            }
             Task {
                 await priceService.fetchChartData(range: newValue.apiRange)
             }

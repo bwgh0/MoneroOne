@@ -79,6 +79,10 @@ struct PortfolioChartView: View {
                 }
             }
             .task {
+                // Set loading synchronously before async work to avoid blank state
+                if priceService.chartDataCache[selectedTimeRange.apiRange] == nil {
+                    priceService.isLoadingChart = true
+                }
                 await priceService.fetchChartData(range: selectedTimeRange.apiRange)
             }
             .onAppear {
@@ -89,7 +93,11 @@ struct PortfolioChartView: View {
             .onChange(of: selectedTimeRange) { newValue in
                 selectedDate = nil
                 selectedPoint = nil
-                priceService.chartData = []
+                priceService.currentChartRange = newValue.apiRange
+                // Only show loading if not cached
+                if priceService.chartDataCache[newValue.apiRange] == nil {
+                    priceService.isLoadingChart = true
+                }
                 Task {
                     await priceService.fetchChartData(range: newValue.apiRange)
                 }

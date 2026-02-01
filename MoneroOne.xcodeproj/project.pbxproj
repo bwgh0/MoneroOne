@@ -46,8 +46,6 @@
 		9B8891204A64866A6A3404D2 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
 		9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8C8A112B161D2A874330F /* TransactionListView.swift */; };
 		9C8D02FA3E7357EA71230987 /* TransactionProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B1E4D64130CA8B6677FA95 /* TransactionProgressView.swift */; };
-		9D7AE903306BDD27D7E6E325 /* LiteWalletManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEAFCAEB9CBBFA40B7A175EE /* LiteWalletManager.swift */; };
-		A139AB6ABC4D9EA71F3AF12D /* SyncModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4332A28BBF78E91CD1A7114 /* SyncModeView.swift */; };
 		A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066F201548A5A5EA2351656E /* SendView.swift */; };
 		A2173E3306237E1F4E1C9AB9 /* MoneroWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE53A66511AA0C64737C553 /* MoneroWallet.swift */; };
 		A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C28FF15F222C2E02553D871 /* TransactionsPanelView.swift */; };
@@ -72,7 +70,6 @@
 		D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */; };
 		D5C81DC6A8A3C7E64770CC88 /* SendConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */; };
 		D78301AFEE705847B38A55DD /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB1E04CE3B83B39E5C3DF4B /* BackgroundSyncManager.swift */; };
-		D8061A1B7B95A9F851941233 /* LiteWalletServerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D207BACF61F41F54E962CA40 /* LiteWalletServerClient.swift */; };
 		DA18F80BA8998B9D71869B82 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A281E883F5B6D0C620D37A9C /* DonationView.swift */; };
 		DA2B7E30A2D8DB0A8AEEEB09 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
 		DCD815950DC4B62A202683AD /* NodeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */; };
@@ -208,10 +205,8 @@
 		C2B3390E2738445B8D347933 /* ErrorBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorBanner.swift; sourceTree = "<group>"; };
 		C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertNotificationManager.swift; sourceTree = "<group>"; };
 		CAA44CACB97519C2456A1D98 /* UnlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockView.swift; sourceTree = "<group>"; };
-		CEAFCAEB9CBBFA40B7A175EE /* LiteWalletManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiteWalletManager.swift; sourceTree = "<group>"; };
 		CF818FE69F2EC0B444D26754 /* QRCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeView.swift; sourceTree = "<group>"; };
 		D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStorage.swift; sourceTree = "<group>"; };
-		D207BACF61F41F54E962CA40 /* LiteWalletServerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiteWalletServerClient.swift; sourceTree = "<group>"; };
 		D5B417D8D6615D3C56F22085 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeManager.swift; sourceTree = "<group>"; };
 		D836C469199BCAE8C34EA7A9 /* monero-correct.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "monero-correct.png"; sourceTree = "<group>"; };
@@ -219,7 +214,6 @@
 		DC58487C5764E22EA877B236 /* MoneroOneWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneWidgetsBundle.swift; sourceTree = "<group>"; };
 		DEFDF397CD9F75684D51EA38 /* RestoreWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreWalletView.swift; sourceTree = "<group>"; };
 		E06460C0C64ADF867FDFD082 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		E4332A28BBF78E91CD1A7114 /* SyncModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncModeView.swift; sourceTree = "<group>"; };
 		E494E802F7171F1946F2FA45 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		E67F51494AC5434F206AED5C /* ReceiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveView.swift; sourceTree = "<group>"; };
 		E9668237F8646D99314673EA /* MoneroOneUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneUITests.swift; sourceTree = "<group>"; };
@@ -292,7 +286,6 @@
 				5BDCBAC09269EA2BCBDEDE3C /* PriceAlertsView.swift */,
 				09AA838F4EF37023CE4794A9 /* SecurityView.swift */,
 				7BE0BF27D62647071D8D9F0E /* SettingsView.swift */,
-				E4332A28BBF78E91CD1A7114 /* SyncModeView.swift */,
 				B21A52926BAFEF95AC6BB226 /* SyncSettingsView.swift */,
 				41BC6A6608335755705B5E8A /* WidgetSettingsView.swift */,
 			);
@@ -401,7 +394,6 @@
 			children = (
 				BDB1E04CE3B83B39E5C3DF4B /* BackgroundSyncManager.swift */,
 				4848074569E3E47EE8FE7F31 /* BiometricAuthManager.swift */,
-				D207BACF61F41F54E962CA40 /* LiteWalletServerClient.swift */,
 				8EE7C972F4CD3C984FC4FFE9 /* NetworkMonitor.swift */,
 				D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */,
 				C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */,
@@ -453,7 +445,6 @@
 			isa = PBXGroup;
 			children = (
 				D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */,
-				CEAFCAEB9CBBFA40B7A175EE /* LiteWalletManager.swift */,
 				6BE53A66511AA0C64737C553 /* MoneroWallet.swift */,
 				833C5B007D9D33E833CFE48B /* WalletManager.swift */,
 			);
@@ -781,8 +772,6 @@
 				EFFC6F8C42D7612A8DE76248 /* GlassButtonStyle.swift in Sources */,
 				2A841431F06DE4BF09DCE55B /* GlassSegmentedPicker.swift in Sources */,
 				916B54FE617C739781D795D9 /* KeychainStorage.swift in Sources */,
-				9D7AE903306BDD27D7E6E325 /* LiteWalletManager.swift in Sources */,
-				D8061A1B7B95A9F851941233 /* LiteWalletServerClient.swift in Sources */,
 				53961F04EC40C1BB78F573E5 /* MainTabView.swift in Sources */,
 				AF3420AD18242AB7B017171D /* MoneroOneApp.swift in Sources */,
 				A2173E3306237E1F4E1C9AB9 /* MoneroWallet.swift in Sources */,
@@ -809,7 +798,6 @@
 				F6ABA0841FC56C21D8B64743 /* SettingsView.swift in Sources */,
 				DA2B7E30A2D8DB0A8AEEEB09 /* SyncActivityAttributes.swift in Sources */,
 				E8E7018CE585AB43B38F22C5 /* SyncActivityManager.swift in Sources */,
-				A139AB6ABC4D9EA71F3AF12D /* SyncModeView.swift in Sources */,
 				70AEC21FC1DFBF2D77A49E15 /* SyncSettingsView.swift in Sources */,
 				EDA400DA20EDD8E52EA9CC2C /* TransactionDetailView.swift in Sources */,
 				9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */,

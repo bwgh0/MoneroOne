@@ -8,30 +8,35 @@ struct ReceiveView: View {
     @State private var showShareSheet = false
     @AppStorage("selectedSubaddressIndex") private var selectedAddressIndex: Int = 0
 
-    private var currentAddress: String {
+    /// Computes the effective address index, falling back to 0 if selected subaddress doesn't exist
+    /// This avoids race conditions by not modifying state during view computation
+    private var effectiveAddressIndex: Int {
         if selectedAddressIndex == 0 {
+            return 0
+        } else if walletManager.subaddresses.contains(where: { $0.index == selectedAddressIndex }) {
+            return selectedAddressIndex
+        } else {
+            // Subaddress doesn't exist (wallet changed or new wallet) - use primary
+            return 0
+        }
+    }
+
+    private var currentAddress: String {
+        if effectiveAddressIndex == 0 {
             return walletManager.primaryAddress.isEmpty ? "Loading..." : walletManager.primaryAddress
         } else {
-            // Find the subaddress with this index
-            if let subaddr = walletManager.subaddresses.first(where: { $0.index == selectedAddressIndex }) {
+            if let subaddr = walletManager.subaddresses.first(where: { $0.index == effectiveAddressIndex }) {
                 return subaddr.address
             }
-            // CRITICAL: If subaddress doesn't exist in current wallet, reset to main address
-            // This can happen after switching wallets where new wallet has fewer subaddresses
-            // Using async to avoid modifying state during view computation
-            DispatchQueue.main.async {
-                self.selectedAddressIndex = 0
-            }
-            // Return main address while reset is in progress
             return walletManager.primaryAddress.isEmpty ? "Loading..." : walletManager.primaryAddress
         }
     }
 
     private var addressLabel: String {
-        if selectedAddressIndex == 0 {
+        if effectiveAddressIndex == 0 {
             return "Main Address"
         } else {
-            return "Subaddress #\(selectedAddressIndex)"
+            return "Subaddress #\(effectiveAddressIndex)"
         }
     }
 
@@ -209,6 +214,13 @@ struct ReceiveView: View {
             .sheet(isPresented: $showShareSheet) {
                 ShareSheet(items: shareItems)
             }
+            .onAppear {
+                // Reset to main address if selected subaddress doesn't exist
+                if selectedAddressIndex > 0 &&
+                   !walletManager.subaddresses.contains(where: { $0.index == selectedAddressIndex && !$0.address.isEmpty }) {
+                    selectedAddressIndex = 0
+                }
+            }
         }
     }
 
@@ -288,9 +300,13 @@ struct AddressPickerView: View {
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
 
-                // Subaddress Cards (filter out index 0 since it's the main address shown above)
-                // Also filter out empty addresses (can happen during polyseed wallet init)
-                let actualSubaddresses = walletManager.subaddresses.filter { $0.index > 0 && !$0.address.isEmpty }
+                // Only show subaddresses the user explicitly created
+                // Filter out index 0 (main address shown above), empty addresses, and auto-created ones
+                let actualSubaddresses = walletManager.subaddresses.filter {
+                    $0.index > 0 &&
+                    !$0.address.isEmpty &&
+                    walletManager.userCreatedSubaddressIndices.contains($0.index)
+                }
 
                 if actualSubaddresses.isEmpty {
                     VStack(spacing: 8) {

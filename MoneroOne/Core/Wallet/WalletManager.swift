@@ -250,13 +250,13 @@ class WalletManager: ObservableObject {
             throw WalletError.invalidMnemonic
         }
 
-        // Get primary address - use pre-computed address since wallet2 hasn't started yet
-        // Both should use the same legacySeedFromBip39 conversion
-        let walletAddress = wallet.primaryAddress
-        let runtimeAddr = wallet.runtimePrimaryAddress
-        #if DEBUG
-        print("[WalletManager] Lite mode initialized")
-        #endif
+        // Try to get address from wallet - may be empty initially for polyseed until wallet opens
+        // The address will be populated via delegate callback when Kit._start() runs
+        let runtimeAddress = wallet.runtimePrimaryAddress
+        if !runtimeAddress.isEmpty {
+            self.primaryAddress = runtimeAddress
+        }
+        let walletAddress = self.primaryAddress
 
         // Get view key for LiteWalletManager (balance/tx display)
         guard let viewKey = getViewKey(from: wallet) else {
@@ -346,6 +346,13 @@ class WalletManager: ObservableObject {
             throw WalletError.invalidMnemonic
         }
 
+        // Try to get address from wallet - may be empty initially for polyseed until wallet opens
+        // The address will be populated via delegate callback when Kit._start() runs
+        let runtimeAddress = wallet.runtimePrimaryAddress
+        if !runtimeAddress.isEmpty {
+            self.primaryAddress = runtimeAddress
+        }
+
         moneroWallet = wallet
         bindToWallet(wallet)
     }
@@ -417,7 +424,15 @@ class WalletManager: ObservableObject {
 
         wallet.$subaddresses
             .receive(on: DispatchQueue.main)
-            .assign(to: &$subaddresses)
+            .sink { [weak self] newSubaddresses in
+                guard let self = self else { return }
+                self.subaddresses = newSubaddresses
+                // Also update primaryAddress when subaddresses change (polyseed case - addresses populate after wallet opens)
+                if self.primaryAddress.isEmpty, let primary = newSubaddresses.first(where: { $0.index == 0 }) {
+                    self.primaryAddress = primary.address
+                }
+            }
+            .store(in: &cancellables)
 
         // Set primary address immediately if available
         primaryAddress = wallet.primaryAddress

@@ -30,11 +30,6 @@ struct SendView: View {
                         )
                     }
 
-                    // Wallet Preparing Banner (only in lite mode when not ready)
-                    if walletManager.currentSyncMode == .lite && !walletManager.isSendReady {
-                        WalletPreparingBanner(progress: walletManager.sendSyncProgress)
-                    }
-
                     // Address Input
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Recipient Address")
@@ -290,8 +285,7 @@ struct SendView: View {
         isValidAddress &&
         !amount.isEmpty &&
         (Decimal(string: amount) ?? 0) > 0 &&
-        (Decimal(string: amount) ?? 0) <= walletManager.unlockedBalance &&
-        (walletManager.currentSyncMode == .privacy || walletManager.isSendReady)
+        (Decimal(string: amount) ?? 0) <= walletManager.unlockedBalance
     }
 
     private func validateAddress() {

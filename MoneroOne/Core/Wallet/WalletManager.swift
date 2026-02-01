@@ -374,16 +374,17 @@ class WalletManager: ObservableObject {
             )
         }
 
-        let widgetData = WidgetData(
-            balance: balance,
-            balanceFormatted: balanceFormatted,
-            fiatBalance: nil, // Could add fiat conversion here if price service available
-            syncStatus: widgetSyncStatus,
-            lastUpdated: Date(),
-            recentTransactions: Array(recentTransactions),
-            isTestnet: isTestnet,
-            isEnabled: isEnabled
-        )
+        // Load existing data to preserve price fields from PriceService
+        var widgetData = WidgetDataManager.shared.load() ?? WidgetDataManager.placeholder
+
+        // Update wallet-related fields only
+        widgetData.balance = balance
+        widgetData.balanceFormatted = balanceFormatted
+        widgetData.syncStatus = widgetSyncStatus
+        widgetData.lastUpdated = Date()
+        widgetData.recentTransactions = Array(recentTransactions)
+        widgetData.isTestnet = isTestnet
+        widgetData.isEnabled = isEnabled
 
         WidgetDataManager.shared.save(widgetData)
     }

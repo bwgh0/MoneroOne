@@ -350,6 +350,11 @@ struct PriceWidgetView: View {
         let range = maxVal - minVal
         let padding = range * 0.05
 
+        // Calculate nice Y-axis values within the actual data range
+        let yAxisMin = minVal - padding
+        let yAxisMax = maxVal + padding
+        let yAxisValues = [yAxisMin, (yAxisMin + yAxisMax) / 2, yAxisMax]
+
         return Chart(points.indices, id: \.self) { index in
             AreaMark(
                 x: .value("", index),
@@ -391,7 +396,7 @@ struct PriceWidgetView: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+            AxisMarks(position: .trailing, values: yAxisValues) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                     .foregroundStyle(Color.secondary.opacity(0.3))
                 AxisValueLabel {
@@ -404,7 +409,7 @@ struct PriceWidgetView: View {
             }
         }
         .chartLegend(.hidden)
-        .chartYScale(domain: (minVal - padding)...(maxVal + padding))
+        .chartYScale(domain: yAxisMin...yAxisMax)
         .chartXScale(domain: 0...(points.count - 1))
         .chartPlotStyle { plotArea in
             plotArea.padding(.horizontal, 0)

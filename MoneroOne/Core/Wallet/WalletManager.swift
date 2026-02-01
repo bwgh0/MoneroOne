@@ -18,6 +18,7 @@ class WalletManager: ObservableObject {
     @Published var syncState: SyncState = .idle
     @Published var transactions: [MoneroTransaction] = []
     @Published var subaddresses: [MoneroKit.SubAddress] = []
+    @Published var userCreatedSubaddressIndices: Set<Int> = []
     @Published var currentSyncMode: SyncMode = .privacy
     @Published var isSendReady: Bool = false
     @Published var sendSyncProgress: Double = 0
@@ -221,6 +222,9 @@ class WalletManager: ObservableObject {
             // Privacy mode: use MoneroKit for local sync
             try startPrivacyMode(mnemonic: mnemonic)
         }
+
+        // Load user-created subaddress indices for filtering in UI
+        loadUserCreatedSubaddresses()
 
         isUnlocked = true
     }
@@ -427,10 +431,14 @@ class WalletManager: ObservableObject {
             .sink { [weak self] newSubaddresses in
                 guard let self = self else { return }
                 self.subaddresses = newSubaddresses
-                // Also update primaryAddress when subaddresses change (polyseed case - addresses populate after wallet opens)
-                if self.primaryAddress.isEmpty, let primary = newSubaddresses.first(where: { $0.index == 0 }) {
-                    self.primaryAddress = primary.address
+                // Update primaryAddress when subaddresses change (polyseed case - addresses populate after wallet opens)
+                if let primary = newSubaddresses.first(where: { $0.index == 0 }), !primary.address.isEmpty {
+                    if self.primaryAddress.isEmpty {
+                        self.primaryAddress = primary.address
+                    }
                 }
+                // Note: Subaddress 1 auto-creation is handled explicitly after bindToWallet() with delay
+                // to ensure polyseed wallets have time to initialize addresses asynchronously
             }
             .store(in: &cancellables)
 
@@ -690,7 +698,23 @@ class WalletManager: ObservableObject {
     /// - Returns: The newly created SubAddress, or nil if creation failed
     func createSubaddress() -> MoneroKit.SubAddress? {
         guard let wallet = moneroWallet else { return nil }
-        return wallet.createSubaddress()
+        if let newSubaddr = wallet.createSubaddress() {
+            userCreatedSubaddressIndices.insert(newSubaddr.index)
+            saveUserCreatedSubaddresses()
+            return newSubaddr
+        }
+        return nil
+    }
+
+    // MARK: - User-Created Subaddress Persistence
+
+    private func saveUserCreatedSubaddresses() {
+        UserDefaults.standard.set(Array(userCreatedSubaddressIndices), forKey: "\(networkPrefix)userCreatedSubaddressIndices")
+    }
+
+    private func loadUserCreatedSubaddresses() {
+        let saved = UserDefaults.standard.array(forKey: "\(networkPrefix)userCreatedSubaddressIndices") as? [Int] ?? []
+        userCreatedSubaddressIndices = Set(saved)
     }
 
     // MARK: - Validation
@@ -878,6 +902,12 @@ class WalletManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "testnet_syncResetCount")
         UserDefaults.standard.removeObject(forKey: "mainnet_seedType")
         UserDefaults.standard.removeObject(forKey: "testnet_seedType")
+        // Clear selected subaddress index (prevents stale index for next wallet)
+        UserDefaults.standard.removeObject(forKey: "selectedSubaddressIndex")
+        // Clear user-created subaddress indices
+        UserDefaults.standard.removeObject(forKey: "mainnet_userCreatedSubaddressIndices")
+        UserDefaults.standard.removeObject(forKey: "testnet_userCreatedSubaddressIndices")
+        userCreatedSubaddressIndices = []
         hasWallet = false
     }
 

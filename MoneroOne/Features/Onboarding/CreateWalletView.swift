@@ -1,5 +1,6 @@
 import SwiftUI
 import LocalAuthentication
+import MoneroKit
 
 struct CreateWalletView: View {
     @EnvironmentObject var walletManager: WalletManager
@@ -470,25 +471,27 @@ struct CreateWalletView: View {
         }
     }
 
-    /// Fetch current chain height from the LWS for instant sync of new wallets
-    /// Only called in lite mode - privacy mode skips this optimization
+    /// Fetch current chain height for instant sync of new wallets
+    /// For lite mode: fetches from LWS server
+    /// For privacy mode: uses date-based height estimation (works offline)
     private func fetchCurrentChainHeight() async -> UInt64? {
-        // Only use LWS if in lite mode
-        guard walletManager.syncMode == .lite else {
-            return nil
+        // For lite mode, fetch from LWS server
+        if walletManager.syncMode == .lite {
+            let client = LiteWalletServerClient(isTestnet: walletManager.isTestnet)
+            do {
+                let heightResponse = try await client.getBlockchainHeight()
+                return heightResponse.height
+            } catch {
+                #if DEBUG
+                print("Failed to fetch chain height from LWS: \(error)")
+                #endif
+                // Fall through to date-based estimation
+            }
         }
 
-        let client = LiteWalletServerClient(isTestnet: walletManager.isTestnet)
-        do {
-            let heightResponse = try await client.getBlockchainHeight()
-            return heightResponse.height
-        } catch {
-            #if DEBUG
-            print("Failed to fetch chain height: \(error)")
-            #endif
-            // Fall back to nil - wallet will scan from beginning
-            return nil
-        }
+        // For privacy mode (or LWS failure), use date-based height estimation
+        // This gives us a block height close to "now" so new wallets don't scan history
+        return UInt64(RestoreHeight.getHeight(date: Date()))
     }
 }
 

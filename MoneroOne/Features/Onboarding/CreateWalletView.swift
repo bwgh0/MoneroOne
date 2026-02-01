@@ -472,24 +472,9 @@ struct CreateWalletView: View {
     }
 
     /// Fetch current chain height for instant sync of new wallets
-    /// For lite mode: fetches from LWS server
-    /// For privacy mode: uses date-based height estimation (works offline)
+    /// Uses date-based height estimation (works offline)
     private func fetchCurrentChainHeight() async -> UInt64? {
-        // For lite mode, fetch from LWS server
-        if walletManager.syncMode == .lite {
-            let client = LiteWalletServerClient(isTestnet: walletManager.isTestnet)
-            do {
-                let heightResponse = try await client.getBlockchainHeight()
-                return heightResponse.height
-            } catch {
-                #if DEBUG
-                print("Failed to fetch chain height from LWS: \(error)")
-                #endif
-                // Fall through to date-based estimation
-            }
-        }
-
-        // For privacy mode (or LWS failure), use date-based height estimation
+        // Use date-based height estimation
         // This gives us a block height close to "now" so new wallets don't scan history
         return UInt64(RestoreHeight.getHeight(date: Date()))
     }

@@ -19,10 +19,6 @@ class WalletManager: ObservableObject {
     @Published var transactions: [MoneroTransaction] = []
     @Published var subaddresses: [MoneroKit.SubAddress] = []
     @Published var userCreatedSubaddressIndices: Set<Int> = []
-    @Published var currentSyncMode: SyncMode = .privacy
-    @Published var isSendReady: Bool = false
-    @Published var sendSyncProgress: Double = 0
-    @Published var sendSyncStatus: String = "Connecting..."
 
     // Send prefill properties (for donation flow)
     @Published var prefillSendAddress: String?
@@ -76,15 +72,9 @@ class WalletManager: ObservableObject {
         isTestnet ? "testnet_" : "mainnet_"
     }
 
-    // MARK: - Sync Mode
-    var syncMode: SyncMode {
-        SyncMode(rawValue: UserDefaults.standard.string(forKey: "syncMode") ?? SyncMode.privacy.rawValue) ?? .privacy
-    }
-
     // MARK: - Private
     private let keychain = KeychainStorage()
     private var moneroWallet: MoneroWallet?
-    private var liteWalletManager: LiteWalletManager?
     private var cancellables = Set<AnyCancellable>()
     private var currentSeed: [String]?
     private var isRefreshing = false
@@ -213,132 +203,8 @@ class WalletManager: ObservableObject {
 
         let mnemonic = seedPhrase.split(separator: " ").map(String.init)
         currentSeed = mnemonic
-        currentSyncMode = syncMode
 
-        if syncMode == .lite {
-            // Lite mode: use LWS for fast sync
-            try startLiteMode(mnemonic: mnemonic)
-        } else {
-            // Privacy mode: use MoneroKit for local sync
-            try startPrivacyMode(mnemonic: mnemonic)
-        }
-
-        // Load user-created subaddress indices for filtering in UI
-        loadUserCreatedSubaddresses()
-
-        isUnlocked = true
-    }
-
-    private func startLiteMode(mnemonic: [String]) throws {
-        let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
-        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
-        let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
-
-        // Create MoneroWallet in light wallet mode - connects to LWS for output fetching
-        // wallet2 will use LWS endpoints: /get_unspent_outs, /get_random_outs, /submit_raw_tx
-        let wallet = MoneroWallet()
-        let lwsURLString = ServerConfiguration.lwsServerURL(isTestnet: isTestnet)
-        guard let lwsURL = URL(string: lwsURLString) else {
-            throw WalletError.invalidMnemonic // TODO: Add proper error type for invalid URL
-        }
-
-        do {
-            try wallet.createLightWallet(
-                seed: mnemonic,
-                lwsURL: lwsURL,
-                restoreHeight: restoreHeight,
-                resetSuffix: resetSuffix,
-                networkType: networkType
-            )
-        } catch {
-            throw WalletError.invalidMnemonic
-        }
-
-        // Try to get address from wallet - may be empty initially for polyseed until wallet opens
-        // The address will be populated via delegate callback when Kit._start() runs
-        let runtimeAddress = wallet.runtimePrimaryAddress
-        if !runtimeAddress.isEmpty {
-            self.primaryAddress = runtimeAddress
-        }
-        let walletAddress = self.primaryAddress
-
-        // Get view key for LiteWalletManager (balance/tx display)
-        guard let viewKey = getViewKey(from: wallet) else {
-            // Fallback to privacy mode if we can't get view key
-            moneroWallet = wallet
-            bindToWallet(wallet)
-            return
-        }
-
-        // Store address for UI (use receive address for display, but primary for LWS)
-        address = wallet.address.isEmpty ? walletAddress : wallet.address
-
-        // Start lite wallet manager for fast balance/transaction display
-        let liteManager = LiteWalletManager()
-        liteWalletManager = liteManager
-        bindToLiteWallet(liteManager)
-
-        // Get restore height from UserDefaults (set during restore flow, network-specific)
-        let savedRestoreHeight = UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight")
-        let startHeight: UInt64? = savedRestoreHeight > 0 ? UInt64(savedRestoreHeight) : nil
-
-        // Start async sync for balance/transaction display - use PRIMARY address to match wallet2
-        Task {
-            await liteManager.start(address: walletAddress, viewKey: viewKey, isTestnet: isTestnet, startHeight: startHeight)
-        }
-
-        // Keep reference to MoneroWallet for sending
-        // In light wallet mode, wallet2 automatically fetches outputs from LWS when sending
-        moneroWallet = wallet
-
-        // Don't set isSendReady = true immediately - wallet2 initializes asynchronously
-        // Subscribe to wallet sync state changes to know when it's ready
-        isSendReady = false
-        sendSyncProgress = 0
-        sendSyncStatus = "Initializing wallet..."
-
-        // Subscribe to MoneroWallet's sync state - when it changes from idle, wallet2 is ready
-        wallet.$syncState
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self = self else { return }
-                switch state {
-                case .idle:
-                    // Still initializing
-                    self.sendSyncStatus = "Initializing wallet..."
-                case .connecting:
-                    // wallet2 is running and trying to connect
-                    self.sendSyncStatus = "Connecting to light wallet server..."
-                    self.sendSyncProgress = 30
-                case .syncing(let progress, _):
-                    // wallet2 is fetching from LWS
-                    self.sendSyncProgress = 30 + progress * 0.7
-                    self.sendSyncStatus = "Syncing..."
-                case .synced:
-                    // wallet2 is ready
-                    self.isSendReady = true
-                    self.sendSyncProgress = 100
-                    self.sendSyncStatus = "Ready"
-                case .error(let msg):
-                    // If we get an error like "no connection to daemon", that's expected for light wallet
-                    // The wallet is still usable for sending in light mode
-                    if msg.lowercased().contains("no connection") || msg.lowercased().contains("timeout") {
-                        NSLog("[WalletManager] Light wallet got expected connection error, marking as send-ready: \(msg)")
-                        self.isSendReady = true
-                        self.sendSyncProgress = 100
-                        self.sendSyncStatus = "Ready (lite mode)"
-                    } else {
-                        self.sendSyncStatus = "Error: \(msg)"
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Note: wallet.start() is already called by createLightWallet() -> setupKit()
-        // No need for redundant start() call here
-    }
-
-    private func startPrivacyMode(mnemonic: [String]) throws {
+        // Start privacy mode wallet
         let wallet = MoneroWallet()
         let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
         let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
@@ -352,22 +218,18 @@ class WalletManager: ObservableObject {
 
         // Try to get address from wallet - may be empty initially for polyseed until wallet opens
         // The address will be populated via delegate callback when Kit._start() runs
-        let runtimeAddress = wallet.runtimePrimaryAddress
+        let runtimeAddress = wallet.primaryAddress
         if !runtimeAddress.isEmpty {
             self.primaryAddress = runtimeAddress
         }
 
         moneroWallet = wallet
         bindToWallet(wallet)
-    }
 
-    private func getViewKey(from wallet: MoneroWallet) -> String? {
-        // MoneroKit exposes the secret view key through the kit
-        let viewKey = wallet.secretViewKey
-        #if DEBUG
-        print("[WalletManager] getViewKey returned: \(viewKey != nil ? "valid" : "nil")")
-        #endif
-        return viewKey
+        // Load user-created subaddress indices for filtering in UI
+        loadUserCreatedSubaddresses()
+
+        isUnlocked = true
     }
 
     private func bindToWallet(_ wallet: MoneroWallet) {
@@ -458,102 +320,9 @@ class WalletManager: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func bindToLiteWallet(_ manager: LiteWalletManager) {
-        // Bind lite wallet manager state to WalletManager
-        manager.$balance
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$balance)
-
-        manager.$unlockedBalance
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$unlockedBalance)
-
-        manager.$syncState
-            .receive(on: DispatchQueue.main)
-            .map { state -> SyncState in
-                switch state {
-                case .idle: return .idle
-                case .connecting: return .connecting
-                case .syncing(let progress, let remaining):
-                    return .syncing(progress: progress, remaining: remaining)
-                case .synced: return .synced
-                case .error(let msg): return .error(msg)
-                }
-            }
-            .assign(to: &$syncState)
-
-        manager.$transactions
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$transactions)
-    }
-
-    private func startBackgroundSync(_ wallet: MoneroWallet) {
-        // Helper to update send readiness from sync state
-        func updateSendReadiness(from state: MoneroWallet.SyncState) {
-            switch state {
-            case .synced:
-                isSendReady = true
-                sendSyncProgress = 100
-            case .syncing(let progress, _):
-                sendSyncProgress = progress
-                // Consider ready once we have most outputs synced
-                isSendReady = progress >= 95
-            case .connecting:
-                sendSyncProgress = 0
-                isSendReady = false
-            case .error:
-                // Keep current progress, don't mark as ready
-                isSendReady = false
-            case .idle:
-                sendSyncProgress = 0
-                isSendReady = false
-            }
-        }
-
-        // Check initial state immediately (since @Published doesn't emit on subscribe)
-        updateSendReadiness(from: wallet.syncState)
-
-        // Subscribe to MoneroKit sync state changes for send readiness
-        wallet.$syncState
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.updateSendReadinessFromState(state)
-            }
-            .store(in: &cancellables)
-
-        // Start MoneroKit sync to fetch outputs for transaction construction
-        wallet.start()
-    }
-
-    private func updateSendReadinessFromState(_ state: MoneroWallet.SyncState) {
-        switch state {
-        case .synced:
-            isSendReady = true
-            sendSyncProgress = 100
-            sendSyncStatus = "Ready"
-        case .syncing(let progress, let remaining):
-            sendSyncProgress = progress
-            isSendReady = progress >= 95
-            if let blocks = remaining {
-                sendSyncStatus = "Syncing... \(blocks) blocks remaining"
-            } else {
-                sendSyncStatus = "Syncing blockchain..."
-            }
-        case .connecting:
-            sendSyncStatus = "Connecting to node..."
-        case .error(let msg):
-            isSendReady = false
-            sendSyncStatus = "Error: \(msg)"
-        case .idle:
-            sendSyncStatus = "Starting..."
-        }
-    }
-
     func lock() {
         moneroWallet?.stop()
         moneroWallet = nil
-        liteWalletManager?.stop()
-        liteWalletManager = nil
         currentSeed = nil
         isUnlocked = false
         balance = 0
@@ -563,9 +332,6 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
-        isSendReady = false
-        sendSyncProgress = 0
-        sendSyncStatus = "Connecting..."
     }
 
     // MARK: - Widget Data
@@ -629,46 +395,6 @@ class WalletManager: ObservableObject {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    // MARK: - Sync Mode Switching
-
-    /// Switch sync mode and restart wallet
-    func switchSyncMode(to mode: SyncMode) {
-        guard let seed = currentSeed, mode != currentSyncMode else { return }
-
-        // CRITICAL: Clear address fields FIRST to prevent stale address display if init fails
-        address = ""
-        primaryAddress = ""
-        subaddresses = []
-
-        // Release references - deinit handles cleanup
-        // Don't call stop() here as deinit will do it (avoids double-close crash)
-        moneroWallet = nil
-        liteWalletManager = nil
-        cancellables.removeAll()
-
-        // Reset state
-        syncState = .connecting
-        balance = 0
-        unlockedBalance = 0
-        transactions = []
-        isSendReady = false
-        sendSyncProgress = 0
-        sendSyncStatus = "Connecting..."
-
-        currentSyncMode = mode
-
-        // Restart with new mode
-        do {
-            if mode == .lite {
-                try startLiteMode(mnemonic: seed)
-            } else {
-                try startPrivacyMode(mnemonic: seed)
-            }
-        } catch {
-            syncState = .error("Failed to switch mode: \(error.localizedDescription)")
-        }
-    }
-
     // MARK: - Send
 
     func estimateFee(to address: String, amount: Decimal) async throws -> Decimal {
@@ -730,24 +456,16 @@ class WalletManager: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        if currentSyncMode == .lite {
-            await liteWalletManager?.refresh()
-        } else {
-            // Let MoneroKit determine actual sync state via walletStateDidChange() callback
-            // Don't force .connecting - if already synced and no new blocks, stay synced
-            moneroWallet?.startSync()
-            moneroWallet?.refresh()
-        }
+        // Let MoneroKit determine actual sync state via walletStateDidChange() callback
+        // Don't force .connecting - if already synced and no new blocks, stay synced
+        moneroWallet?.startSync()
+        moneroWallet?.refresh()
         // Note: Live Activity is updated by BackgroundSyncManager.handleSyncStateChange()
         // when sync state transitions to .synced - no need to call markSynced() here
     }
 
     /// Restart sync to check for new blocks
     func startSync() {
-        if currentSyncMode == .lite {
-            // Lite mode handles this differently - refresh triggers sync
-            return
-        }
         moneroWallet?.startSync()
     }
 
@@ -824,48 +542,27 @@ class WalletManager: ObservableObject {
         unlockedBalance = 0
         transactions = []
 
-        if currentSyncMode == .lite {
-            // Lite mode: stop lite manager and MoneroWallet, re-register with server
-            liteWalletManager?.stop()
-            liteWalletManager = nil
-            moneroWallet?.stop()
-            moneroWallet = nil
+        // Stop current wallet
+        moneroWallet?.stop()
+        moneroWallet = nil
 
-            // Clear MoneroKit wallet data directory for light wallet
-            clearWalletCache()
+        // Clear MoneroKit wallet data directory
+        clearWalletCache()
 
-            // Increment reset counter to force new walletId (network-specific)
-            let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount") + 1
-            UserDefaults.standard.set(resetCount, forKey: "\(networkPrefix)syncResetCount")
+        // Increment reset counter to force new walletId (network-specific)
+        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount") + 1
+        UserDefaults.standard.set(resetCount, forKey: "\(networkPrefix)syncResetCount")
 
-            do {
-                try startLiteMode(mnemonic: seed)
-            } catch {
-                syncState = .error("Failed to restart lite mode: \(error.localizedDescription)")
-            }
-        } else {
-            // Privacy mode: restart MoneroKit with new wallet ID
-            moneroWallet?.stop()
-            moneroWallet = nil
+        // Get restore height from UserDefaults (network-specific)
+        let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
 
-            // Clear MoneroKit wallet data directory
-            clearWalletCache()
-
-            // Increment reset counter to force new walletId (network-specific)
-            let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount") + 1
-            UserDefaults.standard.set(resetCount, forKey: "\(networkPrefix)syncResetCount")
-
-            // Get restore height from UserDefaults (network-specific)
-            let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
-
-            do {
-                let wallet = MoneroWallet()
-                try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: "\(resetCount)", networkType: networkType)
-                moneroWallet = wallet
-                bindToWallet(wallet)
-            } catch {
-                syncState = .error("Failed to restart wallet: \(error.localizedDescription)")
-            }
+        do {
+            let wallet = MoneroWallet()
+            try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: "\(resetCount)", networkType: networkType)
+            moneroWallet = wallet
+            bindToWallet(wallet)
+        } catch {
+            syncState = .error("Failed to restart wallet: \(error.localizedDescription)")
         }
     }
 
@@ -926,8 +623,6 @@ class WalletManager: ObservableObject {
         subaddresses = []
 
         // Stop current wallet without clearing cache
-        liteWalletManager?.stop()
-        liteWalletManager = nil
         moneroWallet?.stop()
         moneroWallet = nil
         cancellables.removeAll()
@@ -937,24 +632,20 @@ class WalletManager: ObservableObject {
         unlockedBalance = 0
         transactions = []
         syncState = .connecting
-        isSendReady = false
-        sendSyncProgress = 0
-        sendSyncStatus = "Connecting..."
 
         // Reinitialize with new network (will use different walletId due to network suffix)
         // Note: isTestnet has already been toggled by the caller
-        if currentSyncMode == .lite {
-            do {
-                try startLiteMode(mnemonic: seed)
-            } catch {
-                syncState = .error("Failed to start lite mode: \(error.localizedDescription)")
-            }
-        } else {
-            do {
-                try startPrivacyMode(mnemonic: seed)
-            } catch {
-                syncState = .error("Failed to start privacy mode: \(error.localizedDescription)")
-            }
+        do {
+            let wallet = MoneroWallet()
+            let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+            let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+            let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
+
+            try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
+            moneroWallet = wallet
+            bindToWallet(wallet)
+        } catch {
+            syncState = .error("Failed to switch network: \(error.localizedDescription)")
         }
     }
 }

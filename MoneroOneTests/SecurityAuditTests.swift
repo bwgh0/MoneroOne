@@ -145,31 +145,6 @@ final class SecurityAuditTests: XCTestCase {
 
     // MARK: - CRITICAL #3: Address Clearing on Switch Tests
 
-    /// Test that switchSyncMode clears addresses before reinitializing
-    func testSwitchSyncModeClearsAddresses() async throws {
-        // Create and unlock wallet
-        let mnemonic = walletManager.generateNewWallet()
-        let pin = "123456"
-        try walletManager.saveWallet(mnemonic: mnemonic, pin: pin)
-        try walletManager.unlock(pin: pin)
-
-        // Wait for initialization
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-
-        // Record current state
-        let initialSyncMode = walletManager.currentSyncMode
-
-        // Switch sync mode
-        let newMode: SyncMode = initialSyncMode == .lite ? .privacy : .lite
-        walletManager.switchSyncMode(to: newMode)
-
-        // Addresses should be cleared (empty or "Loading...")
-        // The actual address will be repopulated after switch completes
-        // We're testing that stale addresses don't persist during the switch
-        XCTAssertNotEqual(walletManager.currentSyncMode, initialSyncMode,
-                          "Sync mode should have changed")
-    }
-
     /// Test that switchNetwork clears addresses before reinitializing
     func testSwitchNetworkClearsAddresses() async throws {
         // Create and unlock wallet on mainnet

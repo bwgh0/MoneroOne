@@ -116,6 +116,8 @@ struct CompactPriceChartCard: View {
                 priceService.isLoadingChart = true
             }
             await priceService.fetchChartData(range: selectedTimeRange.apiRange)
+            // Calculate domain after initial load (onChange doesn't fire on initial value)
+            updateCachedYDomain()
         }
         .onChange(of: selectedTimeRange) { newValue in
             selectedDate = nil
@@ -138,6 +140,10 @@ struct CompactPriceChartCard: View {
             selectedPoint = priceService.chartData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
         }
         .onChange(of: priceService.chartData.count) { _ in
+            updateCachedYDomain()
+        }
+        .onChange(of: priceService.currentChartRange) { _ in
+            // Recalculate domain when range changes (even if count is same)
             updateCachedYDomain()
         }
     }
@@ -202,7 +208,7 @@ struct CompactPriceChartCard: View {
                             endPoint: .bottom
                         )
                     )
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
 
                     LineMark(
                         x: .value("Time", point.timestamp),
@@ -210,7 +216,7 @@ struct CompactPriceChartCard: View {
                     )
                     .foregroundStyle(Color.orange)
                     .lineStyle(StrokeStyle(lineWidth: 2))
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
                 }
 
                 if let selectedPoint = selectedPoint {

@@ -15,25 +15,14 @@ class MoneroWallet: ObservableObject {
     @Published var transactions: [MoneroTransaction] = []
     @Published var subaddresses: [MoneroKit.SubAddress] = []
 
-    /// Secret view key (hex string) - used for lite mode
-    var secretViewKey: String? {
-        guard let walletCredentials = walletCredentials else { return nil }
-        // Get private view key (not spend key)
-        return try? MoneroKit.Kit.key(wallet: walletCredentials, privateKey: true, spendKey: false)
-    }
+    // MARK: - Connection Progress Tracking
+    @Published var daemonHeight: UInt64 = 0
+    @Published var walletHeight: UInt64 = 0
 
     /// Primary address (index 0) - from storage (pre-computed)
     var primaryAddress: String {
         kit?.primaryAddress ?? ""
     }
-
-    /// Primary address directly from wallet2 runtime - use for light wallet mode
-    var runtimePrimaryAddress: String {
-        kit?.runtimePrimaryAddress ?? ""
-    }
-
-    // Store wallet credentials for view key extraction
-    private var walletCredentials: MoneroKit.MoneroWallet?
 
     enum SyncState: Equatable {
         case idle
@@ -80,7 +69,6 @@ class MoneroWallet: ObservableObject {
         default:
             credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
         }
-        walletCredentials = credentials
 
         kit = try MoneroKit.Kit(
             wallet: credentials,
@@ -108,60 +96,6 @@ class MoneroWallet: ObservableObject {
             restoreHeight: restoreHeight,
             walletId: walletId,
             node: walletNode,
-            networkType: networkType,
-            reachabilityManager: reachabilityManager,
-            logger: nil
-        )
-
-        setupKit()
-    }
-
-    /// Create wallet in light wallet mode connected to LWS server
-    /// The LWS handles blockchain scanning; wallet2 fetches outputs from LWS endpoints
-    /// - Parameters:
-    ///   - seed: Seed words (16 for polyseed, 24 for BIP39, 25 for legacy)
-    ///   - lwsURL: Light Wallet Server URL
-    ///   - restoreHeight: Block height to restore from
-    ///   - resetSuffix: Optional suffix to force new walletId
-    ///   - networkType: Mainnet or testnet
-    func createLightWallet(seed: [String], lwsURL: URL, restoreHeight: UInt64 = 0, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) throws {
-        // Create light wallet node - wallet2 will use LWS endpoints for outputs
-        let lightNode = MoneroKit.Node(
-            url: lwsURL,
-            isTrusted: true,
-            isLightWallet: true
-        )
-
-        var walletId = Self.stableWalletId(for: seed)
-
-        // Append reset suffix and network to force new wallet identity
-        let modeSuffix = "_light"
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        if let suffix = resetSuffix {
-            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + suffix + modeSuffix + networkSuffix)
-        } else {
-            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + modeSuffix + networkSuffix)
-        }
-
-        // Detect seed type and create appropriate credentials
-        // 16 words = polyseed, 24 words = bip39, 25 words = legacy
-        let credentials: MoneroKit.MoneroWallet
-        switch seed.count {
-        case 16:
-            credentials = MoneroKit.MoneroWallet.polyseed(seed: seed, passphrase: "")
-        case 25:
-            credentials = MoneroKit.MoneroWallet.legacy(seed: seed, passphrase: "")
-        default:
-            credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
-        }
-        walletCredentials = credentials
-
-        kit = try MoneroKit.Kit(
-            wallet: credentials,
-            account: 0,
-            restoreHeight: restoreHeight,
-            walletId: walletId,
-            node: lightNode,
             networkType: networkType,
             reachabilityManager: reachabilityManager,
             logger: nil
@@ -279,6 +213,12 @@ class MoneroWallet: ObservableObject {
             syncState = .error(friendlyErrorMessage(for: error))
         case .idle:
             syncState = .idle
+        }
+
+        // Update block heights for connection progress tracking
+        if let heights = kit?.blockHeights {
+            walletHeight = heights.walletHeight
+            daemonHeight = heights.daemonHeight
         }
     }
 

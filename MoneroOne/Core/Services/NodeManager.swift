@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 struct MoneroNode: Identifiable, Codable, Equatable {
     var id: String { url }
@@ -13,23 +14,69 @@ struct MoneroNode: Identifiable, Codable, Equatable {
     }
 }
 
+struct NodeStats {
+    let uptimeMonth: Double?   // e.g. 99.5, nil if unknown
+    let uptimeYear: Double?    // e.g. 99.8, nil if unknown
+    let isUp: Bool
+    var latencyMs: Int?        // measured locally, nil if not tested
+
+    var score: Double {
+        guard let latency = latencyMs, latency > 0 else { return 0 }
+        // For unknown uptime, use 95% as neutral assumption for ranking
+        let uptime = uptimeMonth ?? 95.0
+        return uptime / Double(latency)  // higher = better
+    }
+
+    var uptimeColor: UptimeColor {
+        guard let uptime = uptimeMonth else { return .unknown }
+        if uptime >= 99.0 {
+            return .green
+        } else if uptime >= 95.0 {
+            return .yellow
+        } else {
+            return .red
+        }
+    }
+
+    enum UptimeColor {
+        case green, yellow, red, unknown
+    }
+}
+
+// Response from Cake Upptime API
+struct UptimeSummaryEntry: Codable {
+    let name: String
+    let url: String
+    let status: String
+    let uptimeDay: String?
+    let uptimeWeek: String?
+    let uptimeMonth: String?
+    let uptimeYear: String?
+}
+
 @MainActor
 class NodeManager: ObservableObject {
     @Published var selectedNode: MoneroNode
     @Published var customNodes: [MoneroNode] = []
-    @Published var connectionStatus: ConnectionStatus = .unknown
-
-    enum ConnectionStatus: Equatable {
-        case unknown
-        case testing
-        case connected
-        case failed(String)
+    @Published var autoSelectEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(autoSelectEnabled, forKey: autoSelectKey)
+            if autoSelectEnabled {
+                selectBestNode()
+            }
+        }
     }
+    @Published var nodeStats: [String: NodeStats] = [:]
+    @Published var isLoadingStats: Bool = false
+
+    private var uptimeStatsCache: [UptimeSummaryEntry]?
+    private var uptimeCacheTime: Date?
+    private let uptimeCacheDuration: TimeInterval = 3600 // 1 hour
 
     static let defaultNodes: [MoneroNode] = [
-        MoneroNode(name: "CakeWallet", url: "https://xmr-node.cakewallet.com:18081"),
-        MoneroNode(name: "Monerujo", url: "https://node.monerujo.io:18081"),
+        MoneroNode(name: "Hashvault", url: "https://nodes.hashvault.pro:18081"),
         MoneroNode(name: "Seth for Privacy", url: "https://node.sethforprivacy.com:18089"),
+        MoneroNode(name: "CakeWallet", url: "https://xmr-node.cakewallet.com:18081"),
     ]
 
     static let defaultTestnetNodes: [MoneroNode] = [
@@ -42,6 +89,9 @@ class NodeManager: ObservableObject {
     }
     private var customNodesKey: String {
         isTestnet ? "customTestnetNodes" : "customNodes"
+    }
+    private var autoSelectKey: String {
+        isTestnet ? "autoSelectTestnetNode" : "autoSelectNode"
     }
 
     var isTestnet: Bool {
@@ -56,10 +106,14 @@ class NodeManager: ObservableObject {
         // Determine which node list to use based on network
         let testnet = UserDefaults.standard.bool(forKey: "isTestnet")
         let nodeKey = testnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
+        let autoKey = testnet ? "autoSelectTestnetNode" : "autoSelectNode"
         let nodes = testnet ? Self.defaultTestnetNodes : Self.defaultNodes
 
+        // Load auto select setting (default to true for new users)
+        self.autoSelectEnabled = UserDefaults.standard.object(forKey: autoKey) as? Bool ?? true
+
         // Load selected node from UserDefaults (use first default node as fallback)
-        let defaultURL = nodes.first?.url ?? "https://xmr-node.cakewallet.com:18081"
+        let defaultURL = nodes.first?.url ?? "https://nodes.hashvault.pro:18081"
         let savedURL = UserDefaults.standard.string(forKey: nodeKey) ?? defaultURL
         if let node = nodes.first(where: { $0.url == savedURL }) {
             selectedNode = node
@@ -72,10 +126,13 @@ class NodeManager: ObservableObject {
         loadCustomNodes()
     }
 
+    var allNodes: [MoneroNode] {
+        currentDefaultNodes + customNodes
+    }
+
     func selectNode(_ node: MoneroNode) {
         selectedNode = node
         UserDefaults.standard.set(node.url, forKey: selectedNodeKey)
-        connectionStatus = .unknown
     }
 
     func addCustomNode(name: String, url: String, isTrusted: Bool = false) {
@@ -109,99 +166,212 @@ class NodeManager: ObservableObject {
         UserDefaults.standard.set(data, forKey: customNodesKey)
     }
 
-    // Custom session that allows older TLS versions (matches wallet2 behavior)
-    private lazy var testSession: URLSession = {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 10
-        config.timeoutIntervalForResource = 15
-        return URLSession(configuration: config, delegate: TLSDelegate(), delegateQueue: nil)
-    }()
+    // MARK: - Uptime Stats
 
-    func testConnection() async {
-        connectionStatus = .testing
+    private static let uptimeAPIURL = "https://raw.githubusercontent.com/cake-tech/upptime-monerocom/master/history/summary.json"
 
-        guard let baseURL = URL(string: selectedNode.url) else {
-            connectionStatus = .failed("Invalid URL")
+    func fetchUptimeStats() async {
+        // Check cache
+        if let cacheTime = uptimeCacheTime,
+           Date().timeIntervalSince(cacheTime) < uptimeCacheDuration,
+           uptimeStatsCache != nil {
+            applyUptimeCache()
             return
         }
 
-        // Try the /get_info endpoint first (works with most public nodes)
-        let infoURL = baseURL.appendingPathComponent("get_info")
-        var request = URLRequest(url: infoURL)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 10
+        guard let url = URL(string: Self.uptimeAPIURL) else { return }
 
         do {
-            let (data, response) = try await testSession.data(for: request)
-            if let httpResponse = response as? HTTPURLResponse {
-                if (200...299).contains(httpResponse.statusCode) {
-                    // Check if response contains expected fields
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       json["height"] != nil || json["status"] != nil {
-                        connectionStatus = .connected
-                        return
-                    }
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let entries = try JSONDecoder().decode([UptimeSummaryEntry].self, from: data)
+            uptimeStatsCache = entries
+            uptimeCacheTime = Date()
+            applyUptimeCache()
+        } catch {
+            print("Failed to fetch uptime stats: \(error)")
+        }
+    }
+
+    private func applyUptimeCache() {
+        guard let entries = uptimeStatsCache else { return }
+
+        for node in allNodes {
+            // Extract host:port from our node URL to match API's "name" field format
+            // API uses format like "xmr-node.cakewallet.com:18081"
+            guard let nodeURL = URL(string: node.url),
+                  let host = nodeURL.host else { continue }
+            let port = nodeURL.port ?? (nodeURL.scheme == "https" ? 443 : 80)
+            let hostPort = "\(host):\(port)"
+
+            // Find matching entry by host:port
+            let entry = entries.first { entry in
+                // API name is "hostname:port" format
+                return entry.name.lowercased() == hostPort.lowercased()
+            }
+
+            if let entry = entry {
+                // Parse uptime - remove % sign if present
+                let uptimeMonthStr = entry.uptimeMonth?.replacingOccurrences(of: "%", with: "") ?? "0"
+                let uptimeYearStr = entry.uptimeYear?.replacingOccurrences(of: "%", with: "") ?? "0"
+                let uptimeMonth = Double(uptimeMonthStr) ?? 0
+                let uptimeYear = Double(uptimeYearStr) ?? 0
+                let isUp = entry.status.lowercased() == "up"
+
+                // Preserve existing latency if we already have it
+                let existingLatency = nodeStats[node.url]?.latencyMs
+
+                nodeStats[node.url] = NodeStats(
+                    uptimeMonth: uptimeMonth,
+                    uptimeYear: uptimeYear,
+                    isUp: isUp,
+                    latencyMs: existingLatency
+                )
+            }
+        }
+    }
+
+    // MARK: - Latency Measurement
+
+    func measureAllLatencies() async {
+        isLoadingStats = true
+
+        await withTaskGroup(of: (String, Int?).self) { group in
+            for node in allNodes {
+                group.addTask {
+                    let latency = await self.measureLatency(for: node)
+                    return (node.url, latency)
                 }
-                // Try JSON-RPC as fallback
-                await testConnectionViaJsonRpc(baseURL: baseURL)
-            } else {
-                connectionStatus = .failed("Invalid response")
             }
-        } catch let error as URLError {
-            // Provide more specific error messages
-            switch error.code {
-            case .notConnectedToInternet:
-                connectionStatus = .failed("No internet")
-            case .timedOut:
-                connectionStatus = .failed("Timed out")
-            case .cannotConnectToHost:
-                connectionStatus = .failed("Can't connect")
-            case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateNotYetValid, .serverCertificateHasUnknownRoot:
-                // Try JSON-RPC as fallback for SSL issues
-                await testConnectionViaJsonRpc(baseURL: baseURL)
-            default:
-                connectionStatus = .failed("Network error")
+
+            for await (url, latency) in group {
+                if var stats = nodeStats[url] {
+                    stats.latencyMs = latency
+                    nodeStats[url] = stats
+                } else {
+                    // Custom node without uptime data - create stats with just latency
+                    nodeStats[url] = NodeStats(
+                        uptimeMonth: nil,
+                        uptimeYear: nil,
+                        isUp: latency != nil,
+                        latencyMs: latency
+                    )
+                }
             }
-        } catch {
-            // Try JSON-RPC as fallback
-            await testConnectionViaJsonRpc(baseURL: baseURL)
+        }
+
+        isLoadingStats = false
+
+        // Auto-select best node if enabled
+        if autoSelectEnabled {
+            selectBestNode()
         }
     }
 
-    private func testConnectionViaJsonRpc(baseURL: URL) async {
-        let rpcURL = baseURL.appendingPathComponent("json_rpc")
-        var request = URLRequest(url: rpcURL)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = #"{"jsonrpc":"2.0","id":"0","method":"get_info"}"#.data(using: .utf8)
-        request.timeoutInterval = 10
+    private func measureLatency(for node: MoneroNode) async -> Int? {
+        NSLog("[Latency] Starting measurement for %@: %@", node.name, node.url)
 
-        do {
-            let (data, response) = try await testSession.data(for: request)
-            if let httpResponse = response as? HTTPURLResponse,
-               (200...299).contains(httpResponse.statusCode),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               json["result"] != nil {
-                connectionStatus = .connected
+        guard let url = URL(string: node.url),
+              let host = url.host else {
+            NSLog("[Latency] Failed to parse URL: %@", node.url)
+            return nil
+        }
+
+        let port = url.port ?? 18081
+        let usesTLS = url.scheme == "https"
+
+        return await withCheckedContinuation { continuation in
+            let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(integerLiteral: UInt16(port)))
+
+            let parameters: NWParameters
+            if usesTLS {
+                // Create TLS options that accept all certificates
+                let tlsOptions = NWProtocolTLS.Options()
+                sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, _, complete in
+                    // Accept all certificates for latency testing
+                    complete(true)
+                }, DispatchQueue.global())
+                // Explicitly include TCP options for proper connection setup
+                parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
             } else {
-                connectionStatus = .failed("Not responding")
+                parameters = NWParameters.tcp
             }
-        } catch {
-            connectionStatus = .failed("RPC failed")
+
+            let connection = NWConnection(to: endpoint, using: parameters)
+            let startTime = CFAbsoluteTimeGetCurrent()
+            var hasResumed = false
+
+            connection.stateUpdateHandler = { state in
+                guard !hasResumed else { return }
+
+                switch state {
+                case .ready:
+                    hasResumed = true
+                    let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+                    let latencyMs = Int(elapsed * 1000)
+                    NSLog("[Latency] Success for %@: %dms", node.name, latencyMs)
+                    connection.cancel()
+                    continuation.resume(returning: latencyMs)
+
+                case .failed(let error):
+                    hasResumed = true
+                    NSLog("[Latency] Failed for %@: %@", node.name, error.localizedDescription)
+                    connection.cancel()
+                    continuation.resume(returning: nil)
+
+                case .cancelled:
+                    if !hasResumed {
+                        hasResumed = true
+                        continuation.resume(returning: nil)
+                    }
+
+                default:
+                    break
+                }
+            }
+
+            connection.start(queue: DispatchQueue.global())
+
+            // Timeout after 10 seconds
+            DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
+                if !hasResumed {
+                    hasResumed = true
+                    NSLog("[Latency] Timeout for %@", node.name)
+                    connection.cancel()
+                    continuation.resume(returning: nil)
+                }
+            }
         }
     }
-}
 
-// Delegate to handle TLS certificate validation (matches wallet2 behavior)
-private class TLSDelegate: NSObject, URLSessionDelegate {
-    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        // Accept server certificates for Monero nodes (wallet2 does the same)
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let serverTrust = challenge.protectionSpace.serverTrust {
-            completionHandler(.useCredential, URLCredential(trust: serverTrust))
-        } else {
-            completionHandler(.performDefaultHandling, nil)
+    // MARK: - Auto Select
+
+    func selectBestNode() {
+        guard autoSelectEnabled else { return }
+
+        // Filter to nodes that are up and have latency measured
+        let candidates = allNodes.filter { node in
+            guard let stats = nodeStats[node.url] else { return false }
+            return stats.isUp && stats.latencyMs != nil
         }
+
+        // Sort by score (uptime / latency) descending
+        let best = candidates.max { a, b in
+            guard let statsA = nodeStats[a.url], let statsB = nodeStats[b.url] else { return true }
+            return statsA.score < statsB.score
+        }
+
+        if let best = best, selectedNode.url != best.url {
+            selectedNode = best
+            UserDefaults.standard.set(best.url, forKey: selectedNodeKey)
+        }
+    }
+
+    // MARK: - Combined Refresh
+
+    func refreshStats() async {
+        isLoadingStats = true
+        await fetchUptimeStats()
+        await measureAllLatencies()
+        // isLoadingStats is set to false in measureAllLatencies
     }
 }

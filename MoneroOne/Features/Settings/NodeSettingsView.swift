@@ -10,6 +10,20 @@ struct NodeSettingsView: View {
 
     var body: some View {
         List {
+            // Auto Select Section
+            Section {
+                Toggle(isOn: $nodeManager.autoSelectEnabled) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Auto Select")
+                            .font(.body)
+                        Text("Automatically picks fastest reliable node")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .tint(.orange)
+            }
+
             Section(nodeManager.isTestnet ? "Testnet Nodes" : "Default Nodes") {
                 ForEach(nodeManager.currentDefaultNodes) { node in
                     nodeRow(node: node)
@@ -54,6 +68,12 @@ struct NodeSettingsView: View {
         }
         .navigationTitle(nodeManager.isTestnet ? "Remote Node (Testnet)" : "Remote Node")
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await nodeManager.refreshStats()
+        }
+        .task {
+            await nodeManager.refreshStats()
+        }
         .alert("Add Custom Node", isPresented: $showAddNode) {
             TextField("Name (e.g., My Node)", text: $customNodeName)
             TextField("URL (e.g., https://node.example.com:18089)", text: $customNodeURL)
@@ -75,25 +95,106 @@ struct NodeSettingsView: View {
     }
 
     private func nodeRow(node: MoneroNode) -> some View {
-        Button {
-            selectNode(node)
+        let isSelected = nodeManager.selectedNode.id == node.id
+        let stats = nodeManager.nodeStats[node.url]
+
+        return Button {
+            if !nodeManager.autoSelectEnabled {
+                selectNode(node)
+            }
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(node.name)
-                        .foregroundColor(.primary)
+                    HStack(spacing: 6) {
+                        Text(node.name)
+                            .foregroundColor(nodeManager.autoSelectEnabled && !isSelected ? .secondary : .primary)
+
+                        if isSelected && nodeManager.autoSelectEnabled {
+                            Text("Auto")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange)
+                                .clipShape(Capsule())
+                        }
+                    }
+
                     Text(node.url)
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    // Stats row
+                    if let stats = stats {
+                        HStack(spacing: 8) {
+                            // Uptime indicator
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(uptimeColor(for: stats))
+                                    .frame(width: 8, height: 8)
+                                if let uptime = stats.uptimeMonth {
+                                    Text(String(format: "%.1f%% uptime", uptime))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Unknown uptime")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            // Latency
+                            if let latency = stats.latencyMs {
+                                Text("•")
+                                    .foregroundColor(.secondary)
+                                Text("\(latency)ms")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            } else if nodeManager.isLoadingStats {
+                                ProgressView()
+                                    .scaleEffect(0.5)
+                            } else {
+                                Text("•")
+                                    .foregroundColor(.secondary)
+                                Text("--")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    } else if nodeManager.isLoadingStats {
+                        HStack(spacing: 4) {
+                            ProgressView()
+                                .scaleEffect(0.5)
+                            Text("Checking...")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
 
                 Spacer()
 
-                if nodeManager.selectedNode.id == node.id {
+                if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.orange)
                 }
             }
+        }
+        .disabled(nodeManager.autoSelectEnabled)
+        .opacity(nodeManager.autoSelectEnabled && !isSelected ? 0.5 : 1.0)
+    }
+
+    private func uptimeColor(for stats: NodeStats) -> Color {
+        switch stats.uptimeColor {
+        case .green:
+            return .green
+        case .yellow:
+            return .yellow
+        case .red:
+            return .red
+        case .unknown:
+            return .gray
         }
     }
 

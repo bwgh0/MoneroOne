@@ -17,6 +17,7 @@ struct WalletView: View {
                         balance: walletManager.balance,
                         unlockedBalance: walletManager.unlockedBalance,
                         syncState: walletManager.syncState,
+                        connectionStage: walletManager.connectionStage,
                         priceService: priceService,
                         onPriceChangeTap: {
                             selectedTab = .chart

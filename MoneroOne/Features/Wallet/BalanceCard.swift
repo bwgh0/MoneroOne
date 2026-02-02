@@ -4,6 +4,7 @@ struct BalanceCard: View {
     let balance: Decimal
     let unlockedBalance: Decimal
     let syncState: WalletManager.SyncState
+    let connectionStage: ConnectionStage
     @ObservedObject var priceService: PriceService
     var onPriceChangeTap: (() -> Void)? = nil
     var onCardTap: (() -> Void)? = nil
@@ -11,14 +12,32 @@ struct BalanceCard: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            // Sync Status
+            // Sync Status - use progressive indicator when connecting, simple status when synced
             HStack {
-                Circle()
-                    .fill(syncStatusColor)
-                    .frame(width: 8, height: 8)
-                Text(syncStatusText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if case .synced = syncState {
+                    // Simple synced indicator
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 8, height: 8)
+                    Text("Synced")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else if case .error(let msg) = syncState {
+                    // Error indicator
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text("Error: \(msg)")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .lineLimit(1)
+                } else {
+                    // Progressive connection indicator
+                    ConnectionStepIndicator(
+                        stage: connectionStage,
+                        syncProgress: syncProgress
+                    )
+                }
                 Spacer()
 
                 // Price change indicator (tappable)
@@ -144,24 +163,12 @@ struct BalanceCard: View {
         }
     }
 
-    private var syncStatusColor: Color {
-        switch syncState {
-        case .idle: return .gray
-        case .connecting: return .yellow
-        case .syncing: return .orange
-        case .synced: return .green
-        case .error: return .red
+    /// Extract sync progress from syncState for the step indicator
+    private var syncProgress: Double? {
+        if case .syncing(let progress, _) = syncState {
+            return progress
         }
-    }
-
-    private var syncStatusText: String {
-        switch syncState {
-        case .idle: return "Idle"
-        case .connecting: return "Connecting..."
-        case .syncing: return "Scanning for transactions..."
-        case .synced: return "Synced"
-        case .error(let msg): return "Error: \(msg)"
-        }
+        return nil
     }
 
     private func formatXMR(_ value: Decimal) -> String {
@@ -183,21 +190,150 @@ struct BalanceCard: View {
     }
 }
 
-#Preview {
-    VStack(spacing: 20) {
-        BalanceCard(
-            balance: 1.234567890123,
-            unlockedBalance: 1.234567890123,
-            syncState: .synced,
-            priceService: PriceService()
-        )
+// MARK: - Connection Step Indicator
 
-        BalanceCard(
-            balance: 5.5,
-            unlockedBalance: 3.2,
-            syncState: .syncing(progress: 65, remaining: 1000),
-            priceService: PriceService()
-        )
+/// Progressive connection status indicator with 6 stages
+/// Shows: Network -> Node -> Connecting -> Loading -> Syncing -> Synced
+private struct ConnectionStepIndicator: View {
+    let stage: ConnectionStage
+    let syncProgress: Double?  // nil if not syncing, 0-100 if syncing
+
+    private let stageCount = 6
+    private let dotSize: CGFloat = 8
+    private let lineWidth: CGFloat = 12
+    private let lineHeight: CGFloat = 2
+
+    var body: some View {
+        VStack(spacing: 6) {
+            // Step dots and lines
+            HStack(spacing: 0) {
+                ForEach(0..<stageCount, id: \.self) { index in
+                    stepDot(for: index)
+
+                    if index < stageCount - 1 {
+                        stepLine(for: index)
+                    }
+                }
+            }
+
+            // Status text
+            Text(statusText)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
     }
+
+    @ViewBuilder
+    private func stepDot(for index: Int) -> some View {
+        let isCompleted = index < stage.stageIndex
+        let isActive = index == stage.stageIndex
+        let isFinal = index == stageCount - 1 && stage == .synced
+
+        ZStack {
+            if isCompleted || isFinal {
+                // Completed or final synced state - filled dot
+                Circle()
+                    .fill(isFinal ? Color.green : Color.orange)
+                    .frame(width: dotSize, height: dotSize)
+            } else if isActive {
+                // Active state - pulsing dot
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: dotSize, height: dotSize)
+                    .modifier(PulsingModifier())
+            } else {
+                // Pending state - gray outline
+                Circle()
+                    .stroke(Color.gray.opacity(0.4), lineWidth: 1.5)
+                    .frame(width: dotSize, height: dotSize)
+            }
+        }
+    }
+
+    private func stepLine(for index: Int) -> some View {
+        Rectangle()
+            .fill(index < stage.stageIndex ? Color.orange : Color.gray.opacity(0.3))
+            .frame(width: lineWidth, height: lineHeight)
+    }
+
+    private var statusText: String {
+        if case .syncing = stage, let progress = syncProgress {
+            return "Scanning \(Int(progress))%..."
+        }
+        return stage.displayText
+    }
+}
+
+/// Pulsing animation modifier for active dots
+private struct PulsingModifier: ViewModifier {
+    @State private var isPulsing = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPulsing ? 1.2 : 0.9)
+            .opacity(isPulsing ? 1.0 : 0.7)
+            .animation(
+                .easeInOut(duration: 0.8)
+                .repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear {
+                isPulsing = true
+            }
+    }
+}
+
+#Preview("Synced") {
+    BalanceCard(
+        balance: 1.234567890123,
+        unlockedBalance: 1.234567890123,
+        syncState: .synced,
+        connectionStage: .synced,
+        priceService: PriceService()
+    )
+    .padding()
+}
+
+#Preview("Syncing") {
+    BalanceCard(
+        balance: 5.5,
+        unlockedBalance: 3.2,
+        syncState: .syncing(progress: 65, remaining: 1000),
+        connectionStage: .syncing,
+        priceService: PriceService()
+    )
+    .padding()
+}
+
+#Preview("Connecting") {
+    BalanceCard(
+        balance: 0,
+        unlockedBalance: 0,
+        syncState: .connecting,
+        connectionStage: .connecting,
+        priceService: PriceService()
+    )
+    .padding()
+}
+
+#Preview("Loading Blocks") {
+    BalanceCard(
+        balance: 0,
+        unlockedBalance: 0,
+        syncState: .connecting,
+        connectionStage: .loadingBlocks(wallet: 2_100_000, daemon: 3_450_000),
+        priceService: PriceService()
+    )
+    .padding()
+}
+
+#Preview("Error") {
+    BalanceCard(
+        balance: 0,
+        unlockedBalance: 0,
+        syncState: .error("Connection timeout"),
+        connectionStage: .reachingNode,
+        priceService: PriceService()
+    )
     .padding()
 }

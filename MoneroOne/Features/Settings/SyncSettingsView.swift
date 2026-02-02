@@ -294,9 +294,23 @@ struct RestoreHeightSheet: View {
 
                 Section {
                     HStack {
-                        Text("Estimated Block Height")
+                        Text("Current Block Height")
+                        Spacer()
+                        Text(formatHeight(currentHeight))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    HStack {
+                        Text("Restore From Block")
                         Spacer()
                         Text(formatHeight(estimatedHeight))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    HStack {
+                        Text("Blocks to Scan")
+                        Spacer()
+                        Text(formatHeight(blocksToScan))
                             .foregroundColor(.secondary)
                             .monospacedDigit()
                     }
@@ -344,9 +358,27 @@ struct RestoreHeightSheet: View {
         }
     }
 
+    /// Current blockchain height (from wallet or estimated from today's date)
+    private var currentHeight: UInt64 {
+        let daemonHeight = walletManager.daemonHeight
+        if daemonHeight > 0 {
+            return daemonHeight
+        }
+        // Fallback: estimate from today's date
+        return UInt64(max(0, RestoreHeight.getHeight(date: Date())))
+    }
+
     /// Estimate block height from date using MoneroKit's RestoreHeight utility
     private var estimatedHeight: UInt64 {
-        UInt64(RestoreHeight.getHeight(date: selectedDate))
+        UInt64(max(0, RestoreHeight.getHeight(date: selectedDate)))
+    }
+
+    /// Number of blocks that will need to be scanned
+    private var blocksToScan: UInt64 {
+        if currentHeight > estimatedHeight {
+            return currentHeight - estimatedHeight
+        }
+        return 0
     }
 
     private func formatHeight(_ height: UInt64) -> String {

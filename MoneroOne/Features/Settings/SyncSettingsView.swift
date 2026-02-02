@@ -46,6 +46,22 @@ struct SyncSettingsView: View {
                 Text("Sync Status")
             }
 
+            // Node Settings
+            Section {
+                NavigationLink {
+                    NodeSettingsView()
+                } label: {
+                    Label {
+                        Text("Remote Node")
+                    } icon: {
+                        Image(systemName: "server.rack")
+                            .foregroundColor(.purple)
+                    }
+                }
+            } header: {
+                Text("Connection")
+            }
+
             // Restore Height
             Section {
                 Button {
@@ -150,22 +166,6 @@ struct SyncSettingsView: View {
                 Text("Background")
             } footer: {
                 Text("Keeps wallet synced when app is in background. Uses location permission as a workaround - your location is never stored or transmitted.")
-            }
-
-            // Node Settings
-            Section {
-                NavigationLink {
-                    NodeSettingsView()
-                } label: {
-                    Label {
-                        Text("Remote Node")
-                    } icon: {
-                        Image(systemName: "server.rack")
-                            .foregroundColor(.purple)
-                    }
-                }
-            } header: {
-                Text("Connection")
             }
         }
         .navigationTitle("Sync Settings")

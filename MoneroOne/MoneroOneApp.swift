@@ -21,6 +21,9 @@ struct MoneroOneApp: App {
     }
 
     init() {
+        // Migrate keychain items to new accessibility level (fixes wallet loss after device lock)
+        KeychainStorage().migrateKeychainAccessibilityIfNeeded()
+
         // Register background task for price checking
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.priceCheckTaskId,

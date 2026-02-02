@@ -8,6 +8,12 @@ struct PriceDataPoint: Identifiable, Equatable {
     let price: Double
 }
 
+/// Chart smoothing mode for price charts
+enum ChartSmoothingMode: String, CaseIterable {
+    case highDensity = "High Density"    // More LTTB points only
+    case emaSmoothed = "EMA Smoothed"    // LTTB + EMA smoothing
+}
+
 @MainActor
 class PriceService: ObservableObject {
     @Published var xmrPrice: Double?
@@ -19,6 +25,7 @@ class PriceService: ObservableObject {
     @Published var chartDataCache: [String: [PriceDataPoint]] = [:]
     @Published var currentChartRange: String = "7D"
     @Published var isLoadingChart = false
+    @Published var chartSmoothingMode: ChartSmoothingMode = .emaSmoothed
 
     var chartData: [PriceDataPoint] {
         chartDataCache[currentChartRange] ?? []
@@ -73,8 +80,11 @@ class PriceService: ObservableObject {
     func startAutoRefresh() {
         Task {
             await fetchPrice()
-            // Prefetch default chart data (7D) so it's ready when user opens chart
-            await fetchChartData(range: "7D")
+            // Prefetch ALL chart ranges for instant switching
+            let ranges = ["7D", "1D", "1M", "1Y", "All"]
+            for range in ranges {
+                await fetchChartData(range: range)
+            }
         }
 
         refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
@@ -164,6 +174,88 @@ class PriceService: ObservableObject {
         return "\(sign)\(String(format: "%.2f", change))%"
     }
 
+    /// LTTB (Largest Triangle Three Buckets) downsampling algorithm
+    /// Preserves visual shape while reducing point count
+    private func downsampleLTTB(_ data: [PriceDataPoint], targetCount: Int) -> [PriceDataPoint] {
+        guard data.count > targetCount else { return data }
+        guard targetCount >= 2 else { return data }
+
+        var result: [PriceDataPoint] = []
+        result.reserveCapacity(targetCount)
+
+        // Always keep first point
+        result.append(data[0])
+
+        let bucketSize = Double(data.count - 2) / Double(targetCount - 2)
+        var lastSelectedIndex = 0
+
+        for i in 0..<(targetCount - 2) {
+            // Calculate bucket range
+            let bucketStart = Int(Double(i) * bucketSize) + 1
+            let bucketEnd = Int(Double(i + 1) * bucketSize) + 1
+
+            // Calculate average point of next bucket (for triangle calculation)
+            let nextBucketStart = bucketEnd
+            let nextBucketEnd = min(Int(Double(i + 2) * bucketSize) + 1, data.count - 1)
+
+            var avgX: Double = 0
+            var avgY: Double = 0
+            let nextBucketCount = nextBucketEnd - nextBucketStart + 1
+
+            for j in nextBucketStart...nextBucketEnd {
+                avgX += data[j].timestamp.timeIntervalSince1970
+                avgY += data[j].price
+            }
+            avgX /= Double(nextBucketCount)
+            avgY /= Double(nextBucketCount)
+
+            // Find point in current bucket that creates largest triangle
+            let pointA = data[lastSelectedIndex]
+            var maxArea: Double = -1
+            var selectedIndex = bucketStart
+
+            for j in bucketStart..<min(bucketEnd, data.count - 1) {
+                let pointB = data[j]
+                // Triangle area using cross product
+                let area = abs(
+                    (pointA.timestamp.timeIntervalSince1970 - avgX) * (pointB.price - pointA.price) -
+                    (pointA.timestamp.timeIntervalSince1970 - pointB.timestamp.timeIntervalSince1970) * (avgY - pointA.price)
+                )
+                if area > maxArea {
+                    maxArea = area
+                    selectedIndex = j
+                }
+            }
+
+            result.append(data[selectedIndex])
+            lastSelectedIndex = selectedIndex
+        }
+
+        // Always keep last point
+        result.append(data[data.count - 1])
+
+        return result
+    }
+
+    /// Exponential Moving Average smoothing for smoother chart curves
+    /// - Parameters:
+    ///   - data: Array of price data points to smooth
+    ///   - alpha: Smoothing factor (0-1). Lower = smoother but more lag. Default 0.3
+    /// - Returns: Smoothed price data points preserving timestamps
+    private func applyEMA(_ data: [PriceDataPoint], alpha: Double = 0.3) -> [PriceDataPoint] {
+        guard data.count > 1 else { return data }
+
+        var result: [PriceDataPoint] = []
+        result.reserveCapacity(data.count)
+        result.append(data[0])
+
+        for i in 1..<data.count {
+            let smoothedPrice = alpha * data[i].price + (1 - alpha) * result[i - 1].price
+            result.append(PriceDataPoint(timestamp: data[i].timestamp, price: smoothedPrice))
+        }
+        return result
+    }
+
     /// Fetch chart data using CoinMarketCap ranges: "1D", "7D", "1M", "1Y", "All"
     func fetchChartData(range: String = "7D") async {
         currentChartRange = range
@@ -243,25 +335,21 @@ class PriceService: ObservableObject {
                 allPoints = allPoints.filter { $0.timestamp >= cutoffDate }
             }
 
-            // Downsample to max 100 points for smooth performance
-            let maxPoints = 100
-            var newChartData: [PriceDataPoint]
+            // Downsample using LTTB - increased point counts for smoother curves
+            let targetPoints: Int
+            switch range {
+            case "1D": targetPoints = 96   // was 48
+            case "7D": targetPoints = 84   // was 42
+            case "1M": targetPoints = 120  // was 60
+            case "1Y": targetPoints = 104  // was 52
+            default: targetPoints = 120    // was 60 ("All")
+            }
 
-            if allPoints.count > maxPoints {
-                let step = Double(allPoints.count) / Double(maxPoints)
-                var sampledPoints: [PriceDataPoint] = []
-                for i in 0..<maxPoints {
-                    let index = Int(Double(i) * step)
-                    if index < allPoints.count {
-                        sampledPoints.append(allPoints[index])
-                    }
-                }
-                if let last = allPoints.last {
-                    sampledPoints.append(last)
-                }
-                newChartData = sampledPoints
-            } else {
-                newChartData = allPoints
+            var newChartData = downsampleLTTB(allPoints, targetCount: targetPoints)
+
+            // Apply EMA smoothing if enabled for flowing curves
+            if chartSmoothingMode == .emaSmoothed {
+                newChartData = applyEMA(newChartData, alpha: 0.3)
             }
 
             if !newChartData.isEmpty {
@@ -274,6 +362,18 @@ class PriceService: ObservableObject {
         }
 
         isLoadingChart = false
+    }
+
+    /// Switch chart smoothing mode and regenerate all cached chart data
+    func setChartSmoothingMode(_ mode: ChartSmoothingMode) {
+        chartSmoothingMode = mode
+        chartDataCache.removeAll()  // Clear cache to regenerate with new mode
+        Task {
+            let ranges = ["7D", "1D", "1M", "1Y", "All"]
+            for range in ranges {
+                await fetchChartData(range: range)
+            }
+        }
     }
 
     var priceRange: (min: Double, max: Double)? {

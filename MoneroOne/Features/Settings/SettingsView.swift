@@ -27,18 +27,12 @@ struct SettingsView: View {
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceAlertService: PriceAlertService
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
-    @AppStorage("syncMode") private var syncMode: String = SyncMode.privacy.rawValue
     @State private var showBackup = false
     @State private var showSecurity = false
-    @State private var showSyncMode = false
     @State private var showDeleteConfirmation = false
     @State private var showResetSyncConfirmation = false
     @State private var showNetworkChangeAlert = false
     @AppStorage("isTestnet") private var isTestnet = false
-
-    private var currentSyncMode: String {
-        SyncMode(rawValue: syncMode)?.rawValue ?? "Lite Mode"
-    }
 
     private var syncStatusText: String {
         switch walletManager.syncState {

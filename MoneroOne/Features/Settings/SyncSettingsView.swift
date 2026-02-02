@@ -1,13 +1,11 @@
 import SwiftUI
 import CoreLocation
+import MoneroKit
 
 struct SyncSettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @ObservedObject var syncManager = BackgroundSyncManager.shared
-    @AppStorage("syncMode") private var syncMode: String = SyncMode.privacy.rawValue
 
-    @State private var showingModeConfirmation = false
-    @State private var pendingMode: SyncMode?
     @State private var showingRestoreHeightSheet = false
     @State private var showingBackgroundExplanation = false
 
@@ -46,89 +44,6 @@ struct SyncSettingsView: View {
                 }
             } header: {
                 Text("Sync Status")
-            }
-
-            // Sync Mode Selection
-            Section {
-                // Lite Mode - Coming Soon (disabled)
-                HStack(spacing: 12) {
-                    Image(systemName: "bolt.fill")
-                        .font(.title3)
-                        .foregroundColor(.gray.opacity(0.4))
-                        .frame(width: 32)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text("Lite Mode")
-                                .font(.body)
-                                .foregroundColor(.gray)
-
-                            Text("Coming Soon")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.15))
-                                .foregroundColor(.orange)
-                                .cornerRadius(4)
-                        }
-
-                        Text("Fast sync using Light Wallet Server. Your view key is shared with the server.")
-                            .font(.caption)
-                            .foregroundColor(.gray.opacity(0.6))
-                    }
-
-                    Spacer()
-                }
-                .listRowBackground(Color(.systemGray6))
-
-                // Privacy Mode - selectable
-                Button {
-                    selectMode(.privacy)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "shield.fill")
-                            .font(.title3)
-                            .foregroundColor(.blue)
-                            .frame(width: 32)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text("Privacy Mode")
-                                    .font(.body)
-                                    .foregroundColor(.primary)
-
-                                if walletManager.currentSyncMode == .privacy {
-                                    Text("Active")
-                                        .font(.caption2)
-                                        .fontWeight(.medium)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.green.opacity(0.2))
-                                        .foregroundColor(.green)
-                                        .cornerRadius(4)
-                                }
-                            }
-
-                            Text("Full privacy sync using remote node. Slower but your keys stay local.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        if syncMode == SyncMode.privacy.rawValue {
-                            Image(systemName: "checkmark")
-                                .foregroundColor(.orange)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            } header: {
-                Text("Sync Mode")
-            } footer: {
-                Text("Privacy Mode syncs directly with a remote node. Your keys never leave your device.")
             }
 
             // Restore Height
@@ -237,41 +152,24 @@ struct SyncSettingsView: View {
                 Text("Keeps wallet synced when app is in background. Uses location permission as a workaround - your location is never stored or transmitted.")
             }
 
-            // Node Settings (for privacy mode)
-            if syncMode == SyncMode.privacy.rawValue {
-                Section {
-                    NavigationLink {
-                        NodeSettingsView()
-                    } label: {
-                        Label {
-                            Text("Remote Node")
-                        } icon: {
-                            Image(systemName: "server.rack")
-                                .foregroundColor(.purple)
-                        }
+            // Node Settings
+            Section {
+                NavigationLink {
+                    NodeSettingsView()
+                } label: {
+                    Label {
+                        Text("Remote Node")
+                    } icon: {
+                        Image(systemName: "server.rack")
+                            .foregroundColor(.purple)
                     }
-                } header: {
-                    Text("Connection")
                 }
+            } header: {
+                Text("Connection")
             }
         }
         .navigationTitle("Sync Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Switch Sync Mode?", isPresented: $showingModeConfirmation) {
-            Button("Cancel", role: .cancel) {
-                pendingMode = nil
-            }
-            Button("Switch") {
-                if let mode = pendingMode {
-                    applyMode(mode)
-                }
-                pendingMode = nil
-            }
-        } message: {
-            if let mode = pendingMode {
-                Text("Switch to \(mode.rawValue)? Your wallet will restart syncing.")
-            }
-        }
         .sheet(isPresented: $showingRestoreHeightSheet) {
             RestoreHeightSheet()
         }
@@ -348,24 +246,6 @@ struct SyncSettingsView: View {
 
     // MARK: - Actions
 
-    private func selectMode(_ mode: SyncMode) {
-        guard mode.rawValue != syncMode else { return }
-
-        if walletManager.isUnlocked {
-            pendingMode = mode
-            showingModeConfirmation = true
-        } else {
-            applyMode(mode)
-        }
-    }
-
-    private func applyMode(_ mode: SyncMode) {
-        syncMode = mode.rawValue
-        if walletManager.isUnlocked {
-            walletManager.switchSyncMode(to: mode)
-        }
-    }
-
     private func openSettings() {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
@@ -391,11 +271,8 @@ struct RestoreHeightSheet: View {
     @State private var selectedDate = Date()
     @State private var isUpdating = false
     @State private var showConfirmation = false
-    @State private var chainHeight: UInt64 = 0
-    @State private var isLoadingHeight = true
 
     // Monero mainnet genesis: approximately April 2014
-    // For testnet, we'll cap the calculated height to chain height
     private static let genesisDate = Date(timeIntervalSince1970: 1397818193)
 
     var body: some View {
@@ -419,31 +296,12 @@ struct RestoreHeightSheet: View {
                     HStack {
                         Text("Estimated Block Height")
                         Spacer()
-                        if isLoadingHeight {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        } else {
-                            Text(formatHeight(effectiveHeight))
-                                .foregroundColor(.secondary)
-                                .monospacedDigit()
-                        }
-                    }
-
-                    if !isLoadingHeight && chainHeight > 0 {
-                        HStack {
-                            Text("Current Chain Height")
-                            Spacer()
-                            Text(formatHeight(chainHeight))
-                                .foregroundColor(.secondary)
-                                .monospacedDigit()
-                        }
+                        Text(formatHeight(estimatedHeight))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
                     }
                 } footer: {
-                    if walletManager.isTestnet {
-                        Text("Testnet block heights differ from mainnet. Using actual chain height when needed.")
-                    } else {
-                        Text("Monero produces ~1 block every 2 minutes.")
-                    }
+                    Text("Monero produces ~1 block every 2 minutes.")
                 }
 
                 Section {
@@ -461,9 +319,9 @@ struct RestoreHeightSheet: View {
                             Spacer()
                         }
                     }
-                    .disabled(isUpdating || isLoadingHeight)
+                    .disabled(isUpdating)
                 } footer: {
-                    Text("This will re-register your wallet with the server and restart scanning from the selected date.")
+                    Text("This will restart scanning from the selected date.")
                 }
             }
             .navigationTitle("Restore Height")
@@ -475,39 +333,20 @@ struct RestoreHeightSheet: View {
                     }
                 }
             }
-            .task {
-                await fetchChainHeight()
-            }
             .alert("Update Restore Height?", isPresented: $showConfirmation) {
                 Button("Cancel", role: .cancel) { }
                 Button("Update") {
                     updateRestoreHeight()
                 }
             } message: {
-                Text("This will restart scanning from block \(formatHeight(effectiveHeight)). Any transactions before this won't be found.")
+                Text("This will restart scanning from block \(formatHeight(estimatedHeight)). Any transactions before this won't be found.")
             }
         }
     }
 
-    /// The effective height to use - calculated relative to current chain height
-    private var effectiveHeight: UInt64 {
-        guard chainHeight > 0 else { return 0 }
-
-        // Calculate how many seconds ago the selected date is
-        let secondsAgo = Date().timeIntervalSince(selectedDate)
-        guard secondsAgo > 0 else {
-            // Selected date is today or future - use current chain height
-            return chainHeight
-        }
-
-        // Convert to blocks (~2 min per block = 120 seconds)
-        let blocksAgo = UInt64(secondsAgo / 120)
-
-        // Subtract from current chain height
-        if blocksAgo >= chainHeight {
-            return 0 // Would go negative, start from beginning
-        }
-        return chainHeight - blocksAgo
+    /// Estimate block height from date using MoneroKit's RestoreHeight utility
+    private var estimatedHeight: UInt64 {
+        UInt64(RestoreHeight.getHeight(date: selectedDate))
     }
 
     private func formatHeight(_ height: UInt64) -> String {
@@ -516,38 +355,14 @@ struct RestoreHeightSheet: View {
         return formatter.string(from: NSNumber(value: height)) ?? "\(height)"
     }
 
-    private func fetchChainHeight() async {
-        // Only fetch from LWS in lite mode
-        guard walletManager.currentSyncMode == .lite else {
-            await MainActor.run {
-                isLoadingHeight = false
-            }
-            return
-        }
-
-        let client = LiteWalletServerClient(isTestnet: walletManager.isTestnet)
-        do {
-            let response = try await client.getBlockchainHeight()
-            await MainActor.run {
-                chainHeight = response.height
-                isLoadingHeight = false
-            }
-        } catch {
-            await MainActor.run {
-                isLoadingHeight = false
-            }
-        }
-    }
-
     private func updateRestoreHeight() {
         isUpdating = true
-        let newHeight = effectiveHeight
+        let newHeight = estimatedHeight
 
         // Save to UserDefaults (network-specific)
         let networkPrefix = walletManager.isTestnet ? "testnet_" : "mainnet_"
         UserDefaults.standard.set(Int(newHeight), forKey: "\(networkPrefix)restoreHeight")
 
-        // Re-register with server if in lite mode
         Task {
             // Small delay to show loading state
             try? await Task.sleep(nanoseconds: 500_000_000)

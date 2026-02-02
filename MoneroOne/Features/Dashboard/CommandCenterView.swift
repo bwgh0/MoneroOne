@@ -58,6 +58,7 @@ struct CommandCenterView: View {
                     balance: walletManager.balance,
                     unlockedBalance: walletManager.unlockedBalance,
                     syncState: walletManager.syncState,
+                    connectionStage: walletManager.connectionStage,
                     priceService: priceService,
                     onPriceChangeTap: nil,
                     onCardTap: nil
@@ -103,6 +104,7 @@ struct CommandCenterView: View {
                     balance: walletManager.balance,
                     unlockedBalance: walletManager.unlockedBalance,
                     syncState: walletManager.syncState,
+                    connectionStage: walletManager.connectionStage,
                     priceService: priceService,
                     onPriceChangeTap: nil,
                     onCardTap: nil

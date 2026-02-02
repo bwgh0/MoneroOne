@@ -237,6 +237,10 @@ struct NodeSettingsView: View {
         nodeManager.addCustomNode(name: customNodeName, url: customNodeURL)
         customNodeName = ""
         customNodeURL = ""
+        // Measure latency for the newly added node
+        Task {
+            await nodeManager.refreshStats()
+        }
     }
 
     private func deleteCustomNode(at offsets: IndexSet) {

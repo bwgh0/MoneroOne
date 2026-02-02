@@ -112,10 +112,4 @@ final class NodeManagerTests: XCTestCase {
         XCTAssertEqual(newManager.customNodes.count, 1, "Custom nodes should persist")
         XCTAssertEqual(newManager.customNodes[0].name, "Persistent")
     }
-
-    // MARK: - Connection Status Tests
-
-    func testInitialConnectionStatusIsUnknown() {
-        XCTAssertEqual(nodeManager.connectionStatus, .unknown, "Initial status should be unknown")
-    }
 }

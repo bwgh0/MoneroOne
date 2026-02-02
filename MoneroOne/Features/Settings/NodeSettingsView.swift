@@ -51,20 +51,6 @@ struct NodeSettingsView: View {
                 }
             }
 
-            Section {
-                Button {
-                    Task {
-                        await nodeManager.testConnection()
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "network")
-                        Text("Test Connection")
-                        Spacer()
-                        connectionStatusView
-                    }
-                }
-            }
         }
         .navigationTitle(nodeManager.isTestnet ? "Remote Node (Testnet)" : "Remote Node")
         .navigationBarTitleDisplayMode(.inline)
@@ -195,29 +181,6 @@ struct NodeSettingsView: View {
             return .red
         case .unknown:
             return .gray
-        }
-    }
-
-    @ViewBuilder
-    private var connectionStatusView: some View {
-        switch nodeManager.connectionStatus {
-        case .unknown:
-            EmptyView()
-        case .testing:
-            ProgressView()
-                .scaleEffect(0.8)
-        case .connected:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(.green)
-        case .failed(let error):
-            HStack(spacing: 4) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.red)
-                Text(error)
-                    .font(.caption2)
-                    .foregroundColor(.red)
-                    .lineLimit(1)
-            }
         }
     }
 

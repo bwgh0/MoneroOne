@@ -4,6 +4,82 @@ import CryptoKit
 import CommonCrypto
 
 class KeychainStorage {
+    // MARK: - Migration
+
+    private static let migrationKey = "one.monero.keychain.migratedToAfterFirstUnlock"
+
+    /// Migrate existing keychain items to use kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    /// This fixes the issue where wallet data appears lost after device reboot or extended lock
+    func migrateKeychainAccessibilityIfNeeded() {
+        // Only run migration once
+        guard !UserDefaults.standard.bool(forKey: Self.migrationKey) else { return }
+
+        // Migrate all network variants
+        migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.seed")
+        migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.pinhash")
+        migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.salt")
+        migrateKeychainItem(account: "one.monero.MoneroOne.testnet.seed")
+        migrateKeychainItem(account: "one.monero.MoneroOne.testnet.pinhash")
+        migrateKeychainItem(account: "one.monero.MoneroOne.testnet.salt")
+
+        // Biometric PIN uses access control, handle separately
+        migrateBiometricPinIfNeeded()
+
+        // Mark migration as complete
+        UserDefaults.standard.set(true, forKey: Self.migrationKey)
+    }
+
+    private func migrateKeychainItem(account: String) {
+        // Read existing data
+        let readQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(readQuery as CFDictionary, &result)
+
+        guard status == errSecSuccess, let data = result as? Data else {
+            return // Item doesn't exist or can't be read
+        }
+
+        // Delete the old item
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        // Re-add with new accessibility
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    private func migrateBiometricPinIfNeeded() {
+        // Check if biometric PIN exists (without triggering auth)
+        let checkQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: biometricPinKey,
+            kSecReturnData as String: false,
+            kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail
+        ]
+        let checkStatus = SecItemCopyMatching(checkQuery as CFDictionary, nil)
+
+        // If it exists, we can't migrate it without user authentication
+        // The new accessibility will be applied when the user re-enables biometrics
+        // or on next save. For now, just skip biometric migration.
+        if checkStatus == errSecSuccess || checkStatus == errSecInteractionNotAllowed {
+            // Item exists - will be updated on next biometric setup
+            return
+        }
+    }
+
     // MARK: - Network-Prefixed Keychain Keys
     // CRITICAL: Each network (mainnet/testnet) must have separate seed storage
     // to prevent users from backing up the wrong seed after switching networks
@@ -109,7 +185,7 @@ class KeychainStorage {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: seedKey,
             kSecValueData as String: encryptedSeed,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
         var status = SecItemAdd(seedQuery as CFDictionary, nil)
@@ -122,7 +198,7 @@ class KeychainStorage {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: pinHashKey,
             kSecValueData as String: pinHash,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
         status = SecItemAdd(pinQuery as CFDictionary, nil)
@@ -135,7 +211,7 @@ class KeychainStorage {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: saltKey,
             kSecValueData as String: salt,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
         status = SecItemAdd(saltQuery as CFDictionary, nil)
@@ -241,7 +317,7 @@ class KeychainStorage {
         var error: Unmanaged<CFError>?
         guard let accessControl = SecAccessControlCreateWithFlags(
             kCFAllocatorDefault,
-            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             .biometryCurrentSet,
             &error
         ) else {

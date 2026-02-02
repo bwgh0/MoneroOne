@@ -272,13 +272,13 @@ private struct PulsingModifier: ViewModifier {
         content
             .scaleEffect(isPulsing ? 1.2 : 0.9)
             .opacity(isPulsing ? 1.0 : 0.7)
-            .animation(
-                .easeInOut(duration: 0.8)
-                .repeatForever(autoreverses: true),
-                value: isPulsing
-            )
             .onAppear {
-                isPulsing = true
+                withAnimation(
+                    .easeInOut(duration: 0.8)
+                    .repeatForever(autoreverses: true)
+                ) {
+                    isPulsing = true
+                }
             }
     }
 }

@@ -15,6 +15,10 @@ class MoneroWallet: ObservableObject {
     @Published var transactions: [MoneroTransaction] = []
     @Published var subaddresses: [MoneroKit.SubAddress] = []
 
+    // MARK: - Connection Progress Tracking
+    @Published var daemonHeight: UInt64 = 0
+    @Published var walletHeight: UInt64 = 0
+
     /// Primary address (index 0) - from storage (pre-computed)
     var primaryAddress: String {
         kit?.primaryAddress ?? ""
@@ -209,6 +213,12 @@ class MoneroWallet: ObservableObject {
             syncState = .error(friendlyErrorMessage(for: error))
         case .idle:
             syncState = .idle
+        }
+
+        // Update block heights for connection progress tracking
+        if let heights = kit?.blockHeights {
+            walletHeight = heights.walletHeight
+            daemonHeight = heights.daemonHeight
         }
     }
 

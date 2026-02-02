@@ -25,6 +25,17 @@ class WalletManager: ObservableObject {
     @Published var prefillSendAmount: String?
     @Published var shouldShowSendView: Bool = false
 
+    // Connection progress tracking
+    @Published var connectionStage: ConnectionStage = .noNetwork
+    @Published var daemonHeight: UInt64 = 0
+    @Published var walletHeight: UInt64 = 0
+    @Published var restoreHeight: UInt64 = 0
+    @Published var connectionElapsedSeconds: Int = 0
+    private var nodeReachable: Bool? = nil  // nil = not tested, true/false = result
+    private var networkMonitorCancellable: AnyCancellable?
+    private var connectionTimer: Timer?
+    private var connectionStartTime: Date?
+
     enum SyncState: Equatable {
         case idle
         case connecting
@@ -32,6 +43,7 @@ class WalletManager: ObservableObject {
         case synced
         case error(String)
     }
+
 
     /// Seed type for wallet creation/restoration
     enum SeedType: String, CaseIterable {
@@ -206,12 +218,12 @@ class WalletManager: ObservableObject {
 
         // Start privacy mode wallet
         let wallet = MoneroWallet()
-        let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        let walletRestoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
         let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
 
         do {
-            try wallet.create(seed: mnemonic, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
+            try wallet.create(seed: mnemonic, restoreHeight: walletRestoreHeight, resetSuffix: resetSuffix, networkType: networkType)
         } catch {
             throw WalletError.invalidMnemonic
         }
@@ -228,6 +240,10 @@ class WalletManager: ObservableObject {
 
         // Load user-created subaddress indices for filtering in UI
         loadUserCreatedSubaddresses()
+
+        // Start connection progress tracking
+        restoreHeight = walletRestoreHeight
+        startConnectionTracking()
 
         isUnlocked = true
     }
@@ -269,10 +285,32 @@ class WalletManager: ObservableObject {
                 }
                 self.syncState = newState
 
+                // Update connection stage based on sync state
+                self.updateConnectionStage()
+
                 // Update widget when sync completes
                 if case .synced = newState {
                     self.saveWidgetDataIfEnabled()
                 }
+            }
+            .store(in: &cancellables)
+
+        // Track block heights for connection progress
+        wallet.$daemonHeight
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] height in
+                guard let self = self else { return }
+                self.daemonHeight = height
+                self.updateConnectionStage()
+            }
+            .store(in: &cancellables)
+
+        wallet.$walletHeight
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] height in
+                guard let self = self else { return }
+                self.walletHeight = height
+                self.updateConnectionStage()
             }
             .store(in: &cancellables)
 
@@ -332,6 +370,119 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
+
+        // Reset connection progress tracking
+        connectionStage = .noNetwork
+        daemonHeight = 0
+        walletHeight = 0
+        nodeReachable = nil
+        networkMonitorCancellable?.cancel()
+        networkMonitorCancellable = nil
+    }
+
+    // MARK: - Connection Stage
+
+    /// Update connection stage based on REAL detection, not timers
+    /// Called when sync state, heights, or network status change
+    private func updateConnectionStage() {
+        // Stage 6: Synced
+        if case .synced = syncState {
+            connectionStage = .synced
+            return
+        }
+
+        // Stage 5: Syncing
+        if case .syncing = syncState {
+            connectionStage = .syncing
+            return
+        }
+
+        // Stage 4: Got daemon height, loading blocks - show wallet height climbing
+        if daemonHeight > 0 {
+            connectionStage = .loadingBlocks(wallet: walletHeight, daemon: daemonHeight)
+            return
+        }
+
+        // Stage 3: Node reachable but daemon not yet responding
+        if nodeReachable == true {
+            connectionStage = .connecting
+            return
+        }
+
+        // Stage 2: Node not reachable
+        if nodeReachable == false {
+            connectionStage = .reachingNode
+            return
+        }
+
+        // Stage 1: Network check
+        if !NetworkMonitor.shared.isConnected {
+            connectionStage = .noNetwork
+            return
+        }
+
+        // Default: trying to reach node
+        connectionStage = .reachingNode
+        testNodeReachability()
+    }
+
+    /// Start connection stage tracking when wallet unlocks
+    private func startConnectionTracking() {
+        // Load restore height for stage calculation
+        restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+
+        // Reset node reachability
+        nodeReachable = nil
+
+        // Subscribe to network connectivity changes
+        networkMonitorCancellable = NetworkMonitor.shared.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isConnected in
+                guard let self = self else { return }
+                if !isConnected {
+                    self.nodeReachable = nil
+                }
+                self.updateConnectionStage()
+            }
+
+        // Initial stage update
+        updateConnectionStage()
+    }
+
+    /// Test if the node is reachable via HTTP GET to /get_info
+    private func testNodeReachability() {
+        // Get node URL from UserDefaults
+        let nodeURLString = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL")
+            ?? (isTestnet ? "http://testnet.xmr-tw.org:28081" : "https://xmr-node.cakewallet.com:18081")
+
+        guard let baseURL = URL(string: nodeURLString) else {
+            nodeReachable = false
+            updateConnectionStage()
+            return
+        }
+
+        let infoURL = baseURL.appendingPathComponent("get_info")
+        var request = URLRequest(url: infoURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+
+                if let httpResponse = response as? HTTPURLResponse,
+                   (200...299).contains(httpResponse.statusCode),
+                   let data = data,
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   json["height"] != nil || json["status"] != nil {
+                    self.nodeReachable = true
+                } else {
+                    self.nodeReachable = false
+                }
+                self.updateConnectionStage()
+            }
+        }.resume()
     }
 
     // MARK: - Widget Data
@@ -670,5 +821,51 @@ enum WalletError: LocalizedError {
         case .biometricFailed: return "Biometric authentication failed"
         case .seedMismatch: return "Seed phrase doesn't match current wallet"
         }
+    }
+}
+
+// MARK: - Connection Stages
+
+/// Connection stages for progressive UI feedback with REAL detection
+/// Each stage represents a checkpoint in the connection process
+enum ConnectionStage: Equatable {
+    case noNetwork              // Stage 1: No network connectivity
+    case reachingNode           // Stage 2: Testing node reachability
+    case connecting             // Stage 3: Node reachable, waiting for daemon
+    case loadingBlocks(wallet: UInt64, daemon: UInt64)  // Stage 4: Loading blocks
+    case syncing                // Stage 5: Scanning blocks for transactions
+    case synced                 // Stage 6: Fully synced
+
+    var displayText: String {
+        switch self {
+        case .noNetwork: return "No network"
+        case .reachingNode: return "Reaching node..."
+        case .connecting: return "Connecting..."
+        case .loadingBlocks(let wallet, let daemon):
+            return "Loading... \(Self.formatHeight(wallet)) / \(Self.formatHeight(daemon))"
+        case .syncing: return "Scanning..."
+        case .synced: return "Synced"
+        }
+    }
+
+    /// Stage index for the progress indicator (0-5)
+    var stageIndex: Int {
+        switch self {
+        case .noNetwork: return 0
+        case .reachingNode: return 1
+        case .connecting: return 2
+        case .loadingBlocks: return 3
+        case .syncing: return 4
+        case .synced: return 5
+        }
+    }
+
+    private static func formatHeight(_ height: UInt64) -> String {
+        if height >= 1_000_000 {
+            return String(format: "%.2fM", Double(height) / 1_000_000)
+        } else if height >= 1_000 {
+            return String(format: "%.1fK", Double(height) / 1_000)
+        }
+        return "\(height)"
     }
 }

@@ -434,8 +434,8 @@ class NodeManager: ObservableObject {
                     // Accept all certificates for latency testing
                     complete(true)
                 }, DispatchQueue.global())
-
-                parameters = NWParameters(tls: tlsOptions)
+                // Explicitly include TCP options for proper connection setup
+                parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
             } else {
                 parameters = NWParameters.tcp
             }

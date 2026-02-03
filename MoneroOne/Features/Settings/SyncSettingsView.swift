@@ -278,6 +278,30 @@ struct RestoreHeightSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                // Current setting section
+                Section {
+                    HStack {
+                        Text("Block Height")
+                        Spacer()
+                        Text(formatHeight(currentRestoreHeight))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    HStack {
+                        Text("Estimated Date")
+                        Spacer()
+                        if let date = estimatedDate(for: currentRestoreHeight) {
+                            Text(date, style: .date)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Genesis")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Current Wallet Birthday")
+                }
+
                 Section {
                     DatePicker(
                         "Wallet Creation Date",
@@ -355,7 +379,18 @@ struct RestoreHeightSheet: View {
             } message: {
                 Text("This will restart scanning from block \(formatHeight(estimatedHeight)). Any transactions before this won't be found.")
             }
+            .onAppear {
+                // Initialize date picker to current restore height's estimated date
+                if let date = estimatedDate(for: currentRestoreHeight) {
+                    selectedDate = date
+                }
+            }
         }
+    }
+
+    /// Current wallet restore height setting
+    private var currentRestoreHeight: UInt64 {
+        walletManager.restoreHeight
     }
 
     /// Current blockchain height (from wallet or estimated from today's date)
@@ -385,6 +420,29 @@ struct RestoreHeightSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: height)) ?? "\(height)"
+    }
+
+    /// Estimate date from block height using RestoreHeight lookup table (binary search)
+    private func estimatedDate(for height: UInt64) -> Date? {
+        guard height > 0 else { return nil }
+
+        // Binary search: find date where RestoreHeight.getHeight(date) is closest to height
+        var low = Self.genesisDate
+        var high = Date()
+
+        // 20 iterations gives sub-day precision
+        for _ in 0..<20 {
+            let mid = Date(timeIntervalSince1970: (low.timeIntervalSince1970 + high.timeIntervalSince1970) / 2)
+            let midHeight = UInt64(max(0, RestoreHeight.getHeight(date: mid)))
+
+            if midHeight < height {
+                low = mid
+            } else {
+                high = mid
+            }
+        }
+
+        return low
     }
 
     private func updateRestoreHeight() {

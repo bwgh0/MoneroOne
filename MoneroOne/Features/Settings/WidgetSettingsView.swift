@@ -10,8 +10,8 @@ struct WidgetSettingsView: View {
             Section {
                 Toggle(isOn: $widgetEnabled) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Enable Widget")
-                        Text("Show balance on home screen")
+                        Text("Balance & Transactions")
+                        Text("Allow widgets to display wallet info")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -33,7 +33,7 @@ struct WidgetSettingsView: View {
                     }
                 }
             } footer: {
-                Text("Add the MoneroOne widget to your home screen to see your balance at a glance.")
+                Text("When enabled, your balance and recent transactions will appear in widgets. The Price widget works without this setting.")
             }
         }
         .navigationTitle("Widget")

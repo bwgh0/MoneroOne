@@ -35,6 +35,19 @@ class PriceService: ObservableObject {
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 60 // 1 minute
 
+    // Retry configuration
+    private let maxRetries = 3
+    private let initialRetryDelay: TimeInterval = 2
+    private let requestTimeout: TimeInterval = 15
+
+    // URLSession with explicit timeouts
+    private lazy var priceSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
+
     // Optional alert service for triggering price alerts
     weak var priceAlertService: PriceAlertService?
 
@@ -77,6 +90,28 @@ class PriceService: ObservableObject {
         Self.currencySymbols[selectedCurrency] ?? "$"
     }
 
+    /// Execute an async operation with exponential backoff retry
+    private func fetchWithRetry<T>(
+        retries: Int = 3,
+        operation: @escaping () async throws -> T
+    ) async throws -> T {
+        var lastError: Error?
+        var delay = initialRetryDelay
+
+        for attempt in 1...retries {
+            do {
+                return try await operation()
+            } catch {
+                lastError = error
+                if attempt < retries {
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    delay *= 2 // exponential backoff
+                }
+            }
+        }
+        throw lastError ?? URLError(.unknown)
+    }
+
     func startAutoRefresh() {
         Task {
             await fetchPrice()
@@ -98,63 +133,68 @@ class PriceService: ObservableObject {
         isLoading = true
         error = nil
 
+        do {
+            try await fetchWithRetry(retries: maxRetries) {
+                try await self.performPriceFetch()
+            }
+        } catch {
+            self.error = "Price unavailable"
+            print("Price fetch error after retries: \(error)")
+        }
+
+        isLoading = false
+    }
+
+    /// Performs the actual price fetch - called by fetchWithRetry
+    private func performPriceFetch() async throws {
         // Fetch both selected currency and USD (for chart conversion)
         let currencies = selectedCurrency == "usd" ? "usd" : "\(selectedCurrency),usd"
         let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=\(currencies)&include_24hr_change=true"
 
         guard let url = URL(string: urlString) else {
-            error = "Invalid URL"
-            isLoading = false
-            return
+            throw URLError(.badURL)
         }
 
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await priceSession.data(from: url)
 
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
-                error = "Server error"
-                isLoading = false
-                return
-            }
-
-            let result = try JSONDecoder().decode(CoinGeckoResponse.self, from: data)
-
-            if let moneroData = result.monero {
-                xmrPrice = moneroData[selectedCurrency]
-                priceChange24h = moneroData["\(selectedCurrency)_24h_change"]
-                lastUpdated = Date()
-
-                // Calculate USD to selected currency conversion rate for chart data
-                if selectedCurrency == "usd" {
-                    usdToSelectedRate = 1.0
-                } else if let selectedPrice = moneroData[selectedCurrency],
-                          let usdPrice = moneroData["usd"],
-                          usdPrice > 0 {
-                    // Rate = selectedCurrency / USD (e.g., GBP/USD)
-                    usdToSelectedRate = selectedPrice / usdPrice
-                }
-
-                // Check price alerts
-                if let price = xmrPrice, let alertService = priceAlertService {
-                    let triggered = alertService.checkAlerts(
-                        currentPrice: price,
-                        currency: selectedCurrency
-                    )
-                    for alert in triggered {
-                        PriceAlertNotificationManager.shared.sendAlert(alert, currentPrice: price)
-                    }
-                }
-
-                // Save price data for widget
-                savePriceWidgetData()
-            }
-        } catch {
-            self.error = "Failed to fetch price"
-            print("Price fetch error: \(error)")
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
         }
 
-        isLoading = false
+        let result = try JSONDecoder().decode(CoinGeckoResponse.self, from: data)
+
+        if let moneroData = result.monero {
+            xmrPrice = moneroData[selectedCurrency]
+            priceChange24h = moneroData["\(selectedCurrency)_24h_change"]
+            lastUpdated = Date()
+
+            // Calculate USD to selected currency conversion rate for chart data
+            if selectedCurrency == "usd" {
+                usdToSelectedRate = 1.0
+            } else if let selectedPrice = moneroData[selectedCurrency],
+                      let usdPrice = moneroData["usd"],
+                      usdPrice > 0 {
+                // Rate = selectedCurrency / USD (e.g., GBP/USD)
+                usdToSelectedRate = selectedPrice / usdPrice
+            }
+
+            // Check price alerts
+            if let price = xmrPrice, let alertService = priceAlertService {
+                let triggered = alertService.checkAlerts(
+                    currentPrice: price,
+                    currency: selectedCurrency
+                )
+                for alert in triggered {
+                    PriceAlertNotificationManager.shared.sendAlert(alert, currentPrice: price)
+                }
+            }
+
+            // Save price data for widget
+            savePriceWidgetData()
+        } else {
+            throw URLError(.cannotParseResponse)
+        }
     }
 
     func formatFiatValue(_ xmrAmount: Decimal) -> String? {
@@ -396,10 +436,10 @@ class PriceService: ObservableObject {
         widgetData.priceCurrency = selectedCurrency
         widgetData.priceLastUpdated = lastUpdated
 
-        // Downsample chart data for widget sparkline
-        if !chartData.isEmpty {
-            // Convert chart data to widget format (just Y values, applying currency conversion)
-            let prices = chartData.map { $0.price * usdToSelectedRate }
+        // Always use 24h (1D) chart data for widget sparkline
+        if let dayData = chartDataCache["1D"], !dayData.isEmpty {
+            // Convert 24h chart data to widget format (just Y values, applying currency conversion)
+            let prices = dayData.map { $0.price * usdToSelectedRate }
 
             // Downsample to 48 points for smoother chart appearance
             let targetPoints = 48

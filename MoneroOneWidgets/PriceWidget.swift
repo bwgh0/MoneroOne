@@ -114,39 +114,39 @@ struct PriceWidgetView: View {
     // MARK: - Small View (2x2) - "Price Glance"
 
     private var smallView: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Header
-            HStack(spacing: 6) {
-                Image("MoneroSymbol")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 22, height: 22)
-                    .clipShape(Circle())
-                    .scaleEffect(1.15)
-                    .clipShape(Circle())
+        VStack(alignment: .leading, spacing: 0) {
+            // Logo
+            Image("MoneroSymbol")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 36, height: 36)
+                .clipShape(Circle())
+                .scaleEffect(1.15)
+                .clipShape(Circle())
 
-                Text("Monero")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
-
-                Spacer()
-            }
+            // Name
+            Text("Monero")
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(.secondary)
+                .padding(.top, 6)
 
             Spacer()
 
-            // Current price (large, monospace)
+            // Current price (large)
             if let price = entry.data.currentPrice {
                 Text(formatPrice(price))
-                    .font(.system(.title2, design: .monospaced).bold())
-                    .minimumScaleFactor(0.5)
+                    .font(.system(.title2, design: .default).bold())
+                    .minimumScaleFactor(0.6)
                     .lineLimit(1)
             }
 
             // 24h change badge
             if let change = entry.data.priceChange24h {
                 priceChangeBadge(change)
+                    .padding(.top, 6)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .widgetURL(URL(string: "moneroone://price"))
     }
 

@@ -46,6 +46,22 @@ struct SyncSettingsView: View {
                 Text("Sync Status")
             }
 
+            // Node Settings
+            Section {
+                NavigationLink {
+                    NodeSettingsView()
+                } label: {
+                    Label {
+                        Text("Remote Node")
+                    } icon: {
+                        Image(systemName: "server.rack")
+                            .foregroundColor(.purple)
+                    }
+                }
+            } header: {
+                Text("Connection")
+            }
+
             // Restore Height
             Section {
                 Button {
@@ -150,22 +166,6 @@ struct SyncSettingsView: View {
                 Text("Background")
             } footer: {
                 Text("Keeps wallet synced when app is in background. Uses location permission as a workaround - your location is never stored or transmitted.")
-            }
-
-            // Node Settings
-            Section {
-                NavigationLink {
-                    NodeSettingsView()
-                } label: {
-                    Label {
-                        Text("Remote Node")
-                    } icon: {
-                        Image(systemName: "server.rack")
-                            .foregroundColor(.purple)
-                    }
-                }
-            } header: {
-                Text("Connection")
             }
         }
         .navigationTitle("Sync Settings")
@@ -278,6 +278,30 @@ struct RestoreHeightSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                // Current setting section
+                Section {
+                    HStack {
+                        Text("Block Height")
+                        Spacer()
+                        Text(formatHeight(currentRestoreHeight))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    HStack {
+                        Text("Estimated Date")
+                        Spacer()
+                        if let date = estimatedDate(for: currentRestoreHeight) {
+                            Text(date, style: .date)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Genesis")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Current Wallet Birthday")
+                }
+
                 Section {
                     DatePicker(
                         "Wallet Creation Date",
@@ -294,9 +318,23 @@ struct RestoreHeightSheet: View {
 
                 Section {
                     HStack {
-                        Text("Estimated Block Height")
+                        Text("Current Block Height")
+                        Spacer()
+                        Text(formatHeight(currentHeight))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    HStack {
+                        Text("Restore From Block")
                         Spacer()
                         Text(formatHeight(estimatedHeight))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    HStack {
+                        Text("Blocks to Scan")
+                        Spacer()
+                        Text(formatHeight(blocksToScan))
                             .foregroundColor(.secondary)
                             .monospacedDigit()
                     }
@@ -341,18 +379,70 @@ struct RestoreHeightSheet: View {
             } message: {
                 Text("This will restart scanning from block \(formatHeight(estimatedHeight)). Any transactions before this won't be found.")
             }
+            .onAppear {
+                // Initialize date picker to current restore height's estimated date
+                if let date = estimatedDate(for: currentRestoreHeight) {
+                    selectedDate = date
+                }
+            }
         }
+    }
+
+    /// Current wallet restore height setting
+    private var currentRestoreHeight: UInt64 {
+        walletManager.restoreHeight
+    }
+
+    /// Current blockchain height (from wallet or estimated from today's date)
+    private var currentHeight: UInt64 {
+        let daemonHeight = walletManager.daemonHeight
+        if daemonHeight > 0 {
+            return daemonHeight
+        }
+        // Fallback: estimate from today's date
+        return UInt64(max(0, RestoreHeight.getHeight(date: Date())))
     }
 
     /// Estimate block height from date using MoneroKit's RestoreHeight utility
     private var estimatedHeight: UInt64 {
-        UInt64(RestoreHeight.getHeight(date: selectedDate))
+        UInt64(max(0, RestoreHeight.getHeight(date: selectedDate)))
+    }
+
+    /// Number of blocks that will need to be scanned
+    private var blocksToScan: UInt64 {
+        if currentHeight > estimatedHeight {
+            return currentHeight - estimatedHeight
+        }
+        return 0
     }
 
     private func formatHeight(_ height: UInt64) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: height)) ?? "\(height)"
+    }
+
+    /// Estimate date from block height using RestoreHeight lookup table (binary search)
+    private func estimatedDate(for height: UInt64) -> Date? {
+        guard height > 0 else { return nil }
+
+        // Binary search: find date where RestoreHeight.getHeight(date) is closest to height
+        var low = Self.genesisDate
+        var high = Date()
+
+        // 20 iterations gives sub-day precision
+        for _ in 0..<20 {
+            let mid = Date(timeIntervalSince1970: (low.timeIntervalSince1970 + high.timeIntervalSince1970) / 2)
+            let midHeight = UInt64(max(0, RestoreHeight.getHeight(date: mid)))
+
+            if midHeight < height {
+                low = mid
+            } else {
+                high = mid
+            }
+        }
+
+        return low
     }
 
     private func updateRestoreHeight() {

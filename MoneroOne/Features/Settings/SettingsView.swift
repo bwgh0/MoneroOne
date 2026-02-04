@@ -153,11 +153,11 @@ struct SettingsView: View {
                     HStack {
                         SettingsRow(
                             icon: "info.circle",
-                            title: "Version",
+                            title: "Build",
                             color: .gray
                         )
                         Spacer()
-                        Text("1.0.0")
+                        Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")
                             .foregroundColor(.secondary)
                     }
 

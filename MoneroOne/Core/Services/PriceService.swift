@@ -289,10 +289,15 @@ class PriceService: ObservableObject {
         result.reserveCapacity(data.count)
         result.append(data[0])
 
-        for i in 1..<data.count {
+        // Smooth all points except the last one
+        for i in 1..<(data.count - 1) {
             let smoothedPrice = alpha * data[i].price + (1 - alpha) * result[i - 1].price
             result.append(PriceDataPoint(timestamp: data[i].timestamp, price: smoothedPrice))
         }
+
+        // Keep last point unchanged so chart endpoint matches current price
+        result.append(data[data.count - 1])
+
         return result
     }
 

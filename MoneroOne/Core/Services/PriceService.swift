@@ -162,7 +162,6 @@ class PriceService: ObservableObject {
             // a newer task is handling the fetch
             guard !Task.isCancelled else { return }
             self.error = "Price unavailable"
-            print("Price fetch error after retries: \(error)")
         }
 
         // Don't update loading state if this task was cancelled

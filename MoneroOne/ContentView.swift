@@ -2,10 +2,13 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @AppStorage("hasAcceptedDisclaimer") private var hasAcceptedDisclaimer = false
 
     var body: some View {
         Group {
-            if !walletManager.hasWallet {
+            if !hasAcceptedDisclaimer {
+                DisclaimerView(hasAcceptedDisclaimer: $hasAcceptedDisclaimer)
+            } else if !walletManager.hasWallet {
                 WelcomeView()
             } else if !walletManager.isUnlocked {
                 UnlockView()
@@ -13,6 +16,7 @@ struct ContentView: View {
                 MainTabView()
             }
         }
+        .animation(.easeInOut, value: hasAcceptedDisclaimer)
         .animation(.easeInOut, value: walletManager.hasWallet)
         .animation(.easeInOut, value: walletManager.isUnlocked)
     }

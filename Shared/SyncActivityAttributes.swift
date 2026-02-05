@@ -11,13 +11,15 @@ public struct SyncActivityAttributes: ActivityAttributes {
         public var isSynced: Bool
         public var isConnecting: Bool
         public var lastUpdated: Date
+        public var trustedLocationName: String?  // Name of current trusted zone (e.g., "Home")
 
-        public init(progress: Double, blocksRemaining: Int? = nil, isSynced: Bool, isConnecting: Bool = false, lastUpdated: Date) {
+        public init(progress: Double, blocksRemaining: Int? = nil, isSynced: Bool, isConnecting: Bool = false, lastUpdated: Date, trustedLocationName: String? = nil) {
             self.progress = progress
             self.blocksRemaining = blocksRemaining
             self.isSynced = isSynced
             self.isConnecting = isConnecting
             self.lastUpdated = lastUpdated
+            self.trustedLocationName = trustedLocationName
         }
     }
 

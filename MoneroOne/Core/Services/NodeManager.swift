@@ -208,7 +208,7 @@ class NodeManager: ObservableObject {
             uptimeCacheTime = Date()
             applyUptimeCache()
         } catch {
-            print("Failed to fetch uptime stats: \(error)")
+            // Silently fail - uptime stats are optional
         }
     }
 

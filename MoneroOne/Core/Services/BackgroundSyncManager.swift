@@ -3,7 +3,7 @@ import CoreLocation
 import Combine
 
 /// Uses location services to keep app alive for background sync
-/// Location data is NOT used or stored - only used to maintain background execution
+/// Optionally warns when syncing outside trusted locations (security feature)
 @MainActor
 class BackgroundSyncManager: NSObject, ObservableObject {
     static let shared = BackgroundSyncManager()
@@ -12,11 +12,15 @@ class BackgroundSyncManager: NSObject, ObservableObject {
     @Published var isSyncing: Bool = false
     @Published var lastSyncTime: Date?
     @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    @Published private(set) var currentTrustedLocationName: String?  // Name of current trusted zone (nil if outside)
 
     private var locationManager: CLLocationManager?
     private var statusCheckManager: CLLocationManager? // For checking status without starting updates
     private var walletManager: WalletManager?
     private let enabledKey = "backgroundSyncEnabled"
+
+    // Trusted locations manager
+    private let trustedLocationsManager = TrustedLocationsManager.shared
 
     // Timer-based polling for when stationary (location updates won't trigger)
     private var pollTimer: Timer?
@@ -99,10 +103,14 @@ class BackgroundSyncManager: NSObject, ObservableObject {
 
         isSyncing = true
 
+        // Check trusted location status and warn if needed
+        // This does NOT block sync - just warns the user
+        currentTrustedLocationName = trustedLocationsManager.checkAndWarnIfNeeded()
+
         Task {
             // 1. Start/reset Live Activity and show connecting
             if #available(iOS 16.2, *), isEnabled {
-                await SyncActivityManager.shared.startActivity()
+                await SyncActivityManager.shared.startActivity(locationName: currentTrustedLocationName)
                 // startActivity() already sets isConnecting: true
             }
 
@@ -114,7 +122,7 @@ class BackgroundSyncManager: NSObject, ObservableObject {
 
             // 4. Directly mark as synced (bypasses race conditions from Combine subscription)
             if #available(iOS 16.2, *), isEnabled {
-                SyncActivityManager.shared.markSynced()
+                SyncActivityManager.shared.markSynced(locationName: currentTrustedLocationName)
             }
 
             isSyncing = false
@@ -218,9 +226,12 @@ extension BackgroundSyncManager: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        // Location received - we don't care about the actual location
-        // This callback keeps our app alive - use it to sync!
+        // Location received - update trusted zone status and sync
         Task { @MainActor in
+            // Update trusted location status with current location
+            if let location = locations.last {
+                trustedLocationsManager.updateZoneStatus(for: location)
+            }
             performSync()
         }
     }

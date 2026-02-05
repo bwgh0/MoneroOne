@@ -142,6 +142,7 @@ jobs:
             --exclude='DerivedData' \
             --exclude='*.xcuserstate' \
             --exclude='xcuserdata' \
+            --exclude='public-repo' \
             ./ public-repo/
 
           # Commit and push

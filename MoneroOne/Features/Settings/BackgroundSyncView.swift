@@ -183,19 +183,29 @@ struct BackgroundSyncExplanationView: View {
                         Label("How It Works", systemImage: "gearshape.2")
                             .font(.headline)
 
-                        Text("iOS doesn't allow apps to run continuously in the background. However, apps that use location services can stay active.")
+                        Text("Background sync keeps your wallet up to date even when you're not using the app, so your balance is always current when you open it.")
 
-                        Text("By enabling background sync, we request location updates which keeps the app alive to sync your wallet.")
+                        Text("The system schedules sync tasks at optimal times based on your usage patterns and device state.")
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Trusted Locations", systemImage: "shield.checkered")
+                            .font(.headline)
+                            .foregroundColor(.green)
+
+                        Text("For security, you can set up trusted locations like your home or office. When background sync runs outside these zones, you'll be notified.")
+
+                        Text("This protects you from wallet activity on untrusted networks like public Wi-Fi or unknown locations.")
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Privacy", systemImage: "lock.shield")
                             .font(.headline)
-                            .foregroundColor(.green)
+                            .foregroundColor(.blue)
 
-                        Text("Your location is NEVER stored, transmitted, or used for anything.")
+                        Text("Your location data stays on your device. It's only used to check if you're in a trusted zone - never stored, logged, or transmitted anywhere.")
 
-                        Text("This is purely a technical workaround to enable background execution. The app is open source - you can verify this yourself.")
+                        Text("Monero One is open source. You can verify exactly how location is used in the code.")
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -203,19 +213,7 @@ struct BackgroundSyncExplanationView: View {
                             .font(.headline)
                             .foregroundColor(.orange)
 
-                        Text("We use low-accuracy location updates to minimize battery drain. You may notice slightly higher battery usage with this enabled.")
-                    }
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label("Open Source", systemImage: "chevron.left.forwardslash.chevron.right")
-                            .font(.headline)
-                            .foregroundColor(.blue)
-
-                        Text("Monero One is fully open source. Review the code at:")
-
-                        Text("github.com/user/MoneroOne")
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.secondary)
+                        Text("We use low-power location monitoring to minimize battery drain. You may notice slightly higher battery usage with background sync enabled.")
                     }
                 }
                 .padding()

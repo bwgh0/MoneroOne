@@ -99,7 +99,7 @@ struct MoneroOneApp: App {
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch {
-            print("Failed to schedule price check: \(error)")
+            logger.error("Failed to schedule price check: \(error.localizedDescription)")
         }
     }
 

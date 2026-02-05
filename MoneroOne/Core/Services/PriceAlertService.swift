@@ -111,7 +111,7 @@ class PriceAlertService: ObservableObject {
             let data = try JSONEncoder().encode(alerts)
             UserDefaults.standard.set(data, forKey: Self.storageKey)
         } catch {
-            print("Failed to save price alerts: \(error)")
+            // Encoding shouldn't fail for this simple type
         }
     }
 
@@ -120,7 +120,8 @@ class PriceAlertService: ObservableObject {
         do {
             alerts = try JSONDecoder().decode([PriceAlert].self, from: data)
         } catch {
-            print("Failed to load price alerts: \(error)")
+            // If decoding fails, start with empty alerts
+            alerts = []
         }
     }
 }

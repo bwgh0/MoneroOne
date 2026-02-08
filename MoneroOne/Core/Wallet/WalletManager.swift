@@ -90,6 +90,7 @@ class WalletManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var currentSeed: [String]?
     private var isRefreshing = false
+    private var widgetReloadTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -541,10 +542,21 @@ class WalletManager: ObservableObject {
     }
 
     /// Save widget data if widget is enabled - called during sync cycles
+    /// Uses debouncing to prevent UI freezes from rapid widget reloads
     private func saveWidgetDataIfEnabled() {
         guard UserDefaults.standard.bool(forKey: "widgetEnabled") else { return }
         saveWidgetData()
-        WidgetCenter.shared.reloadAllTimelines()
+        scheduleWidgetReload()
+    }
+
+    /// Debounced widget reload - waits 1 second before reloading to batch rapid updates
+    private func scheduleWidgetReload() {
+        widgetReloadTask?.cancel()
+        widgetReloadTask = Task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            guard !Task.isCancelled else { return }
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     // MARK: - Send

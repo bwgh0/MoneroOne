@@ -19,11 +19,29 @@ struct TrustedLocationsView: View {
                             .foregroundColor(.green)
                     }
 
-                    Text("Add trusted locations like home or work. When syncing from an untrusted location, you'll receive a notification.")
+                    Text("Add trusted locations like home or work. Control what happens when syncing from an untrusted location.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 .padding(.vertical, 4)
+            }
+
+            // Sync Mode Selection
+            if locationsManager.hasTrustedLocations {
+                Section {
+                    Picker("Sync Mode", selection: $locationsManager.syncMode) {
+                        ForEach(TrustedLocationMode.allCases) { mode in
+                            VStack(alignment: .leading) {
+                                Text(mode.displayName)
+                            }
+                            .tag(mode)
+                        }
+                    }
+                } header: {
+                    Text("Outside Trusted Zones")
+                } footer: {
+                    Text(locationsManager.syncMode.description)
+                }
             }
 
             // Current Status

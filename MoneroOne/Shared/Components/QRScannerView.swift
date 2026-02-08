@@ -247,8 +247,10 @@ enum ScannerError: LocalizedError {
     }
 }
 
+#if DEBUG
 #Preview {
     QRScannerView { code in
         print("Scanned: \(code)")
     }
 }
+#endif

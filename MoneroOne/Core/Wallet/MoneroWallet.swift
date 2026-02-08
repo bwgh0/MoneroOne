@@ -135,12 +135,16 @@ class MoneroWallet: ObservableObject {
         ("XMR.to", "https://node.xmr.to:18081")
     ]
 
+    #if DEBUG
     /// Available public testnet nodes (port 28081/28089)
     /// Note: Testnet nodes are often unreliable. MoneroKit doesn't support stagenet.
     static let testnetNodes: [(name: String, url: String)] = [
         ("Monero Project", "http://testnet.xmr-tw.org:28081"),
         ("MoneroDevs", "http://node.monerodevs.org:28089"),
     ]
+    #else
+    static let testnetNodes: [(name: String, url: String)] = []
+    #endif
 
     private func setupKit() {
         guard let kit = kit else { return }
@@ -320,6 +324,7 @@ class MoneroWallet: ObservableObject {
         }
     }
 
+    #if DEBUG
     private func writeDebugLog(_ message: String) {
         guard let documentDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             return
@@ -339,6 +344,11 @@ class MoneroWallet: ObservableObject {
             }
         }
     }
+    #else
+    private func writeDebugLog(_ message: String) {
+        // No-op in release builds
+    }
+    #endif
 
     func send(to address: String, amount: Decimal, priority: SendPriority = .default, memo: String? = nil) async throws -> String {
         guard let kit = kit else { throw WalletError.notUnlocked }

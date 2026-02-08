@@ -1,10 +1,33 @@
 import Foundation
 import CoreLocation
 import UserNotifications
+import SwiftUI
+
+/// Sync behavior when outside trusted locations
+enum TrustedLocationMode: String, CaseIterable, Identifiable {
+    case warnOnly = "warnOnly"
+    case blockSync = "blockSync"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .warnOnly: return "Warn Only"
+        case .blockSync: return "Block Sync"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .warnOnly: return "Sync everywhere, notify when outside trusted zones"
+        case .blockSync: return "Only sync when inside a trusted zone"
+        }
+    }
+}
 
 /// Manages trusted locations for secure background sync
 /// When trusted locations are configured, the user is warned when syncing outside them
-/// Syncing is NOT blocked - just warned (optional security feature)
+/// Syncing can optionally be blocked (configurable)
 @MainActor
 class TrustedLocationsManager: NSObject, ObservableObject {
     static let shared = TrustedLocationsManager()
@@ -15,6 +38,9 @@ class TrustedLocationsManager: NSObject, ObservableObject {
     @Published private(set) var currentLocationName: String?  // Name of current trusted zone, nil if outside all
     @Published private(set) var isInTrustedZone: Bool = true  // True if no locations configured OR inside a zone
     @Published private(set) var lastKnownLocation: CLLocation?
+
+    /// User preference for sync behavior outside trusted zones
+    @AppStorage("trustedLocationMode") var syncMode: TrustedLocationMode = .warnOnly
 
     // MARK: - Private
 
@@ -144,6 +170,19 @@ class TrustedLocationsManager: NSObject, ObservableObject {
         }
 
         return nil
+    }
+
+    /// Check if sync should be blocked based on current location and user settings
+    /// Returns true if sync should be BLOCKED, false if sync is allowed
+    func shouldBlockSync() -> Bool {
+        // If no trusted locations configured, never block
+        guard hasTrustedLocations else { return false }
+
+        // If mode is warn only, never block
+        guard syncMode == .blockSync else { return false }
+
+        // Block if outside trusted zone
+        return !isInTrustedZone
     }
 
     private func shouldShowWarning() -> Bool {

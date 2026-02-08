@@ -34,6 +34,8 @@ class PriceService: ObservableObject {
 
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 60 // 1 minute
+    private var priceFetchTask: Task<Void, Never>?
+    private var currencyChangeDebounceTask: Task<Void, Never>?
 
     // Retry configuration
     private let maxRetries = 3
@@ -79,10 +81,26 @@ class PriceService: ObservableObject {
     }
 
     func setCurrency(_ currency: String) {
+        // Cancel any pending debounce and in-flight fetch
+        currencyChangeDebounceTask?.cancel()
+        priceFetchTask?.cancel()
+
         selectedCurrency = currency
         UserDefaults.standard.set(currency, forKey: "selectedCurrency")
-        Task {
-            await fetchPrice()
+
+        // Clear stale price to trigger loading state and prevent showing
+        // old price value with new currency symbol
+        xmrPrice = nil
+        priceChange24h = nil
+
+        // Debounce: wait 300ms before fetching to avoid rate limits during rapid switching
+        currencyChangeDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms
+            guard !Task.isCancelled else { return }
+
+            priceFetchTask = Task {
+                await fetchPrice()
+            }
         }
     }
 
@@ -138,10 +156,15 @@ class PriceService: ObservableObject {
                 try await self.performPriceFetch()
             }
         } catch {
+            // Don't update error state if this task was cancelled -
+            // a newer task is handling the fetch
+            guard !Task.isCancelled else { return }
             self.error = "Price unavailable"
             print("Price fetch error after retries: \(error)")
         }
 
+        // Don't update loading state if this task was cancelled
+        guard !Task.isCancelled else { return }
         isLoading = false
     }
 
@@ -163,6 +186,10 @@ class PriceService: ObservableObject {
         }
 
         let result = try JSONDecoder().decode(CoinGeckoResponse.self, from: data)
+
+        // Check if task was cancelled before updating price
+        // This prevents stale responses from overwriting newer currency selections
+        guard !Task.isCancelled else { return }
 
         if let moneroData = result.monero {
             xmrPrice = moneroData[selectedCurrency]

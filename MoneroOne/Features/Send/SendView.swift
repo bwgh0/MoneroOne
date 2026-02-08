@@ -18,6 +18,7 @@ struct SendView: View {
     @State private var estimatedFee: Decimal?
     @State private var transactionHash: String?
     @State private var sendError: String?
+    @State private var isSendingAll = false
 
     var body: some View {
         NavigationStack {
@@ -90,6 +91,7 @@ struct SendView: View {
                             Spacer()
 
                             Button("Max") {
+                                isSendingAll = true
                                 amount = "\(walletManager.unlockedBalance)"
                             }
                             .font(.caption)
@@ -101,6 +103,13 @@ struct SendView: View {
                                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                                 .keyboardType(.decimalPad)
                                 .onChange(of: amount) { newValue in
+                                    // Clear sendAll flag if user manually edits amount
+                                    if isSendingAll {
+                                        let maxAmount = "\(walletManager.unlockedBalance)"
+                                        if newValue != maxAmount {
+                                            isSendingAll = false
+                                        }
+                                    }
                                     // Filter to only allow valid decimal input
                                     let filtered = filterDecimalInput(newValue)
                                     if filtered != newValue {
@@ -349,11 +358,19 @@ struct SendView: View {
 
         Task {
             do {
-                let txHash = try await walletManager.send(
-                    to: recipientAddress,
-                    amount: amountDecimal,
-                    memo: memo.isEmpty ? nil : memo
-                )
+                let txHash: String
+                if isSendingAll {
+                    txHash = try await walletManager.sendAll(
+                        to: recipientAddress,
+                        memo: memo.isEmpty ? nil : memo
+                    )
+                } else {
+                    txHash = try await walletManager.send(
+                        to: recipientAddress,
+                        amount: amountDecimal,
+                        memo: memo.isEmpty ? nil : memo
+                    )
+                }
                 print("Transaction sent: \(txHash)")
                 transactionHash = txHash
                 await walletManager.refresh()  // Refresh to show the new transaction

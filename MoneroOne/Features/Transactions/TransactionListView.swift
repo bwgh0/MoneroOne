@@ -146,18 +146,18 @@ struct TransactionRow: View {
 
             // Amount & Status
             VStack(alignment: .trailing, spacing: 4) {
-                Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
+                Text("\(transaction.type == .incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount))")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(transaction.type == .incoming ? .green : .primary)
 
                 HStack(spacing: 4) {
                     Circle()
-                        .fill(statusColor)
+                        .fill(transaction.displayStatusColor)
                         .frame(width: 6, height: 6)
-                    Text(statusText)
+                    Text(transaction.displayStatusText)
                         .font(.caption2)
-                        .foregroundColor(statusColor)
+                        .foregroundColor(transaction.displayStatusColor)
                 }
             }
         }
@@ -169,30 +169,6 @@ struct TransactionRow: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: transaction.timestamp)
-    }
-
-    private var statusText: String {
-        switch transaction.status {
-        case .pending: return "Pending"
-        case .confirmed: return "Confirmed"
-        case .failed: return "Failed"
-        }
-    }
-
-    private var statusColor: Color {
-        switch transaction.status {
-        case .pending: return .orange
-        case .confirmed: return .green
-        case .failed: return .red
-        }
-    }
-
-    private func formatXMR(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 8
-        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
     }
 }
 

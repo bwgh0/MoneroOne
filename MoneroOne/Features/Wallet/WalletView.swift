@@ -308,7 +308,7 @@ struct RecentTransactionCard: View {
 
                 // Amount & Status
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount))")
+                    Text("\(transaction.type == .incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount))")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(transaction.type == .incoming ? .green : .primary)
@@ -316,11 +316,11 @@ struct RecentTransactionCard: View {
                     // Status indicator with dot
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(statusColor)
+                            .fill(transaction.displayStatusColor)
                             .frame(width: 6, height: 6)
-                        Text(statusText)
+                        Text(transaction.displayStatusText)
                             .font(.caption2)
-                            .foregroundColor(statusColor)
+                            .foregroundColor(transaction.displayStatusColor)
                     }
                 }
 
@@ -338,47 +338,12 @@ struct RecentTransactionCard: View {
         transaction.type == .incoming ? .green : .orange
     }
 
-    private var statusText: String {
-        if transaction.status == .failed {
-            return "Failed"
-        }
-        let confs = transaction.confirmations
-        if confs == 0 {
-            return "Pending"
-        } else if confs < 10 {
-            return "Locked"
-        } else {
-            return "Confirmed"
-        }
-    }
-
-    private var statusColor: Color {
-        if transaction.status == .failed {
-            return .red
-        }
-        let confs = transaction.confirmations
-        if confs == 0 {
-            return .orange
-        } else if confs < 10 {
-            return .orange
-        } else {
-            return .green
-        }
-    }
-
     private var formattedDate: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: transaction.timestamp, relativeTo: Date())
     }
 
-    private func formatXMR(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 4
-        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
-    }
 }
 
 #Preview {

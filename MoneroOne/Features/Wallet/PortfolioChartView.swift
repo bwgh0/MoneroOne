@@ -169,7 +169,7 @@ struct PortfolioChartView: View {
                 } else {
                     // Show portfolio change for selected time range
                     HStack(spacing: 12) {
-                        Text(formatXMR(balance) + " XMR")
+                        Text(XMRFormatter.format(balance) + " XMR")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
 
@@ -434,13 +434,6 @@ struct PortfolioChartView: View {
         return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value))"
     }
 
-    private func formatXMR(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 4
-        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
-    }
 }
 
 #Preview {

@@ -37,7 +37,7 @@ struct SendConfirmationView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(formatXMR(amount)) XMR")
+                        Text("\(XMRFormatter.format(amount)) XMR")
                             .fontWeight(.medium)
                         if let fiatAmount = priceService.formatFiatValue(amount) {
                             Text("≈ \(fiatAmount)")
@@ -56,7 +56,7 @@ struct SendConfirmationView: View {
                     Spacer()
                     if let fee = displayFee {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(formatXMR(fee)) XMR")
+                            Text("\(XMRFormatter.format(fee)) XMR")
                                 .fontWeight(.medium)
                             if let fiatFee = priceService.formatFiatValue(fee) {
                                 Text("≈ \(fiatFee)")
@@ -83,7 +83,7 @@ struct SendConfirmationView: View {
                     Spacer()
                     if let total = total {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(formatXMR(total)) XMR")
+                            Text("\(XMRFormatter.format(total)) XMR")
                                 .fontWeight(.semibold)
                                 .foregroundColor(.orange)
                             if let fiatTotal = priceService.formatFiatValue(total) {
@@ -169,14 +169,6 @@ struct SendConfirmationView: View {
                 }
             }
         }
-    }
-
-    private func formatXMR(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 12
-        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
     }
 
     private func formatAddress(_ addr: String) -> String {

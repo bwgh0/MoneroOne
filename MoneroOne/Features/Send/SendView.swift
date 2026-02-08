@@ -126,7 +126,7 @@ struct SendView: View {
                         }
 
                         HStack {
-                            Text("Available: \(formatXMR(walletManager.unlockedBalance)) XMR")
+                            Text("Available: \(XMRFormatter.format(walletManager.unlockedBalance)) XMR")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             if let fiatAvailable = priceService.formatFiatValue(walletManager.unlockedBalance) {
@@ -156,7 +156,7 @@ struct SendView: View {
                                 Text("Estimated Fee")
                                     .foregroundColor(.secondary)
                                 Spacer()
-                                Text("\(formatXMR(fee)) XMR")
+                                Text("\(XMRFormatter.format(fee)) XMR")
                                     .fontWeight(.medium)
                             }
                             if let fiatFee = priceService.formatFiatValue(fee) {
@@ -363,14 +363,6 @@ struct SendView: View {
                 isSending = false
             }
         }
-    }
-
-    private func formatXMR(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 12
-        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
     }
 
     private func formatAddress(_ addr: String) -> String {

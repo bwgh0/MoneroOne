@@ -91,6 +91,8 @@
 		FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF818FE69F2EC0B444D26754 /* QRCodeView.swift */; };
 		FF659956FD9D9759B11F49F9 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B332C777DDD3D470FA081B35 /* WidgetData.swift */; };
 		PRICEWIDGET1234567890ABCD /* PriceWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = PRICEWIDGETREF123456789A /* PriceWidget.swift */; };
+		XMRFORMAT123456789ABCDEF0 /* XMRFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMRFORMATREF12345678ABCD /* XMRFormatter.swift */; };
+		TXSTATUS123456789ABCDEF01 /* MoneroTransaction+Status.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -221,6 +223,8 @@
 		FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		FF6022942E141D54562F131E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		PRICEWIDGETREF123456789A /* PriceWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceWidget.swift; sourceTree = "<group>"; };
+		XMRFORMATREF12345678ABCD /* XMRFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XMRFormatter.swift; sourceTree = "<group>"; };
+		TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroTransaction+Status.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -304,10 +308,19 @@
 		355B80F2AADB94A31B38327D /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				XMRFORMATGRP1234567890AB /* Formatters */,
 				5B41E4CE7002C3EA9370D135 /* Services */,
 				A009680DCA5DEAEBFFBE7D54 /* Wallet */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		XMRFORMATGRP1234567890AB /* Formatters */ = {
+			isa = PBXGroup;
+			children = (
+				XMRFORMATREF12345678ABCD /* XMRFormatter.swift */,
+			);
+			path = Formatters;
 			sourceTree = "<group>";
 		};
 		39546E93F10D127556F1DFC2 /* Extensions */ = {
@@ -435,6 +448,7 @@
 			isa = PBXGroup;
 			children = (
 				D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */,
+				TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */,
 				6BE53A66511AA0C64737C553 /* MoneroWallet.swift */,
 				833C5B007D9D33E833CFE48B /* WalletManager.swift */,
 			);
@@ -786,6 +800,8 @@
 				B6CA1E6614A397E2BC1F155A /* WelcomeView.swift in Sources */,
 				FF659956FD9D9759B11F49F9 /* WidgetData.swift in Sources */,
 				F65EECC001BAE93898D97CB6 /* WidgetSettingsView.swift in Sources */,
+				XMRFORMAT123456789ABCDEF0 /* XMRFormatter.swift in Sources */,
+				TXSTATUS123456789ABCDEF01 /* MoneroTransaction+Status.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

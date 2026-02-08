@@ -73,7 +73,7 @@ struct BalanceCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(formatXMR(balance))
+                        Text(XMRFormatter.format(balance))
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .contentTransition(.numericText())
@@ -107,7 +107,7 @@ struct BalanceCard: View {
                     HStack {
                         Text("Available:")
                             .foregroundColor(.secondary)
-                        Text(formatXMR(unlockedBalance))
+                        Text(XMRFormatter.format(unlockedBalance))
                             .fontWeight(.medium)
                         Text("XMR")
                             .foregroundColor(.secondary)
@@ -169,14 +169,6 @@ struct BalanceCard: View {
             return progress
         }
         return nil
-    }
-
-    private func formatXMR(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 12
-        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
     }
 
     private func formatBlockCount(_ count: Int) -> String {

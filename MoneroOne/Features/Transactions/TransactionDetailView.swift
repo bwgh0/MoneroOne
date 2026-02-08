@@ -40,7 +40,7 @@ struct TransactionDetailView: View {
                 HStack {
                     Text("Amount")
                     Spacer()
-                    Text("\(transaction.type == .incoming ? "+" : "-")\(formatXMR(transaction.amount)) XMR")
+                    Text("\(transaction.type == .incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount)) XMR")
                         .fontWeight(.semibold)
                         .foregroundColor(transaction.type == .incoming ? .green : .primary)
                 }
@@ -50,7 +50,7 @@ struct TransactionDetailView: View {
                     HStack {
                         Text("Fee")
                         Spacer()
-                        Text("\(formatXMR(transaction.fee)) XMR")
+                        Text("\(XMRFormatter.format(transaction.fee)) XMR")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -61,9 +61,9 @@ struct TransactionDetailView: View {
                     Spacer()
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(combinedStatusColor)
+                            .fill(transaction.displayStatusColor)
                             .frame(width: 8, height: 8)
-                        Text(combinedStatusText)
+                        Text(transaction.displayStatusText)
                     }
                 }
 
@@ -178,42 +178,6 @@ struct TransactionDetailView: View {
         formatter.dateStyle = .long
         formatter.timeStyle = .medium
         return formatter.string(from: transaction.timestamp)
-    }
-
-    private var combinedStatusText: String {
-        if transaction.status == .failed {
-            return "Failed"
-        }
-        let confs = transaction.confirmations
-        if confs == 0 {
-            return "Pending"
-        } else if confs < 10 {
-            return "Locked"
-        } else {
-            return "Confirmed"
-        }
-    }
-
-    private var combinedStatusColor: Color {
-        if transaction.status == .failed {
-            return .red
-        }
-        let confs = transaction.confirmations
-        if confs == 0 {
-            return .orange
-        } else if confs < 10 {
-            return .orange
-        } else {
-            return .green
-        }
-    }
-
-    private func formatXMR(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 12
-        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
     }
 }
 

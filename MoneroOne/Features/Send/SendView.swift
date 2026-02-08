@@ -1,4 +1,5 @@
 import SwiftUI
+import MoneroKit
 
 struct SendView: View {
     @EnvironmentObject var walletManager: WalletManager
@@ -209,12 +210,28 @@ struct SendView: View {
                 }
                 .padding()
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil, from: nil, for: nil
+                )
+            }
             .navigationTitle("Send XMR")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
                     }
                 }
             }
@@ -226,7 +243,7 @@ struct SendView: View {
             .sheet(isPresented: $showConfirmation) {
                 SendConfirmationView(
                     amount: Decimal(string: amount) ?? 0,
-                    fee: estimatedFee ?? 0,
+                    fee: estimatedFee,
                     address: recipientAddress,
                     onConfirm: {
                         showConfirmation = false
@@ -314,15 +331,9 @@ struct SendView: View {
             return
         }
 
-        // Estimate fee before confirming
-        Task {
-            do {
-                estimatedFee = try await walletManager.estimateFee(to: recipientAddress, amount: amountDecimal)
-                showConfirmation = true
-            } catch {
-                errorMessage = "Failed to estimate fee: \(error.localizedDescription)"
-            }
-        }
+        // Show confirmation immediately (fee loads in background)
+        estimatedFee = nil
+        showConfirmation = true
     }
 
     private func sendTransaction() {
@@ -348,7 +359,7 @@ struct SendView: View {
                 await walletManager.refresh()  // Refresh to show the new transaction
                 isSending = false
             } catch {
-                sendError = "Send failed: \(error.localizedDescription)"
+                sendError = "Send failed: \(friendlyErrorMessage(for: error))"
                 isSending = false
             }
         }
@@ -390,6 +401,26 @@ struct SendView: View {
         }
 
         return result
+    }
+
+    private func friendlyErrorMessage(for error: Error) -> String {
+        if let coreError = error as? MoneroCoreError {
+            switch coreError {
+            case .walletNotInitialized:
+                return "Wallet not ready. Please wait for sync to complete."
+            case .walletStatusError(let msg):
+                return msg ?? "Wallet error occurred."
+            case .insufficientFunds(let balance):
+                return "Not enough unlocked funds. Available: \(balance) XMR"
+            case .transactionEstimationFailed(let msg):
+                return msg
+            case .transactionSendFailed(let msg):
+                return msg
+            case .transactionCommitFailed(let msg):
+                return "Broadcast failed: \(msg)"
+            }
+        }
+        return error.localizedDescription
     }
 }
 

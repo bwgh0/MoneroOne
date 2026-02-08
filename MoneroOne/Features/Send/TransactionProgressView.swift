@@ -12,6 +12,7 @@ struct TransactionProgressView: View {
     let onRetry: (() -> Void)?
 
     @State private var showCheckmark = false
+    @State private var rotationAngle: Double = 0
 
     var body: some View {
         VStack(spacing: 32) {
@@ -21,9 +22,16 @@ struct TransactionProgressView: View {
             ZStack {
                 switch state {
                 case .sending:
-                    ProgressView()
-                        .scaleEffect(2)
-                        .tint(.orange)
+                    Circle()
+                        .trim(from: 0, to: 0.7)
+                        .stroke(Color.orange, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .frame(width: 80, height: 80)
+                        .rotationEffect(.degrees(rotationAngle))
+                        .onAppear {
+                            withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                                rotationAngle = 360
+                            }
+                        }
 
                 case .success:
                     Image(systemName: "checkmark.circle.fill")
@@ -152,6 +160,14 @@ struct TransactionProgressView: View {
         }
         .padding()
         .interactiveDismissDisabled(state.isSending)
+        .onChange(of: state.isSuccess) { isSuccess in
+            if isSuccess {
+                // Auto-dismiss after showing checkmark briefly
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    onDone()
+                }
+            }
+        }
     }
 
     private func formatTxHash(_ hash: String) -> String {
@@ -160,9 +176,27 @@ struct TransactionProgressView: View {
     }
 }
 
-extension TransactionProgressView.TransactionState {
+extension TransactionProgressView.TransactionState: Equatable {
+    static func == (lhs: TransactionProgressView.TransactionState, rhs: TransactionProgressView.TransactionState) -> Bool {
+        switch (lhs, rhs) {
+        case (.sending, .sending):
+            return true
+        case (.success(let lhsHash), .success(let rhsHash)):
+            return lhsHash == rhsHash
+        case (.error(let lhsMsg), .error(let rhsMsg)):
+            return lhsMsg == rhsMsg
+        default:
+            return false
+        }
+    }
+
     var isSending: Bool {
         if case .sending = self { return true }
+        return false
+    }
+
+    var isSuccess: Bool {
+        if case .success = self { return true }
         return false
     }
 }

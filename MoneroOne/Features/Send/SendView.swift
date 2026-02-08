@@ -1,4 +1,5 @@
 import SwiftUI
+import MoneroKit
 
 struct SendView: View {
     @EnvironmentObject var walletManager: WalletManager
@@ -17,6 +18,7 @@ struct SendView: View {
     @State private var estimatedFee: Decimal?
     @State private var transactionHash: String?
     @State private var sendError: String?
+    @State private var isSendingAll = false
 
     var body: some View {
         NavigationStack {
@@ -89,6 +91,7 @@ struct SendView: View {
                             Spacer()
 
                             Button("Max") {
+                                isSendingAll = true
                                 amount = "\(walletManager.unlockedBalance)"
                             }
                             .font(.caption)
@@ -100,6 +103,13 @@ struct SendView: View {
                                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                                 .keyboardType(.decimalPad)
                                 .onChange(of: amount) { newValue in
+                                    // Clear sendAll flag if user manually edits amount
+                                    if isSendingAll {
+                                        let maxAmount = "\(walletManager.unlockedBalance)"
+                                        if newValue != maxAmount {
+                                            isSendingAll = false
+                                        }
+                                    }
                                     // Filter to only allow valid decimal input
                                     let filtered = filterDecimalInput(newValue)
                                     if filtered != newValue {
@@ -125,7 +135,7 @@ struct SendView: View {
                         }
 
                         HStack {
-                            Text("Available: \(formatXMR(walletManager.unlockedBalance)) XMR")
+                            Text("Available: \(XMRFormatter.format(walletManager.unlockedBalance)) XMR")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             if let fiatAvailable = priceService.formatFiatValue(walletManager.unlockedBalance) {
@@ -155,7 +165,7 @@ struct SendView: View {
                                 Text("Estimated Fee")
                                     .foregroundColor(.secondary)
                                 Spacer()
-                                Text("\(formatXMR(fee)) XMR")
+                                Text("\(XMRFormatter.format(fee)) XMR")
                                     .fontWeight(.medium)
                             }
                             if let fiatFee = priceService.formatFiatValue(fee) {
@@ -209,12 +219,28 @@ struct SendView: View {
                 }
                 .padding()
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil, from: nil, for: nil
+                )
+            }
             .navigationTitle("Send XMR")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
                     }
                 }
             }
@@ -226,7 +252,7 @@ struct SendView: View {
             .sheet(isPresented: $showConfirmation) {
                 SendConfirmationView(
                     amount: Decimal(string: amount) ?? 0,
-                    fee: estimatedFee ?? 0,
+                    fee: estimatedFee,
                     address: recipientAddress,
                     onConfirm: {
                         showConfirmation = false
@@ -314,15 +340,9 @@ struct SendView: View {
             return
         }
 
-        // Estimate fee before confirming
-        Task {
-            do {
-                estimatedFee = try await walletManager.estimateFee(to: recipientAddress, amount: amountDecimal)
-                showConfirmation = true
-            } catch {
-                errorMessage = "Failed to estimate fee: \(error.localizedDescription)"
-            }
-        }
+        // Show confirmation immediately (fee loads in background)
+        estimatedFee = nil
+        showConfirmation = true
     }
 
     private func sendTransaction() {
@@ -338,28 +358,28 @@ struct SendView: View {
 
         Task {
             do {
-                let txHash = try await walletManager.send(
-                    to: recipientAddress,
-                    amount: amountDecimal,
-                    memo: memo.isEmpty ? nil : memo
-                )
+                let txHash: String
+                if isSendingAll {
+                    txHash = try await walletManager.sendAll(
+                        to: recipientAddress,
+                        memo: memo.isEmpty ? nil : memo
+                    )
+                } else {
+                    txHash = try await walletManager.send(
+                        to: recipientAddress,
+                        amount: amountDecimal,
+                        memo: memo.isEmpty ? nil : memo
+                    )
+                }
                 print("Transaction sent: \(txHash)")
                 transactionHash = txHash
                 await walletManager.refresh()  // Refresh to show the new transaction
                 isSending = false
             } catch {
-                sendError = "Send failed: \(error.localizedDescription)"
+                sendError = "Send failed: \(friendlyErrorMessage(for: error))"
                 isSending = false
             }
         }
-    }
-
-    private func formatXMR(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 12
-        return formatter.string(from: value as NSDecimalNumber) ?? "0.0000"
     }
 
     private func formatAddress(_ addr: String) -> String {
@@ -390,6 +410,26 @@ struct SendView: View {
         }
 
         return result
+    }
+
+    private func friendlyErrorMessage(for error: Error) -> String {
+        if let coreError = error as? MoneroCoreError {
+            switch coreError {
+            case .walletNotInitialized:
+                return "Wallet not ready. Please wait for sync to complete."
+            case .walletStatusError(let msg):
+                return msg ?? "Wallet error occurred."
+            case .insufficientFunds(let balance):
+                return "Not enough unlocked funds. Available: \(balance) XMR"
+            case .transactionEstimationFailed(let msg):
+                return msg
+            case .transactionSendFailed(let msg):
+                return msg
+            case .transactionCommitFailed(let msg):
+                return "Broadcast failed: \(msg)"
+            }
+        }
+        return error.localizedDescription
     }
 }
 

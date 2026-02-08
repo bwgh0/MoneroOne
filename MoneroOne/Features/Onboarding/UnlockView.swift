@@ -11,6 +11,7 @@ struct UnlockView: View {
     @State private var isUnlocking = false
     @State private var attempts = 0
     @State private var lastBiometricAttempt: Date?
+    @State private var showForgotPINConfirmation = false
 
     var body: some View {
         VStack(spacing: 32) {
@@ -84,9 +85,27 @@ struct UnlockView: View {
                 .disabled(isUnlocking)
             }
 
+            // Forgot PIN option
+            Button {
+                showForgotPINConfirmation = true
+            } label: {
+                Text("Forgot PIN?")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.top, 16)
+
             Spacer()
         }
         .padding()
+        .alert("Forgot Your PIN?", isPresented: $showForgotPINConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset App", role: .destructive) {
+                walletManager.deleteWallet()
+            }
+        } message: {
+            Text("This will delete all wallet data from this device. You can restore your wallet using your seed phrase.\n\nThis action cannot be undone.")
+        }
         .onAppear {
             triggerBiometricsIfAvailable()
         }

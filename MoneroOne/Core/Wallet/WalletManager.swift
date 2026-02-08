@@ -119,7 +119,9 @@ class WalletManager: ObservableObject {
     /// Polyseed includes an embedded wallet birthday for faster restoration
     func generatePolyseed() -> [String] {
         guard let seedPtr = MONERO_Wallet_createPolyseed("English") else {
+            #if DEBUG
             print("Polyseed generation failed: null pointer returned")
+            #endif
             return []
         }
         let seedString = String(cString: seedPtr)
@@ -127,7 +129,9 @@ class WalletManager: ObservableObject {
 
         // Polyseed should always be 16 words
         guard words.count == 16 else {
+            #if DEBUG
             print("Polyseed generation failed: expected 16 words, got \(words.count)")
+            #endif
             return []
         }
 
@@ -141,7 +145,9 @@ class WalletManager: ObservableObject {
             let mnemonic = try Mnemonic.generate(wordCount: .twentyFour, language: .english)
             return mnemonic
         } catch {
+            #if DEBUG
             print("BIP39 mnemonic generation failed: \(error)")
+            #endif
             return []
         }
     }
@@ -479,8 +485,13 @@ class WalletManager: ObservableObject {
     /// Test if the node is reachable via HTTP GET to /get_info
     private func testNodeReachability() {
         // Get node URL from UserDefaults
+        #if DEBUG
+        let defaultURL = isTestnet ? "http://testnet.xmr-tw.org:28081" : "https://xmr-node.cakewallet.com:18081"
+        #else
+        let defaultURL = "https://xmr-node.cakewallet.com:18081"
+        #endif
         let nodeURLString = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL")
-            ?? (isTestnet ? "http://testnet.xmr-tw.org:28081" : "https://xmr-node.cakewallet.com:18081")
+            ?? defaultURL
 
         guard let baseURL = URL(string: nodeURLString) else {
             nodeReachable = false

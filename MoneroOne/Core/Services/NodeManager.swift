@@ -90,10 +90,14 @@ class NodeManager: ObservableObject {
         MoneroNode(name: "CakeWallet", url: "https://xmr-node.cakewallet.com:18081"),
     ]
 
+    #if DEBUG
     static let defaultTestnetNodes: [MoneroNode] = [
         MoneroNode(name: "Monero Project", url: "http://testnet.xmr-tw.org:28081"),
         MoneroNode(name: "MoneroDevs", url: "http://node.monerodevs.org:28089"),
     ]
+    #else
+    static let defaultTestnetNodes: [MoneroNode] = []
+    #endif
 
     private var selectedNodeKey: String {
         isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
@@ -288,11 +292,15 @@ class NodeManager: ObservableObject {
     }
 
     private func measureLatency(for node: MoneroNode) async -> Int? {
+        #if DEBUG
         NSLog("[Latency] Starting measurement for %@: %@", node.name, node.url)
+        #endif
 
         guard let url = URL(string: node.url),
               let host = url.host else {
+            #if DEBUG
             NSLog("[Latency] Failed to parse URL: %@", node.url)
+            #endif
             return nil
         }
 
@@ -304,14 +312,18 @@ class NodeManager: ObservableObject {
 
             let parameters: NWParameters
             if usesTLS {
-                // Create TLS options that accept all certificates
+                #if DEBUG
+                // DEBUG ONLY: Accept all certificates for latency testing
+                // In release builds, use default certificate validation
                 let tlsOptions = NWProtocolTLS.Options()
                 sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, _, complete in
-                    // Accept all certificates for latency testing
                     complete(true)
                 }, DispatchQueue.global())
-                // Explicitly include TCP options for proper connection setup
                 parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
+                #else
+                // Production: Use default TLS with proper certificate validation
+                parameters = NWParameters(tls: NWProtocolTLS.Options(), tcp: NWProtocolTCP.Options())
+                #endif
             } else {
                 parameters = NWParameters.tcp
             }
@@ -328,13 +340,17 @@ class NodeManager: ObservableObject {
                     hasResumed = true
                     let elapsed = CFAbsoluteTimeGetCurrent() - startTime
                     let latencyMs = Int(elapsed * 1000)
+                    #if DEBUG
                     NSLog("[Latency] Success for %@: %dms", node.name, latencyMs)
+                    #endif
                     connection.cancel()
                     continuation.resume(returning: latencyMs)
 
                 case .failed(let error):
                     hasResumed = true
+                    #if DEBUG
                     NSLog("[Latency] Failed for %@: %@", node.name, error.localizedDescription)
+                    #endif
                     connection.cancel()
                     continuation.resume(returning: nil)
 
@@ -355,7 +371,9 @@ class NodeManager: ObservableObject {
             DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
                 if !hasResumed {
                     hasResumed = true
+                    #if DEBUG
                     NSLog("[Latency] Timeout for %@", node.name)
+                    #endif
                     connection.cancel()
                     continuation.resume(returning: nil)
                 }

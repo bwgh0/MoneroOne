@@ -101,10 +101,16 @@ class BackgroundSyncManager: NSObject, ObservableObject {
     private func performSync() {
         guard let wallet = walletManager, wallet.isUnlocked else { return }
 
+        // Check if sync should be blocked based on trusted location settings
+        if trustedLocationsManager.shouldBlockSync() {
+            // In block mode and outside trusted zone - skip sync
+            isSyncing = false
+            return
+        }
+
         isSyncing = true
 
-        // Check trusted location status and warn if needed
-        // This does NOT block sync - just warns the user
+        // Check trusted location status and warn if needed (for warn-only mode)
         currentTrustedLocationName = trustedLocationsManager.checkAndWarnIfNeeded()
 
         Task {

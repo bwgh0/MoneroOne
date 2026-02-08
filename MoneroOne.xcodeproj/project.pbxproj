@@ -98,6 +98,7 @@
 		BAN47YMLAVTQLXS17K9HBS4H /* TrustedLocationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = UXJZ2UWP4AMFOMV5YUCT0SLA /* TrustedLocationsView.swift */; };
 		CND649AMACFN64RTKGHV6PCM /* AddTrustedLocationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */; };
 		5KTMKZ19F24DRHHTSNXITH45 /* DisclaimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */; };
+		PRIVACYINFOBUILD1234ABCD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -235,6 +236,7 @@
 		UXJZ2UWP4AMFOMV5YUCT0SLA /* TrustedLocationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocationsView.swift; sourceTree = "<group>"; };
 		H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTrustedLocationView.swift; sourceTree = "<group>"; };
 		ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisclaimerView.swift; sourceTree = "<group>"; };
+		PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -519,6 +521,7 @@
 				E06460C0C64ADF867FDFD082 /* ContentView.swift */,
 				453AD935BC81C7E29EC967D6 /* Info.plist */,
 				EF4403D66526417A897F64CD /* MoneroOne.entitlements */,
+				PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */,
 				F2DA1C3CAB861DC98E98BED4 /* MoneroOneApp.swift */,
 				636A0EF30B6BB676199581BD /* Configuration */,
 				355B80F2AADB94A31B38327D /* Core */,
@@ -691,6 +694,7 @@
 			files = (
 				AF8CD53F523DABC80F06F168 /* Assets.xcassets in Resources */,
 				093E2F482F307A6400A0715B /* monero-one.icon in Resources */,
+				PRIVACYINFOBUILD1234ABCD /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

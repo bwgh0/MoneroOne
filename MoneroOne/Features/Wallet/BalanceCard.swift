@@ -10,6 +10,21 @@ struct BalanceCard: View {
     var onCardTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
 
+    /// Calculate 24h price change from 1D chart data (same as chart views)
+    private var priceChange24h: Double? {
+        guard let dayData = priceService.chartDataCache["1D"],
+              dayData.count >= 2,
+              let firstPrice = dayData.first?.price,
+              let lastPrice = dayData.last?.price,
+              firstPrice > 0 else { return nil }
+        return ((lastPrice - firstPrice) / firstPrice) * 100
+    }
+
+    private func formatPriceChange(_ change: Double) -> String {
+        let sign = change >= 0 ? "+" : ""
+        return "\(sign)\(String(format: "%.2f", change))%"
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             // Sync Status - use progressive indicator when connecting, simple status when synced
@@ -41,14 +56,14 @@ struct BalanceCard: View {
                 Spacer()
 
                 // Price change indicator (tappable)
-                if let change = priceService.priceChange24h {
+                if let change = priceChange24h {
                     Button {
                         onPriceChangeTap?()
                     } label: {
                         HStack(spacing: 2) {
                             Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
                                 .font(.caption2)
-                            Text(priceService.formatPriceChange() ?? "")
+                            Text(formatPriceChange(change))
                                 .font(.caption)
                         }
                         .foregroundColor(change >= 0 ? .green : .red)

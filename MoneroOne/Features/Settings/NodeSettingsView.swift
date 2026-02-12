@@ -6,7 +6,6 @@ struct NodeSettingsView: View {
     @State private var customNodeName = ""
     @State private var customNodeURL = ""
     @State private var showAddNode = false
-    @State private var showRestartAlert = false
 
     var body: some View {
         List {
@@ -72,11 +71,6 @@ struct NodeSettingsView: View {
             }
         } message: {
             Text("Enter the node details")
-        }
-        .alert("Node Changed", isPresented: $showRestartAlert) {
-            Button("OK") { }
-        } message: {
-            Text("The new node will be used when you next open the app.")
         }
     }
 
@@ -185,14 +179,9 @@ struct NodeSettingsView: View {
     }
 
     private func selectNode(_ node: MoneroNode) {
-        let previousNode = nodeManager.selectedNode
         nodeManager.selectNode(node)
         walletManager.setNode(url: node.url, isTrusted: node.isTrusted)
-
-        // Show restart alert if node changed and wallet is unlocked
-        if previousNode.id != node.id && walletManager.isUnlocked {
-            showRestartAlert = true
-        }
+        // Node change takes effect immediately - no alert needed
     }
 
     private func addCustomNode() {

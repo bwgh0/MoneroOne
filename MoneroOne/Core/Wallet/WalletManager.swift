@@ -635,13 +635,35 @@ class WalletManager: ObservableObject {
 
     // MARK: - Node Management
 
-    /// Save new node URL - takes effect on next app restart
-    /// Returns true if restart is needed for change to take effect
+    /// Set node URL and restart wallet to use new node immediately
     @discardableResult
     func setNode(url: String, isTrusted: Bool = false) -> Bool {
-        UserDefaults.standard.set(url, forKey: "selectedNodeURL")
-        // Node change saved - will take effect on next app restart
-        // We don't restart immediately to avoid race conditions with MoneroKit's internal sync loop
+        UserDefaults.standard.set(url, forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL")
+
+        // If wallet is running, restart with new node
+        if isUnlocked, let seed = currentSeed {
+            // Reset UI state
+            syncState = .connecting
+
+            // Stop current wallet
+            moneroWallet?.stop()
+            moneroWallet = nil
+            cancellables.removeAll()
+
+            // Recreate with new node (reads from UserDefaults)
+            do {
+                let wallet = MoneroWallet()
+                let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+                let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+                let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
+
+                try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
+                moneroWallet = wallet
+                bindToWallet(wallet)
+            } catch {
+                syncState = .error("Failed to reconnect: \(error.localizedDescription)")
+            }
+        }
         return true
     }
 

@@ -35,6 +35,17 @@ class WalletManager: ObservableObject {
     private var networkMonitorCancellable: AnyCancellable?
     private var connectionTimer: Timer?
     private var connectionStartTime: Date?
+    private var reachabilityRetryTask: Task<Void, Never>?
+    private var reachabilityRetryCount: Int = 0
+
+    /// URLSession that accepts all certificates (matches NodeManager behavior)
+    /// Nodes with self-signed certs pass the settings latency test, so the wallet
+    /// reachability test must also accept them to avoid a stuck "Reaching node..." state.
+    private lazy var reachabilitySession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 10
+        return URLSession(configuration: config, delegate: AllCertsTrustDelegate.shared, delegateQueue: nil)
+    }()
 
     enum SyncState: Equatable {
         case idle
@@ -377,6 +388,9 @@ class WalletManager: ObservableObject {
         daemonHeight = 0
         walletHeight = 0
         nodeReachable = nil
+        reachabilityRetryCount = 0
+        reachabilityRetryTask?.cancel()
+        reachabilityRetryTask = nil
         networkMonitorCancellable?.cancel()
         networkMonitorCancellable = nil
     }
@@ -404,15 +418,23 @@ class WalletManager: ObservableObject {
             return
         }
 
+        // Stage 3b: MoneroKit reports actively connecting - trust it over HTTP test
+        if case .connecting = syncState {
+            NSLog("[WalletManager] MoneroKit reports .connecting — overriding reachability (nodeReachable=%@)", String(describing: nodeReachable))
+            connectionStage = .connecting
+            return
+        }
+
         // Stage 3: Node reachable but daemon not yet responding
         if nodeReachable == true {
             connectionStage = .connecting
             return
         }
 
-        // Stage 2: Node not reachable
+        // Stage 2: Node not reachable — schedule retry
         if nodeReachable == false {
             connectionStage = .reachingNode
+            scheduleReachabilityRetry()
             return
         }
 
@@ -432,14 +454,18 @@ class WalletManager: ObservableObject {
         // Load restore height for stage calculation
         restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
 
-        // Reset node reachability
+        // Reset node reachability and retry state
         nodeReachable = nil
+        reachabilityRetryCount = 0
+        reachabilityRetryTask?.cancel()
+        reachabilityRetryTask = nil
 
         // Subscribe to network connectivity changes
         networkMonitorCancellable = NetworkMonitor.shared.$isConnected
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isConnected in
                 guard let self = self else { return }
+                NSLog("[WalletManager] Network connectivity changed: %@", isConnected ? "connected" : "disconnected")
                 if !isConnected {
                     self.nodeReachable = nil
                 }
@@ -468,7 +494,7 @@ class WalletManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 10
 
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        reachabilitySession.dataTask(with: request) { [weak self] data, response, error in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
 
@@ -477,13 +503,40 @@ class WalletManager: ObservableObject {
                    let data = data,
                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    json["height"] != nil || json["status"] != nil {
+                    NSLog("[WalletManager] Node reachable: %@", nodeURLString)
                     self.nodeReachable = true
+                    self.reachabilityRetryCount = 0
+                    self.reachabilityRetryTask?.cancel()
+                    self.reachabilityRetryTask = nil
                 } else {
+                    NSLog("[WalletManager] Node unreachable: %@ (HTTP %d)", nodeURLString, (response as? HTTPURLResponse)?.statusCode ?? 0)
                     self.nodeReachable = false
                 }
                 self.updateConnectionStage()
             }
         }.resume()
+    }
+
+    /// Retry reachability test with exponential backoff (5s, 10s, 20s)
+    private func scheduleReachabilityRetry() {
+        // Don't schedule if already retrying or max attempts reached
+        guard reachabilityRetryTask == nil, reachabilityRetryCount < 3 else { return }
+
+        let delay: UInt64 = switch reachabilityRetryCount {
+        case 0: 5_000_000_000   // 5s
+        case 1: 10_000_000_000  // 10s
+        default: 20_000_000_000 // 20s
+        }
+
+        reachabilityRetryCount += 1
+        NSLog("[WalletManager] Scheduling reachability retry %d/3 in %ds", reachabilityRetryCount, delay / 1_000_000_000)
+
+        reachabilityRetryTask = Task {
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled else { return }
+            self.reachabilityRetryTask = nil
+            self.testNodeReachability()
+        }
     }
 
     // MARK: - Widget Data
@@ -620,6 +673,16 @@ class WalletManager: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
+        // If stuck on unreachable, reset and re-test (user escape hatch)
+        if nodeReachable == false {
+            NSLog("[WalletManager] Pull-to-refresh: resetting stuck reachability state")
+            nodeReachable = nil
+            reachabilityRetryCount = 0
+            reachabilityRetryTask?.cancel()
+            reachabilityRetryTask = nil
+            updateConnectionStage()
+        }
+
         // Let MoneroKit determine actual sync state via walletStateDidChange() callback
         // Don't force .connecting - if already synced and no new blocks, stay synced
         moneroWallet?.startSync()
@@ -660,6 +723,9 @@ class WalletManager: ObservableObject {
                 try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
                 moneroWallet = wallet
                 bindToWallet(wallet)
+
+                // Reset connection tracking for the new node
+                startConnectionTracking()
             } catch {
                 syncState = .error("Failed to reconnect: \(error.localizedDescription)")
             }
@@ -901,5 +967,26 @@ enum ConnectionStage: Equatable {
             return String(format: "%.1fK", Double(height) / 1_000)
         }
         return "\(height)"
+    }
+}
+
+// MARK: - URLSession Delegate for Node Reachability
+
+/// Accepts all server certificates for node reachability checks.
+/// Matches the behavior of NodeManager's NWConnection latency tests,
+/// which use `sec_protocol_options_set_verify_block { _, _, complete in complete(true) }`.
+private class AllCertsTrustDelegate: NSObject, URLSessionDelegate {
+    static let shared = AllCertsTrustDelegate()
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        if let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
     }
 }

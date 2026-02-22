@@ -18,9 +18,11 @@ class KeychainStorage {
         migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.seed")
         migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.pinhash")
         migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.salt")
+        migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.pinlength")
         migrateKeychainItem(account: "one.monero.MoneroOne.testnet.seed")
         migrateKeychainItem(account: "one.monero.MoneroOne.testnet.pinhash")
         migrateKeychainItem(account: "one.monero.MoneroOne.testnet.salt")
+        migrateKeychainItem(account: "one.monero.MoneroOne.testnet.pinlength")
 
         // Biometric PIN uses access control, handle separately
         migrateBiometricPinIfNeeded()
@@ -102,6 +104,10 @@ class KeychainStorage {
 
     private var saltKey: String {
         "one.monero.MoneroOne.\(networkPrefix).salt"
+    }
+
+    private var pinLengthKey: String {
+        "one.monero.MoneroOne.\(networkPrefix).pinlength"
     }
 
     // Biometric PIN is shared across networks (same PIN unlocks both)
@@ -304,6 +310,47 @@ class KeychainStorage {
             kSecAttrAccount as String: saltKey
         ]
         SecItemDelete(saltQuery as CFDictionary)
+    }
+
+    // MARK: - PIN Length Storage
+
+    func savePinLength(_ length: Int) {
+        let data = Data("\(length)".utf8)
+
+        // Delete existing
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: pinLengthKey
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: pinLengthKey,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    func getPinLength() -> Int? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: pinLengthKey,
+            kSecReturnData as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let str = String(data: data, encoding: .utf8),
+              let length = Int(str) else {
+            return nil
+        }
+
+        return length
     }
 
     // MARK: - Biometric PIN Storage

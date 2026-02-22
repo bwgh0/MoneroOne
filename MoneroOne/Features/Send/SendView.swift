@@ -263,6 +263,8 @@ struct SendView: View {
                         showConfirmation = false
                     }
                 )
+                .environmentObject(walletManager)
+                .environmentObject(priceService)
             }
             .sheet(isPresented: $showProgress) {
                 TransactionProgressView(
@@ -278,6 +280,8 @@ struct SendView: View {
                         sendTransaction()
                     } : nil
                 )
+                .environmentObject(walletManager)
+                .environmentObject(priceService)
             }
             .onAppear {
                 if let addr = walletManager.prefillSendAddress {

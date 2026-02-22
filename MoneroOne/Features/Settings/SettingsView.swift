@@ -190,13 +190,7 @@ struct SettingsView: View {
                                 .cornerRadius(6)
 
                             Text("Donate XMR")
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.pink, .orange, .yellow],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                                .foregroundColor(.orange)
                                 .fontWeight(.medium)
                         }
                     }

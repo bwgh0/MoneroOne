@@ -105,31 +105,26 @@ class MoneroWallet: ObservableObject {
     }
 
     private func defaultNode(for networkType: MoneroKit.NetworkType = .mainnet) -> MoneroKit.Node {
-        if networkType == .testnet {
-            // Testnet node (port 28081)
-            let defaultTestnetURL = Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081"
-            let testnetURL = UserDefaults.standard.string(forKey: "selectedTestnetNodeURL") ?? defaultTestnetURL
-            // Use default if URL is invalid
-            let url = URL(string: testnetURL) ?? URL(string: defaultTestnetURL)!
-            return MoneroKit.Node(
-                url: url,
-                isTrusted: false,
-                login: nil,
-                password: nil
-            )
-        } else {
-            // Mainnet - Load from UserDefaults or use default
-            let defaultMainnetURL = "https://xmr-node.cakewallet.com:18081"
-            let savedURL = UserDefaults.standard.string(forKey: "selectedNodeURL") ?? defaultMainnetURL
-            // Use default if URL is invalid
-            let url = URL(string: savedURL) ?? URL(string: defaultMainnetURL)!
-            return MoneroKit.Node(
-                url: url,
-                isTrusted: false,
-                login: nil,
-                password: nil
-            )
-        }
+        let isTestnet = networkType == .testnet
+        let urlKey = isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
+        let loginKey = isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin"
+        let passwordKey = isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword"
+
+        let defaultURL = isTestnet
+            ? (Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081")
+            : "https://xmr-node.cakewallet.com:18081"
+        let savedURL = UserDefaults.standard.string(forKey: urlKey) ?? defaultURL
+        let url = URL(string: savedURL) ?? URL(string: defaultURL)!
+
+        let login = UserDefaults.standard.string(forKey: loginKey)
+        let password = UserDefaults.standard.string(forKey: passwordKey)
+
+        return MoneroKit.Node(
+            url: url,
+            isTrusted: false,
+            login: login,
+            password: password
+        )
     }
 
     /// Available public mainnet nodes

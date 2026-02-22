@@ -63,7 +63,7 @@ struct DonationView: View {
                             Text(copied ? "Copied!" : "Copy")
                                 .fontWeight(.medium)
                         }
-                        .foregroundColor(copied ? .green : .white)
+                        .foregroundColor(copied ? .green : .primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(copied ? Color.green.opacity(0.2) : Color(.secondarySystemBackground))

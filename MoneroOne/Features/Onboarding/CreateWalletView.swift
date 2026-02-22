@@ -455,6 +455,7 @@ struct CreateWalletView: View {
                 let chainHeight = await fetchCurrentChainHeight()
 
                 try walletManager.saveWallet(mnemonic: mnemonic, pin: pin, restoreHeight: chainHeight)
+                KeychainStorage().savePinLength(selectedPINLength)
 
                 // Enable biometrics if user opted in
                 if enableBiometrics {

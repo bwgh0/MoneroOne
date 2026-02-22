@@ -477,6 +477,7 @@ struct RestoreWalletView: View {
                     restoreDate = useCreationDate ? walletCreationDate : nil
                 }
                 try walletManager.restoreWallet(mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
+                KeychainStorage().savePinLength(selectedPINLength)
 
                 // Enable biometrics if user opted in
                 if enableBiometrics {

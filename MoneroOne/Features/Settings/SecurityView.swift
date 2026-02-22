@@ -289,6 +289,7 @@ struct ChangePINView: View {
 
             // Save wallet with new PIN
             try walletManager.saveWallet(mnemonic: seed, pin: newPIN)
+            KeychainStorage().savePinLength(selectedPINLength)
 
             // Update biometric PIN if enabled
             if walletManager.hasBiometricPinStored {

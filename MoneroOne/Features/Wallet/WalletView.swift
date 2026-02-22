@@ -102,9 +102,13 @@ struct WalletView: View {
             }
             .sheet(isPresented: $showReceive) {
                 ReceiveView()
+                    .environmentObject(walletManager)
+                    .environmentObject(priceService)
             }
             .sheet(isPresented: $showSend) {
                 SendView()
+                    .environmentObject(walletManager)
+                    .environmentObject(priceService)
             }
             .onChange(of: walletManager.shouldShowSendView) { show in
                 if show {
@@ -117,6 +121,8 @@ struct WalletView: View {
                     balance: walletManager.balance,
                     priceService: priceService
                 )
+                .environmentObject(walletManager)
+                .environmentObject(priceService)
             }
         }
     }

@@ -107,6 +107,11 @@ struct UnlockView: View {
             Text("This will delete all wallet data from this device. You can restore your wallet using your seed phrase.\n\nThis action cannot be undone.")
         }
         .onAppear {
+            // If UserDefaults was reset (reinstall/TestFlight), recover PIN length from keychain
+            if UserDefaults.standard.object(forKey: "preferredPINLength") == nil,
+               let keychainLength = KeychainStorage().getPinLength() {
+                preferredPINLength = keychainLength
+            }
             triggerBiometricsIfAvailable()
         }
         .onChange(of: scenePhase) { newPhase in

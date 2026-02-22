@@ -700,8 +700,10 @@ class WalletManager: ObservableObject {
 
     /// Set node URL and restart wallet to use new node immediately
     @discardableResult
-    func setNode(url: String, isTrusted: Bool = false) -> Bool {
+    func setNode(url: String, isTrusted: Bool = false, login: String? = nil, password: String? = nil) -> Bool {
         UserDefaults.standard.set(url, forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL")
+        UserDefaults.standard.set(login, forKey: isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin")
+        UserDefaults.standard.set(password, forKey: isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword")
 
         // If wallet is running, restart with new node
         if isUnlocked, let seed = currentSeed {
@@ -972,18 +974,49 @@ enum ConnectionStage: Equatable {
 
 // MARK: - URLSession Delegate for Node Reachability
 
-/// Accepts all server certificates for node reachability checks.
+/// Accepts all server certificates and handles digest auth for node reachability checks.
 /// Matches the behavior of NodeManager's NWConnection latency tests,
 /// which use `sec_protocol_options_set_verify_block { _, _, complete in complete(true) }`.
-private class AllCertsTrustDelegate: NSObject, URLSessionDelegate {
+private class AllCertsTrustDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
     static let shared = AllCertsTrustDelegate()
 
+    // Session-level: TLS trust
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         if let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
+    }
+
+    // Task-level: HTTP digest/basic auth (monerod uses digest)
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPDigest ||
+           challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic {
+            // Only attempt credentials once to avoid loops
+            guard challenge.previousFailureCount == 0 else {
+                completionHandler(.cancelAuthenticationChallenge, nil)
+                return
+            }
+            let isTestnet = UserDefaults.standard.bool(forKey: "isTestnet")
+            let login = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin")
+            let password = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword")
+            if let login = login, !login.isEmpty {
+                let credential = URLCredential(user: login, password: password ?? "", persistence: .forSession)
+                completionHandler(.useCredential, credential)
+            } else {
+                completionHandler(.performDefaultHandling, nil)
+            }
+        } else if let trust = challenge.protectionSpace.serverTrust {
             completionHandler(.useCredential, URLCredential(trust: trust))
         } else {
             completionHandler(.performDefaultHandling, nil)

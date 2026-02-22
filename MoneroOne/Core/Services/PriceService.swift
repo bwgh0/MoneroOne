@@ -23,6 +23,8 @@ class PriceService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
     @Published var chartDataCache: [String: [PriceDataPoint]] = [:]
+    private var chartDataTimestamps: [String: Date] = [:]
+    private let chartCacheTTL: TimeInterval = 300 // 5 minutes
     @Published var currentChartRange: String = "7D"
     @Published var isLoadingChart = false
     @Published var chartSmoothingMode: ChartSmoothingMode = .emaSmoothed
@@ -217,10 +219,27 @@ class PriceService: ObservableObject {
                 }
             }
 
+            // Update the trailing live-price point in all cached chart ranges
+            updateCachedChartEndpoints()
+
             // Save price data for widget
             savePriceWidgetData()
         } else {
             throw URLError(.cannotParseResponse)
+        }
+    }
+
+    /// Replace the last data point in each cached chart range with the current live price.
+    /// This keeps the chart tip pinned to the real price between full chart refreshes.
+    private func updateCachedChartEndpoints() {
+        guard let livePrice = xmrPrice, usdToSelectedRate > 0 else { return }
+        let liveUSD = livePrice / usdToSelectedRate
+        let now = Date()
+
+        for key in chartDataCache.keys {
+            guard var points = chartDataCache[key], !points.isEmpty else { continue }
+            points[points.count - 1] = PriceDataPoint(timestamp: now, price: liveUSD)
+            chartDataCache[key] = points
         }
     }
 
@@ -316,24 +335,22 @@ class PriceService: ObservableObject {
         result.reserveCapacity(data.count)
         result.append(data[0])
 
-        // Smooth all points except the last one
-        for i in 1..<(data.count - 1) {
+        for i in 1..<data.count {
             let smoothedPrice = alpha * data[i].price + (1 - alpha) * result[i - 1].price
             result.append(PriceDataPoint(timestamp: data[i].timestamp, price: smoothedPrice))
         }
-
-        // Keep last point unchanged so chart endpoint matches current price
-        result.append(data[data.count - 1])
 
         return result
     }
 
     /// Fetch chart data using CoinMarketCap ranges: "1D", "7D", "1M", "1Y", "All"
-    func fetchChartData(range: String = "7D") async {
+    func fetchChartData(range: String = "7D", force: Bool = false) async {
         currentChartRange = range
 
-        // Return cached data if available
-        if chartDataCache[range] != nil {
+        // Return cached data if available and not expired
+        if !force, let cached = chartDataCache[range], !cached.isEmpty,
+           let timestamp = chartDataTimestamps[range],
+           Date().timeIntervalSince(timestamp) < chartCacheTTL {
             isLoadingChart = false
             return
         }
@@ -424,8 +441,16 @@ class PriceService: ObservableObject {
                 newChartData = applyEMA(newChartData, alpha: 0.3)
             }
 
+            // Append current live price so the chart ends at "now" instead of the
+            // last API interval (which can be hours/days old for longer ranges).
+            if !newChartData.isEmpty, let livePrice = xmrPrice, usdToSelectedRate > 0 {
+                let liveUSD = livePrice / usdToSelectedRate
+                newChartData.append(PriceDataPoint(timestamp: Date(), price: liveUSD))
+            }
+
             if !newChartData.isEmpty {
                 chartDataCache[range] = newChartData
+                chartDataTimestamps[range] = Date()
                 // Save updated chart data for widget
                 savePriceWidgetData()
             }
@@ -440,6 +465,7 @@ class PriceService: ObservableObject {
     func setChartSmoothingMode(_ mode: ChartSmoothingMode) {
         chartSmoothingMode = mode
         chartDataCache.removeAll()  // Clear cache to regenerate with new mode
+        chartDataTimestamps.removeAll()
         Task {
             let ranges = ["7D", "1D", "1M", "1Y", "All"]
             for range in ranges {

@@ -6,11 +6,19 @@ struct MoneroNode: Identifiable, Codable, Equatable {
     let name: String
     let url: String
     let isTrusted: Bool
+    let login: String?
+    let password: String?
 
-    init(name: String, url: String, isTrusted: Bool = false) {
+    init(name: String, url: String, isTrusted: Bool = false, login: String? = nil, password: String? = nil) {
         self.name = name
         self.url = url
         self.isTrusted = isTrusted
+        self.login = login
+        self.password = password
+    }
+
+    var hasCredentials: Bool {
+        login != nil && !(login?.isEmpty ?? true)
     }
 }
 
@@ -28,7 +36,10 @@ struct NodeStats {
     }
 
     var uptimeColor: UptimeColor {
-        guard let uptime = uptimeMonth else { return .unknown }
+        guard let uptime = uptimeMonth else {
+            // No uptime data — if latency is good, the node is up
+            return latencyMs != nil ? .green : .unknown
+        }
         if uptime >= 99.0 {
             return .green
         } else if uptime >= 95.0 {
@@ -93,6 +104,12 @@ class NodeManager: ObservableObject {
     private var autoSelectKey: String {
         isTestnet ? "autoSelectTestnetNode" : "autoSelectNode"
     }
+    private var selectedNodeLoginKey: String {
+        isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin"
+    }
+    private var selectedNodePasswordKey: String {
+        isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword"
+    }
 
     var isTestnet: Bool {
         UserDefaults.standard.bool(forKey: "isTestnet")
@@ -133,10 +150,13 @@ class NodeManager: ObservableObject {
     func selectNode(_ node: MoneroNode) {
         selectedNode = node
         UserDefaults.standard.set(node.url, forKey: selectedNodeKey)
+        // Persist credentials (or clear them for nodes without auth)
+        UserDefaults.standard.set(node.login, forKey: selectedNodeLoginKey)
+        UserDefaults.standard.set(node.password, forKey: selectedNodePasswordKey)
     }
 
-    func addCustomNode(name: String, url: String, isTrusted: Bool = false) {
-        let node = MoneroNode(name: name, url: url, isTrusted: isTrusted)
+    func addCustomNode(name: String, url: String, isTrusted: Bool = false, login: String? = nil, password: String? = nil) {
+        let node = MoneroNode(name: name, url: url, isTrusted: isTrusted, login: login, password: password)
         customNodes.append(node)
         saveCustomNodes()
     }
@@ -361,8 +381,7 @@ class NodeManager: ObservableObject {
         }
 
         if let best = best, selectedNode.url != best.url {
-            selectedNode = best
-            UserDefaults.standard.set(best.url, forKey: selectedNodeKey)
+            selectNode(best)
         }
     }
 

@@ -486,9 +486,9 @@ class WalletManager: ObservableObject {
     private func testNodeReachability() {
         // Get node URL from UserDefaults
         #if DEBUG
-        let defaultURL = isTestnet ? "http://testnet.xmr-tw.org:28081" : "https://xmr-node.cakewallet.com:18081"
+        let defaultURL = isTestnet ? "http://testnet.xmr-tw.org:28081" : "https://node.monero.one:443"
         #else
-        let defaultURL = "https://xmr-node.cakewallet.com:18081"
+        let defaultURL = "https://node.monero.one:443"
         #endif
         let nodeURLString = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL")
             ?? defaultURL

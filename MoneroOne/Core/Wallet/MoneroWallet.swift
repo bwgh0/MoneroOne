@@ -112,7 +112,7 @@ class MoneroWallet: ObservableObject {
 
         let defaultURL = isTestnet
             ? (Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081")
-            : "https://xmr-node.cakewallet.com:18081"
+            : "https://node.monero.one:443"
         let savedURL = UserDefaults.standard.string(forKey: urlKey) ?? defaultURL
         let url = URL(string: savedURL) ?? URL(string: defaultURL)!
 
@@ -128,14 +128,6 @@ class MoneroWallet: ObservableObject {
             proxy: proxy
         )
     }
-
-    /// Available public mainnet nodes
-    static let publicNodes: [(name: String, url: String)] = [
-        ("CakeWallet", "https://xmr-node.cakewallet.com:18081"),
-        ("MoneroWorld", "https://node.moneroworld.com:18089"),
-        ("Community Node", "https://nodes.hashvault.pro:18081"),
-        ("XMR.to", "https://node.xmr.to:18081")
-    ]
 
     #if DEBUG
     /// Available public testnet nodes (port 28081/28089)

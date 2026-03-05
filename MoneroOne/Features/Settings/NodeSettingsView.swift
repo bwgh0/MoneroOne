@@ -9,29 +9,112 @@ struct NodeSettingsView: View {
 
     var body: some View {
         List {
-            // Auto Select Section
+            // Nodes section — flat list, default + custom together
             Section {
                 Toggle(isOn: $nodeManager.autoSelectEnabled) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Auto Select")
                             .font(.body)
-                        Text("Automatically picks fastest reliable node")
+                        Text("Picks fastest reliable node")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
                 .tint(.orange)
-            }
 
-            Section(nodeManager.isTestnet ? "Testnet Nodes" : "Default Nodes") {
                 ForEach(nodeManager.currentDefaultNodes) { node in
                     nodeRow(node: node)
                 }
+
+                ForEach(customClearnetNodes) { node in
+                    HStack {
+                        nodeRow(node: node)
+                        Button {
+                            editingNode = node
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .onDelete(perform: deleteCustomNode)
+
+                Button {
+                    showAddNode = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.orange)
+                        Text("Add Node")
+                    }
+                }
+            } header: {
+                Text(nodeManager.isTestnet ? "Testnet Nodes" : "Nodes")
             }
 
-            if !nodeManager.customNodes.isEmpty {
-                Section("Custom Nodes") {
-                    ForEach(nodeManager.customNodes) { node in
+            // Privacy section
+            Section {
+                Toggle(isOn: Binding(
+                    get: { !proxyText.isEmpty },
+                    set: { enabled in
+                        if enabled {
+                            proxyText = "127.0.0.1:9050"
+                            // Auto-select first .onion node
+                            if let torNode = NodeManager.torNodes.first {
+                                selectNode(torNode)
+                            }
+                        } else {
+                            proxyText = ""
+                            // Switch off .onion node if selected
+                            if nodeManager.selectedNode.url.contains(".onion") {
+                                if let fallback = nodeManager.currentDefaultNodes.first {
+                                    selectNode(fallback)
+                                }
+                            }
+                        }
+                        applyProxy()
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Use Tor")
+                            .font(.body)
+                        Text("Route through Orbot or local Tor proxy")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .tint(.orange)
+
+                if !proxyText.isEmpty {
+                    HStack {
+                        Text("Proxy")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        TextField("127.0.0.1:9050", text: $proxyText)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .multilineTextAlignment(.trailing)
+                            .onSubmit {
+                                applyProxy()
+                            }
+                    }
+                }
+            } header: {
+                Text("Privacy")
+            }
+
+            // Tor nodes — only visible when proxy is active
+            if !proxyText.isEmpty {
+                Section {
+                    ForEach(NodeManager.torNodes) { node in
+                        nodeRow(node: node)
+                    }
+
+                    ForEach(customOnionNodes) { node in
                         HStack {
                             nodeRow(node: node)
                             Button {
@@ -45,36 +128,21 @@ struct NodeSettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .onDelete(perform: deleteCustomNode)
+                    .onDelete(perform: deleteCustomOnionNode)
+
+                    Button {
+                        showAddNode = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.orange)
+                            Text("Add Node")
+                        }
+                    }
+                } header: {
+                    Text("Tor Nodes")
                 }
             }
-
-            Section {
-                Button {
-                    showAddNode = true
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.orange)
-                        Text("Add Custom Node")
-                    }
-                }
-            }
-
-            Section {
-                TextField("127.0.0.1:9050", text: $proxyText)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .onSubmit {
-                        applyProxy()
-                    }
-            } header: {
-                Text("SOCKS Proxy")
-            } footer: {
-                Text("Route connections through a SOCKS proxy (e.g. Orbot for Tor)")
-            }
-
         }
         .navigationTitle(nodeManager.isTestnet ? "Remote Node (Testnet)" : "Remote Node")
         .navigationBarTitleDisplayMode(.inline)
@@ -88,7 +156,6 @@ struct NodeSettingsView: View {
             proxyText = nodeManager.proxyAddress
         }
         .onChange(of: proxyText) { _, newValue in
-            // Apply when user clears the field
             if newValue.isEmpty && !nodeManager.proxyAddress.isEmpty {
                 applyProxy()
             }
@@ -104,7 +171,6 @@ struct NodeSettingsView: View {
         .sheet(item: $editingNode) { node in
             EditCustomNodeView(node: node) { name, url, login, password in
                 nodeManager.updateCustomNode(oldURL: node.url, name: name, url: url, login: login, password: password)
-                // If this was the selected node, reconnect
                 if nodeManager.selectedNode.id == node.id {
                     let updatedNode = MoneroNode(name: name, url: url, login: login, password: password)
                     nodeManager.selectNode(updatedNode)
@@ -122,7 +188,6 @@ struct NodeSettingsView: View {
         let stats = nodeManager.nodeStats[node.url]
 
         return Button {
-            // If auto-select is on, turn it off — manual tap implies manual control
             if nodeManager.autoSelectEnabled {
                 nodeManager.autoSelectEnabled = false
             }
@@ -155,6 +220,8 @@ struct NodeSettingsView: View {
                     Text(node.url)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
 
                     // Stats row
                     if node.url.contains(".onion") {
@@ -173,23 +240,21 @@ struct NodeSettingsView: View {
                         }
                     } else if let stats = stats {
                         HStack(spacing: 8) {
-                            // Uptime indicator
                             HStack(spacing: 4) {
                                 Circle()
                                     .fill(uptimeColor(for: stats))
                                     .frame(width: 8, height: 8)
                                 if let uptime = stats.uptimeMonth {
-                                    Text(String(format: "%.1f%% uptime", uptime))
+                                    Text(String(format: "%.1f%%", uptime))
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                 } else {
-                                    Text("Unknown uptime")
+                                    Text("--")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
                             }
 
-                            // Latency
                             if let latency = stats.latencyMs {
                                 Text("•")
                                     .foregroundColor(.secondary)
@@ -199,12 +264,6 @@ struct NodeSettingsView: View {
                             } else if nodeManager.isLoadingStats {
                                 ProgressView()
                                     .scaleEffect(0.5)
-                            } else {
-                                Text("•")
-                                    .foregroundColor(.secondary)
-                                Text("--")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
                             }
                         }
                     } else if nodeManager.isLoadingStats {
@@ -231,15 +290,19 @@ struct NodeSettingsView: View {
 
     private func uptimeColor(for stats: NodeStats) -> Color {
         switch stats.uptimeColor {
-        case .green:
-            return .green
-        case .yellow:
-            return .yellow
-        case .red:
-            return .red
-        case .unknown:
-            return .gray
+        case .green: return .green
+        case .yellow: return .yellow
+        case .red: return .red
+        case .unknown: return .gray
         }
+    }
+
+    private var customClearnetNodes: [MoneroNode] {
+        nodeManager.customNodes.filter { !$0.url.contains(".onion") }
+    }
+
+    private var customOnionNodes: [MoneroNode] {
+        nodeManager.customNodes.filter { $0.url.contains(".onion") }
     }
 
     private func selectNode(_ node: MoneroNode) {
@@ -248,9 +311,16 @@ struct NodeSettingsView: View {
     }
 
     private func deleteCustomNode(at offsets: IndexSet) {
+        let nodes = customClearnetNodes
         for index in offsets {
-            let node = nodeManager.customNodes[index]
-            nodeManager.removeCustomNode(node)
+            nodeManager.removeCustomNode(nodes[index])
+        }
+    }
+
+    private func deleteCustomOnionNode(at offsets: IndexSet) {
+        let nodes = customOnionNodes
+        for index in offsets {
+            nodeManager.removeCustomNode(nodes[index])
         }
     }
 
@@ -307,7 +377,7 @@ struct AddCustomNodeView: View {
                     Text("Only needed for nodes that require RPC credentials")
                 }
             }
-            .navigationTitle("Add Custom Node")
+            .navigationTitle("Add Node")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

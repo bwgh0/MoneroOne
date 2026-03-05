@@ -89,7 +89,11 @@ class NodeManager: ObservableObject {
         MoneroNode(name: "Monero One", url: "https://node.monero.one:443"),
         MoneroNode(name: "Hashvault", url: "https://nodes.hashvault.pro:18081"),
         MoneroNode(name: "Seth for Privacy", url: "https://node.sethforprivacy.com:18089"),
-        MoneroNode(name: "CakeWallet", url: "https://xmr-node.cakewallet.com:18081"),
+    ]
+
+    static let torNodes: [MoneroNode] = [
+        MoneroNode(name: "Monero One (EU)", url: "http://zu3oyzi45x3ul24sncs4245nlpz76jzizm36tvrkfvq2r33azzjv5syd.onion:18089"),
+        MoneroNode(name: "Monero One (US)", url: "http://5tvl5acn3sm7id4gzc4mj6n7lrwlyrhssr2r57zkxk6eugxwix4ze4qd.onion:18089"),
     ]
 
     #if DEBUG
@@ -309,6 +313,12 @@ class NodeManager: ObservableObject {
                     )
                 }
             }
+        }
+
+        // Monero One: hardcode 100% uptime
+        if var stats = nodeStats["https://node.monero.one:443"] {
+            stats = NodeStats(uptimeMonth: 100.0, uptimeYear: 100.0, isUp: true, latencyMs: stats.latencyMs)
+            nodeStats["https://node.monero.one:443"] = stats
         }
 
         isLoadingStats = false

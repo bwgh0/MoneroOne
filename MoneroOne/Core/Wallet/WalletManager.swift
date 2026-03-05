@@ -226,7 +226,7 @@ class WalletManager: ObservableObject {
 
     // MARK: - Wallet Unlock
 
-    func unlock(pin: String) throws {
+    func unlock(pin: String) async throws {
         guard let seedPhrase = try keychain.getSeed(pin: pin) else {
             throw WalletError.invalidPin
         }
@@ -241,7 +241,7 @@ class WalletManager: ObservableObject {
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
 
         do {
-            try wallet.create(seed: mnemonic, restoreHeight: walletRestoreHeight, resetSuffix: resetSuffix, networkType: networkType)
+            try await wallet.create(seed: mnemonic, restoreHeight: walletRestoreHeight, resetSuffix: resetSuffix, networkType: networkType)
         } catch {
             throw WalletError.invalidMnemonic
         }
@@ -775,16 +775,18 @@ class WalletManager: ObservableObject {
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
         let netType = networkType
 
-        // Create new wallet (Kit.init is fast; kit.start() dispatches to lifecycleQueue)
-        do {
-            let wallet = MoneroWallet()
-            try wallet.create(seed: seed, restoreHeight: walletRestoreHeight,
-                              resetSuffix: resetSuffix, networkType: netType)
-            moneroWallet = wallet
-            bindToWallet(wallet)
-            startConnectionTracking()
-        } catch {
-            syncState = .error("Failed to reconnect: \(error.localizedDescription)")
+        // Create new wallet — Kit init runs off main via async create()
+        Task {
+            do {
+                let wallet = MoneroWallet()
+                try await wallet.create(seed: seed, restoreHeight: walletRestoreHeight,
+                                  resetSuffix: resetSuffix, networkType: netType)
+                self.moneroWallet = wallet
+                self.bindToWallet(wallet)
+                self.startConnectionTracking()
+            } catch {
+                self.syncState = .error("Failed to reconnect: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -828,11 +830,11 @@ class WalletManager: ObservableObject {
     }
 
     /// Unlock using biometrics - retrieves PIN via Face ID/Touch ID
-    func unlockWithBiometrics() throws {
+    func unlockWithBiometrics() async throws {
         guard let pin = keychain.getPinWithBiometrics() else {
             throw WalletError.biometricFailed
         }
-        try unlock(pin: pin)
+        try await unlock(pin: pin)
     }
 
     // MARK: - Reset Sync
@@ -863,14 +865,18 @@ class WalletManager: ObservableObject {
 
         // Get restore height from UserDefaults (network-specific)
         let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        let netType = networkType
 
-        do {
-            let wallet = MoneroWallet()
-            try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: "\(resetCount)", networkType: networkType)
-            moneroWallet = wallet
-            bindToWallet(wallet)
-        } catch {
-            syncState = .error("Failed to restart wallet: \(error.localizedDescription)")
+        // Create new wallet — Kit init runs off main via async create()
+        Task {
+            do {
+                let wallet = MoneroWallet()
+                try await wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: "\(resetCount)", networkType: netType)
+                self.moneroWallet = wallet
+                self.bindToWallet(wallet)
+            } catch {
+                self.syncState = .error("Failed to restart wallet: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -944,17 +950,21 @@ class WalletManager: ObservableObject {
 
         // Reinitialize with new network (will use different walletId due to network suffix)
         // Note: isTestnet has already been toggled by the caller
-        do {
-            let wallet = MoneroWallet()
-            let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
-            let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
-            let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
+        let walletRestoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+        let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
+        let netType = networkType
 
-            try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
-            moneroWallet = wallet
-            bindToWallet(wallet)
-        } catch {
-            syncState = .error("Failed to switch network: \(error.localizedDescription)")
+        // Create new wallet — Kit init runs off main via async create()
+        Task {
+            do {
+                let wallet = MoneroWallet()
+                try await wallet.create(seed: seed, restoreHeight: walletRestoreHeight, resetSuffix: resetSuffix, networkType: netType)
+                self.moneroWallet = wallet
+                self.bindToWallet(wallet)
+            } catch {
+                self.syncState = .error("Failed to switch network: \(error.localizedDescription)")
+            }
         }
     }
 }

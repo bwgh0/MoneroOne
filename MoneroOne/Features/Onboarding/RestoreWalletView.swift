@@ -490,7 +490,7 @@ struct RestoreWalletView: View {
                     try walletManager.enableBiometricUnlock(pin: pin)
                 }
 
-                try walletManager.unlock(pin: pin)
+                try await walletManager.unlock(pin: pin)
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription

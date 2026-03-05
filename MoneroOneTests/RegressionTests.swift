@@ -63,13 +63,18 @@ final class WalletLifecycleRegressionTests: XCTestCase {
         try walletManager.saveWallet(mnemonic: mnemonic, pin: "123456")
 
         // Correct PIN
-        try walletManager.unlock(pin: "123456")
+        try await walletManager.unlock(pin: "123456")
         XCTAssertTrue(walletManager.isUnlocked)
 
         walletManager.lock()
 
         // Wrong PIN
-        XCTAssertThrowsError(try walletManager.unlock(pin: "000000"))
+        do {
+            try await walletManager.unlock(pin: "000000")
+            XCTFail("Should throw for wrong PIN")
+        } catch {
+            // Expected
+        }
         XCTAssertFalse(walletManager.isUnlocked)
     }
 
@@ -77,7 +82,7 @@ final class WalletLifecycleRegressionTests: XCTestCase {
     func testLockClearsAllState() async throws {
         let mnemonic = walletManager.generateNewWallet()
         try walletManager.saveWallet(mnemonic: mnemonic, pin: "1234")
-        try walletManager.unlock(pin: "1234")
+        try await walletManager.unlock(pin: "1234")
 
         walletManager.lock()
 
@@ -114,7 +119,7 @@ final class WalletLifecycleRegressionTests: XCTestCase {
         try walletManager.saveWallet(mnemonic: mnemonic, pin: pin)
 
         for _ in 0..<3 {
-            try walletManager.unlock(pin: pin)
+            try await walletManager.unlock(pin: pin)
             XCTAssertTrue(walletManager.isUnlocked)
             walletManager.lock()
             XCTAssertFalse(walletManager.isUnlocked)

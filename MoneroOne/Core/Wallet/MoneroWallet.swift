@@ -46,7 +46,7 @@ class MoneroWallet: ObservableObject {
     ///   - node: Optional custom node
     ///   - resetSuffix: Optional suffix to force new walletId (used for reset sync)
     ///   - networkType: Mainnet or testnet
-    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) throws {
+    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) async throws {
         let walletNode = node ?? defaultNode(for: networkType)
         var walletId = Self.stableWalletId(for: seed)
 
@@ -70,37 +70,47 @@ class MoneroWallet: ObservableObject {
             credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
         }
 
-        kit = try MoneroKit.Kit(
-            wallet: credentials,
-            account: 0,
-            restoreHeight: restoreHeight,
-            walletId: walletId,
-            node: walletNode,
-            networkType: networkType,
-            reachabilityManager: reachabilityManager,
-            logger: nil
-        )
+        // Heavy Kit init (SQLite + C++ + crypto) off main thread
+        let reachability = reachabilityManager
+        let newKit = try await Task.detached {
+            try MoneroKit.Kit(
+                wallet: credentials,
+                account: 0,
+                restoreHeight: restoreHeight,
+                walletId: walletId,
+                node: walletNode,
+                networkType: networkType,
+                reachabilityManager: reachability,
+                logger: nil
+            )
+        }.value
 
+        kit = newKit
         setupKit()
     }
 
     /// Create watch-only wallet
-    func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, networkType: MoneroKit.NetworkType = .mainnet) throws {
+    func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, networkType: MoneroKit.NetworkType = .mainnet) async throws {
         let walletNode = node ?? defaultNode(for: networkType)
         let networkSuffix = networkType == .testnet ? "_testnet" : ""
         let walletId = Self.stableWalletId(for: address + viewKey + networkSuffix)
 
-        kit = try MoneroKit.Kit(
-            wallet: .watch(address: address, viewKey: viewKey),
-            account: 0,
-            restoreHeight: restoreHeight,
-            walletId: walletId,
-            node: walletNode,
-            networkType: networkType,
-            reachabilityManager: reachabilityManager,
-            logger: nil
-        )
+        // Heavy Kit init (SQLite + C++ + crypto) off main thread
+        let reachability = reachabilityManager
+        let newKit = try await Task.detached {
+            try MoneroKit.Kit(
+                wallet: .watch(address: address, viewKey: viewKey),
+                account: 0,
+                restoreHeight: restoreHeight,
+                walletId: walletId,
+                node: walletNode,
+                networkType: networkType,
+                reachabilityManager: reachability,
+                logger: nil
+            )
+        }.value
 
+        kit = newKit
         setupKit()
     }
 

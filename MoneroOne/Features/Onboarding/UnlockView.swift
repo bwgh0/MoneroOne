@@ -145,36 +145,36 @@ struct UnlockView: View {
         isUnlocking = true
         errorMessage = nil
 
-        do {
-            try walletManager.unlock(pin: pin)
-            // Success - ContentView will show MainTabView
-        } catch {
-            attempts += 1
-            errorMessage = "Invalid PIN"
-            pin = ""
+        Task {
+            do {
+                try await walletManager.unlock(pin: pin)
+                // Success - ContentView will show MainTabView
+            } catch {
+                attempts += 1
+                errorMessage = "Invalid PIN"
+                pin = ""
 
-            // Haptic feedback
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.error)
+                // Haptic feedback
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+            isUnlocking = false
         }
-
-        isUnlocking = false
     }
 
     private func unlockWithBiometrics() {
         isUnlocking = true
         errorMessage = nil
 
-        // The keychain will prompt for Face ID/Touch ID automatically
-        do {
-            try walletManager.unlockWithBiometrics()
-            // Success
-        } catch {
-            // Biometric failed or was cancelled - user can try PIN
-            errorMessage = nil // Don't show error, just let them use PIN
+        Task {
+            do {
+                try await walletManager.unlockWithBiometrics()
+                // Success
+            } catch {
+                // Biometric failed or was cancelled - user can try PIN
+                errorMessage = nil
+            }
+            isUnlocking = false
         }
-
-        isUnlocking = false
     }
 }
 

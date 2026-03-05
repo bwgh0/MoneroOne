@@ -4,6 +4,8 @@ struct NodeSettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @StateObject private var nodeManager = NodeManager()
     @State private var showAddNode = false
+    @State private var editingNode: MoneroNode? = nil
+    @State private var proxyText: String = ""
 
     var body: some View {
         List {
@@ -30,7 +32,18 @@ struct NodeSettingsView: View {
             if !nodeManager.customNodes.isEmpty {
                 Section("Custom Nodes") {
                     ForEach(nodeManager.customNodes) { node in
-                        nodeRow(node: node)
+                        HStack {
+                            nodeRow(node: node)
+                            Button {
+                                editingNode = node
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     .onDelete(perform: deleteCustomNode)
                 }
@@ -48,6 +61,20 @@ struct NodeSettingsView: View {
                 }
             }
 
+            Section {
+                TextField("127.0.0.1:9050", text: $proxyText)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onSubmit {
+                        applyProxy()
+                    }
+            } header: {
+                Text("SOCKS Proxy")
+            } footer: {
+                Text("Route connections through a SOCKS proxy (e.g. Orbot for Tor)")
+            }
+
         }
         .navigationTitle(nodeManager.isTestnet ? "Remote Node (Testnet)" : "Remote Node")
         .navigationBarTitleDisplayMode(.inline)
@@ -57,9 +84,32 @@ struct NodeSettingsView: View {
         .task {
             await nodeManager.refreshStats()
         }
+        .onAppear {
+            proxyText = nodeManager.proxyAddress
+        }
+        .onChange(of: proxyText) { _, newValue in
+            // Apply when user clears the field
+            if newValue.isEmpty && !nodeManager.proxyAddress.isEmpty {
+                applyProxy()
+            }
+        }
         .sheet(isPresented: $showAddNode) {
             AddCustomNodeView { name, url, login, password in
                 nodeManager.addCustomNode(name: name, url: url, login: login, password: password)
+                Task {
+                    await nodeManager.refreshStats()
+                }
+            }
+        }
+        .sheet(item: $editingNode) { node in
+            EditCustomNodeView(node: node) { name, url, login, password in
+                nodeManager.updateCustomNode(oldURL: node.url, name: name, url: url, login: login, password: password)
+                // If this was the selected node, reconnect
+                if nodeManager.selectedNode.id == node.id {
+                    let updatedNode = MoneroNode(name: name, url: url, login: login, password: password)
+                    nodeManager.selectNode(updatedNode)
+                    walletManager.setNode(url: url, login: login, password: password)
+                }
                 Task {
                     await nodeManager.refreshStats()
                 }
@@ -107,7 +157,21 @@ struct NodeSettingsView: View {
                         .foregroundColor(.secondary)
 
                     // Stats row
-                    if let stats = stats {
+                    if node.url.contains(".onion") {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(nodeManager.proxyAddress.isEmpty ? Color.gray : Color.green)
+                                .frame(width: 8, height: 8)
+                            Text("Tor")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            if nodeManager.proxyAddress.isEmpty {
+                                Text("• Needs proxy")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                    } else if let stats = stats {
                         HStack(spacing: 8) {
                             // Uptime indicator
                             HStack(spacing: 4) {
@@ -189,6 +253,11 @@ struct NodeSettingsView: View {
             nodeManager.removeCustomNode(node)
         }
     }
+
+    private func applyProxy() {
+        nodeManager.setProxy(proxyText)
+        walletManager.setProxy(proxyText)
+    }
 }
 
 // MARK: - Add Custom Node Sheet
@@ -259,6 +328,83 @@ struct AddCustomNodeView: View {
                     .disabled(!isValid)
                     .fontWeight(.semibold)
                 }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+// MARK: - Edit Custom Node Sheet
+
+struct EditCustomNodeView: View {
+    @Environment(\.dismiss) private var dismiss
+    let node: MoneroNode
+    var onSave: (String, String, String?, String?) -> Void
+
+    @State private var name: String = ""
+    @State private var url: String = ""
+    @State private var login: String = ""
+    @State private var password: String = ""
+    @State private var showAuth: Bool = false
+
+    private var isValid: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !url.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Name", text: $name)
+                        .textInputAutocapitalization(.words)
+                    TextField("https://node.example.com:18089", text: $url)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Node Details")
+                }
+
+                Section {
+                    DisclosureGroup("Authentication", isExpanded: $showAuth) {
+                        TextField("Username", text: $login)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        SecureField("Password", text: $password)
+                    }
+                } footer: {
+                    Text("Only needed for nodes that require RPC credentials")
+                }
+            }
+            .navigationTitle("Edit Node")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let trimmedLogin = login.trimmingCharacters(in: .whitespaces)
+                        let trimmedPassword = password.trimmingCharacters(in: .whitespaces)
+                        onSave(
+                            name.trimmingCharacters(in: .whitespaces),
+                            url.trimmingCharacters(in: .whitespaces),
+                            trimmedLogin.isEmpty ? nil : trimmedLogin,
+                            trimmedPassword.isEmpty ? nil : trimmedPassword
+                        )
+                        dismiss()
+                    }
+                    .disabled(!isValid)
+                    .fontWeight(.semibold)
+                }
+            }
+            .onAppear {
+                name = node.name
+                url = node.url
+                login = node.login ?? ""
+                password = node.password ?? ""
+                showAuth = node.hasCredentials
             }
         }
         .presentationDetents([.medium])

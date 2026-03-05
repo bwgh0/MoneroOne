@@ -118,12 +118,14 @@ class MoneroWallet: ObservableObject {
 
         let login = UserDefaults.standard.string(forKey: loginKey)
         let password = UserDefaults.standard.string(forKey: passwordKey)
+        let proxy = UserDefaults.standard.string(forKey: "proxyAddress")
 
         return MoneroKit.Node(
             url: url,
             isTrusted: false,
             login: login,
-            password: password
+            password: password,
+            proxy: proxy
         )
     }
 

@@ -35,14 +35,24 @@ struct SyncLiveActivity: Widget {
 
                 DynamicIslandExpandedRegion(.center) {
                     if context.state.isSynced {
-                        Text("Synced")
-                            .font(.headline)
+                        if let locationName = context.state.trustedLocationName {
+                            Text("Synced from \(locationName)")
+                                .font(.headline)
+                        } else {
+                            Text("Synced")
+                                .font(.headline)
+                        }
                     } else if context.state.isConnecting {
                         Text("Connecting")
                             .font(.headline)
                     } else {
-                        Text("Syncing Wallet")
-                            .font(.headline)
+                        if let locationName = context.state.trustedLocationName {
+                            Text("Syncing from \(locationName)")
+                                .font(.headline)
+                        } else {
+                            Text("Syncing Wallet")
+                                .font(.headline)
+                        }
                     }
                 }
 
@@ -133,9 +143,15 @@ struct LockScreenView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 if context.state.isSynced {
-                    Text("Wallet Synced")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                    if let locationName = context.state.trustedLocationName {
+                        Text("Synced from \(locationName)")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                    } else {
+                        Text("Wallet Synced")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                    }
 
                     Text("Updated \(context.state.lastUpdated, style: .relative) ago")
                         .font(.caption)
@@ -145,9 +161,15 @@ struct LockScreenView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                 } else {
-                    Text("Syncing Wallet")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                    if let locationName = context.state.trustedLocationName {
+                        Text("Syncing from \(locationName)")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                    } else {
+                        Text("Syncing Wallet")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                    }
 
                     ProgressView(value: context.state.progress, total: 100)
                         .tint(.orange)

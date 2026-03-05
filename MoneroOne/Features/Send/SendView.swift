@@ -43,6 +43,7 @@ struct SendView: View {
                                 .font(.system(.caption, design: .monospaced))
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
+                                .accessibilityIdentifier("send.addressField")
                                 .onChange(of: recipientAddress) { _ in
                                     validateAddress()
                                 }
@@ -54,6 +55,7 @@ struct SendView: View {
                                     .font(.title2)
                                     .foregroundColor(.orange)
                             }
+                            .accessibilityIdentifier("send.scanButton")
 
                             Button {
                                 if let clipboard = UIPasteboard.general.string {
@@ -102,6 +104,7 @@ struct SendView: View {
                             TextField("0.0", text: $amount)
                                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                                 .keyboardType(.decimalPad)
+                                .accessibilityIdentifier("send.amountField")
                                 .onChange(of: amount) { newValue in
                                     // Clear sendAll flag if user manually edits amount
                                     if isSendingAll {
@@ -215,6 +218,7 @@ struct SendView: View {
                         .padding(.vertical, 16)
                     }
                     .glassButtonStyle()
+                    .accessibilityIdentifier("send.sendButton")
                     .disabled(!isValidInput || isSending)
                 }
                 .padding()
@@ -263,6 +267,8 @@ struct SendView: View {
                         showConfirmation = false
                     }
                 )
+                .environmentObject(walletManager)
+                .environmentObject(priceService)
             }
             .sheet(isPresented: $showProgress) {
                 TransactionProgressView(
@@ -278,6 +284,8 @@ struct SendView: View {
                         sendTransaction()
                     } : nil
                 )
+                .environmentObject(walletManager)
+                .environmentObject(priceService)
             }
             .onAppear {
                 if let addr = walletManager.prefillSendAddress {

@@ -80,6 +80,7 @@ struct ReceiveView: View {
                         QRCodeView(content: qrContent)
                             .frame(width: 280, height: 280)
                             .shadow(color: .black.opacity(0.1), radius: 10)
+                            .accessibilityIdentifier("receive.qrCode")
                     } else {
                         Rectangle()
                             .fill(Color(.secondarySystemBackground))
@@ -180,6 +181,7 @@ struct ReceiveView: View {
                             .padding(.vertical, 16)
                         }
                         .glassButtonStyle()
+                        .accessibilityIdentifier("receive.copyButton")
 
                         // Share Button
                         Button {

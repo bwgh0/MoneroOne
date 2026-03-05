@@ -5,9 +5,21 @@ import MoneroKit
 struct SyncSettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @ObservedObject var syncManager = BackgroundSyncManager.shared
+    @ObservedObject var trustedLocationsManager = TrustedLocationsManager.shared
 
     @State private var showingRestoreHeightSheet = false
     @State private var showingBackgroundExplanation = false
+
+    private var trustedLocationsCount: String {
+        let count = trustedLocationsManager.trustedLocations.count
+        if count == 0 {
+            return "None"
+        } else if count == 1 {
+            return "1 location"
+        } else {
+            return "\(count) locations"
+        }
+    }
 
     var body: some View {
         List {
@@ -108,51 +120,75 @@ struct SyncSettingsView: View {
                 }
                 .tint(.orange)
 
-                // Always show permission status
-                HStack {
-                    Text("Location Permission")
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(permissionColor)
-                            .frame(width: 8, height: 8)
-                        Text(permissionStatus)
-                            .foregroundColor(permissionColor)
-                    }
-                }
-
-                // Show warning and action button if not authorized always
-                if syncManager.authorizationStatus != .authorizedAlways {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                            Text("Action Required")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
+                if syncManager.isEnabled {
+                    // Location Permission Status
+                    HStack {
+                        Text("Location Permission")
+                        Spacer()
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(permissionColor)
+                                .frame(width: 8, height: 8)
+                            Text(permissionStatus)
+                                .foregroundColor(permissionColor)
                         }
+                    }
 
-                        Text(permissionWarningText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        Button {
-                            openSettings()
-                        } label: {
-                            HStack {
-                                Image(systemName: "gear")
-                                Text("Open Settings")
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
-                                    .font(.caption)
+                    // Show warning and action button if not authorized always
+                    if syncManager.authorizationStatus != .authorizedAlways {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                Text("Action Required")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
                             }
-                            .padding()
-                            .background(Color.orange)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
+
+                            Text(permissionWarningText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            Button {
+                                openSettings()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "gear")
+                                    Text("Open Settings")
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption)
+                                }
+                                .padding()
+                                .background(Color.orange)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    // Trusted Locations - integrated into Background Sync
+                    NavigationLink {
+                        TrustedLocationsView()
+                    } label: {
+                        HStack {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Trusted Locations")
+                                    Text("Secure zones for background sync")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "shield.checkered")
+                                    .foregroundColor(.green)
+                            }
+                            Spacer()
+                            Text(trustedLocationsCount)
+                                .foregroundColor(.secondary)
                         }
                     }
-                    .padding(.vertical, 4)
                 }
 
                 Button {
@@ -163,9 +199,13 @@ struct SyncSettingsView: View {
                         .foregroundColor(.secondary)
                 }
             } header: {
-                Text("Background")
+                Text("Background Sync")
             } footer: {
-                Text("Keeps wallet synced when app is in background. Uses location permission as a workaround - your location is never stored or transmitted.")
+                if syncManager.isEnabled {
+                    Text("Your wallet syncs automatically in the background. Trusted locations ensure you're notified if sync occurs outside secure zones like home or work.")
+                } else {
+                    Text("Enable to keep your wallet synced when the app is in the background. Requires location access to set up trusted sync zones.")
+                }
             }
         }
         .navigationTitle("Sync Settings")

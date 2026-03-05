@@ -31,6 +31,7 @@ struct UnlockView: View {
                     length: preferredPINLength,
                     label: "Enter your PIN to unlock",
                     autoFocus: true,
+                    accessibilityID: "unlock.pinEntry",
                     onComplete: {
                         unlockWithPIN()
                     }
@@ -42,6 +43,7 @@ struct UnlockView: View {
                         .foregroundColor(.red)
                         .font(.caption)
                         .transition(.opacity)
+                        .accessibilityIdentifier("unlock.errorMessage")
                 }
 
                 Button {
@@ -63,6 +65,7 @@ struct UnlockView: View {
                     .padding(.vertical, 12)
                 }
                 .glassButtonStyle()
+                .accessibilityIdentifier("unlock.unlockButton")
                 .disabled(pin.count < 4 || isUnlocking)
             }
 
@@ -107,6 +110,11 @@ struct UnlockView: View {
             Text("This will delete all wallet data from this device. You can restore your wallet using your seed phrase.\n\nThis action cannot be undone.")
         }
         .onAppear {
+            // If UserDefaults was reset (reinstall/TestFlight), recover PIN length from keychain
+            if UserDefaults.standard.object(forKey: "preferredPINLength") == nil,
+               let keychainLength = KeychainStorage().getPinLength() {
+                preferredPINLength = keychainLength
+            }
             triggerBiometricsIfAvailable()
         }
         .onChange(of: scenePhase) { newPhase in

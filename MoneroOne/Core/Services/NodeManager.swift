@@ -6,11 +6,19 @@ struct MoneroNode: Identifiable, Codable, Equatable {
     let name: String
     let url: String
     let isTrusted: Bool
+    let login: String?
+    let password: String?
 
-    init(name: String, url: String, isTrusted: Bool = false) {
+    init(name: String, url: String, isTrusted: Bool = false, login: String? = nil, password: String? = nil) {
         self.name = name
         self.url = url
         self.isTrusted = isTrusted
+        self.login = login
+        self.password = password
+    }
+
+    var hasCredentials: Bool {
+        login != nil && !(login?.isEmpty ?? true)
     }
 }
 
@@ -28,7 +36,10 @@ struct NodeStats {
     }
 
     var uptimeColor: UptimeColor {
-        guard let uptime = uptimeMonth else { return .unknown }
+        guard let uptime = uptimeMonth else {
+            // No uptime data — if latency is good, the node is up
+            return latencyMs != nil ? .green : .unknown
+        }
         if uptime >= 99.0 {
             return .green
         } else if uptime >= 95.0 {
@@ -79,10 +90,14 @@ class NodeManager: ObservableObject {
         MoneroNode(name: "CakeWallet", url: "https://xmr-node.cakewallet.com:18081"),
     ]
 
+    #if DEBUG
     static let defaultTestnetNodes: [MoneroNode] = [
         MoneroNode(name: "Monero Project", url: "http://testnet.xmr-tw.org:28081"),
         MoneroNode(name: "MoneroDevs", url: "http://node.monerodevs.org:28089"),
     ]
+    #else
+    static let defaultTestnetNodes: [MoneroNode] = []
+    #endif
 
     private var selectedNodeKey: String {
         isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
@@ -92,6 +107,12 @@ class NodeManager: ObservableObject {
     }
     private var autoSelectKey: String {
         isTestnet ? "autoSelectTestnetNode" : "autoSelectNode"
+    }
+    private var selectedNodeLoginKey: String {
+        isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin"
+    }
+    private var selectedNodePasswordKey: String {
+        isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword"
     }
 
     var isTestnet: Bool {
@@ -133,10 +154,13 @@ class NodeManager: ObservableObject {
     func selectNode(_ node: MoneroNode) {
         selectedNode = node
         UserDefaults.standard.set(node.url, forKey: selectedNodeKey)
+        // Persist credentials (or clear them for nodes without auth)
+        UserDefaults.standard.set(node.login, forKey: selectedNodeLoginKey)
+        UserDefaults.standard.set(node.password, forKey: selectedNodePasswordKey)
     }
 
-    func addCustomNode(name: String, url: String, isTrusted: Bool = false) {
-        let node = MoneroNode(name: name, url: url, isTrusted: isTrusted)
+    func addCustomNode(name: String, url: String, isTrusted: Bool = false, login: String? = nil, password: String? = nil) {
+        let node = MoneroNode(name: name, url: url, isTrusted: isTrusted, login: login, password: password)
         customNodes.append(node)
         saveCustomNodes()
     }
@@ -188,7 +212,7 @@ class NodeManager: ObservableObject {
             uptimeCacheTime = Date()
             applyUptimeCache()
         } catch {
-            print("Failed to fetch uptime stats: \(error)")
+            // Silently fail - uptime stats are optional
         }
     }
 
@@ -268,11 +292,15 @@ class NodeManager: ObservableObject {
     }
 
     private func measureLatency(for node: MoneroNode) async -> Int? {
+        #if DEBUG
         NSLog("[Latency] Starting measurement for %@: %@", node.name, node.url)
+        #endif
 
         guard let url = URL(string: node.url),
               let host = url.host else {
+            #if DEBUG
             NSLog("[Latency] Failed to parse URL: %@", node.url)
+            #endif
             return nil
         }
 
@@ -284,14 +312,18 @@ class NodeManager: ObservableObject {
 
             let parameters: NWParameters
             if usesTLS {
-                // Create TLS options that accept all certificates
+                #if DEBUG
+                // DEBUG ONLY: Accept all certificates for latency testing
+                // In release builds, use default certificate validation
                 let tlsOptions = NWProtocolTLS.Options()
                 sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, _, complete in
-                    // Accept all certificates for latency testing
                     complete(true)
                 }, DispatchQueue.global())
-                // Explicitly include TCP options for proper connection setup
                 parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
+                #else
+                // Production: Use default TLS with proper certificate validation
+                parameters = NWParameters(tls: NWProtocolTLS.Options(), tcp: NWProtocolTCP.Options())
+                #endif
             } else {
                 parameters = NWParameters.tcp
             }
@@ -308,13 +340,17 @@ class NodeManager: ObservableObject {
                     hasResumed = true
                     let elapsed = CFAbsoluteTimeGetCurrent() - startTime
                     let latencyMs = Int(elapsed * 1000)
+                    #if DEBUG
                     NSLog("[Latency] Success for %@: %dms", node.name, latencyMs)
+                    #endif
                     connection.cancel()
                     continuation.resume(returning: latencyMs)
 
                 case .failed(let error):
                     hasResumed = true
+                    #if DEBUG
                     NSLog("[Latency] Failed for %@: %@", node.name, error.localizedDescription)
+                    #endif
                     connection.cancel()
                     continuation.resume(returning: nil)
 
@@ -335,7 +371,9 @@ class NodeManager: ObservableObject {
             DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
                 if !hasResumed {
                     hasResumed = true
+                    #if DEBUG
                     NSLog("[Latency] Timeout for %@", node.name)
+                    #endif
                     connection.cancel()
                     continuation.resume(returning: nil)
                 }
@@ -361,8 +399,7 @@ class NodeManager: ObservableObject {
         }
 
         if let best = best, selectedNode.url != best.url {
-            selectedNode = best
-            UserDefaults.standard.set(best.url, forKey: selectedNodeKey)
+            selectNode(best)
         }
     }
 

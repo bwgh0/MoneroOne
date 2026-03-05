@@ -101,6 +101,7 @@ struct RestoreWalletView: View {
                 .cornerRadius(12)
                 .autocapitalization(.none)
                 .autocorrectionDisabled()
+                .accessibilityIdentifier("restore.seedInput")
 
             if let error = errorMessage {
                 Text(error)
@@ -124,6 +125,7 @@ struct RestoreWalletView: View {
                     .cornerRadius(14)
             }
             .disabled(!isValidSeedCount)
+            .accessibilityIdentifier("restore.continueButton")
 
             Spacer()
         }
@@ -203,6 +205,7 @@ struct RestoreWalletView: View {
                 label: "Enter PIN",
                 field: PINField.pin,
                 focusedField: $focusedField,
+                accessibilityID: "restore.pinEntry",
                 onComplete: {
                     focusedField = .confirmPin
                 }
@@ -214,6 +217,7 @@ struct RestoreWalletView: View {
                 label: "Confirm PIN",
                 field: PINField.confirmPin,
                 focusedField: $focusedField,
+                accessibilityID: "restore.confirmPinEntry",
                 onComplete: {
                     if canProceed {
                         // Save the selected PIN length preference
@@ -227,6 +231,7 @@ struct RestoreWalletView: View {
                 Text("PINs don't match")
                     .foregroundColor(.red)
                     .font(.caption)
+                    .accessibilityIdentifier("restore.pinMismatchError")
             }
 
             Button {
@@ -246,6 +251,7 @@ struct RestoreWalletView: View {
             }
             .glassButtonStyle()
             .disabled(!canProceed)
+            .accessibilityIdentifier("restore.pin.continueButton")
             .padding(.horizontal)
 
             Spacer()
@@ -477,6 +483,7 @@ struct RestoreWalletView: View {
                     restoreDate = useCreationDate ? walletCreationDate : nil
                 }
                 try walletManager.restoreWallet(mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
+                KeychainStorage().savePinLength(selectedPINLength)
 
                 // Enable biometrics if user opted in
                 if enableBiometrics {

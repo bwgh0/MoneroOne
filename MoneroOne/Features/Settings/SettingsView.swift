@@ -31,8 +31,6 @@ struct SettingsView: View {
     @State private var showSecurity = false
     @State private var showDeleteConfirmation = false
     @State private var showResetSyncConfirmation = false
-    @State private var showNetworkChangeAlert = false
-    @AppStorage("isTestnet") private var isTestnet = false
 
     private var syncStatusText: String {
         switch walletManager.syncState {
@@ -58,6 +56,7 @@ struct SettingsView: View {
                             color: .orange
                         )
                     }
+                    .accessibilityIdentifier("settings.backupRow")
 
                     NavigationLink {
                         SecurityView()
@@ -68,6 +67,7 @@ struct SettingsView: View {
                             color: .blue
                         )
                     }
+                    .accessibilityIdentifier("settings.securityRow")
                 }
 
                 // Display Section
@@ -146,6 +146,7 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    .accessibilityIdentifier("settings.syncRow")
                 }
 
                 // About Section
@@ -166,6 +167,22 @@ struct SettingsView: View {
                             icon: "globe",
                             title: "Website",
                             color: .orange
+                        )
+                    }
+
+                    Link(destination: URL(string: "https://monero.one/privacy")!) {
+                        SettingsRow(
+                            icon: "hand.raised.fill",
+                            title: "Privacy Policy",
+                            color: .blue
+                        )
+                    }
+
+                    Link(destination: URL(string: "https://monero.one/terms")!) {
+                        SettingsRow(
+                            icon: "doc.text.fill",
+                            title: "Terms of Service",
+                            color: .gray
                         )
                     }
                 }
@@ -190,50 +207,10 @@ struct SettingsView: View {
                                 .cornerRadius(6)
 
                             Text("Donate XMR")
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.pink, .orange, .yellow],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                                .foregroundColor(.orange)
                                 .fontWeight(.medium)
                         }
                     }
-                }
-
-                // Developer Section
-                Section {
-                    Toggle(isOn: Binding(
-                        get: { isTestnet },
-                        set: { newValue in
-                            if newValue != isTestnet {
-                                showNetworkChangeAlert = true
-                            }
-                        }
-                    )) {
-                        HStack {
-                            SettingsRow(
-                                icon: "flask",
-                                title: "Testnet Mode",
-                                color: .cyan
-                            )
-                            if isTestnet {
-                                Text("Active")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 2)
-                                    .background(Color.cyan)
-                                    .cornerRadius(4)
-                            }
-                        }
-                    }
-                } header: {
-                    Text("Developer")
-                } footer: {
-                    Text("Testnet uses test XMR with no real value. Note: Testnet nodes are often unreliable.")
                 }
 
                 // Danger Zone
@@ -275,33 +252,6 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("This removes wallet data from this device only. Your wallet still exists on the blockchain and can be recovered with your seed phrase.")
-            }
-            .alert(isTestnet ? "Switch to Mainnet?" : "Switch to Testnet?", isPresented: $showNetworkChangeAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("Switch Network") {
-                    isTestnet.toggle()
-
-                    // Auto-select first node for the new network
-                    if isTestnet {
-                        // Switched TO testnet, select first testnet node
-                        if let firstTestnetNode = MoneroWallet.testnetNodes.first {
-                            UserDefaults.standard.set(firstTestnetNode.url, forKey: "selectedTestnetNodeURL")
-                        }
-                    } else {
-                        // Switched TO mainnet, select first mainnet node
-                        if let firstMainnetNode = MoneroWallet.publicNodes.first {
-                            UserDefaults.standard.set(firstMainnetNode.url, forKey: "selectedNodeURL")
-                        }
-                    }
-
-                    walletManager.switchNetwork()
-                }
-            } message: {
-                if isTestnet {
-                    Text("Switching to mainnet. Your sync progress for each network is saved separately.")
-                } else {
-                    Text("Switching to testnet. Testnet XMR has no real value. Your mainnet sync progress will be preserved.")
-                }
             }
         }
     }

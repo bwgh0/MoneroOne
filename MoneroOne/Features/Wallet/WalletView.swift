@@ -37,6 +37,7 @@ struct WalletView: View {
                         ) {
                             showSend = true
                         }
+                        .accessibilityIdentifier("wallet.sendButton")
 
                         CompactActionButton(
                             title: "Receive",
@@ -45,6 +46,7 @@ struct WalletView: View {
                         ) {
                             showReceive = true
                         }
+                        .accessibilityIdentifier("wallet.receiveButton")
                     }
                     .padding(.horizontal)
 
@@ -102,9 +104,13 @@ struct WalletView: View {
             }
             .sheet(isPresented: $showReceive) {
                 ReceiveView()
+                    .environmentObject(walletManager)
+                    .environmentObject(priceService)
             }
             .sheet(isPresented: $showSend) {
                 SendView()
+                    .environmentObject(walletManager)
+                    .environmentObject(priceService)
             }
             .onChange(of: walletManager.shouldShowSendView) { show in
                 if show {
@@ -117,6 +123,8 @@ struct WalletView: View {
                     balance: walletManager.balance,
                     priceService: priceService
                 )
+                .environmentObject(walletManager)
+                .environmentObject(priceService)
             }
         }
     }

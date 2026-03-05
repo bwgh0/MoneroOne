@@ -150,28 +150,6 @@ struct TestnetBanner: View {
     }
 }
 
-struct ActionButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 28))
-                Text(title)
-                    .font(.callout.weight(.semibold))
-            }
-            .foregroundStyle(color)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-        }
-        .glassButtonStyle()
-    }
-}
-
 /// Compact action button with reduced height
 struct CompactActionButton: View {
     let title: String

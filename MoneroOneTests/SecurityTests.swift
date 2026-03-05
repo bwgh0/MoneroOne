@@ -106,7 +106,7 @@ final class SecurityTests: XCTestCase {
 
         // Make enough failed attempts to trigger lockout
         for _ in 0..<6 {
-            _ = try keychainStorage.getSeed(pin: wrongPin)
+            _ = try? keychainStorage.getSeed(pin: wrongPin)
         }
 
         // Should be locked out now
@@ -123,7 +123,7 @@ final class SecurityTests: XCTestCase {
 
         // Trigger lockout
         for _ in 0..<6 {
-            _ = try keychainStorage.getSeed(pin: wrongPin)
+            _ = try? keychainStorage.getSeed(pin: wrongPin)
         }
 
         // Attempt with correct PIN should throw lockout error
@@ -167,7 +167,7 @@ final class SecurityTests: XCTestCase {
 
         // Trigger lockout
         for _ in 0..<6 {
-            _ = try keychainStorage.getSeed(pin: wrongPin)
+            _ = try? keychainStorage.getSeed(pin: wrongPin)
         }
 
         XCTAssertTrue(keychainStorage.isLockedOut)

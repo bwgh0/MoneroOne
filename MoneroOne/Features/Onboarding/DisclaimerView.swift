@@ -21,6 +21,7 @@ struct DisclaimerView: View {
                 Text("Important Information")
                     .font(.title2)
                     .fontWeight(.bold)
+                    .accessibilityIdentifier("disclaimer.title")
 
                 Text("Please read and acknowledge before continuing")
                     .font(.subheadline)
@@ -39,6 +40,7 @@ struct DisclaimerView: View {
                         description: "Monero One is a self-custody wallet. Your seed phrase is the only way to access your funds. We cannot recover it for you.",
                         isChecked: $checkboxes[0]
                     )
+                    .accessibilityIdentifier("disclaimer.checkbox.0")
 
                     DisclaimerItem(
                         icon: "arrow.uturn.backward.circle.fill",
@@ -47,6 +49,7 @@ struct DisclaimerView: View {
                         description: "Once a Monero transaction is confirmed, it cannot be reversed, canceled, or modified. Always verify addresses before sending.",
                         isChecked: $checkboxes[1]
                     )
+                    .accessibilityIdentifier("disclaimer.checkbox.1")
 
                     DisclaimerItem(
                         icon: "doc.text.fill",
@@ -55,6 +58,7 @@ struct DisclaimerView: View {
                         description: "If you lose your 16-word seed phrase, your funds are permanently lost. Write it down and store it securely offline.",
                         isChecked: $checkboxes[2]
                     )
+                    .accessibilityIdentifier("disclaimer.checkbox.2")
 
                     DisclaimerItem(
                         icon: "chart.line.uptrend.xyaxis",
@@ -63,6 +67,7 @@ struct DisclaimerView: View {
                         description: "The value of Monero can fluctuate significantly. Only invest what you can afford to lose.",
                         isChecked: $checkboxes[3]
                     )
+                    .accessibilityIdentifier("disclaimer.checkbox.3")
 
                     DisclaimerItem(
                         icon: "checkmark.shield.fill",
@@ -71,6 +76,7 @@ struct DisclaimerView: View {
                         description: "This software is provided as-is. While we strive for security and reliability, we cannot guarantee the software is free of bugs.",
                         isChecked: $checkboxes[4]
                     )
+                    .accessibilityIdentifier("disclaimer.checkbox.4")
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 100)
@@ -95,6 +101,7 @@ struct DisclaimerView: View {
                         .cornerRadius(12)
                 }
                 .disabled(!allChecked)
+                .accessibilityIdentifier("disclaimer.acceptButton")
                 .padding(.horizontal)
                 .padding(.bottom)
             }

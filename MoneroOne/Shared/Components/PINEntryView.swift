@@ -8,6 +8,7 @@ struct PINEntryView: View {
     let length: Int
     let label: String
     var autoFocus: Bool = false
+    var accessibilityID: String? = nil
     var onComplete: (() -> Void)? = nil
 
     @FocusState private var isFocused: Bool
@@ -43,6 +44,7 @@ struct PINEntryView: View {
             .onTapGesture {
                 isFocused = true
             }
+            .accessibilityIdentifier(accessibilityID.map { "\($0).dots" } ?? "")
 
             // Hidden input field using TextField with secure display
             TextField("", text: $pin)
@@ -52,6 +54,7 @@ struct PINEntryView: View {
                 #endif
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
+                .accessibilityIdentifier(accessibilityID ?? "")
                 .focused($isFocused)
                 .onChange(of: pin) { newValue in
                     // Filter to digits only
@@ -86,6 +89,7 @@ struct PINEntryFieldView<Field: Hashable>: View {
     let label: String
     var field: Field
     var focusedField: FocusState<Field?>.Binding
+    var accessibilityID: String? = nil
     var onComplete: (() -> Void)? = nil
 
     private var isFieldFocused: Bool {
@@ -123,6 +127,7 @@ struct PINEntryFieldView<Field: Hashable>: View {
             .onTapGesture {
                 focusedField.wrappedValue = field
             }
+            .accessibilityIdentifier(accessibilityID.map { "\($0).dots" } ?? "")
 
             // Hidden input field
             TextField("", text: $pin)
@@ -132,6 +137,7 @@ struct PINEntryFieldView<Field: Hashable>: View {
                 #endif
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
+                .accessibilityIdentifier(accessibilityID ?? "")
                 .focused(focusedField, equals: field)
                 .onChange(of: pin) { newValue in
                     // Filter to digits only

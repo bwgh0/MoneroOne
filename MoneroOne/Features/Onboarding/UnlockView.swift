@@ -31,6 +31,7 @@ struct UnlockView: View {
                     length: preferredPINLength,
                     label: "Enter your PIN to unlock",
                     autoFocus: true,
+                    accessibilityID: "unlock.pinEntry",
                     onComplete: {
                         unlockWithPIN()
                     }
@@ -42,6 +43,7 @@ struct UnlockView: View {
                         .foregroundColor(.red)
                         .font(.caption)
                         .transition(.opacity)
+                        .accessibilityIdentifier("unlock.errorMessage")
                 }
 
                 Button {
@@ -63,6 +65,7 @@ struct UnlockView: View {
                     .padding(.vertical, 12)
                 }
                 .glassButtonStyle()
+                .accessibilityIdentifier("unlock.unlockButton")
                 .disabled(pin.count < 4 || isUnlocking)
             }
 

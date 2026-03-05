@@ -37,6 +37,7 @@ struct WalletView: View {
                         ) {
                             showSend = true
                         }
+                        .accessibilityIdentifier("wallet.sendButton")
 
                         CompactActionButton(
                             title: "Receive",
@@ -45,6 +46,7 @@ struct WalletView: View {
                         ) {
                             showReceive = true
                         }
+                        .accessibilityIdentifier("wallet.receiveButton")
                     }
                     .padding(.horizontal)
 

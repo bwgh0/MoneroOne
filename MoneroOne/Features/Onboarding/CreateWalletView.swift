@@ -165,6 +165,7 @@ struct CreateWalletView: View {
                 .padding(.vertical, 16)
             }
             .glassButtonStyle()
+            .accessibilityIdentifier("create.seedType.continueButton")
             .padding(.horizontal)
 
             Spacer()
@@ -245,6 +246,7 @@ struct CreateWalletView: View {
                 label: "Enter PIN",
                 field: PINField.pin,
                 focusedField: $focusedField,
+                accessibilityID: "create.pinEntry",
                 onComplete: {
                     focusedField = .confirmPin
                 }
@@ -256,6 +258,7 @@ struct CreateWalletView: View {
                 label: "Confirm PIN",
                 field: PINField.confirmPin,
                 focusedField: $focusedField,
+                accessibilityID: "create.confirmPinEntry",
                 onComplete: {
                     if canProceed {
                         // Save the selected PIN length preference
@@ -269,6 +272,7 @@ struct CreateWalletView: View {
                 Text("PINs don't match")
                     .foregroundColor(.red)
                     .font(.caption)
+                    .accessibilityIdentifier("create.pinMismatchError")
             }
 
             Button {
@@ -288,6 +292,7 @@ struct CreateWalletView: View {
             }
             .glassButtonStyle()
             .disabled(!canProceed)
+            .accessibilityIdentifier("create.pin.continueButton")
             .padding(.horizontal)
 
             Spacer()
@@ -362,6 +367,7 @@ struct CreateWalletView: View {
                 .padding()
 
             Toggle("I have written down my seed phrase", isOn: $confirmed)
+                .accessibilityIdentifier("create.confirmToggle")
                 .padding(.horizontal)
 
             Button {
@@ -379,6 +385,7 @@ struct CreateWalletView: View {
             }
             .glassButtonStyle()
             .disabled(!confirmed)
+            .accessibilityIdentifier("create.seed.continueButton")
             .padding(.horizontal)
         }
     }

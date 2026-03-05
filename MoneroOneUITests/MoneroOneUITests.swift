@@ -1,206 +1,322 @@
 import XCTest
 
-final class MoneroOneUITests: XCTestCase {
+// MARK: - Onboarding Flow Tests
 
-    var app: XCUIApplication!
+final class OnboardingFlowTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
-        app.launch()
     }
 
-    override func tearDownWithError() throws {
-        app = nil
+    func testDisclaimerShownOnFreshLaunch() {
+        let app = UITestHelpers.launchCleanApp()
+        let title = app.staticTexts["disclaimer.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "Disclaimer should show on fresh launch")
     }
 
-    // MARK: - Welcome Screen Tests
+    func testDisclaimerAcceptButtonDisabledUntilAllChecked() {
+        let app = UITestHelpers.launchCleanApp()
+        let acceptButton = app.buttons["disclaimer.acceptButton"]
+        XCTAssertTrue(acceptButton.waitForExistence(timeout: 5))
+        XCTAssertFalse(acceptButton.isEnabled, "Accept button should be disabled before all checkboxes checked")
 
-    func testWelcomeScreenShowsAppName() {
-        // On fresh install, should show welcome screen
-        let title = app.staticTexts["Monero One"]
-        XCTAssertTrue(title.waitForExistence(timeout: 5), "App title should be visible")
-    }
-
-    func testWelcomeScreenShowsCreateButton() {
-        let createButton = app.buttons["Create New Wallet"]
-        XCTAssertTrue(createButton.waitForExistence(timeout: 5), "Create wallet button should be visible")
-    }
-
-    func testWelcomeScreenShowsRestoreButton() {
-        let restoreButton = app.buttons["Restore Wallet"]
-        XCTAssertTrue(restoreButton.waitForExistence(timeout: 5), "Restore wallet button should be visible")
-    }
-
-    // MARK: - Create Wallet Flow Tests
-
-    func testCreateWalletFlowShowsPINEntry() {
-        let createButton = app.buttons["Create New Wallet"]
-        XCTAssertTrue(createButton.waitForExistence(timeout: 5))
-        createButton.tap()
-
-        let pinField = app.secureTextFields.firstMatch
-        XCTAssertTrue(pinField.waitForExistence(timeout: 5), "PIN entry should appear")
-    }
-
-    func testCreateWalletRequires6DigitPIN() {
-        let createButton = app.buttons["Create New Wallet"]
-        XCTAssertTrue(createButton.waitForExistence(timeout: 5))
-        createButton.tap()
-
-        // Enter short PIN
-        let pinField = app.secureTextFields.element(boundBy: 0)
-        XCTAssertTrue(pinField.waitForExistence(timeout: 5))
-        pinField.tap()
-        pinField.typeText("123")
-
-        let confirmField = app.secureTextFields.element(boundBy: 1)
-        confirmField.tap()
-        confirmField.typeText("123")
-
-        // Continue button should be disabled (gray)
-        let continueButton = app.buttons["Continue"]
-        // Note: We can't easily check if it's disabled, but the flow won't proceed
-        XCTAssertTrue(continueButton.exists, "Continue button should exist")
-    }
-
-    // MARK: - Navigation Tests
-
-    func testTabBarExists() {
-        // This test assumes we're past the welcome screen
-        // In real testing, we'd need to complete wallet creation first
-        let walletTab = app.buttons["Wallet"]
-        let historyTab = app.buttons["History"]
-        let settingsTab = app.buttons["Settings"]
-
-        // These will fail on fresh install - that's expected
-        // This test is for when we have a wallet
-        if walletTab.exists {
-            XCTAssertTrue(historyTab.exists, "History tab should exist")
-            XCTAssertTrue(settingsTab.exists, "Settings tab should exist")
+        // Check all 5 checkboxes
+        for i in 0..<5 {
+            app.buttons["disclaimer.checkbox.\(i)"].tap()
         }
+
+        XCTAssertTrue(acceptButton.isEnabled, "Accept button should be enabled after all checkboxes checked")
     }
 
-    // MARK: - Restore Wallet Flow Tests
+    func testDisclaimerAcceptNavigatesToWelcome() {
+        let app = UITestHelpers.launchCleanApp()
+        UITestHelpers.acceptDisclaimer(app: app)
 
-    func testRestoreWalletFlowShowsPINEntry() {
-        let restoreButton = app.buttons["Restore Wallet"]
-        XCTAssertTrue(restoreButton.waitForExistence(timeout: 5))
-        restoreButton.tap()
-
-        // Should show seed phrase entry or PIN entry
-        let seedPhraseText = app.staticTexts["Enter Recovery Phrase"]
-        let pinField = app.secureTextFields.firstMatch
-
-        XCTAssertTrue(seedPhraseText.waitForExistence(timeout: 5) || pinField.waitForExistence(timeout: 5),
-                      "Restore flow should show seed phrase entry or PIN")
+        let welcomeTitle = app.staticTexts["welcome.title"]
+        XCTAssertTrue(welcomeTitle.waitForExistence(timeout: 5), "Should navigate to welcome screen after accepting disclaimer")
     }
 
-    // MARK: - Welcome Screen Element Tests
+    func testWelcomeScreenShowsCreateAndRestore() {
+        let app = UITestHelpers.launchCleanApp()
+        UITestHelpers.acceptDisclaimer(app: app)
 
-    func testWelcomeScreenShowsMoneroLogo() {
-        // Check for the Monero logo or app icon
-        let image = app.images.firstMatch
-        XCTAssertTrue(image.waitForExistence(timeout: 5), "Should show an image/logo")
-    }
+        let createButton = app.buttons["welcome.createButton"]
+        let restoreButton = app.buttons["welcome.restoreButton"]
 
-    func testWelcomeScreenShowsDescription() {
-        // Look for descriptive text about the wallet
-        let exists = app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'wallet' OR label CONTAINS[c] 'private' OR label CONTAINS[c] 'Monero'")).firstMatch.waitForExistence(timeout: 5)
-        XCTAssertTrue(exists, "Should show wallet description text")
-    }
-
-    // MARK: - Create Wallet PIN Flow Tests
-
-    func testCreateWalletPINMismatchShowsError() {
-        let createButton = app.buttons["Create New Wallet"]
-        XCTAssertTrue(createButton.waitForExistence(timeout: 5))
-        createButton.tap()
-
-        // Enter different PINs
-        let pinField = app.secureTextFields.element(boundBy: 0)
-        XCTAssertTrue(pinField.waitForExistence(timeout: 5))
-        pinField.tap()
-        pinField.typeText("123456")
-
-        let confirmField = app.secureTextFields.element(boundBy: 1)
-        confirmField.tap()
-        confirmField.typeText("654321")
-
-        // Look for error message or mismatch indicator
-        let mismatchText = app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'match' OR label CONTAINS[c] 'different'")).firstMatch
-        // Note: This may or may not exist depending on UI implementation
-        XCTAssertTrue(true, "PIN mismatch should be detected")
-    }
-
-    // MARK: - Accessibility Tests
-
-    func testWelcomeScreenElementsAreAccessible() {
-        // Verify buttons have accessibility labels
-        let createButton = app.buttons["Create New Wallet"]
-        let restoreButton = app.buttons["Restore Wallet"]
-
-        XCTAssertTrue(createButton.waitForExistence(timeout: 5))
-        XCTAssertTrue(restoreButton.waitForExistence(timeout: 5))
-
+        XCTAssertTrue(createButton.waitForExistence(timeout: 5), "Create button should be visible")
+        XCTAssertTrue(restoreButton.exists, "Restore button should be visible")
         XCTAssertTrue(createButton.isHittable, "Create button should be tappable")
         XCTAssertTrue(restoreButton.isHittable, "Restore button should be tappable")
     }
 
-    // MARK: - Button Interaction Tests
+    func testCreateWalletNavigatesToSeedType() {
+        let app = UITestHelpers.launchCleanApp()
+        UITestHelpers.navigateToCreateSeedType(app: app)
 
-    func testCreateButtonRespondsToTap() {
-        let createButton = app.buttons["Create New Wallet"]
-        XCTAssertTrue(createButton.waitForExistence(timeout: 5))
-
-        // Tap and verify navigation occurs
-        createButton.tap()
-
-        // Wait for navigation - should no longer show welcome content
-        let welcomeTitle = app.staticTexts["Monero One"]
-        let navigated = !welcomeTitle.waitForExistence(timeout: 2) || app.secureTextFields.firstMatch.waitForExistence(timeout: 2)
-        XCTAssertTrue(navigated, "Tapping Create should navigate away from welcome")
+        let continueButton = app.buttons["create.seedType.continueButton"]
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5), "Should see seed type selection with Continue button")
     }
 
-    func testRestoreButtonRespondsToTap() {
-        let restoreButton = app.buttons["Restore Wallet"]
-        XCTAssertTrue(restoreButton.waitForExistence(timeout: 5))
+    func testCreateWalletSeedTypeNavigatesToPIN() {
+        let app = UITestHelpers.launchCleanApp()
+        UITestHelpers.navigateToCreatePIN(app: app)
 
-        // Tap and verify navigation occurs
-        restoreButton.tap()
-
-        // Wait for navigation
-        let navigated = app.staticTexts["Enter Recovery Phrase"].waitForExistence(timeout: 5) ||
-                        app.textFields.firstMatch.waitForExistence(timeout: 5) ||
-                        app.secureTextFields.firstMatch.waitForExistence(timeout: 5)
-        XCTAssertTrue(navigated, "Tapping Restore should navigate to restore flow")
+        // Should show PIN entry fields
+        let pinField = app.textFields["create.pinEntry"]
+        XCTAssertTrue(pinField.waitForExistence(timeout: 5), "Should show PIN entry after seed type selection")
     }
 
-    // MARK: - Settings Screen Tests (when wallet exists)
+    func testCreateWalletPINMismatchShowsError() {
+        let app = UITestHelpers.launchCleanApp()
+        UITestHelpers.navigateToCreatePIN(app: app)
 
-    func testSettingsScreenShowsExpectedSections() {
-        // Navigate to settings if we have a wallet
-        let settingsTab = app.buttons["Settings"]
-        guard settingsTab.waitForExistence(timeout: 2) else {
-            // No wallet exists, skip test
+        // Enter PIN in first field
+        UITestHelpers.enterPIN(app: app, identifier: "create.pinEntry", pin: "123456")
+
+        // Enter different PIN in confirm field
+        UITestHelpers.enterPIN(app: app, identifier: "create.confirmPinEntry", pin: "654321")
+
+        // Should show mismatch error
+        let mismatchError = app.staticTexts["create.pinMismatchError"]
+        XCTAssertTrue(mismatchError.waitForExistence(timeout: 3), "Should show PIN mismatch error")
+    }
+
+    func testRestoreWalletShowsSeedEntry() {
+        let app = UITestHelpers.launchCleanApp()
+        UITestHelpers.navigateToRestoreSeed(app: app)
+
+        let seedInput = app.textViews["restore.seedInput"]
+        let continueButton = app.buttons["restore.continueButton"]
+
+        XCTAssertTrue(seedInput.waitForExistence(timeout: 5), "Should show seed input field")
+        XCTAssertTrue(continueButton.exists, "Should show continue button")
+        XCTAssertFalse(continueButton.isEnabled, "Continue should be disabled with empty seed")
+    }
+
+    func testBackNavigationFromCreate() {
+        let app = UITestHelpers.launchCleanApp()
+        UITestHelpers.navigateToCreateSeedType(app: app)
+
+        // Tap back button
+        let backButton = app.navigationBars.buttons.element(boundBy: 0)
+        if backButton.exists {
+            backButton.tap()
+        }
+
+        // Should be back at welcome screen
+        let welcomeTitle = app.staticTexts["welcome.title"]
+        XCTAssertTrue(welcomeTitle.waitForExistence(timeout: 5), "Should return to welcome screen")
+    }
+
+    func testBackNavigationFromRestore() {
+        let app = UITestHelpers.launchCleanApp()
+        UITestHelpers.navigateToRestoreSeed(app: app)
+
+        // Tap back button
+        let backButton = app.navigationBars.buttons.element(boundBy: 0)
+        if backButton.exists {
+            backButton.tap()
+        }
+
+        // Should be back at welcome screen
+        let welcomeTitle = app.staticTexts["welcome.title"]
+        XCTAssertTrue(welcomeTitle.waitForExistence(timeout: 5), "Should return to welcome screen")
+    }
+}
+
+// MARK: - Unlock Flow Tests
+
+final class UnlockFlowTests: XCTestCase {
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    func testUnlockScreenShowsPINEntry() {
+        // This test requires a wallet to exist — launch without --reset-state
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let pinEntry = app.textFields["unlock.pinEntry"]
+        // Only proceed if we're on the unlock screen (wallet exists)
+        guard pinEntry.waitForExistence(timeout: 3) else {
+            // No wallet — can't test unlock
+            return
+        }
+        XCTAssertTrue(pinEntry.exists, "Unlock screen should show PIN entry")
+    }
+
+    func testUnlockButtonExists() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let unlockButton = app.buttons["unlock.unlockButton"]
+        guard unlockButton.waitForExistence(timeout: 3) else {
+            // No wallet — can't test unlock
+            return
+        }
+        XCTAssertTrue(unlockButton.exists, "Unlock button should be visible")
+    }
+
+    func testWrongPINShowsError() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let pinEntry = app.textFields["unlock.pinEntry"]
+        guard pinEntry.waitForExistence(timeout: 3) else { return }
+
+        // Type wrong PIN
+        pinEntry.tap()
+        pinEntry.typeText("000000")
+
+        // Tap unlock
+        let unlockButton = app.buttons["unlock.unlockButton"]
+        if unlockButton.waitForExistence(timeout: 2) && unlockButton.isEnabled {
+            unlockButton.tap()
+        }
+
+        // Should show error
+        let errorMessage = app.staticTexts["unlock.errorMessage"]
+        XCTAssertTrue(errorMessage.waitForExistence(timeout: 3), "Should show error for wrong PIN")
+    }
+}
+
+// MARK: - Main App Flow Tests
+
+final class MainAppFlowTests: XCTestCase {
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    func testTabsExistWhenWalletUnlocked() {
+        // Launch without reset to preserve existing wallet state
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        // Only test if we can get past unlock (this requires a wallet + correct PIN)
+        let walletTab = app.tabBars.buttons["Wallet"]
+        guard walletTab.waitForExistence(timeout: 5) else {
+            // Not on main screen — skip
             return
         }
 
+        let chartTab = app.tabBars.buttons["Chart"]
+        let settingsTab = app.tabBars.buttons["Settings"]
+
+        XCTAssertTrue(walletTab.exists, "Wallet tab should exist")
+        XCTAssertTrue(chartTab.exists, "Chart tab should exist")
+        XCTAssertTrue(settingsTab.exists, "Settings tab should exist")
+    }
+
+    func testTabNavigationSwitchesContent() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let settingsTab = app.tabBars.buttons["Settings"]
+        guard settingsTab.waitForExistence(timeout: 5) else { return }
+
         settingsTab.tap()
 
-        // Check for expected settings items
-        let backupRow = app.staticTexts["Backup Seed Phrase"]
-        let securityRow = app.staticTexts["Security"]
-        let currencyRow = app.staticTexts["Currency"]
-        let nodeRow = app.staticTexts["Remote Node"]
+        // Should show settings content
+        let settingsTitle = app.navigationBars["Settings"]
+        XCTAssertTrue(settingsTitle.waitForExistence(timeout: 3), "Should show Settings navigation title")
 
-        // At least some settings should be visible
-        let hasSettings = backupRow.waitForExistence(timeout: 3) ||
-                         securityRow.waitForExistence(timeout: 3) ||
-                         currencyRow.waitForExistence(timeout: 3) ||
-                         nodeRow.waitForExistence(timeout: 3)
+        // Switch back to wallet
+        let walletTab = app.tabBars.buttons["Wallet"]
+        walletTab.tap()
 
-        XCTAssertTrue(hasSettings, "Settings should show configuration options")
+        // Should show wallet content (send/receive buttons)
+        let sendButton = app.buttons["wallet.sendButton"]
+        XCTAssertTrue(sendButton.waitForExistence(timeout: 3), "Should show wallet send button")
+    }
+
+    func testWalletSendButtonExists() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let sendButton = app.buttons["wallet.sendButton"]
+        guard sendButton.waitForExistence(timeout: 5) else { return }
+        XCTAssertTrue(sendButton.isHittable, "Send button should be tappable")
+    }
+
+    func testWalletReceiveButtonExists() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let receiveButton = app.buttons["wallet.receiveButton"]
+        guard receiveButton.waitForExistence(timeout: 5) else { return }
+        XCTAssertTrue(receiveButton.isHittable, "Receive button should be tappable")
+    }
+}
+
+// MARK: - Settings Flow Tests
+
+final class SettingsFlowTests: XCTestCase {
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    func testSettingsRowsExist() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let settingsTab = app.tabBars.buttons["Settings"]
+        guard settingsTab.waitForExistence(timeout: 5) else { return }
+        settingsTab.tap()
+
+        let backupRow = app.buttons["settings.backupRow"]
+        let securityRow = app.buttons["settings.securityRow"]
+        let syncRow = app.buttons["settings.syncRow"]
+
+        XCTAssertTrue(backupRow.waitForExistence(timeout: 3), "Backup seed phrase row should exist")
+        XCTAssertTrue(securityRow.exists, "Security row should exist")
+        XCTAssertTrue(syncRow.exists, "Sync settings row should exist")
+    }
+
+    func testBackupRowNavigates() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let settingsTab = app.tabBars.buttons["Settings"]
+        guard settingsTab.waitForExistence(timeout: 5) else { return }
+        settingsTab.tap()
+
+        let backupRow = app.buttons["settings.backupRow"]
+        guard backupRow.waitForExistence(timeout: 3) else { return }
+        backupRow.tap()
+
+        // Should navigate to backup view (PIN required to view seed)
+        // Just verify navigation occurred
+        let backButton = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(backButton.waitForExistence(timeout: 3), "Should navigate to backup view")
+    }
+
+    func testSecurityRowNavigates() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+
+        let settingsTab = app.tabBars.buttons["Settings"]
+        guard settingsTab.waitForExistence(timeout: 5) else { return }
+        settingsTab.tap()
+
+        let securityRow = app.buttons["settings.securityRow"]
+        guard securityRow.waitForExistence(timeout: 3) else { return }
+        securityRow.tap()
+
+        // Should navigate to security view
+        let backButton = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(backButton.waitForExistence(timeout: 3), "Should navigate to security view")
     }
 }

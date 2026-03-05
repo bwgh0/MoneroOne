@@ -13,7 +13,6 @@ class PriceAlertNotificationManager {
             )
             return granted
         } catch {
-            print("Failed to request notification permission: \(error)")
             return false
         }
     }
@@ -41,10 +40,6 @@ class PriceAlertNotificationManager {
             trigger: nil // Deliver immediately
         )
 
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Failed to send price alert notification: \(error)")
-            }
-        }
+        UNUserNotificationCenter.current().add(request)
     }
 }

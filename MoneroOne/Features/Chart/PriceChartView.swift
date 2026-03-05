@@ -2,6 +2,7 @@ import SwiftUI
 import Charts
 
 struct PriceChartView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceAlertService: PriceAlertService
     @State private var selectedTimeRange: TimeRange = .week
@@ -119,7 +120,7 @@ struct PriceChartView: View {
             }
             .refreshable {
                 await priceService.fetchPrice()
-                await priceService.fetchChartData(range: selectedTimeRange.apiRange)
+                await priceService.fetchChartData(range: selectedTimeRange.apiRange, force: true)
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -320,8 +321,16 @@ struct PriceChartView: View {
         }
         .frame(height: 280)
         .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(16)
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .shadow(
+                    color: colorScheme == .light ? Color.black.opacity(0.08) : Color.clear,
+                    radius: 12,
+                    x: 0,
+                    y: 4
+                )
+        }
     }
 
     private var xAxisFormat: Date.FormatStyle {
@@ -421,6 +430,7 @@ struct PriceChartView: View {
 // MARK: - Stat Card
 
 struct StatCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let value: String
     let color: Color
@@ -437,8 +447,16 @@ struct StatCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(.tertiarySystemGroupedBackground))
-        .cornerRadius(12)
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .shadow(
+                    color: colorScheme == .light ? Color.black.opacity(0.08) : Color.clear,
+                    radius: 8,
+                    x: 0,
+                    y: 2
+                )
+        }
     }
 }
 

@@ -24,6 +24,13 @@ struct BackupView: View {
         .padding()
         .navigationTitle("Backup")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // Recover PIN length from keychain if UserDefaults was reset
+            if UserDefaults.standard.object(forKey: "preferredPINLength") == nil,
+               let keychainLength = KeychainStorage().getPinLength() {
+                preferredPINLength = keychainLength
+            }
+        }
     }
 
     private var lockedView: some View {

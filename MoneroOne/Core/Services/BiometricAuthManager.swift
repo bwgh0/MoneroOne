@@ -78,7 +78,6 @@ class BiometricAuthManager: ObservableObject {
             )
             return success
         } catch {
-            print("Biometric auth error: \(error)")
             return false
         }
     }

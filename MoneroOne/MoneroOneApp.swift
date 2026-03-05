@@ -21,6 +21,14 @@ struct MoneroOneApp: App {
     }
 
     init() {
+        // UI test state reset — clear all persisted data for a clean slate
+        if CommandLine.arguments.contains("--uitesting") && CommandLine.arguments.contains("--reset-state") {
+            if let bundleId = Bundle.main.bundleIdentifier {
+                UserDefaults.standard.removePersistentDomain(forName: bundleId)
+            }
+            KeychainStorage().deleteAll()
+        }
+
         // Migrate keychain items to new accessibility level (fixes wallet loss after device lock)
         KeychainStorage().migrateKeychainAccessibilityIfNeeded()
 
@@ -99,7 +107,7 @@ struct MoneroOneApp: App {
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch {
-            print("Failed to schedule price check: \(error)")
+            logger.error("Failed to schedule price check: \(error.localizedDescription)")
         }
     }
 

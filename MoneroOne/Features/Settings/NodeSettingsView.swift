@@ -3,10 +3,7 @@ import SwiftUI
 struct NodeSettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @StateObject private var nodeManager = NodeManager()
-    @State private var customNodeName = ""
-    @State private var customNodeURL = ""
     @State private var showAddNode = false
-    @State private var showRestartAlert = false
 
     var body: some View {
         List {
@@ -60,23 +57,13 @@ struct NodeSettingsView: View {
         .task {
             await nodeManager.refreshStats()
         }
-        .alert("Add Custom Node", isPresented: $showAddNode) {
-            TextField("Name (e.g., My Node)", text: $customNodeName)
-            TextField("URL (e.g., https://node.example.com:18089)", text: $customNodeURL)
-            Button("Cancel", role: .cancel) {
-                customNodeName = ""
-                customNodeURL = ""
+        .sheet(isPresented: $showAddNode) {
+            AddCustomNodeView { name, url, login, password in
+                nodeManager.addCustomNode(name: name, url: url, login: login, password: password)
+                Task {
+                    await nodeManager.refreshStats()
+                }
             }
-            Button("Add") {
-                addCustomNode()
-            }
-        } message: {
-            Text("Enter the node details")
-        }
-        .alert("Node Changed", isPresented: $showRestartAlert) {
-            Button("OK") { }
-        } message: {
-            Text("The new node will be used when you next open the app.")
         }
     }
 
@@ -85,9 +72,11 @@ struct NodeSettingsView: View {
         let stats = nodeManager.nodeStats[node.url]
 
         return Button {
-            if !nodeManager.autoSelectEnabled {
-                selectNode(node)
+            // If auto-select is on, turn it off — manual tap implies manual control
+            if nodeManager.autoSelectEnabled {
+                nodeManager.autoSelectEnabled = false
             }
+            selectNode(node)
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -104,6 +93,12 @@ struct NodeSettingsView: View {
                                 .padding(.vertical, 2)
                                 .background(Color.orange)
                                 .clipShape(Capsule())
+                        }
+
+                        if node.hasCredentials {
+                            Image(systemName: "lock.fill")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
                     }
 
@@ -167,7 +162,6 @@ struct NodeSettingsView: View {
                 }
             }
         }
-        .disabled(nodeManager.autoSelectEnabled)
         .opacity(nodeManager.autoSelectEnabled && !isSelected ? 0.5 : 1.0)
     }
 
@@ -185,25 +179,8 @@ struct NodeSettingsView: View {
     }
 
     private func selectNode(_ node: MoneroNode) {
-        let previousNode = nodeManager.selectedNode
         nodeManager.selectNode(node)
-        walletManager.setNode(url: node.url, isTrusted: node.isTrusted)
-
-        // Show restart alert if node changed and wallet is unlocked
-        if previousNode.id != node.id && walletManager.isUnlocked {
-            showRestartAlert = true
-        }
-    }
-
-    private func addCustomNode() {
-        guard !customNodeName.isEmpty, !customNodeURL.isEmpty else { return }
-        nodeManager.addCustomNode(name: customNodeName, url: customNodeURL)
-        customNodeName = ""
-        customNodeURL = ""
-        // Measure latency for the newly added node
-        Task {
-            await nodeManager.refreshStats()
-        }
+        walletManager.setNode(url: node.url, isTrusted: node.isTrusted, login: node.login, password: node.password)
     }
 
     private func deleteCustomNode(at offsets: IndexSet) {
@@ -211,6 +188,80 @@ struct NodeSettingsView: View {
             let node = nodeManager.customNodes[index]
             nodeManager.removeCustomNode(node)
         }
+    }
+}
+
+// MARK: - Add Custom Node Sheet
+
+struct AddCustomNodeView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var url = ""
+    @State private var login = ""
+    @State private var password = ""
+    @State private var showAuth = false
+
+    var onAdd: (String, String, String?, String?) -> Void
+
+    private var isValid: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !url.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Name", text: $name)
+                        .textInputAutocapitalization(.words)
+                    TextField("https://node.example.com:18089", text: $url)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Node Details")
+                } footer: {
+                    if !name.isEmpty && url.isEmpty {
+                        Text("URL is required")
+                            .foregroundColor(.red)
+                    }
+                }
+
+                Section {
+                    DisclosureGroup("Authentication", isExpanded: $showAuth) {
+                        TextField("Username", text: $login)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        SecureField("Password", text: $password)
+                    }
+                } footer: {
+                    Text("Only needed for nodes that require RPC credentials")
+                }
+            }
+            .navigationTitle("Add Custom Node")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        let trimmedLogin = login.trimmingCharacters(in: .whitespaces)
+                        let trimmedPassword = password.trimmingCharacters(in: .whitespaces)
+                        onAdd(
+                            name.trimmingCharacters(in: .whitespaces),
+                            url.trimmingCharacters(in: .whitespaces),
+                            trimmedLogin.isEmpty ? nil : trimmedLogin,
+                            trimmedPassword.isEmpty ? nil : trimmedPassword
+                        )
+                        dismiss()
+                    }
+                    .disabled(!isValid)
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 

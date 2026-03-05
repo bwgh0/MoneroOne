@@ -18,9 +18,11 @@ class KeychainStorage {
         migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.seed")
         migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.pinhash")
         migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.salt")
+        migrateKeychainItem(account: "one.monero.MoneroOne.mainnet.pinlength")
         migrateKeychainItem(account: "one.monero.MoneroOne.testnet.seed")
         migrateKeychainItem(account: "one.monero.MoneroOne.testnet.pinhash")
         migrateKeychainItem(account: "one.monero.MoneroOne.testnet.salt")
+        migrateKeychainItem(account: "one.monero.MoneroOne.testnet.pinlength")
 
         // Biometric PIN uses access control, handle separately
         migrateBiometricPinIfNeeded()
@@ -102,6 +104,10 @@ class KeychainStorage {
 
     private var saltKey: String {
         "one.monero.MoneroOne.\(networkPrefix).salt"
+    }
+
+    private var pinLengthKey: String {
+        "one.monero.MoneroOne.\(networkPrefix).pinlength"
     }
 
     // Biometric PIN is shared across networks (same PIN unlocks both)
@@ -260,6 +266,12 @@ class KeychainStorage {
             return nil
         }
 
+        // Migrate to current iterations if decrypted with legacy count
+        if decryptWith(encryptedData, pin: pin, salt: salt, iterations: Self.currentIterations) == nil {
+            // Decryption succeeded with legacy iterations — re-encrypt with current
+            try? saveSeed(seed, pin: pin)
+        }
+
         return seed
     }
 
@@ -306,6 +318,47 @@ class KeychainStorage {
         SecItemDelete(saltQuery as CFDictionary)
     }
 
+    // MARK: - PIN Length Storage
+
+    func savePinLength(_ length: Int) {
+        let data = Data("\(length)".utf8)
+
+        // Delete existing
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: pinLengthKey
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: pinLengthKey,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    func getPinLength() -> Int? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: pinLengthKey,
+            kSecReturnData as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let str = String(data: data, encoding: .utf8),
+              let length = Int(str) else {
+            return nil
+        }
+
+        return length
+    }
+
     // MARK: - Biometric PIN Storage
 
     /// Save PIN with biometric protection for Face ID/Touch ID unlock
@@ -317,7 +370,7 @@ class KeychainStorage {
         var error: Unmanaged<CFError>?
         guard let accessControl = SecAccessControlCreateWithFlags(
             kCFAllocatorDefault,
-            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
             .biometryCurrentSet,
             &error
         ) else {
@@ -365,34 +418,6 @@ class KeychainStorage {
         return pin
     }
 
-    /// Verify PIN matches biometrically stored hash
-    func verifyBiometricPin(_ pin: String) -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: biometricPinKey,
-            kSecReturnData as String: true,
-            kSecUseOperationPrompt as String: "Unlock your Monero wallet"
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess,
-              let storedHash = result as? Data else {
-            return false
-        }
-
-        // Check if legacy plaintext PIN
-        if let plainPin = String(data: storedHash, encoding: .utf8),
-           plainPin.count <= 6, plainPin.allSatisfy({ $0.isNumber }) {
-            return pin == plainPin
-        }
-
-        // Compare hashes
-        let inputHash = hashPinForBiometrics(pin)
-        return storedHash == inputHash
-    }
-
     /// Check if biometric PIN is stored
     func hasBiometricPin() -> Bool {
         let query: [String: Any] = [
@@ -404,6 +429,21 @@ class KeychainStorage {
         let status = SecItemCopyMatching(query as CFDictionary, nil)
         // errSecInteractionNotAllowed means it exists but needs biometrics
         return status == errSecSuccess || status == errSecInteractionNotAllowed
+    }
+
+    /// Delete all keychain items (used by UI tests for clean state)
+    func deleteAll() {
+        for prefix in ["mainnet", "testnet"] {
+            for suffix in ["seed", "pinhash", "salt", "pinlength"] {
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrAccount as String: "one.monero.MoneroOne.\(prefix).\(suffix)"
+                ]
+                SecItemDelete(query as CFDictionary)
+            }
+        }
+        deleteBiometricPin()
+        resetFailedAttempts()
     }
 
     /// Delete biometric PIN
@@ -432,18 +472,23 @@ class KeychainStorage {
             return false
         }
 
-        // Try with salt first (new format)
+        // Try with salt first (new format, current iterations)
         if let salt = getSalt() {
             let inputHash = hashPin(pin, salt: salt)
             if storedHash == inputHash {
                 return true
             }
+
+            // Fall back to old iteration count (migration from 100k → 600k)
+            let legacyIterHash = deriveKey(from: pin, salt: salt, keyLength: 32, iterations: Self.legacyIterations)
+            if storedHash == legacyIterHash {
+                return true
+            }
         }
 
-        // Fall back to legacy hash (for migration)
+        // Fall back to legacy hash without salt (very old wallets)
         let legacyHash = hashPinLegacy(pin)
         if storedHash == legacyHash {
-            // Migration: if we have a seed, re-save with new encryption
             return true
         }
 
@@ -481,22 +526,14 @@ class KeychainStorage {
 
     // MARK: - Modern Encryption (AES-GCM with PBKDF2)
 
+    private static let currentIterations: UInt32 = 600_000
+    private static let legacyIterations: UInt32 = 100_000
+
     private func hashPin(_ pin: String, salt: Data) -> Data {
-        // Use PBKDF2 with 100,000 iterations
         return deriveKey(from: pin, salt: salt, keyLength: 32)
     }
 
-    // Fixed salt for biometric PIN (constant, so force unwrap is safe)
-    private static let biometricSalt = Data("one.monero.biometric.salt".utf8)
-
-    private func hashPinForBiometrics(_ pin: String) -> Data {
-        // Use a fixed salt for biometric PIN hashing
-        // This is less secure than random salt but we don't have
-        // access to the wallet salt when storing biometric PIN
-        return deriveKey(from: pin, salt: Self.biometricSalt, keyLength: 32)
-    }
-
-    private func deriveKey(from pin: String, salt: Data, keyLength: Int) -> Data {
+    private func deriveKey(from pin: String, salt: Data, keyLength: Int, iterations: UInt32 = currentIterations) -> Data {
         var derivedKey = Data(count: keyLength)
 
         let result = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
@@ -508,7 +545,7 @@ class KeychainStorage {
                     saltBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
                     salt.count,
                     CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
-                    100_000, // iterations
+                    iterations,
                     derivedKeyBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
                     keyLength
                 )
@@ -543,15 +580,20 @@ class KeychainStorage {
     }
 
     private func decrypt(_ data: Data, with pin: String, salt: Data) -> String? {
-        // Derive decryption key using PBKDF2
-        let keyData = deriveKey(from: pin, salt: salt, keyLength: 32)
+        // Try current iteration count first
+        if let result = decryptWith(data, pin: pin, salt: salt, iterations: Self.currentIterations) {
+            return result
+        }
+        // Fall back to legacy iteration count (migration)
+        return decryptWith(data, pin: pin, salt: salt, iterations: Self.legacyIterations)
+    }
+
+    private func decryptWith(_ data: Data, pin: String, salt: Data, iterations: UInt32) -> String? {
+        let keyData = deriveKey(from: pin, salt: salt, keyLength: 32, iterations: iterations)
         let key = SymmetricKey(data: keyData)
 
         do {
-            // Reconstruct sealed box from combined data
             let sealedBox = try AES.GCM.SealedBox(combined: data)
-
-            // Decrypt
             let decrypted = try AES.GCM.open(sealedBox, using: key)
             return String(data: decrypted, encoding: .utf8)
         } catch {

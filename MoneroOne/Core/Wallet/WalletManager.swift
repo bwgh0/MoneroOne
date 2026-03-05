@@ -377,8 +377,12 @@ class WalletManager: ObservableObject {
     }
 
     func lock() {
-        moneroWallet?.stop()
+        // Capture old wallet so its deallocation (Kit.deinit → C++ close)
+        // happens off the main thread.
+        let oldWallet = moneroWallet
         moneroWallet = nil
+        Task.detached { [oldWallet] in let _ = oldWallet }
+
         currentSeed = nil
         isUnlocked = false
         balance = 0
@@ -606,19 +610,17 @@ class WalletManager: ObservableObject {
     }
 
     /// Save widget data if widget is enabled - called during sync cycles
-    /// Uses debouncing to prevent UI freezes from rapid widget reloads
+    /// Debounced: batches rapid updates into a single save + reload after 1 second
     private func saveWidgetDataIfEnabled() {
         guard UserDefaults.standard.bool(forKey: "widgetEnabled") else { return }
-        saveWidgetData()
-        scheduleWidgetReload()
-    }
 
-    /// Debounced widget reload - waits 1 second before reloading to batch rapid updates
-    private func scheduleWidgetReload() {
+        // Debounce: cancel any pending save and schedule a new one.
+        // This avoids JSON encode + file I/O on every balance/tx/state change.
         widgetReloadTask?.cancel()
         widgetReloadTask = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
             guard !Task.isCancelled else { return }
+            self.saveWidgetData()
             WidgetCenter.shared.reloadAllTimelines()
         }
     }
@@ -723,32 +725,8 @@ class WalletManager: ObservableObject {
         UserDefaults.standard.set(login, forKey: isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin")
         UserDefaults.standard.set(password, forKey: isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword")
 
-        // If wallet is running, restart with new node
-        if isUnlocked, let seed = currentSeed {
-            // Reset UI state
-            syncState = .connecting
-
-            // Stop current wallet
-            moneroWallet?.stop()
-            moneroWallet = nil
-            cancellables.removeAll()
-
-            // Recreate with new node (reads from UserDefaults)
-            do {
-                let wallet = MoneroWallet()
-                let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
-                let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
-                let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
-
-                try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
-                moneroWallet = wallet
-                bindToWallet(wallet)
-
-                // Reset connection tracking for the new node
-                startConnectionTracking()
-            } catch {
-                syncState = .error("Failed to reconnect: \(error.localizedDescription)")
-            }
+        if let seed = currentSeed {
+            restartWallet(with: seed)
         }
         return true
     }
@@ -757,30 +735,56 @@ class WalletManager: ObservableObject {
 
     /// Set SOCKS proxy address and restart wallet to apply
     func setProxy(_ address: String) {
+        saveProxy(address)
+
+        if let seed = currentSeed {
+            restartWallet(with: seed)
+        }
+    }
+
+    /// Save proxy address to UserDefaults without restarting the wallet.
+    /// Use this when a subsequent setNode() call will trigger the restart.
+    func saveProxy(_ address: String) {
         let trimmed = address.trimmingCharacters(in: .whitespaces)
         UserDefaults.standard.set(trimmed, forKey: "proxyAddress")
+    }
 
-        // If wallet is running, restart with new proxy
-        if isUnlocked, let seed = currentSeed {
-            syncState = .connecting
+    // MARK: - Wallet Restart
 
-            moneroWallet?.stop()
-            moneroWallet = nil
-            cancellables.removeAll()
+    /// Restart the wallet off the main thread to avoid UI blocking.
+    /// The old wallet's deallocation (Kit.deinit → _stop() → C++ close) happens
+    /// in a detached task so the main thread is never blocked.
+    private func restartWallet(with seed: [String]) {
+        guard isUnlocked else { return }
 
-            do {
-                let wallet = MoneroWallet()
-                let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
-                let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
-                let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
+        syncState = .connecting
 
-                try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
-                moneroWallet = wallet
-                bindToWallet(wallet)
-                startConnectionTracking()
-            } catch {
-                syncState = .error("Failed to reconnect: \(error.localizedDescription)")
-            }
+        // Capture old wallet — do NOT let it deallocate on the main thread.
+        // Setting moneroWallet = nil removes our reference, but oldWallet
+        // keeps the Kit alive until the detached task completes.
+        let oldWallet = moneroWallet
+        moneroWallet = nil
+        cancellables.removeAll()
+
+        // Old wallet deallocation happens off main when this task completes
+        Task.detached { [oldWallet] in let _ = oldWallet }
+
+        // Capture values for new wallet (all reads happen on main, fast)
+        let walletRestoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+        let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
+        let netType = networkType
+
+        // Create new wallet (Kit.init is fast; kit.start() dispatches to lifecycleQueue)
+        do {
+            let wallet = MoneroWallet()
+            try wallet.create(seed: seed, restoreHeight: walletRestoreHeight,
+                              resetSuffix: resetSuffix, networkType: netType)
+            moneroWallet = wallet
+            bindToWallet(wallet)
+            startConnectionTracking()
+        } catch {
+            syncState = .error("Failed to reconnect: \(error.localizedDescription)")
         }
     }
 
@@ -845,9 +849,10 @@ class WalletManager: ObservableObject {
         unlockedBalance = 0
         transactions = []
 
-        // Stop current wallet
-        moneroWallet?.stop()
+        // Capture old wallet so its deallocation happens off main thread
+        let oldWallet = moneroWallet
         moneroWallet = nil
+        Task.detached { [oldWallet] in let _ = oldWallet }
 
         // Clear MoneroKit wallet data directory
         clearWalletCache()
@@ -925,10 +930,11 @@ class WalletManager: ObservableObject {
         primaryAddress = ""
         subaddresses = []
 
-        // Stop current wallet without clearing cache
-        moneroWallet?.stop()
+        // Capture old wallet so its deallocation happens off main thread
+        let oldWallet = moneroWallet
         moneroWallet = nil
         cancellables.removeAll()
+        Task.detached { [oldWallet] in let _ = oldWallet }
 
         // Reset UI state
         balance = 0

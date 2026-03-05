@@ -753,6 +753,37 @@ class WalletManager: ObservableObject {
         return true
     }
 
+    // MARK: - Proxy Management
+
+    /// Set SOCKS proxy address and restart wallet to apply
+    func setProxy(_ address: String) {
+        let trimmed = address.trimmingCharacters(in: .whitespaces)
+        UserDefaults.standard.set(trimmed, forKey: "proxyAddress")
+
+        // If wallet is running, restart with new proxy
+        if isUnlocked, let seed = currentSeed {
+            syncState = .connecting
+
+            moneroWallet?.stop()
+            moneroWallet = nil
+            cancellables.removeAll()
+
+            do {
+                let wallet = MoneroWallet()
+                let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+                let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+                let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
+
+                try wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: resetSuffix, networkType: networkType)
+                moneroWallet = wallet
+                bindToWallet(wallet)
+                startConnectionTracking()
+            } catch {
+                syncState = .error("Failed to reconnect: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Seed Access
 
     func getSeedPhrase(pin: String) throws -> [String]? {

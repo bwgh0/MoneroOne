@@ -79,12 +79,14 @@ class NodeManager: ObservableObject {
     }
     @Published var nodeStats: [String: NodeStats] = [:]
     @Published var isLoadingStats: Bool = false
+    @Published var proxyAddress: String = ""
 
     private var uptimeStatsCache: [UptimeSummaryEntry]?
     private var uptimeCacheTime: Date?
     private let uptimeCacheDuration: TimeInterval = 3600 // 1 hour
 
     static let defaultNodes: [MoneroNode] = [
+        MoneroNode(name: "Monero One", url: "https://node.monero.one:443"),
         MoneroNode(name: "Hashvault", url: "https://nodes.hashvault.pro:18081"),
         MoneroNode(name: "Seth for Privacy", url: "https://node.sethforprivacy.com:18089"),
         MoneroNode(name: "CakeWallet", url: "https://xmr-node.cakewallet.com:18081"),
@@ -145,6 +147,9 @@ class NodeManager: ObservableObject {
 
         // Load custom nodes
         loadCustomNodes()
+
+        // Load proxy address
+        self.proxyAddress = UserDefaults.standard.string(forKey: "proxyAddress") ?? ""
     }
 
     var allNodes: [MoneroNode] {
@@ -175,6 +180,18 @@ class NodeManager: ObservableObject {
                 selectNode(defaultNode)
             }
         }
+    }
+
+    func updateCustomNode(oldURL: String, name: String, url: String, login: String? = nil, password: String? = nil) {
+        guard let index = customNodes.firstIndex(where: { $0.url == oldURL }) else { return }
+        customNodes[index] = MoneroNode(name: name, url: url, login: login, password: password)
+        saveCustomNodes()
+    }
+
+    func setProxy(_ address: String) {
+        let trimmed = address.trimmingCharacters(in: .whitespaces)
+        proxyAddress = trimmed
+        UserDefaults.standard.set(trimmed, forKey: "proxyAddress")
     }
 
     private func loadCustomNodes() {
@@ -261,6 +278,17 @@ class NodeManager: ObservableObject {
 
         await withTaskGroup(of: (String, Int?).self) { group in
             for node in allNodes {
+                // .onion nodes can't be tested via direct TCP — mark as available if proxy is set
+                if node.url.contains(".onion") {
+                    let isUp = !proxyAddress.isEmpty
+                    nodeStats[node.url] = NodeStats(
+                        uptimeMonth: nil,
+                        uptimeYear: nil,
+                        isUp: isUp,
+                        latencyMs: nil
+                    )
+                    continue
+                }
                 group.addTask {
                     let latency = await self.measureLatency(for: node)
                     return (node.url, latency)

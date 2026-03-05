@@ -379,7 +379,6 @@ struct SendView: View {
                         memo: memo.isEmpty ? nil : memo
                     )
                 }
-                print("Transaction sent: \(txHash)")
                 transactionHash = txHash
                 await walletManager.refresh()  // Refresh to show the new transaction
                 isSending = false

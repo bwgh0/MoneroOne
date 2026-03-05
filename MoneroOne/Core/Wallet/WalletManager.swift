@@ -430,7 +430,9 @@ class WalletManager: ObservableObject {
 
         // Stage 3b: MoneroKit reports actively connecting - trust it over HTTP test
         if case .connecting = syncState {
+            #if DEBUG
             NSLog("[WalletManager] MoneroKit reports .connecting — overriding reachability (nodeReachable=%@)", String(describing: nodeReachable))
+            #endif
             connectionStage = .connecting
             return
         }
@@ -475,7 +477,9 @@ class WalletManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isConnected in
                 guard let self = self else { return }
+                #if DEBUG
                 NSLog("[WalletManager] Network connectivity changed: %@", isConnected ? "connected" : "disconnected")
+                #endif
                 if !isConnected {
                     self.nodeReachable = nil
                 }
@@ -518,13 +522,17 @@ class WalletManager: ObservableObject {
                    let data = data,
                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    json["height"] != nil || json["status"] != nil {
+                    #if DEBUG
                     NSLog("[WalletManager] Node reachable: %@", nodeURLString)
+                    #endif
                     self.nodeReachable = true
                     self.reachabilityRetryCount = 0
                     self.reachabilityRetryTask?.cancel()
                     self.reachabilityRetryTask = nil
                 } else {
+                    #if DEBUG
                     NSLog("[WalletManager] Node unreachable: %@ (HTTP %d)", nodeURLString, (response as? HTTPURLResponse)?.statusCode ?? 0)
+                    #endif
                     self.nodeReachable = false
                 }
                 self.updateConnectionStage()
@@ -544,7 +552,9 @@ class WalletManager: ObservableObject {
         }
 
         reachabilityRetryCount += 1
+        #if DEBUG
         NSLog("[WalletManager] Scheduling reachability retry %d/3 in %ds", reachabilityRetryCount, delay / 1_000_000_000)
+        #endif
 
         reachabilityRetryTask = Task {
             try? await Task.sleep(nanoseconds: delay)
@@ -695,7 +705,9 @@ class WalletManager: ObservableObject {
 
         // If stuck on unreachable, reset and re-test (user escape hatch)
         if nodeReachable == false {
+            #if DEBUG
             NSLog("[WalletManager] Pull-to-refresh: resetting stuck reachability state")
+            #endif
             nodeReachable = nil
             reachabilityRetryCount = 0
             reachabilityRetryTask?.cancel()

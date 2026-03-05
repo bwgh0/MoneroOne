@@ -261,6 +261,16 @@ struct AddressPickerView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var selectedIndex: Int
     @State private var isCreating = false
+    @State private var showCreateError = false
+
+    private var isSynced: Bool {
+        switch walletManager.syncState {
+        case .synced, .syncing:
+            return true
+        default:
+            return false
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -297,7 +307,7 @@ struct AddressPickerView: View {
                                 .font(.subheadline)
                         }
                     }
-                    .disabled(isCreating)
+                    .disabled(isCreating || !isSynced)
                 }
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
@@ -346,6 +356,11 @@ struct AddressPickerView: View {
         }
         .navigationTitle("Select Address")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Couldn't Create Address", isPresented: $showCreateError) {
+            Button("OK") {}
+        } message: {
+            Text("Please wait until the wallet finishes syncing and try again.")
+        }
     }
 
     private func createNewSubaddress() {
@@ -361,6 +376,7 @@ struct AddressPickerView: View {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
                 } else {
+                    showCreateError = true
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.error)
                 }

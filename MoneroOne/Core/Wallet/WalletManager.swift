@@ -652,6 +652,13 @@ class WalletManager: ObservableObject {
     /// - Returns: The newly created SubAddress, or nil if creation failed
     func createSubaddress() -> MoneroKit.SubAddress? {
         guard let wallet = moneroWallet else { return nil }
+        // Don't create subaddresses while wallet is connecting or in error state
+        switch syncState {
+        case .synced, .syncing:
+            break
+        default:
+            return nil
+        }
         if let newSubaddr = wallet.createSubaddress() {
             userCreatedSubaddressIndices.insert(newSubaddr.index)
             saveUserCreatedSubaddresses()

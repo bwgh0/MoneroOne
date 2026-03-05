@@ -16,6 +16,7 @@ struct ContentView: View {
                 MainTabView()
             }
         }
+        .accessibilityIdentifier("contentView.root")
         .animation(.easeInOut, value: hasAcceptedDisclaimer)
         .animation(.easeInOut, value: walletManager.hasWallet)
         .animation(.easeInOut, value: walletManager.isUnlocked)

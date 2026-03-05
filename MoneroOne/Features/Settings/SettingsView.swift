@@ -56,6 +56,7 @@ struct SettingsView: View {
                             color: .orange
                         )
                     }
+                    .accessibilityIdentifier("settings.backupRow")
 
                     NavigationLink {
                         SecurityView()
@@ -66,6 +67,7 @@ struct SettingsView: View {
                             color: .blue
                         )
                     }
+                    .accessibilityIdentifier("settings.securityRow")
                 }
 
                 // Display Section
@@ -144,6 +146,7 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    .accessibilityIdentifier("settings.syncRow")
                 }
 
                 // About Section

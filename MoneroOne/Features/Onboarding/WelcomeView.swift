@@ -16,6 +16,7 @@ struct WelcomeView: View {
                     Text("Monero One")
                         .font(.largeTitle)
                         .fontWeight(.bold)
+                        .accessibilityIdentifier("welcome.title")
 
                     Text("Simple. Private. Secure.")
                         .font(.subheadline)
@@ -39,6 +40,7 @@ struct WelcomeView: View {
                         .padding(.vertical, 12)
                     }
                     .glassButtonStyle()
+                    .accessibilityIdentifier("welcome.createButton")
 
                     Button {
                         showRestore = true
@@ -54,6 +56,7 @@ struct WelcomeView: View {
                         .padding(.vertical, 12)
                     }
                     .glassButtonStyle()
+                    .accessibilityIdentifier("welcome.restoreButton")
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 32)

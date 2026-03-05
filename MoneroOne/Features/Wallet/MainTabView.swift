@@ -49,18 +49,21 @@ struct MainTabView: View {
                     Label("Wallet", systemImage: "wallet.pass")
                 }
                 .tag(Tab.wallet)
+                .accessibilityIdentifier("tab.wallet")
 
             PriceChartView()
                 .tabItem {
                     Label("Chart", systemImage: "chart.line.uptrend.xyaxis")
                 }
                 .tag(Tab.chart)
+                .accessibilityIdentifier("tab.chart")
 
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
                 .tag(Tab.settings)
+                .accessibilityIdentifier("tab.settings")
         }
     }
 }

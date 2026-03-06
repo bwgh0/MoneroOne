@@ -62,23 +62,19 @@ struct WalletView: View {
             .safeAreaBar(edge: .top, spacing: 12) {
                 // Floating header with progressive blur - content scrolls underneath
                 VStack(spacing: 8) {
-                    // Top row: Greeting on left, Wallet button on right
-                    HStack {
-                        DynamicGreeting()
-
-                        Spacer()
-
-                        // Wallet switcher button
-                        Button {
-                            showWalletManager = true
-                        } label: {
-                            Image(systemName: "rectangle.stack.fill")
-                                .font(.title2)
-                                .foregroundStyle(.orange)
-                                .frame(width: 44, height: 44)
+                    // Top row: Greeting on left, Wallet switcher on right
+                    HStack(spacing: 0) {
+                        if !showWalletManager {
+                            DynamicGreeting()
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                            Spacer(minLength: 12)
                         }
-                        .glassButtonStyle()
+
+                        WalletSwitcherButton(isExpanded: $showWalletManager)
+                            .environmentObject(walletManager)
+                            .frame(maxWidth: showWalletManager ? .infinity : nil)
                     }
+                    .animation(.snappy(duration: 0.35), value: showWalletManager)
                     .padding(.horizontal)
 
                     // Banners below the header
@@ -126,10 +122,6 @@ struct WalletView: View {
                 )
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
-            }
-            .sheet(isPresented: $showWalletManager) {
-                WalletManagerSheet()
-                    .environmentObject(walletManager)
             }
         }
     }

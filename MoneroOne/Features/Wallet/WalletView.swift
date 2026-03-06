@@ -3,6 +3,7 @@ import SwiftUI
 struct WalletView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
+    @ObservedObject private var trustedLocationSync = TrustedLocationSyncManager.shared
     @State private var showReceive = false
     @State private var showSend = false
     @State private var showPortfolio = false
@@ -21,6 +22,10 @@ struct WalletView: View {
                             syncState: walletManager.syncState,
                             connectionStage: walletManager.connectionStage,
                             priceService: priceService,
+                            isSyncBlocked: trustedLocationSync.isSyncBlocked,
+                            isOutsideTrustedZone: trustedLocationSync.isOutsideTrustedZone,
+                            trustedLocationName: trustedLocationSync.currentTrustedLocationName,
+                            isTrustedLocationEnabled: trustedLocationSync.isEnabled,
                             onPriceChangeTap: {
                                 selectedTab = .chart
                             },

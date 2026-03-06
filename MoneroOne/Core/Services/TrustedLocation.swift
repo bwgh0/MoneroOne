@@ -43,7 +43,11 @@ struct TrustedLocation: Identifiable, Codable, Equatable {
     // MARK: - Equatable
 
     static func == (lhs: TrustedLocation, rhs: TrustedLocation) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id &&
+        lhs.name == rhs.name &&
+        lhs.coordinate.latitude == rhs.coordinate.latitude &&
+        lhs.coordinate.longitude == rhs.coordinate.longitude &&
+        lhs.radius == rhs.radius
     }
 
     // MARK: - Geofencing

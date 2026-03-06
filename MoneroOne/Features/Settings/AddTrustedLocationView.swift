@@ -2,6 +2,63 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
+// MARK: - Search Completer
+
+class SearchCompleterDelegate: NSObject, ObservableObject, MKLocalSearchCompleterDelegate {
+    @Published var results: [MKLocalSearchCompletion] = []
+    private let completer = MKLocalSearchCompleter()
+
+    override init() {
+        super.init()
+        completer.delegate = self
+        completer.resultTypes = [.address, .pointOfInterest]
+    }
+
+    var queryFragment: String {
+        get { completer.queryFragment }
+        set { completer.queryFragment = newValue }
+    }
+
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        results = completer.results
+    }
+
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        results = []
+    }
+}
+
+// MARK: - Map Subview
+
+struct TrustedLocationMapView: View {
+    @Binding var cameraPosition: MapCameraPosition
+    @Binding var coordinate: CLLocationCoordinate2D?
+    var selectedRadius: Double
+
+    var body: some View {
+        MapReader { proxy in
+            Map(position: $cameraPosition) {
+                if let coord = coordinate {
+                    MapCircle(center: coord, radius: selectedRadius)
+                        .foregroundStyle(Color.orange.opacity(0.2))
+                        .stroke(Color.orange, lineWidth: 2)
+
+                    Annotation("", coordinate: coord) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.title)
+                            .foregroundColor(.orange)
+                    }
+                }
+            }
+            .onTapGesture { position in
+                if let coord = proxy.convert(position, from: .local) {
+                    coordinate = coord
+                }
+            }
+        }
+    }
+}
+
 struct AddTrustedLocationView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var locationsManager = TrustedLocationsManager.shared
@@ -14,18 +71,17 @@ struct AddTrustedLocationView: View {
     @State private var name: String = ""
     @State private var selectedRadius: Double = 500
     @State private var coordinate: CLLocationCoordinate2D?
-    @State private var region: MKCoordinateRegion = .init(
+    @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-    )
+    ))
 
     // Location manager for current location
     @StateObject private var locationFetcher = CurrentLocationFetcher()
 
     // Search
     @State private var searchText = ""
-    @State private var searchResults: [MKMapItem] = []
-    @State private var isSearching = false
+    @StateObject private var searchCompleter = SearchCompleterDelegate()
 
     // UI state
     @State private var showDeleteConfirmation = false
@@ -41,14 +97,11 @@ struct AddTrustedLocationView: View {
                     TextField("Search address", text: $searchText)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()
-                        .onSubmit {
-                            performSearch()
-                        }
 
                     if !searchText.isEmpty {
                         Button {
                             searchText = ""
-                            searchResults = []
+                            searchCompleter.results = []
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.secondary)
@@ -57,98 +110,76 @@ struct AddTrustedLocationView: View {
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground))
+                .onChange(of: searchText) { _, newValue in
+                    searchCompleter.queryFragment = newValue
+                }
 
-                // Search results overlay
-                if !searchResults.isEmpty {
-                    List(searchResults, id: \.self) { item in
-                        Button {
-                            selectSearchResult(item)
-                        } label: {
-                            VStack(alignment: .leading) {
-                                Text(item.name ?? "Unknown")
-                                    .foregroundColor(.primary)
-                                if let address = item.placemark.title {
-                                    Text(address)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                // Map area with search results overlaid
+                ZStack(alignment: .top) {
+                    ZStack {
+                        TrustedLocationMapView(
+                            cameraPosition: $cameraPosition,
+                            coordinate: $coordinate,
+                            selectedRadius: selectedRadius
+                        )
+
+                        // Current location button
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Button {
+                                    useCurrentLocation()
+                                } label: {
+                                    Image(systemName: "location.fill")
+                                        .font(.title2)
+                                        .padding()
+                                        .background(Color(.systemBackground))
+                                        .clipShape(Circle())
+                                        .shadow(radius: 2)
+                                }
+                                .padding()
+                            }
+                        }
+
+                        // Tap instruction
+                        if coordinate == nil {
+                            VStack {
+                                Text("Tap the map to place a pin")
+                                    .font(.caption)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color(.systemBackground).opacity(0.9))
+                                    .cornerRadius(8)
+                                    .shadow(radius: 2)
+                                Spacer()
+                            }
+                            .padding(.top, 8)
+                        }
+                    }
+
+                    // Search results dropdown (overlays map)
+                    if !searchCompleter.results.isEmpty {
+                        List(searchCompleter.results, id: \.self) { completion in
+                            Button {
+                                resolveCompletion(completion)
+                            } label: {
+                                VStack(alignment: .leading) {
+                                    Text(completion.title)
+                                        .foregroundColor(.primary)
+                                    if !completion.subtitle.isEmpty {
+                                        Text(completion.subtitle)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
                         }
+                        .listStyle(.plain)
+                        .frame(maxHeight: 200)
+                        .background(Color(.systemBackground))
+                        .shadow(radius: 4)
                     }
-                    .listStyle(.plain)
-                    .frame(maxHeight: 200)
-                }
-
-                // Map
-                ZStack {
-                    Map(coordinateRegion: $region, interactionModes: .all, annotationItems: annotationItems) { item in
-                        MapAnnotation(coordinate: item.coordinate) {
-                            ZStack {
-                                // Radius circle
-                                Circle()
-                                    .fill(Color.orange.opacity(0.2))
-                                    .frame(width: radiusInPoints, height: radiusInPoints)
-
-                                Circle()
-                                    .stroke(Color.orange, lineWidth: 2)
-                                    .frame(width: radiusInPoints, height: radiusInPoints)
-
-                                // Center pin
-                                Image(systemName: "mappin.circle.fill")
-                                    .font(.title)
-                                    .foregroundColor(.orange)
-                            }
-                        }
-                    }
-                    .gesture(
-                        LongPressGesture(minimumDuration: 0.3)
-                            .sequenced(before: DragGesture(minimumDistance: 0))
-                            .onEnded { value in
-                                // Handle long press to place pin
-                                // Note: This is a simplified approach - for production,
-                                // use a tap gesture recognizer via UIViewRepresentable
-                            }
-                    )
-
-                    // Center crosshair for tap-to-place
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Button {
-                                useCurrentLocation()
-                            } label: {
-                                Image(systemName: "location.fill")
-                                    .font(.title2)
-                                    .padding()
-                                    .background(Color(.systemBackground))
-                                    .clipShape(Circle())
-                                    .shadow(radius: 2)
-                            }
-                            .padding()
-                        }
-                    }
-
-                    // Tap instruction
-                    if coordinate == nil {
-                        VStack {
-                            Text("Tap the map to place a pin")
-                                .font(.caption)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color(.systemBackground).opacity(0.9))
-                                .cornerRadius(8)
-                                .shadow(radius: 2)
-                            Spacer()
-                        }
-                        .padding(.top, 8)
-                    }
-                }
-                .onTapGesture { location in
-                    // Convert tap to coordinate
-                    // Note: This requires calculating based on region
-                    // For a proper implementation, use MKMapView via UIViewRepresentable
-                    placeMarkerAtCenter()
                 }
 
                 // Form
@@ -265,41 +296,18 @@ struct AddTrustedLocationView: View {
         }
     }
 
-    private var annotationItems: [MapPin] {
-        if let coord = coordinate {
-            return [MapPin(coordinate: coord)]
-        }
-        return []
-    }
-
-    private var radiusInPoints: CGFloat {
-        // Approximate conversion from meters to points based on zoom level
-        let metersPerDegree = 111_000.0  // roughly
-        let degreesPerMeter = 1.0 / metersPerDegree
-        let radiusDegrees = selectedRadius * degreesPerMeter
-        let spanDegrees = region.span.latitudeDelta
-
-        // Map view is roughly 300-400 points wide
-        let mapWidthPoints: CGFloat = 350
-        let radiusPoints = CGFloat(radiusDegrees / spanDegrees) * mapWidthPoints
-
-        return min(max(radiusPoints, 40), 300)  // Clamp between 40 and 300 points
-    }
-
     // MARK: - Actions
 
     private func setupInitialState() {
         if let location = editingLocation {
-            // Editing existing location
             name = location.name
             selectedRadius = location.radius
             coordinate = location.coordinate
-            region = MKCoordinateRegion(
+            cameraPosition = .region(MKCoordinateRegion(
                 center: location.coordinate,
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-            )
+            ))
         } else {
-            // New location - try to get current location
             useCurrentLocation()
         }
     }
@@ -308,47 +316,34 @@ struct AddTrustedLocationView: View {
         locationFetcher.requestLocation { location in
             if let location = location {
                 coordinate = location.coordinate
-                region = MKCoordinateRegion(
-                    center: location.coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                )
+                withAnimation {
+                    cameraPosition = .region(MKCoordinateRegion(
+                        center: location.coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    ))
+                }
             }
         }
     }
 
-    private func placeMarkerAtCenter() {
-        coordinate = region.center
-    }
-
-    private func performSearch() {
-        guard !searchText.isEmpty else { return }
-
-        isSearching = true
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = searchText
-        request.region = region
-
+    private func resolveCompletion(_ completion: MKLocalSearchCompletion) {
+        let request = MKLocalSearch.Request(completion: completion)
         let search = MKLocalSearch(request: request)
-        search.start { response, error in
-            isSearching = false
-            if let response = response {
-                searchResults = response.mapItems
+        search.start { response, _ in
+            guard let item = response?.mapItems.first else { return }
+            coordinate = item.placemark.coordinate
+            withAnimation {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: item.placemark.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                ))
             }
-        }
-    }
+            searchCompleter.results = []
+            searchText = ""
 
-    private func selectSearchResult(_ item: MKMapItem) {
-        coordinate = item.placemark.coordinate
-        region = MKCoordinateRegion(
-            center: item.placemark.coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-        )
-        searchResults = []
-        searchText = ""
-
-        // Auto-fill name if empty
-        if name.isEmpty, let itemName = item.name {
-            name = itemName
+            if name.isEmpty, let itemName = item.name {
+                name = itemName
+            }
         }
     }
 
@@ -359,14 +354,12 @@ struct AddTrustedLocationView: View {
         guard !trimmedName.isEmpty else { return }
 
         if let existing = editingLocation {
-            // Update existing
             var updated = existing
             updated.name = trimmedName
             updated.coordinate = coord
             updated.radius = selectedRadius
             locationsManager.updateLocation(updated)
         } else {
-            // Create new
             let location = TrustedLocation(
                 name: trimmedName,
                 coordinate: coord,
@@ -377,13 +370,6 @@ struct AddTrustedLocationView: View {
 
         dismiss()
     }
-}
-
-// MARK: - Helper Types
-
-struct MapPin: Identifiable {
-    let id = UUID()
-    let coordinate: CLLocationCoordinate2D
 }
 
 // MARK: - Current Location Fetcher

@@ -32,6 +32,7 @@ struct ErrorBanner: View {
             Image(systemName: type.icon)
                 .font(.body)
                 .foregroundColor(type.color)
+                .accessibilityHidden(true)
 
             Text(message)
                 .font(.subheadline)
@@ -48,11 +49,15 @@ struct ErrorBanner: View {
                         .fontWeight(.medium)
                         .foregroundColor(type.color)
                 }
+                .accessibilityLabel("Retry")
+                .accessibilityHint("Attempt to resolve: \(message)")
             }
         }
         .padding()
         .background(type.color.opacity(0.1))
         .cornerRadius(12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(type == .error ? "Error" : type == .warning ? "Warning" : "Offline"): \(message)")
     }
 }
 

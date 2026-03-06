@@ -136,6 +136,7 @@ struct CommandCenterView: View {
         VStack(spacing: 8) {
             if walletManager.isTestnet {
                 TestnetBanner()
+                    .accessibilityLabel("Testnet mode active")
             }
             OfflineBanner()
             SyncErrorBanner(syncState: walletManager.syncState) {

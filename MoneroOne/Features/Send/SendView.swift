@@ -24,12 +24,12 @@ struct SendView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Offline Banner
                     if !networkMonitor.isConnected {
                         ErrorBanner(
                             message: "No internet connection. Cannot send.",
                             type: .offline
                         )
+                        .accessibilityLabel("Offline: no internet connection, cannot send transactions")
                     }
 
                     // Address Input
@@ -44,6 +44,8 @@ struct SendView: View {
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
                                 .accessibilityIdentifier("send.addressField")
+                                .accessibilityLabel("Recipient address")
+                                .accessibilityHint("Enter a Monero address to send to")
                                 .onChange(of: recipientAddress) { _ in
                                     validateAddress()
                                 }
@@ -56,6 +58,8 @@ struct SendView: View {
                                     .foregroundColor(.orange)
                             }
                             .accessibilityIdentifier("send.scanButton")
+                            .accessibilityLabel("Scan QR code")
+                            .accessibilityHint("Opens the camera to scan a Monero address QR code")
 
                             Button {
                                 if let clipboard = UIPasteboard.general.string {
@@ -66,6 +70,8 @@ struct SendView: View {
                                     .font(.title2)
                                     .foregroundColor(.orange)
                             }
+                            .accessibilityLabel("Paste address")
+                            .accessibilityHint("Pastes a Monero address from the clipboard")
                         }
                         .padding()
                         .background(Color(.secondarySystemBackground))
@@ -76,10 +82,13 @@ struct SendView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: isValidAddress ? "checkmark.circle.fill" : "xmark.circle.fill")
                                     .foregroundColor(isValidAddress ? .green : .red)
+                                    .accessibilityHidden(true)
                                 Text(isValidAddress ? "Valid address" : "Invalid address")
                                     .font(.caption)
                                     .foregroundColor(isValidAddress ? .green : .red)
                             }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel(isValidAddress ? "Address validation: valid" : "Address validation: invalid")
                         }
                     }
 
@@ -98,6 +107,8 @@ struct SendView: View {
                             }
                             .font(.caption)
                             .foregroundColor(.orange)
+                            .accessibilityLabel("Send maximum amount")
+                            .accessibilityHint("Sets the amount to your full available balance")
                         }
 
                         HStack {
@@ -105,6 +116,8 @@ struct SendView: View {
                                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                                 .keyboardType(.decimalPad)
                                 .accessibilityIdentifier("send.amountField")
+                                .accessibilityLabel("Amount in XMR")
+                                .accessibilityHint("Enter the amount of Monero to send")
                                 .onChange(of: amount) { newValue in
                                     // Clear sendAll flag if user manually edits amount
                                     if isSendingAll {
@@ -135,6 +148,7 @@ struct SendView: View {
                             Text("≈ \(fiatValue)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+                                .accessibilityLabel("Approximately \(fiatValue)")
                         }
 
                         HStack {
@@ -184,6 +198,8 @@ struct SendView: View {
                         .padding()
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Estimated fee: \(XMRFormatter.format(fee)) XMR\(priceService.formatFiatValue(fee).map { ", approximately \($0)" } ?? "")")
                     }
 
                     if let error = errorMessage {
@@ -219,6 +235,8 @@ struct SendView: View {
                     }
                     .glassButtonStyle()
                     .accessibilityIdentifier("send.sendButton")
+                    .accessibilityLabel(isSending ? "Sending transaction" : "Send XMR")
+                    .accessibilityHint(isValidInput ? "Double tap to review and send the transaction" : "Enter a valid address and amount first")
                     .disabled(!isValidInput || isSending)
                 }
                 .padding()

@@ -44,6 +44,8 @@ struct WalletView: View {
                                 showSend = true
                             }
                             .accessibilityIdentifier("wallet.sendButton")
+                            .accessibilityLabel("Send Monero")
+                            .accessibilityHint("Opens the send transaction screen")
 
                             CompactActionButton(
                                 title: "Receive",
@@ -53,6 +55,8 @@ struct WalletView: View {
                                 showReceive = true
                             }
                             .accessibilityIdentifier("wallet.receiveButton")
+                            .accessibilityLabel("Receive Monero")
+                            .accessibilityHint("Opens the receive screen with your address and QR code")
                         }
                         .padding(.horizontal)
                     }
@@ -99,6 +103,7 @@ struct WalletView: View {
                     if walletManager.isTestnet {
                         TestnetBanner()
                             .padding(.horizontal)
+                            .accessibilityLabel("Testnet mode active, test XMR only")
                     }
 
                     OfflineBanner()
@@ -227,9 +232,9 @@ struct RecentTransactionsSection: View {
                 Button(action: {}) {
                     VStack(spacing: 12) {
                         if isSyncing {
-                            // Still syncing - show syncing message
                             ProgressView()
                                 .tint(.orange)
+                                .accessibilityHidden(true)
                             Text("Syncing transactions...")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
@@ -239,10 +244,10 @@ struct RecentTransactionsSection: View {
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         } else {
-                            // Synced but no transactions
                             Image(systemName: "clock.arrow.circlepath")
                                 .font(.largeTitle)
                                 .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
                             Text("No transactions yet")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
@@ -282,7 +287,6 @@ struct RecentTransactionCard: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                // Icon
                 ZStack {
                     Circle()
                         .fill(iconColor.opacity(0.2))
@@ -293,7 +297,6 @@ struct RecentTransactionCard: View {
                         .foregroundColor(iconColor)
                 }
 
-                // Details
                 VStack(alignment: .leading, spacing: 2) {
                     Text(transaction.type == .incoming ? "Received" : "Sent")
                         .font(.subheadline)
@@ -307,14 +310,12 @@ struct RecentTransactionCard: View {
 
                 Spacer()
 
-                // Amount & Status
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("\(transaction.type == .incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount))")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(transaction.type == .incoming ? .green : .primary)
 
-                    // Status indicator with dot
                     HStack(spacing: 4) {
                         Circle()
                             .fill(transaction.displayStatusColor)
@@ -325,14 +326,17 @@ struct RecentTransactionCard: View {
                     }
                 }
 
-                // Chevron
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundColor(.secondary.opacity(0.5))
+                    .accessibilityHidden(true)
             }
             .padding(14)
         }
         .glassButtonStyle()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR, \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityHint("Shows transaction details")
     }
 
     private var iconColor: Color {

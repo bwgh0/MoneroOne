@@ -18,7 +18,6 @@ struct TransactionProgressView: View {
         VStack(spacing: 32) {
             Spacer()
 
-            // Status Icon
             ZStack {
                 switch state {
                 case .sending:
@@ -32,6 +31,7 @@ struct TransactionProgressView: View {
                                 rotationAngle = 360
                             }
                         }
+                        .accessibilityLabel("Sending in progress")
 
                 case .success:
                     Image(systemName: "checkmark.circle.fill")
@@ -44,16 +44,17 @@ struct TransactionProgressView: View {
                                 showCheckmark = true
                             }
                         }
+                        .accessibilityLabel("Transaction sent successfully")
 
                 case .error:
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 80))
                         .foregroundColor(.red)
+                        .accessibilityLabel("Transaction failed")
                 }
             }
             .frame(height: 100)
 
-            // Status Text
             VStack(spacing: 12) {
                 switch state {
                 case .sending:
@@ -82,6 +83,7 @@ struct TransactionProgressView: View {
                             .padding(.vertical, 8)
                             .background(Color(.secondarySystemBackground))
                             .cornerRadius(8)
+                            .accessibilityLabel("Transaction ID: \(txHash)")
 
                         Button {
                             UIPasteboard.general.string = txHash
@@ -93,6 +95,8 @@ struct TransactionProgressView: View {
                             .font(.caption)
                             .foregroundColor(.orange)
                         }
+                        .accessibilityLabel("Copy transaction ID")
+                        .accessibilityHint("Copies the full transaction ID to the clipboard")
                     }
 
                 case .error(let message):
@@ -110,7 +114,6 @@ struct TransactionProgressView: View {
 
             Spacer()
 
-            // Buttons
             VStack(spacing: 12) {
                 switch state {
                 case .sending:
@@ -127,6 +130,8 @@ struct TransactionProgressView: View {
                             .padding(.vertical, 16)
                     }
                     .glassButtonStyle()
+                    .accessibilityLabel("Done")
+                    .accessibilityHint("Closes the transaction screen")
 
                 case .error:
                     if let onRetry = onRetry {
@@ -143,6 +148,8 @@ struct TransactionProgressView: View {
                             .padding(.vertical, 16)
                         }
                         .glassButtonStyle()
+                        .accessibilityLabel("Retry transaction")
+                        .accessibilityHint("Attempts to send the transaction again")
                     }
 
                     Button {
@@ -154,6 +161,8 @@ struct TransactionProgressView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                     }
+                    .accessibilityLabel("Close")
+                    .accessibilityHint("Closes the transaction screen without retrying")
                 }
             }
             .padding(.bottom)

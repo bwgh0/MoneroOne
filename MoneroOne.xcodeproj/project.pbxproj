@@ -100,6 +100,7 @@
 		CND649AMACFN64RTKGHV6PCM /* AddTrustedLocationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */; };
 		5KTMKZ19F24DRHHTSNXITH45 /* DisclaimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */; };
 		PRIVACYINFOBUILD1234ABCD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */; };
+		WIDGETPRIVACYBUILD12345A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = WIDGETPRIVACYREF123456AB /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -239,6 +240,7 @@
 		H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTrustedLocationView.swift; sourceTree = "<group>"; };
 		ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisclaimerView.swift; sourceTree = "<group>"; };
 		PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		WIDGETPRIVACYREF123456AB /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -373,6 +375,7 @@
 				80E783520494A8A2ED1812BA /* MoneroOneWidgets.entitlements */,
 				DC58487C5764E22EA877B236 /* MoneroOneWidgetsBundle.swift */,
 				PRICEWIDGETREF123456789A /* PriceWidget.swift */,
+				WIDGETPRIVACYREF123456AB /* PrivacyInfo.xcprivacy */,
 				5B6DB1BCF707C6A91E194AF5 /* SyncLiveActivity.swift */,
 				184E7EF5F71DC832F69F6207 /* TransactionsWidget.swift */,
 			);
@@ -713,6 +716,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				186E1F281B45C7929D9F7CB7 /* Assets.xcassets in Resources */,
+				WIDGETPRIVACYBUILD12345A /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1003,7 +1007,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1121,7 +1125,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

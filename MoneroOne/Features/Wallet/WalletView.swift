@@ -6,6 +6,7 @@ struct WalletView: View {
     @State private var showReceive = false
     @State private var showSend = false
     @State private var showPortfolio = false
+    @State private var showWalletManager = false
     @Binding var selectedTab: MainTabView.Tab
 
     var body: some View {
@@ -69,7 +70,7 @@ struct WalletView: View {
 
                         // Wallet switcher button
                         Button {
-                            // Future: wallet switching
+                            showWalletManager = true
                         } label: {
                             Image(systemName: "rectangle.stack.fill")
                                 .font(.title2)
@@ -125,6 +126,10 @@ struct WalletView: View {
                 )
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
+            }
+            .sheet(isPresented: $showWalletManager) {
+                WalletManagerSheet()
+                    .environmentObject(walletManager)
             }
         }
     }

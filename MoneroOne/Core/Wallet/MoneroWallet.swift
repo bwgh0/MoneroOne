@@ -46,7 +46,7 @@ class MoneroWallet: ObservableObject {
     ///   - node: Optional custom node
     ///   - resetSuffix: Optional suffix to force new walletId (used for reset sync)
     ///   - networkType: Mainnet or testnet
-    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) throws {
+    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) async throws {
         let walletNode = node ?? defaultNode(for: networkType)
         var walletId = Self.stableWalletId(for: seed)
 
@@ -70,37 +70,47 @@ class MoneroWallet: ObservableObject {
             credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
         }
 
-        kit = try MoneroKit.Kit(
-            wallet: credentials,
-            account: 0,
-            restoreHeight: restoreHeight,
-            walletId: walletId,
-            node: walletNode,
-            networkType: networkType,
-            reachabilityManager: reachabilityManager,
-            logger: nil
-        )
+        // Heavy Kit init (SQLite + C++ + crypto) off main thread
+        let reachability = reachabilityManager
+        let newKit = try await Task.detached {
+            try MoneroKit.Kit(
+                wallet: credentials,
+                account: 0,
+                restoreHeight: restoreHeight,
+                walletId: walletId,
+                node: walletNode,
+                networkType: networkType,
+                reachabilityManager: reachability,
+                logger: nil
+            )
+        }.value
 
+        kit = newKit
         setupKit()
     }
 
     /// Create watch-only wallet
-    func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, networkType: MoneroKit.NetworkType = .mainnet) throws {
+    func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, networkType: MoneroKit.NetworkType = .mainnet) async throws {
         let walletNode = node ?? defaultNode(for: networkType)
         let networkSuffix = networkType == .testnet ? "_testnet" : ""
         let walletId = Self.stableWalletId(for: address + viewKey + networkSuffix)
 
-        kit = try MoneroKit.Kit(
-            wallet: .watch(address: address, viewKey: viewKey),
-            account: 0,
-            restoreHeight: restoreHeight,
-            walletId: walletId,
-            node: walletNode,
-            networkType: networkType,
-            reachabilityManager: reachabilityManager,
-            logger: nil
-        )
+        // Heavy Kit init (SQLite + C++ + crypto) off main thread
+        let reachability = reachabilityManager
+        let newKit = try await Task.detached {
+            try MoneroKit.Kit(
+                wallet: .watch(address: address, viewKey: viewKey),
+                account: 0,
+                restoreHeight: restoreHeight,
+                walletId: walletId,
+                node: walletNode,
+                networkType: networkType,
+                reachabilityManager: reachability,
+                logger: nil
+            )
+        }.value
 
+        kit = newKit
         setupKit()
     }
 
@@ -112,28 +122,22 @@ class MoneroWallet: ObservableObject {
 
         let defaultURL = isTestnet
             ? (Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081")
-            : "https://xmr-node.cakewallet.com:18081"
+            : "https://node.monero.one:443"
         let savedURL = UserDefaults.standard.string(forKey: urlKey) ?? defaultURL
         let url = URL(string: savedURL) ?? URL(string: defaultURL)!
 
         let login = UserDefaults.standard.string(forKey: loginKey)
         let password = UserDefaults.standard.string(forKey: passwordKey)
+        let proxy = UserDefaults.standard.string(forKey: "proxyAddress")
 
         return MoneroKit.Node(
             url: url,
             isTrusted: false,
             login: login,
-            password: password
+            password: password,
+            proxy: proxy
         )
     }
-
-    /// Available public mainnet nodes
-    static let publicNodes: [(name: String, url: String)] = [
-        ("CakeWallet", "https://xmr-node.cakewallet.com:18081"),
-        ("MoneroWorld", "https://node.moneroworld.com:18089"),
-        ("Community Node", "https://nodes.hashvault.pro:18081"),
-        ("XMR.to", "https://node.xmr.to:18081")
-    ]
 
     #if DEBUG
     /// Available public testnet nodes (port 28081/28089)

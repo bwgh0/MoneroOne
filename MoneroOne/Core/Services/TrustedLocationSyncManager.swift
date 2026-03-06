@@ -110,7 +110,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         locationManager?.desiredAccuracy = kCLLocationAccuracyThreeKilometers // Low accuracy = less battery
         locationManager?.distanceFilter = 500 // Only update every 500m
         locationManager?.pausesLocationUpdatesAutomatically = false
-        locationManager?.showsBackgroundLocationIndicator = true
+        locationManager?.showsBackgroundLocationIndicator = false
 
         // Request always authorization for trusted zone monitoring
         // Background updates will be enabled in the authorization callback

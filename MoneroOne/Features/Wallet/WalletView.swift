@@ -81,43 +81,7 @@ struct WalletView: View {
                 }
             }
             .animation(.snappy(duration: 0.4), value: showWalletManager)
-            .safeAreaBar(edge: .top, spacing: 12) {
-                // Floating header with progressive blur - content scrolls underneath
-                VStack(spacing: 8) {
-                    // Top row: Greeting on left, Wallet switcher on right
-                    HStack(spacing: 0) {
-                        if !showWalletManager {
-                            DynamicGreeting()
-                                .transition(.move(edge: .leading).combined(with: .opacity))
-                            Spacer(minLength: 12)
-                        }
-
-                        WalletSwitcherButton(isExpanded: $showWalletManager)
-                            .environmentObject(walletManager)
-                            .frame(maxWidth: showWalletManager ? .infinity : nil)
-                    }
-                    .animation(.snappy(duration: 0.35), value: showWalletManager)
-                    .padding(.horizontal)
-
-                    // Banners below the header
-                    if walletManager.isTestnet {
-                        TestnetBanner()
-                            .padding(.horizontal)
-                            .accessibilityLabel("Testnet mode active, test XMR only")
-                    }
-
-                    OfflineBanner()
-                        .padding(.horizontal)
-
-                    SyncErrorBanner(syncState: walletManager.syncState) {
-                        Task {
-                            await walletManager.refresh()
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .animation(.easeInOut, value: walletManager.syncState)
-            }
+            .walletHeader(showWalletManager: $showWalletManager)
             .refreshable {
                 await walletManager.refresh()
                 await priceService.fetchPrice()
@@ -349,6 +313,63 @@ struct RecentTransactionCard: View {
         return formatter.localizedString(for: transaction.timestamp, relativeTo: Date())
     }
 
+}
+
+// MARK: - Wallet Header (iOS version compat)
+
+private struct WalletHeaderContent: View {
+    @Binding var showWalletManager: Bool
+    @EnvironmentObject var walletManager: WalletManager
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 0) {
+                if !showWalletManager {
+                    DynamicGreeting()
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    Spacer(minLength: 12)
+                }
+
+                WalletSwitcherButton(isExpanded: $showWalletManager)
+                    .environmentObject(walletManager)
+                    .frame(maxWidth: showWalletManager ? .infinity : nil)
+            }
+            .animation(.snappy(duration: 0.35), value: showWalletManager)
+            .padding(.horizontal)
+
+            if walletManager.isTestnet {
+                TestnetBanner()
+                    .padding(.horizontal)
+                    .accessibilityLabel("Testnet mode active, test XMR only")
+            }
+
+            OfflineBanner()
+                .padding(.horizontal)
+
+            SyncErrorBanner(syncState: walletManager.syncState) {
+                Task {
+                    await walletManager.refresh()
+                }
+            }
+            .padding(.horizontal)
+        }
+        .animation(.easeInOut, value: walletManager.syncState)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func walletHeader(showWalletManager: Binding<Bool>) -> some View {
+        if #available(iOS 26.0, *) {
+            self.safeAreaBar(edge: .top, spacing: 12) {
+                WalletHeaderContent(showWalletManager: showWalletManager)
+            }
+        } else {
+            self.safeAreaInset(edge: .top, spacing: 12) {
+                WalletHeaderContent(showWalletManager: showWalletManager)
+            }
+        }
+    }
 }
 
 #Preview {

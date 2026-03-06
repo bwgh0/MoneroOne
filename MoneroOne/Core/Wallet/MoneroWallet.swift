@@ -194,6 +194,11 @@ class MoneroWallet: ObservableObject {
         kit?.startSync()
     }
 
+    /// Pause sync — stops refresh and state polling
+    func pauseSync() {
+        kit?.pauseSync()
+    }
+
     // MARK: - Balance
 
     private func updateBalance(_ info: MoneroKit.BalanceInfo) {

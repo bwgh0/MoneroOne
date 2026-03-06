@@ -6,6 +6,10 @@ struct BalanceCard: View {
     let syncState: WalletManager.SyncState
     let connectionStage: ConnectionStage
     @ObservedObject var priceService: PriceService
+    var isSyncBlocked: Bool = false
+    var isOutsideTrustedZone: Bool = false
+    var trustedLocationName: String? = nil
+    var isTrustedLocationEnabled: Bool = false
     var onPriceChangeTap: (() -> Void)? = nil
     var onCardTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
@@ -29,7 +33,14 @@ struct BalanceCard: View {
         VStack(spacing: 16) {
             // Sync Status - use progressive indicator when connecting, simple status when synced
             HStack {
-                if case .synced = syncState {
+                if isSyncBlocked {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text("Paused")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                } else if case .synced = syncState {
                     // Simple synced indicator
                     Circle()
                         .fill(Color.green)
@@ -144,8 +155,8 @@ struct BalanceCard: View {
                 }
             }
 
-            // Sync Progress
-            if case .syncing(let progress, let remaining) = syncState {
+            // Sync Progress (hidden when blocked)
+            if !isSyncBlocked, case .syncing(let progress, let remaining) = syncState {
                 VStack(spacing: 4) {
                     ProgressView(value: progress / 100)
                         .tint(.orange)
@@ -159,6 +170,33 @@ struct BalanceCard: View {
                             .foregroundColor(.secondary)
                     }
                 }
+            }
+
+            // Trusted location status
+            if isSyncBlocked {
+                HStack(spacing: 6) {
+                    Image(systemName: "location.slash")
+                        .font(.caption)
+                    Text("Sync paused — outside trusted zone")
+                        .font(.caption)
+                }
+                .foregroundColor(.red)
+            } else if isOutsideTrustedZone {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.caption)
+                    Text("Syncing from untrusted location")
+                        .font(.caption)
+                }
+                .foregroundColor(.orange)
+            } else if isTrustedLocationEnabled, let name = trustedLocationName {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.shield")
+                        .font(.caption)
+                    Text("Syncing from \(name)")
+                        .font(.caption)
+                }
+                .foregroundColor(.green)
             }
         }
         .padding(24)

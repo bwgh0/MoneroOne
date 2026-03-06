@@ -13,6 +13,8 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
     @Published var lastSyncTime: Date?
     @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published private(set) var currentTrustedLocationName: String?  // Name of current trusted zone (nil if outside)
+    @Published private(set) var isSyncBlocked: Bool = false  // True when outside zone + block mode
+    @Published private(set) var isOutsideTrustedZone: Bool = false  // True when outside zone (any mode)
 
     private var locationManager: CLLocationManager?
     private var statusCheckManager: CLLocationManager? // For checking status without starting updates
@@ -52,6 +54,31 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
                 self?.handleSyncStateChange(state)
             }
             .store(in: &cancellables)
+
+        // Observe connection stage — update live activity during early phases (noNetwork, reachingNode)
+        walletManager.$connectionStage
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] stage in
+                self?.handleConnectionStageChange(stage)
+            }
+            .store(in: &cancellables)
+
+        // Observe trusted location changes — use CombineLatest on the actual
+        // @Published values so we read them AFTER they change (not on willChange).
+        // Include isUnlocked so we recompute when wallet becomes available.
+        Publishers.CombineLatest4(
+            trustedLocationsManager.$syncMode,
+            trustedLocationsManager.$isInTrustedZone,
+            trustedLocationsManager.$trustedLocations,
+            walletManager.$isUnlocked
+        )
+        .dropFirst() // Skip initial emission
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] mode, inZone, locations, unlocked in
+            NSLog("[TrustedSync] State changed — mode=\(mode.rawValue) inZone=\(inZone) locations=\(locations.count) unlocked=\(unlocked)")
+            self?.recomputeSyncState()
+        }
+        .store(in: &cancellables)
 
         if isEnabled {
             startLocationSync()
@@ -98,16 +125,103 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         isSyncing = false
     }
 
-    private func performSync() {
-        guard let wallet = walletManager, wallet.isUnlocked else { return }
-
-        // Check if sync should be blocked based on trusted location settings
-        if trustedLocationsManager.shouldBlockSync() {
-            // In block mode and outside trusted zone - skip sync
-            isSyncing = false
+    /// Recompute sync state in response to settings changes (mode, zone, locations)
+    private func recomputeSyncState() {
+        guard let wallet = walletManager, wallet.isUnlocked else {
+            NSLog("[TrustedSync] recompute skipped — wallet nil or locked")
             return
         }
 
+        let outsideZone = trustedLocationsManager.hasTrustedLocations && !trustedLocationsManager.isInTrustedZone
+        let wasBlocked = isSyncBlocked
+        let shouldBlock = trustedLocationsManager.shouldBlockSync()
+
+        NSLog("[TrustedSync] recompute — outsideZone=\(outsideZone) wasBlocked=\(wasBlocked) shouldBlock=\(shouldBlock) syncMode=\(trustedLocationsManager.syncMode.rawValue) isInTrustedZone=\(trustedLocationsManager.isInTrustedZone) hasLocations=\(trustedLocationsManager.hasTrustedLocations)")
+
+        isOutsideTrustedZone = outsideZone
+        isSyncBlocked = shouldBlock
+        currentTrustedLocationName = trustedLocationsManager.isInTrustedZone ? trustedLocationsManager.currentLocationName : nil
+
+        if shouldBlock && !wasBlocked {
+            // Newly blocked — pause the actual sync engine
+            NSLog("[TrustedSync] BLOCKING sync — pausing wallet")
+            wallet.pauseSync()
+            isSyncing = false
+            if #available(iOS 16.2, *), isEnabled {
+                SyncActivityManager.shared.markBlocked()
+            }
+        } else if shouldBlock {
+            // Already blocked — ensure wallet stays paused
+            if !wallet.isSyncBlocked {
+                wallet.pauseSync()
+            }
+            if #available(iOS 16.2, *), isEnabled {
+                SyncActivityManager.shared.markBlocked()
+            }
+        } else if wasBlocked {
+            // Was blocked, now unblocked — resume sync
+            NSLog("[TrustedSync] UNBLOCKING sync — resuming wallet")
+            wallet.resumeSync()
+            performSync()
+        } else {
+            // Not blocked before or after — just update location info on live activity
+            if #available(iOS 16.2, *), isEnabled {
+                switch wallet.syncState {
+                case .synced:
+                    SyncActivityManager.shared.markSynced(locationName: currentTrustedLocationName, isUntrusted: outsideZone)
+                case .syncing(let progress, let remaining):
+                    SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining, locationName: currentTrustedLocationName, isUntrusted: outsideZone)
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    /// Handle connection stage changes — show connecting on live activity during early phases
+    private func handleConnectionStageChange(_ stage: ConnectionStage) {
+        guard isEnabled else { return }
+        // During early stages before SyncState moves to .connecting,
+        // update the live activity to show connecting instead of stale "synced"
+        switch stage {
+        case .noNetwork, .reachingNode, .connecting, .loadingBlocks:
+            if let wallet = walletManager, wallet.syncState == .idle || wallet.syncState == .connecting {
+                if #available(iOS 16.2, *) {
+                    Task {
+                        await SyncActivityManager.shared.startActivity(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
+                        SyncActivityManager.shared.markConnecting(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
+                    }
+                }
+            }
+        default:
+            break
+        }
+    }
+
+    private func performSync() {
+        guard let wallet = walletManager, wallet.isUnlocked else { return }
+
+        // Update trusted location status
+        let outsideZone = trustedLocationsManager.hasTrustedLocations && !trustedLocationsManager.isInTrustedZone
+        isOutsideTrustedZone = outsideZone
+
+        // Check if sync should be blocked based on trusted location settings
+        if trustedLocationsManager.shouldBlockSync() {
+            // In block mode and outside trusted zone - pause sync engine and block
+            wallet.pauseSync()
+            isSyncBlocked = true
+            isSyncing = false
+            if #available(iOS 16.2, *), isEnabled {
+                SyncActivityManager.shared.markBlocked()
+            }
+            return
+        }
+
+        // Ensure sync is unblocked
+        if wallet.isSyncBlocked {
+            wallet.resumeSync()
+        }
+        isSyncBlocked = false
         isSyncing = true
 
         // Check trusted location status and warn if needed (for warn-only mode)
@@ -116,8 +230,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         Task {
             // 1. Start/reset Live Activity and show connecting
             if #available(iOS 16.2, *), isEnabled {
-                await SyncActivityManager.shared.startActivity(locationName: currentTrustedLocationName)
-                // startActivity() already sets isConnecting: true
+                await SyncActivityManager.shared.startActivity(locationName: currentTrustedLocationName, isUntrusted: outsideZone)
             }
 
             // 2. Restart sync state checking to detect new blocks
@@ -128,7 +241,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
 
             // 4. Directly mark as synced (bypasses race conditions from Combine subscription)
             if #available(iOS 16.2, *), isEnabled {
-                SyncActivityManager.shared.markSynced(locationName: currentTrustedLocationName)
+                SyncActivityManager.shared.markSynced(locationName: currentTrustedLocationName, isUntrusted: outsideZone)
             }
 
             isSyncing = false
@@ -151,15 +264,17 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
     }
 
     private func handleSyncStateChange(_ state: WalletManager.SyncState) {
+        // Don't update live activity with sync progress when blocked
+        guard !isSyncBlocked else { return }
+
         switch state {
         case .syncing(let progress, let remaining):
             isSyncing = true
             guard isEnabled else { return }
             if #available(iOS 16.2, *) {
                 Task {
-                    // Ensure activity is started/reconnected before updating progress
-                    await SyncActivityManager.shared.startActivity()
-                    SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining)
+                    await SyncActivityManager.shared.startActivity(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
+                    SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining, locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
                 }
             }
 
@@ -168,22 +283,20 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
             lastSyncTime = Date()
             guard isEnabled else { return }
             if #available(iOS 16.2, *) {
-                SyncActivityManager.shared.markSynced()
+                SyncActivityManager.shared.markSynced(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
             }
 
         case .error:
             isSyncing = false
-            // Keep activity showing but could add error state
             break
 
         case .connecting:
             isSyncing = true
             guard isEnabled else { return }
-            // Start Live Activity and show connecting state
             if #available(iOS 16.2, *) {
                 Task {
-                    await SyncActivityManager.shared.startActivity()
-                    SyncActivityManager.shared.markConnecting()
+                    await SyncActivityManager.shared.startActivity(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
+                    SyncActivityManager.shared.markConnecting(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
                 }
             }
 

@@ -18,7 +18,11 @@ struct SyncLiveActivity: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
-                    if context.state.isSynced {
+                    if context.state.isBlocked {
+                        Image(systemName: "location.slash")
+                            .foregroundColor(.red)
+                            .font(.title2)
+                    } else if context.state.isSynced {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
                             .font(.title2)
@@ -34,8 +38,14 @@ struct SyncLiveActivity: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.center) {
-                    if context.state.isSynced {
-                        if let locationName = context.state.trustedLocationName {
+                    if context.state.isBlocked {
+                        Text("Sync Paused")
+                            .font(.headline)
+                    } else if context.state.isSynced {
+                        if context.state.isUntrustedLocation {
+                            Text("Synced — untrusted location")
+                                .font(.headline)
+                        } else if let locationName = context.state.trustedLocationName {
                             Text("Synced from \(locationName)")
                                 .font(.headline)
                         } else {
@@ -46,7 +56,10 @@ struct SyncLiveActivity: Widget {
                         Text("Connecting")
                             .font(.headline)
                     } else {
-                        if let locationName = context.state.trustedLocationName {
+                        if context.state.isUntrustedLocation {
+                            Text("Syncing — untrusted location")
+                                .font(.headline)
+                        } else if let locationName = context.state.trustedLocationName {
                             Text("Syncing from \(locationName)")
                                 .font(.headline)
                         } else {
@@ -57,7 +70,11 @@ struct SyncLiveActivity: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
-                    if context.state.isSynced {
+                    if context.state.isBlocked {
+                        Text("Outside trusted zone")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if context.state.isSynced {
                         Text("Updated \(context.state.lastUpdated, style: .relative) ago")
                             .font(.caption2)
                             .foregroundColor(.secondary)
@@ -84,7 +101,11 @@ struct SyncLiveActivity: Widget {
                     .frame(width: 18, height: 18)
                     .clipShape(Circle())
             } compactTrailing: {
-                if context.state.isSynced {
+                if context.state.isBlocked {
+                    Image(systemName: "location.slash")
+                        .foregroundColor(.red)
+                        .font(.caption)
+                } else if context.state.isSynced {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
                         .font(.caption)
@@ -104,7 +125,10 @@ struct SyncLiveActivity: Widget {
                     }
                 }
             } minimal: {
-                if context.state.isSynced {
+                if context.state.isBlocked {
+                    Image(systemName: "location.slash")
+                        .foregroundColor(.red)
+                } else if context.state.isSynced {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
                 } else if context.state.isConnecting {
@@ -142,8 +166,20 @@ struct LockScreenView: View {
                 .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
-                if context.state.isSynced {
-                    if let locationName = context.state.trustedLocationName {
+                if context.state.isBlocked {
+                    Text("Sync Paused")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    Text("Outside trusted zone")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else if context.state.isSynced {
+                    if context.state.isUntrustedLocation {
+                        Text("Synced — untrusted location")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                    } else if let locationName = context.state.trustedLocationName {
                         Text("Synced from \(locationName)")
                             .font(.headline)
                             .foregroundColor(.primary)
@@ -161,7 +197,11 @@ struct LockScreenView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                 } else {
-                    if let locationName = context.state.trustedLocationName {
+                    if context.state.isUntrustedLocation {
+                        Text("Syncing — untrusted location")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                    } else if let locationName = context.state.trustedLocationName {
                         Text("Syncing from \(locationName)")
                             .font(.headline)
                             .foregroundColor(.primary)
@@ -184,7 +224,11 @@ struct LockScreenView: View {
 
             Spacer()
 
-            if context.state.isSynced {
+            if context.state.isBlocked {
+                Image(systemName: "location.slash")
+                    .font(.title)
+                    .foregroundColor(.red)
+            } else if context.state.isSynced {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title)
                     .foregroundColor(.green)

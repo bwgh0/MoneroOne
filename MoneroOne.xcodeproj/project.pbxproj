@@ -38,6 +38,7 @@
 		79AC7BE8045740D2F375CDAD /* PriceAlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BDCBAC09269EA2BCBDEDE3C /* PriceAlertsView.swift */; };
 		7A3D2F3A1A59DD93FC9DBC58 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B332C777DDD3D470FA081B35 /* WidgetData.swift */; };
 		7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873A08AAC18A1EE631F3FC67 /* WalletView.swift */; };
+		D4E5F6A7B8C9D0E1F2A3B4C5 /* WalletManagerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* WalletManagerSheet.swift */; };
 		7EFE00922F8A910BDA499EC1 /* PriceChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC83A18E25A660B8C7DFC5EA /* PriceChartView.swift */; };
 		84BEB133F2C7D5434D9A865D /* PINEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108EE77DBE9D8CB6BE79F891 /* PINEntryView.swift */; };
 		89BEB8E5F42F4AC548599706 /* SecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C4D9F0B5479B927D727DBA /* SecurityTests.swift */; };
@@ -189,6 +190,7 @@
 		84E684EE43DA20220CE2D58B /* WalletManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletManagerTests.swift; sourceTree = "<group>"; };
 		8689F5157606DB44F6B09ECD /* PriceAlertService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertService.swift; sourceTree = "<group>"; };
 		873A08AAC18A1EE631F3FC67 /* WalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* WalletManagerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletManagerSheet.swift; sourceTree = "<group>"; };
 		885C8AC405766D0B3663F27F /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		8EE7C972F4CD3C984FC4FFE9 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		9698D5ECB87A0302392684C6 /* WalletIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletIntegrationTests.swift; sourceTree = "<group>"; };
@@ -409,6 +411,7 @@
 				A39B30F864DF425DCA258A4B /* BalanceCard.swift */,
 				885C8AC405766D0B3663F27F /* MainTabView.swift */,
 				1202A246B0E4F7871A06D84B /* PortfolioChartView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* WalletManagerSheet.swift */,
 				873A08AAC18A1EE631F3FC67 /* WalletView.swift */,
 			);
 			path = Wallet;
@@ -820,6 +823,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */,
 				8BFA73260FA46CA7935C386F /* UnlockView.swift in Sources */,
 				28E3D0F995F39C0E7791AF35 /* WalletManager.swift in Sources */,
+				D4E5F6A7B8C9D0E1F2A3B4C5 /* WalletManagerSheet.swift in Sources */,
 				7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */,
 				B6CA1E6614A397E2BC1F155A /* WelcomeView.swift in Sources */,
 				FF659956FD9D9759B11F49F9 /* WidgetData.swift in Sources */,

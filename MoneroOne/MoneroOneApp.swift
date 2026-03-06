@@ -21,6 +21,7 @@ struct MoneroOneApp: App {
     }
 
     init() {
+        #if DEBUG
         // UI test state reset — clear all persisted data for a clean slate
         if CommandLine.arguments.contains("--uitesting") && CommandLine.arguments.contains("--reset-state") {
             if let bundleId = Bundle.main.bundleIdentifier {
@@ -28,6 +29,7 @@ struct MoneroOneApp: App {
             }
             KeychainStorage().deleteAll()
         }
+        #endif
 
         // Migrate keychain items to new accessibility level (fixes wallet loss after device lock)
         KeychainStorage().migrateKeychainAccessibilityIfNeeded()

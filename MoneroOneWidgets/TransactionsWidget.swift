@@ -35,9 +35,9 @@ struct TransactionsProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TransactionsEntry>) -> Void) {
-        os_log("🔄 getTimeline called", log: widgetLog, type: .info)
+        os_log("getTimeline called", log: widgetLog, type: .info)
         let data = WidgetDataManager.shared.load() ?? WidgetDataManager.placeholder
-        os_log("📊 Using data with isEnabled=%d", log: widgetLog, type: .info, data.isEnabled ? 1 : 0)
+        os_log("Using data with isEnabled=%d", log: widgetLog, type: .info, data.isEnabled ? 1 : 0)
         let entry = TransactionsEntry(date: Date(), data: data)
 
         // Refresh every 15 minutes

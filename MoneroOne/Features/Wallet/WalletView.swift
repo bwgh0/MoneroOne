@@ -6,78 +6,88 @@ struct WalletView: View {
     @State private var showReceive = false
     @State private var showSend = false
     @State private var showPortfolio = false
+    @State private var showWalletManager = false
     @Binding var selectedTab: MainTabView.Tab
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    // Balance Card
-                    BalanceCard(
-                        balance: walletManager.balance,
-                        unlockedBalance: walletManager.unlockedBalance,
-                        syncState: walletManager.syncState,
-                        connectionStage: walletManager.connectionStage,
-                        priceService: priceService,
-                        onPriceChangeTap: {
-                            selectedTab = .chart
-                        },
-                        onCardTap: {
-                            showPortfolio = true
-                        }
-                    )
-                    .padding(.horizontal)
-
-                    // Action Buttons (compact)
-                    HStack(spacing: 16) {
-                        CompactActionButton(
-                            title: "Send",
-                            icon: "arrow.up.circle.fill",
-                            color: .orange
-                        ) {
-                            showSend = true
-                        }
-                        .accessibilityIdentifier("wallet.sendButton")
-
-                        CompactActionButton(
-                            title: "Receive",
-                            icon: "arrow.down.circle.fill",
-                            color: .green
-                        ) {
-                            showReceive = true
-                        }
-                        .accessibilityIdentifier("wallet.receiveButton")
-                    }
-                    .padding(.horizontal)
-
-                    Spacer()
-                        .frame(height: 8)
-
-                    // Recent Transactions
-                    RecentTransactionsSection()
+                VStack(spacing: 8) {
+                    // Balance + actions — collapse upward
+                    VStack(spacing: 16) {
+                        BalanceCard(
+                            balance: walletManager.balance,
+                            unlockedBalance: walletManager.unlockedBalance,
+                            syncState: walletManager.syncState,
+                            connectionStage: walletManager.connectionStage,
+                            priceService: priceService,
+                            onPriceChangeTap: {
+                                selectedTab = .chart
+                            },
+                            onCardTap: {
+                                showPortfolio = true
+                            }
+                        )
                         .padding(.horizontal)
+
+                        HStack(spacing: 16) {
+                            CompactActionButton(
+                                title: "Send",
+                                icon: "arrow.up.circle.fill",
+                                color: .orange
+                            ) {
+                                showSend = true
+                            }
+                            .accessibilityIdentifier("wallet.sendButton")
+
+                            CompactActionButton(
+                                title: "Receive",
+                                icon: "arrow.down.circle.fill",
+                                color: .green
+                            ) {
+                                showReceive = true
+                            }
+                            .accessibilityIdentifier("wallet.receiveButton")
+                        }
+                        .padding(.horizontal)
+                    }
+                    .frame(height: showWalletManager ? 0 : nil)
+                    .scaleEffect(y: showWalletManager ? 0.01 : 1, anchor: .top)
+                    .opacity(showWalletManager ? 0 : 1)
+                    .clipped()
+                    .allowsHitTesting(!showWalletManager)
+
+                    // Recent transactions — hide instantly, no animation
+                    if !showWalletManager {
+                        RecentTransactionsSection()
+                            .padding(.horizontal)
+                            .transaction { $0.animation = nil }
+                    }
+
+                    // Wallet rows — slide in from the right
+                    if showWalletManager {
+                        WalletManagerRows(isExpanded: $showWalletManager)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
             }
+            .animation(.snappy(duration: 0.4), value: showWalletManager)
             .safeAreaBar(edge: .top, spacing: 12) {
                 // Floating header with progressive blur - content scrolls underneath
                 VStack(spacing: 8) {
-                    // Top row: Greeting on left, Wallet button on right
-                    HStack {
-                        DynamicGreeting()
-
-                        Spacer()
-
-                        // Wallet switcher button
-                        Button {
-                            // Future: wallet switching
-                        } label: {
-                            Image(systemName: "rectangle.stack.fill")
-                                .font(.title2)
-                                .foregroundStyle(.orange)
-                                .frame(width: 44, height: 44)
+                    // Top row: Greeting on left, Wallet switcher on right
+                    HStack(spacing: 0) {
+                        if !showWalletManager {
+                            DynamicGreeting()
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                            Spacer(minLength: 12)
                         }
-                        .glassButtonStyle()
+
+                        WalletSwitcherButton(isExpanded: $showWalletManager)
+                            .environmentObject(walletManager)
+                            .frame(maxWidth: showWalletManager ? .infinity : nil)
                     }
+                    .animation(.snappy(duration: 0.35), value: showWalletManager)
                     .padding(.horizontal)
 
                     // Banners below the header
@@ -147,28 +157,6 @@ struct TestnetBanner: View {
         .padding(.vertical, 12)
         .background(Color.cyan.gradient)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-struct ActionButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 28))
-                Text(title)
-                    .font(.callout.weight(.semibold))
-            }
-            .foregroundStyle(color)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-        }
-        .glassButtonStyle()
     }
 }
 

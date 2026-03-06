@@ -20,7 +20,7 @@ final class WalletIntegrationTests: XCTestCase {
     func testWalletCreationFlow() async throws {
         // Generate mnemonic
         let mnemonic = walletManager.generateNewWallet()
-        XCTAssertEqual(mnemonic.count, 24)
+        XCTAssertEqual(mnemonic.count, 16)
 
         // Save wallet
         let pin = "1234"
@@ -37,7 +37,7 @@ final class WalletIntegrationTests: XCTestCase {
 
         try walletManager.saveWallet(mnemonic: mnemonic, pin: pin, restoreHeight: restoreHeight)
 
-        let savedHeight = UserDefaults.standard.integer(forKey: "restoreHeight")
+        let savedHeight = UserDefaults.standard.integer(forKey: "mainnet_restoreHeight")
         XCTAssertEqual(UInt64(savedHeight), restoreHeight)
     }
 
@@ -47,7 +47,9 @@ final class WalletIntegrationTests: XCTestCase {
         // Use a test mnemonic (not a real wallet!)
         let testMnemonic = [
             "abandon", "abandon", "abandon", "abandon", "abandon", "abandon",
-            "abandon", "abandon", "abandon", "abandon", "abandon", "about"
+            "abandon", "abandon", "abandon", "abandon", "abandon", "abandon",
+            "abandon", "abandon", "abandon", "abandon", "abandon", "abandon",
+            "abandon", "abandon", "abandon", "abandon", "abandon", "art"
         ]
         let pin = "1234"
 
@@ -72,7 +74,9 @@ final class WalletIntegrationTests: XCTestCase {
     func testWalletRestoreWithDate() async throws {
         let testMnemonic = [
             "abandon", "abandon", "abandon", "abandon", "abandon", "abandon",
-            "abandon", "abandon", "abandon", "abandon", "abandon", "about"
+            "abandon", "abandon", "abandon", "abandon", "abandon", "abandon",
+            "abandon", "abandon", "abandon", "abandon", "abandon", "abandon",
+            "abandon", "abandon", "abandon", "abandon", "abandon", "art"
         ]
         let pin = "1234"
         let restoreDate = Date(timeIntervalSince1970: 1600000000) // Sept 2020
@@ -80,7 +84,7 @@ final class WalletIntegrationTests: XCTestCase {
         try walletManager.restoreWallet(mnemonic: testMnemonic, pin: pin, restoreDate: restoreDate)
 
         // Restore height should be set
-        let savedHeight = UserDefaults.standard.integer(forKey: "restoreHeight")
+        let savedHeight = UserDefaults.standard.integer(forKey: "mainnet_restoreHeight")
         XCTAssertGreaterThan(savedHeight, 0)
     }
 
@@ -93,7 +97,7 @@ final class WalletIntegrationTests: XCTestCase {
         try walletManager.saveWallet(mnemonic: mnemonic, pin: pin)
 
         // Now try to unlock
-        try walletManager.unlock(pin: pin)
+        try await walletManager.unlock(pin: pin)
 
         XCTAssertTrue(walletManager.isUnlocked)
     }
@@ -107,7 +111,7 @@ final class WalletIntegrationTests: XCTestCase {
         // Try to unlock with wrong pin
         let wrongPin = "9999"
         do {
-            try walletManager.unlock(pin: wrongPin)
+            try await walletManager.unlock(pin: wrongPin)
             XCTFail("Should throw for wrong PIN")
         } catch {
             XCTAssertTrue(error is WalletError)
@@ -121,7 +125,7 @@ final class WalletIntegrationTests: XCTestCase {
         let mnemonic = walletManager.generateNewWallet()
         let pin = "1234"
         try walletManager.saveWallet(mnemonic: mnemonic, pin: pin)
-        try walletManager.unlock(pin: pin)
+        try await walletManager.unlock(pin: pin)
 
         XCTAssertTrue(walletManager.isUnlocked)
 

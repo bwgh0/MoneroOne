@@ -37,7 +37,7 @@ struct PriceProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<PriceEntry>) -> Void) {
-        os_log("🔄 getTimeline called for PriceWidget", log: widgetLog, type: .info)
+        os_log("getTimeline called for PriceWidget", log: widgetLog, type: .info)
 
         // Widget extensions have limited runtime (~10-30 seconds) and network is unreliable.
         // Instead of fetching data ourselves, we rely on cached data prepared by the main app.
@@ -45,10 +45,10 @@ struct PriceProvider: TimelineProvider {
 
         let data: WidgetData
         if let cached = WidgetDataManager.shared.load(), cached.currentPrice != nil {
-            os_log("✅ Using cached price data: %{public}@", log: widgetLog, type: .info, String(describing: cached.currentPrice))
+            os_log("Using cached price data: %{public}@", log: widgetLog, type: .info, String(describing: cached.currentPrice))
             data = cached
         } else {
-            os_log("⚠️ No cached data available - waiting for main app", log: widgetLog, type: .info)
+            os_log("No cached data available - waiting for main app", log: widgetLog, type: .info)
             data = WidgetDataManager.pricePlaceholder
         }
 
@@ -57,7 +57,7 @@ struct PriceProvider: TimelineProvider {
         // Determine refresh interval based on data availability
         let hasData = data.currentPrice != nil
         let refreshMinutes = hasData ? 15 : 2  // Retry sooner if no data (waiting for app)
-        os_log("⏱️ Next refresh in %d minutes (hasData=%d)", log: widgetLog, type: .info, refreshMinutes, hasData ? 1 : 0)
+        os_log("Next refresh in %d minutes (hasData=%d)", log: widgetLog, type: .info, refreshMinutes, hasData ? 1 : 0)
 
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: refreshMinutes, to: Date())!
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))

@@ -107,7 +107,7 @@ final class SecurityAuditTests: XCTestCase {
         let mnemonic = walletManager.generateNewWallet()
         let pin = "123456"
         try walletManager.saveWallet(mnemonic: mnemonic, pin: pin)
-        try walletManager.unlock(pin: pin)
+        try await walletManager.unlock(pin: pin)
 
         // Wait briefly for wallet to initialize
         try await Task.sleep(nanoseconds: 500_000_000)
@@ -128,7 +128,7 @@ final class SecurityAuditTests: XCTestCase {
         let originalMnemonic = walletManager.generateNewWallet()
         let pin = "123456"
         try walletManager.saveWallet(mnemonic: originalMnemonic, pin: pin)
-        try walletManager.unlock(pin: pin)
+        try await walletManager.unlock(pin: pin)
 
         // Wait for wallet to initialize and have primaryAddress set
         try await Task.sleep(nanoseconds: 500_000_000)
@@ -152,7 +152,7 @@ final class SecurityAuditTests: XCTestCase {
         let mnemonic = walletManager.generateNewWallet()
         let pin = "123456"
         try walletManager.saveWallet(mnemonic: mnemonic, pin: pin)
-        try walletManager.unlock(pin: pin)
+        try await walletManager.unlock(pin: pin)
 
         // Wait for initialization
         try await Task.sleep(nanoseconds: 1_000_000_000)
@@ -184,7 +184,7 @@ final class SecurityAuditTests: XCTestCase {
         let mnemonic = walletManager.generateNewWallet()
         let pin = "123456"
         try walletManager.saveWallet(mnemonic: mnemonic, pin: pin)
-        try walletManager.unlock(pin: pin)
+        try await walletManager.unlock(pin: pin)
 
         // Wait for initialization
         try await Task.sleep(nanoseconds: 1_000_000_000)
@@ -286,7 +286,7 @@ final class SecurityAuditTests: XCTestCase {
         XCTAssertTrue(walletManager.hasWallet, "Should have mainnet wallet")
 
         // 2. Unlock on mainnet
-        try walletManager.unlock(pin: pin)
+        try await walletManager.unlock(pin: pin)
         try await Task.sleep(nanoseconds: 500_000_000)
 
         // 3. Get seed on mainnet (should match)

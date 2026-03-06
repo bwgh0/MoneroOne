@@ -1,6 +1,12 @@
 import Foundation
 import Network
 
+struct ProxyEntry: Identifiable, Codable, Equatable {
+    var id: String { address }
+    let name: String
+    let address: String // "host:port"
+}
+
 struct MoneroNode: Identifiable, Codable, Equatable {
     var id: String { url }
     let name: String
@@ -73,21 +79,38 @@ class NodeManager: ObservableObject {
         didSet {
             UserDefaults.standard.set(autoSelectEnabled, forKey: autoSelectKey)
             if autoSelectEnabled {
-                selectBestNode()
+                Task { selectBestNode() }
             }
         }
     }
     @Published var nodeStats: [String: NodeStats] = [:]
     @Published var isLoadingStats: Bool = false
+    @Published var proxyAddress: String = ""
+    @Published var customProxies: [ProxyEntry] = []
+    @Published var selectedProxyAddress: String = ""
+    @Published var proxyReachability: [String: Bool] = [:]
+
+    var selectedProxyReachable: Bool? {
+        proxyReachability[selectedProxyAddress]
+    }
 
     private var uptimeStatsCache: [UptimeSummaryEntry]?
     private var uptimeCacheTime: Date?
     private let uptimeCacheDuration: TimeInterval = 3600 // 1 hour
 
     static let defaultNodes: [MoneroNode] = [
+        MoneroNode(name: "Monero One", url: "https://node.monero.one:443"),
         MoneroNode(name: "Hashvault", url: "https://nodes.hashvault.pro:18081"),
         MoneroNode(name: "Seth for Privacy", url: "https://node.sethforprivacy.com:18089"),
-        MoneroNode(name: "CakeWallet", url: "https://xmr-node.cakewallet.com:18081"),
+    ]
+
+    static let defaultProxies: [ProxyEntry] = [
+        ProxyEntry(name: "Orbot / Local Tor", address: "127.0.0.1:9050"),
+    ]
+
+    static let torNodes: [MoneroNode] = [
+        MoneroNode(name: "Monero One (US)", url: "http://5tvl5acn3sm7id4gzc4mj6n7lrwlyrhssr2r57zkxk6eugxwix4ze4qd.onion:18089"),
+        MoneroNode(name: "Monero One (EU)", url: "http://zu3oyzi45x3ul24sncs4245nlpz76jzizm36tvrkfvq2r33azzjv5syd.onion:18089"),
     ]
 
     #if DEBUG
@@ -145,6 +168,11 @@ class NodeManager: ObservableObject {
 
         // Load custom nodes
         loadCustomNodes()
+
+        // Load proxy address and proxy list
+        self.proxyAddress = UserDefaults.standard.string(forKey: "proxyAddress") ?? ""
+        self.selectedProxyAddress = UserDefaults.standard.string(forKey: "selectedProxyAddress") ?? Self.defaultProxies.first?.address ?? ""
+        loadCustomProxies()
     }
 
     var allNodes: [MoneroNode] {
@@ -173,6 +201,134 @@ class NodeManager: ObservableObject {
         if selectedNode.id == node.id {
             if let defaultNode = currentDefaultNodes.first {
                 selectNode(defaultNode)
+            }
+        }
+    }
+
+    func updateCustomNode(oldURL: String, name: String, url: String, login: String? = nil, password: String? = nil) {
+        guard let index = customNodes.firstIndex(where: { $0.url == oldURL }) else { return }
+        customNodes[index] = MoneroNode(name: name, url: url, login: login, password: password)
+        saveCustomNodes()
+    }
+
+    func setProxy(_ address: String) {
+        let trimmed = address.trimmingCharacters(in: .whitespaces)
+        proxyAddress = trimmed
+        UserDefaults.standard.set(trimmed, forKey: "proxyAddress")
+    }
+
+    var allProxies: [ProxyEntry] {
+        Self.defaultProxies + customProxies
+    }
+
+    func selectProxy(_ proxy: ProxyEntry) {
+        selectedProxyAddress = proxy.address
+        UserDefaults.standard.set(proxy.address, forKey: "selectedProxyAddress")
+        setProxy(proxy.address)
+    }
+
+    func addCustomProxy(name: String, address: String) {
+        let proxy = ProxyEntry(name: name, address: address)
+        customProxies.append(proxy)
+        saveCustomProxies()
+    }
+
+    func updateCustomProxy(oldAddress: String, name: String, address: String) {
+        guard let index = customProxies.firstIndex(where: { $0.address == oldAddress }) else { return }
+        customProxies[index] = ProxyEntry(name: name, address: address)
+        saveCustomProxies()
+    }
+
+    func removeCustomProxy(_ proxy: ProxyEntry) {
+        customProxies.removeAll { $0.id == proxy.id }
+        saveCustomProxies()
+
+        // If removed proxy was selected, fall back to default
+        if selectedProxyAddress == proxy.address {
+            if let fallback = Self.defaultProxies.first {
+                selectProxy(fallback)
+            }
+        }
+    }
+
+    private func loadCustomProxies() {
+        guard let data = UserDefaults.standard.data(forKey: "customProxies"),
+              let proxies = try? JSONDecoder().decode([ProxyEntry].self, from: data) else {
+            return
+        }
+        customProxies = proxies
+    }
+
+    private func saveCustomProxies() {
+        guard let data = try? JSONEncoder().encode(customProxies) else { return }
+        UserDefaults.standard.set(data, forKey: "customProxies")
+    }
+
+    // MARK: - Proxy Reachability
+
+    func checkAllProxyReachability() async {
+        await withTaskGroup(of: (String, Bool).self) { group in
+            for proxy in allProxies {
+                group.addTask {
+                    let reachable = await self.checkReachability(of: proxy.address)
+                    return (proxy.address, reachable)
+                }
+            }
+            for await (address, reachable) in group {
+                proxyReachability[address] = reachable
+            }
+        }
+    }
+
+    func checkProxyReachability(for address: String) async {
+        let reachable = await checkReachability(of: address)
+        proxyReachability[address] = reachable
+    }
+
+    private func checkReachability(of address: String) async -> Bool {
+        let components = address.split(separator: ":")
+        guard components.count == 2,
+              let port = UInt16(components[1]) else {
+            return false
+        }
+        let host = String(components[0])
+
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            let endpoint = NWEndpoint.hostPort(
+                host: NWEndpoint.Host(host),
+                port: NWEndpoint.Port(integerLiteral: port)
+            )
+            let connection = NWConnection(to: endpoint, using: .tcp)
+            var hasResumed = false
+
+            // Use a serial queue so stateUpdateHandler and timeout
+            // never race on hasResumed.
+            let queue = DispatchQueue(label: "one.monero.reachability")
+
+            connection.stateUpdateHandler = { state in
+                guard !hasResumed else { return }
+                switch state {
+                case .ready:
+                    hasResumed = true
+                    connection.cancel()
+                    continuation.resume(returning: true)
+                case .failed, .cancelled:
+                    hasResumed = true
+                    connection.cancel()
+                    continuation.resume(returning: false)
+                default:
+                    break
+                }
+            }
+
+            connection.start(queue: queue)
+
+            queue.asyncAfter(deadline: .now() + 2) {
+                if !hasResumed {
+                    hasResumed = true
+                    connection.cancel()
+                    continuation.resume(returning: false)
+                }
             }
         }
     }
@@ -261,6 +417,17 @@ class NodeManager: ObservableObject {
 
         await withTaskGroup(of: (String, Int?).self) { group in
             for node in allNodes {
+                // .onion nodes can't be tested via direct TCP — mark as available if proxy is reachable
+                if node.url.contains(".onion") {
+                    let isUp = selectedProxyReachable == true
+                    nodeStats[node.url] = NodeStats(
+                        uptimeMonth: nil,
+                        uptimeYear: nil,
+                        isUp: isUp,
+                        latencyMs: nil
+                    )
+                    continue
+                }
                 group.addTask {
                     let latency = await self.measureLatency(for: node)
                     return (node.url, latency)
@@ -281,6 +448,12 @@ class NodeManager: ObservableObject {
                     )
                 }
             }
+        }
+
+        // Monero One: hardcode 100% uptime
+        if var stats = nodeStats["https://node.monero.one:443"] {
+            stats = NodeStats(uptimeMonth: 100.0, uptimeYear: 100.0, isUp: true, latencyMs: stats.latencyMs)
+            nodeStats["https://node.monero.one:443"] = stats
         }
 
         isLoadingStats = false
@@ -332,6 +505,10 @@ class NodeManager: ObservableObject {
             let startTime = CFAbsoluteTimeGetCurrent()
             var hasResumed = false
 
+            // Use a serial queue so stateUpdateHandler and timeout
+            // never race on hasResumed.
+            let queue = DispatchQueue(label: "one.monero.latency")
+
             connection.stateUpdateHandler = { state in
                 guard !hasResumed else { return }
 
@@ -365,10 +542,10 @@ class NodeManager: ObservableObject {
                 }
             }
 
-            connection.start(queue: DispatchQueue.global())
+            connection.start(queue: queue)
 
             // Timeout after 10 seconds
-            DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
+            queue.asyncAfter(deadline: .now() + 10) {
                 if !hasResumed {
                     hasResumed = true
                     #if DEBUG
@@ -407,6 +584,9 @@ class NodeManager: ObservableObject {
 
     func refreshStats() async {
         isLoadingStats = true
+        if !proxyAddress.isEmpty {
+            await checkAllProxyReachability()
+        }
         await fetchUptimeStats()
         await measureAllLatencies()
         // isLoadingStats is set to false in measureAllLatencies

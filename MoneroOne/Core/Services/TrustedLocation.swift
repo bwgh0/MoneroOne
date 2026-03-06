@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-/// A trusted location where background sync is considered safe
+/// A trusted location defining a security zone for wallet sync
 struct TrustedLocation: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String

@@ -2,11 +2,11 @@ import Foundation
 import CoreLocation
 import Combine
 
-/// Uses location services to keep app alive for background sync
-/// Optionally warns when syncing outside trusted locations (security feature)
+/// Manages wallet sync within trusted location zones
+/// Uses geofenced locations to determine when sync is safe to run
 @MainActor
-class BackgroundSyncManager: NSObject, ObservableObject {
-    static let shared = BackgroundSyncManager()
+class TrustedLocationSyncManager: NSObject, ObservableObject {
+    static let shared = TrustedLocationSyncManager()
 
     @Published var isEnabled: Bool = false
     @Published var isSyncing: Bool = false
@@ -54,7 +54,7 @@ class BackgroundSyncManager: NSObject, ObservableObject {
             .store(in: &cancellables)
 
         if isEnabled {
-            startBackgroundSync()
+            startLocationSync()
         }
     }
 
@@ -65,17 +65,17 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         UserDefaults.standard.set(enabled, forKey: enabledKey)
 
         if enabled {
-            startBackgroundSync()
+            startLocationSync()
         } else {
-            stopBackgroundSync()
-            // End Live Activity when background sync is disabled
+            stopLocationSync()
+            // End Live Activity when disabled
             if #available(iOS 16.2, *) {
                 SyncActivityManager.shared.endActivity()
             }
         }
     }
 
-    func startBackgroundSync() {
+    func startLocationSync() {
         guard locationManager == nil else { return }
 
         locationManager = CLLocationManager()
@@ -83,14 +83,14 @@ class BackgroundSyncManager: NSObject, ObservableObject {
         locationManager?.desiredAccuracy = kCLLocationAccuracyThreeKilometers // Low accuracy = less battery
         locationManager?.distanceFilter = 500 // Only update every 500m
         locationManager?.pausesLocationUpdatesAutomatically = false
-        locationManager?.showsBackgroundLocationIndicator = false // Hide blue bar
+        locationManager?.showsBackgroundLocationIndicator = true
 
-        // Request always authorization for background
+        // Request always authorization for trusted zone monitoring
         // Background updates will be enabled in the authorization callback
         locationManager?.requestAlwaysAuthorization()
     }
 
-    func stopBackgroundSync() {
+    func stopLocationSync() {
         stopPollTimer()
         locationManager?.stopUpdatingLocation()
         locationManager?.stopMonitoringSignificantLocationChanges()
@@ -200,7 +200,7 @@ class BackgroundSyncManager: NSObject, ObservableObject {
 }
 
 // MARK: - CLLocationManagerDelegate
-extension BackgroundSyncManager: CLLocationManagerDelegate {
+extension TrustedLocationSyncManager: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor in
@@ -218,7 +218,7 @@ extension BackgroundSyncManager: CLLocationManagerDelegate {
                 // Start timed polling for when stationary
                 startPollTimer()
             case .authorizedWhenInUse:
-                // Need "Always" for background - prompt upgrade
+                // Need "Always" for trusted zone monitoring - prompt upgrade
                 locationManager?.requestAlwaysAuthorization()
             case .denied, .restricted:
                 // User denied - disable feature

@@ -719,7 +719,7 @@ class WalletManager: ObservableObject {
         // Don't force .connecting - if already synced and no new blocks, stay synced
         moneroWallet?.startSync()
         moneroWallet?.refresh()
-        // Note: Live Activity is updated by BackgroundSyncManager.handleSyncStateChange()
+        // Note: Live Activity is updated by TrustedLocationSyncManager.handleSyncStateChange()
         // when sync state transitions to .synced - no need to call markSynced() here
     }
 

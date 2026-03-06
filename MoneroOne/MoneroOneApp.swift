@@ -51,7 +51,7 @@ struct MoneroOneApp: App {
                 .environmentObject(priceAlertService)
                 .preferredColorScheme(colorScheme)
                 .onAppear {
-                    BackgroundSyncManager.shared.configure(walletManager: walletManager)
+                    TrustedLocationSyncManager.shared.configure(walletManager: walletManager)
                     priceService.priceAlertService = priceAlertService
                     schedulePriceCheck()
                 }

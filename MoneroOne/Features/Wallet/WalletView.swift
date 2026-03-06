@@ -63,13 +63,13 @@ struct WalletView: View {
                     .frame(height: showWalletManager ? 0 : nil)
                     .scaleEffect(y: showWalletManager ? 0.01 : 1, anchor: .top)
                     .opacity(showWalletManager ? 0 : 1)
-                    .clipped()
                     .allowsHitTesting(!showWalletManager)
 
                     // Recent transactions — hide instantly, no animation
                     if !showWalletManager {
                         RecentTransactionsSection()
                             .padding(.horizontal)
+                            .padding(.top, 16)
                             .transaction { $0.animation = nil }
                     }
 

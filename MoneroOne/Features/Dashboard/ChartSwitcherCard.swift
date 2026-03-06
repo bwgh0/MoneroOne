@@ -69,10 +69,11 @@ struct ChartSwitcherCard: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // Mode switcher
             CompactGlassSegmentedPicker(selection: $chartMode) { mode in
                 mode.rawValue
             }
+            .accessibilityLabel("Chart mode")
+            .accessibilityHint("Switch between portfolio and price chart")
 
             // Header with value
             HStack {
@@ -102,6 +103,8 @@ struct ChartSwitcherCard: View {
                             .padding(.vertical, 4)
                             .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
                             .cornerRadius(8)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("\(chartMode == .price ? "Price" : "Portfolio") change, \(change >= 0 ? "up" : "down") \(formatChange(change))")
                         } else if priceService.isLoadingChart {
                             ProgressView()
                                 .scaleEffect(0.6)
@@ -119,9 +122,10 @@ struct ChartSwitcherCard: View {
                 range.rawValue
             }
 
-            // Chart
             chartView
                 .frame(height: 140)
+                .accessibilityLabel("\(chartMode.rawValue) chart for \(selectedTimeRange.rawValue)")
+                .accessibilityHint("Shows \(chartMode == .price ? "XMR price" : "portfolio value") trend")
         }
         .padding(16)
         .background(Color(.secondarySystemGroupedBackground))

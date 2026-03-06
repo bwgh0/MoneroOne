@@ -132,6 +132,8 @@ struct PriceChartView: View {
                     } label: {
                         Image(systemName: "bell")
                     }
+                    .accessibilityLabel("Price alerts")
+                    .accessibilityHint("View and manage price alerts")
                 }
             }
         }
@@ -170,6 +172,7 @@ struct PriceChartView: View {
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.1), value: price)
+                    .accessibilityLabel("Current Monero price, \(formatPrice(price))")
 
                 if let selectedPoint = selectedPoint {
                     // Show selected date when interacting
@@ -190,6 +193,8 @@ struct PriceChartView: View {
                             .padding(.vertical, 6)
                             .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
                             .cornerRadius(8)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Price change \(selectedTimeRange.rawValue), \(change >= 0 ? "up" : "down") \(formatChartPriceChange(change))")
                         } else if priceService.isLoadingChart {
                             ProgressView()
                                 .scaleEffect(0.8)
@@ -317,6 +322,8 @@ struct PriceChartView: View {
                 .chartYScale(domain: chartYDomain)
                 .chartXSelectionIfAvailable(value: $selectedDate)
                 .frame(height: 240)
+                .accessibilityLabel("Price chart for \(selectedTimeRange.rawValue)")
+                .accessibilityHint("Shows XMR price trend over the selected time range")
             }
         }
         .frame(height: 280)
@@ -457,6 +464,8 @@ struct StatCard: View {
                     y: 2
                 )
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(value)")
     }
 }
 

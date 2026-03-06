@@ -26,10 +26,13 @@ struct QRCodeView: View {
                         .scaledToFill()
                         .frame(width: logoSize, height: logoSize)
                         .clipShape(Circle())
+                        .accessibilityHidden(true)
                 }
             }
             .frame(width: size, height: size)
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("QR code for Monero address")
         }
     }
 

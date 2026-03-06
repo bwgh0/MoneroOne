@@ -85,6 +85,7 @@ struct ReceiveView: View {
                             .frame(width: 280, height: 280)
                             .shadow(color: .black.opacity(0.1), radius: 10)
                             .accessibilityIdentifier("receive.qrCode")
+                            .accessibilityLabel("QR code for receiving Monero")
                     } else {
                         Rectangle()
                             .fill(Color(.secondarySystemBackground))
@@ -105,9 +106,12 @@ struct ReceiveView: View {
                             TextField("0.0", text: $requestAmount)
                                 .font(.system(.body, design: .rounded))
                                 .keyboardType(.decimalPad)
+                                .accessibilityLabel("Request amount in XMR")
+                                .accessibilityHint("Enter an optional amount to embed in the QR code")
 
                             Text("XMR")
                                 .foregroundColor(.secondary)
+                                .accessibilityHidden(true)
                         }
                         .padding()
                         .background(Color(.secondarySystemBackground))
@@ -161,11 +165,15 @@ struct ReceiveView: View {
                                 }
                                 .foregroundColor(.orange)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("Privacy warning: Main address links all transactions. Use subaddresses for privacy.")
                             }
                         }
                         .padding()
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     }
+                    .accessibilityLabel("\(addressLabel), \(formatAddress(currentAddress))")
+                    .accessibilityHint("Opens address picker to change receiving address")
                     .padding(.horizontal)
 
                     // Action Buttons
@@ -186,6 +194,8 @@ struct ReceiveView: View {
                         }
                         .glassButtonStyle()
                         .accessibilityIdentifier("receive.copyButton")
+                        .accessibilityLabel(copied ? "Address copied" : "Copy address")
+                        .accessibilityHint("Copies the Monero address to clipboard")
 
                         // Share Button
                         Button {
@@ -202,6 +212,8 @@ struct ReceiveView: View {
                             .padding(.vertical, 16)
                         }
                         .glassButtonStyle()
+                        .accessibilityLabel("Share address")
+                        .accessibilityHint("Opens share sheet with QR code and address")
                     }
                     .padding(.horizontal)
                     .disabled(currentAddress == "Loading...")
@@ -312,6 +324,8 @@ struct AddressPickerView: View {
                         }
                     }
                     .disabled(isCreating || !isSynced)
+                    .accessibilityLabel(isCreating ? "Creating subaddress" : "Create new subaddress")
+                    .accessibilityHint("Creates a new subaddress for receiving Monero")
                 }
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
@@ -459,6 +473,9 @@ struct AddressCard: View {
             )
         }
         .buttonStyle(AddressCardButtonStyle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label), \(isSelected ? "selected" : "not selected")\(showWarning ? ", warning: links all transactions together" : "")")
+        .accessibilityHint("Double tap to select this address")
     }
 
     private func formatAddress(_ addr: String) -> String {

@@ -60,22 +60,27 @@ struct SecurityView: View {
             checkBiometrics()
             useBiometrics = walletManager.hasBiometricPinStored
         }
-        .alert("Enter PIN to Enable \(biometricName)", isPresented: $showPINPrompt) {
-            SecureField("PIN", text: $pinForBiometrics)
-                .keyboardType(.numberPad)
-            Button("Cancel", role: .cancel) {
+        .sheet(isPresented: $showPINPrompt, onDismiss: {
+            if !walletManager.hasBiometricPinStored {
                 useBiometrics = false
-                pinForBiometrics = ""
             }
-            Button("Enable") {
-                enableBiometrics()
-            }
-        } message: {
-            if let error = pinError {
-                Text(error)
-            } else {
-                Text("Enter your PIN to enable \(biometricName) unlock")
-            }
+            pinForBiometrics = ""
+            pinError = nil
+        }) {
+            BiometricPINSheet(
+                biometricName: biometricName,
+                biometricIcon: biometricIcon,
+                pinLength: preferredPINLength,
+                pin: $pinForBiometrics,
+                pinError: $pinError,
+                onEnable: { enableBiometrics() },
+                onCancel: {
+                    useBiometrics = false
+                    pinForBiometrics = ""
+                    showPINPrompt = false
+                }
+            )
+            .presentationDetents([.medium])
         }
     }
 
@@ -106,25 +111,20 @@ struct SecurityView: View {
     }
 
     private func enableBiometrics() {
-        // Verify PIN is correct by trying to get seed
         do {
             guard let _ = try walletManager.getSeedPhrase(pin: pinForBiometrics) else {
                 pinError = "Invalid PIN"
-                useBiometrics = false
                 pinForBiometrics = ""
-                showPINPrompt = true
                 return
             }
 
-            // PIN is correct, save for biometrics
             try walletManager.enableBiometricUnlock(pin: pinForBiometrics)
             pinForBiometrics = ""
             pinError = nil
+            showPINPrompt = false
         } catch {
             pinError = "Invalid PIN"
-            useBiometrics = false
             pinForBiometrics = ""
-            showPINPrompt = true
         }
     }
 }
@@ -305,6 +305,71 @@ struct ChangePINView: View {
         }
 
         isChanging = false
+    }
+}
+
+struct BiometricPINSheet: View {
+    let biometricName: String
+    let biometricIcon: String
+    let pinLength: Int
+    @Binding var pin: String
+    @Binding var pinError: String?
+    let onEnable: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer()
+
+                Image(systemName: biometricIcon)
+                    .font(.system(size: 48))
+                    .foregroundColor(.orange)
+
+                Text("Enter PIN to Enable \(biometricName)")
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+
+                PINEntryView(
+                    pin: $pin,
+                    length: pinLength,
+                    label: "Enter your PIN",
+                    autoFocus: true,
+                    onComplete: { onEnable() }
+                )
+
+                if let error = pinError {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                }
+
+                Button {
+                    onEnable()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: biometricIcon)
+                            .font(.callout.weight(.semibold))
+                        Text("Enable \(biometricName)")
+                            .font(.callout.weight(.semibold))
+                    }
+                    .foregroundStyle(pin.count == pinLength ? Color.orange : Color.gray)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                }
+                .glassButtonStyle()
+                .disabled(pin.count < pinLength)
+                .padding(.horizontal)
+
+                Spacer()
+            }
+            .padding()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onCancel() }
+                }
+            }
+        }
     }
 }
 

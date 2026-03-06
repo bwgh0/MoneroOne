@@ -97,6 +97,9 @@ struct SettingsView: View {
                             Text(priceService.selectedCurrency.uppercased())
                                 .foregroundColor(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Currency, \(priceService.selectedCurrency.uppercased())")
+                        .accessibilityHint("Change display currency")
                     }
 
                     NavigationLink {
@@ -117,6 +120,9 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Price Alerts, \(priceAlertService.alerts.filter { $0.isEnabled }.count) active")
+                        .accessibilityHint("View and manage price alerts")
                     }
 
                     NavigationLink {
@@ -145,6 +151,8 @@ struct SettingsView: View {
                             Text(syncStatusText)
                                 .foregroundColor(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Sync Settings, status \(syncStatusText)")
                     }
                     .accessibilityIdentifier("settings.syncRow")
                 }
@@ -161,6 +169,8 @@ struct SettingsView: View {
                         Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")
                             .foregroundColor(.secondary)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Build number, \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown")")
 
                     Link(destination: URL(string: "https://monero.one")!) {
                         SettingsRow(
@@ -169,6 +179,7 @@ struct SettingsView: View {
                             color: .orange
                         )
                     }
+                    .accessibilityHint("Opens monero.one in your browser")
 
                     Link(destination: URL(string: "https://monero.one/privacy")!) {
                         SettingsRow(
@@ -177,6 +188,7 @@ struct SettingsView: View {
                             color: .blue
                         )
                     }
+                    .accessibilityHint("Opens privacy policy in your browser")
 
                     Link(destination: URL(string: "https://monero.one/terms")!) {
                         SettingsRow(
@@ -185,6 +197,7 @@ struct SettingsView: View {
                             color: .gray
                         )
                     }
+                    .accessibilityHint("Opens terms of service in your browser")
                 }
 
                 // Support the Developer Section
@@ -210,6 +223,9 @@ struct SettingsView: View {
                                 .foregroundColor(.orange)
                                 .fontWeight(.medium)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Donate XMR")
+                        .accessibilityHint("Support the developer with a Monero donation")
                     }
                 }
 
@@ -224,6 +240,7 @@ struct SettingsView: View {
                             color: .orange
                         )
                     }
+                    .accessibilityHint("Clears all sync progress and re-syncs from the beginning")
 
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
@@ -234,6 +251,7 @@ struct SettingsView: View {
                             color: .red
                         )
                     }
+                    .accessibilityHint("Removes wallet data from this device. Recovery with seed phrase is still possible.")
                 }
             }
             .navigationTitle("Settings")
@@ -273,6 +291,8 @@ struct SettingsRow: View {
 
             Text(title)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
     }
 }
 

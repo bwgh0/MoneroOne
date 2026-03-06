@@ -54,12 +54,6 @@ targets:
         NSLocationWhenInUseUsageDescription: "Choose trusted locations like home or work to define security zones for your wallet. Location data stays on your device."
         NSCameraUsageDescription: "Camera is used to scan QR codes"
         NSFaceIDUsageDescription: "Face ID is used to unlock your wallet"
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: false
-          NSExceptionDomains:
-            lws.monero.one:
-              NSExceptionAllowsInsecureHTTPLoads: true
-              NSIncludesSubdomains: true
     settings:
       base:
         GENERATE_INFOPLIST_FILE: false

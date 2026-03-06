@@ -44,6 +44,8 @@ struct QuickActionButton: View {
             .padding(.vertical, 14)
         }
         .glassButtonStyle()
+        .accessibilityLabel(title)
+        .accessibilityHint("Double tap to \(title.lowercased()) Monero")
     }
 }
 

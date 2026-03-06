@@ -124,7 +124,7 @@ class MoneroWallet: ObservableObject {
             ? (Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081")
             : "https://node.monero.one:443"
         let savedURL = UserDefaults.standard.string(forKey: urlKey) ?? defaultURL
-        let url = URL(string: savedURL) ?? URL(string: defaultURL)!
+        let url = URL(string: savedURL) ?? URL(string: defaultURL) ?? URL(string: "https://node.monero.one:443")!
 
         let login = UserDefaults.standard.string(forKey: loginKey)
         let password = UserDefaults.standard.string(forKey: passwordKey)

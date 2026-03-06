@@ -29,9 +29,7 @@ struct SendConfirmationView: View {
                 .font(.title2.weight(.semibold))
                 .padding(.top, 8)
 
-            // Details
             VStack(spacing: 12) {
-                // Amount
                 HStack {
                     Text("Amount")
                         .foregroundColor(.secondary)
@@ -46,10 +44,11 @@ struct SendConfirmationView: View {
                         }
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Amount: \(XMRFormatter.format(amount)) XMR\(priceService.formatFiatValue(amount).map { ", approximately \($0)" } ?? "")")
 
                 Divider()
 
-                // Network Fee
                 HStack {
                     Text("Network Fee")
                         .foregroundColor(.secondary)
@@ -73,10 +72,11 @@ struct SendConfirmationView: View {
                             .scaleEffect(0.8)
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(displayFee.map { "Network fee: \(XMRFormatter.format($0)) XMR\(priceService.formatFiatValue($0).map { ", approximately \($0)" } ?? "")" } ?? (feeError != nil ? "Network fee: error loading" : "Network fee: loading"))
 
                 Divider()
 
-                // Total
                 HStack {
                     Text("Total")
                         .fontWeight(.semibold)
@@ -98,12 +98,13 @@ struct SendConfirmationView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(total.map { "Total: \(XMRFormatter.format($0)) XMR\(priceService.formatFiatValue($0).map { ", approximately \($0)" } ?? "")" } ?? "Total: calculating")
             }
             .padding()
             .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
 
-            // Recipient
             VStack(alignment: .leading, spacing: 6) {
                 Text("Recipient")
                     .font(.subheadline)
@@ -117,6 +118,8 @@ struct SendConfirmationView: View {
             .padding()
             .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Recipient address: \(address)")
 
             // Fee error message
             if let error = feeError {
@@ -126,7 +129,6 @@ struct SendConfirmationView: View {
                     .multilineTextAlignment(.center)
             }
 
-            // Buttons
             VStack(spacing: 10) {
                 Button {
                     onConfirm()
@@ -143,6 +145,8 @@ struct SendConfirmationView: View {
                 }
                 .glassButtonStyle()
                 .disabled(displayFee == nil)
+                .accessibilityLabel("Confirm send")
+                .accessibilityHint(displayFee != nil ? "Double tap to send \(XMRFormatter.format(amount)) XMR" : "Waiting for fee estimate to load")
 
                 Button {
                     onCancel()
@@ -153,6 +157,8 @@ struct SendConfirmationView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                 }
+                .accessibilityLabel("Cancel")
+                .accessibilityHint("Cancels the transaction and returns to the send screen")
             }
             .padding(.top, 4)
         }

@@ -36,6 +36,10 @@ struct ReceiveView: View {
         if effectiveAddressIndex == 0 {
             return "Main Address"
         } else {
+            let subaddresses = walletManager.subaddresses.filter { $0.index > 0 && !$0.address.isEmpty }
+            if let position = subaddresses.firstIndex(where: { $0.index == effectiveAddressIndex }) {
+                return "Subaddress #\(position + 1)"
+            }
             return "Subaddress #\(effectiveAddressIndex)"
         }
     }
@@ -312,12 +316,9 @@ struct AddressPickerView: View {
                 .padding(.horizontal, 4)
                 .padding(.top, 8)
 
-                // Only show subaddresses the user explicitly created
-                // Filter out index 0 (main address shown above), empty addresses, and auto-created ones
+                // Show all subaddresses except index 0 (main address shown above)
                 let actualSubaddresses = walletManager.subaddresses.filter {
-                    $0.index > 0 &&
-                    !$0.address.isEmpty &&
-                    walletManager.userCreatedSubaddressIndices.contains($0.index)
+                    $0.index > 0 && !$0.address.isEmpty
                 }
 
                 if actualSubaddresses.isEmpty {
@@ -338,9 +339,9 @@ struct AddressPickerView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
                 } else {
-                    ForEach(actualSubaddresses, id: \.index) { subaddr in
+                    ForEach(Array(actualSubaddresses.enumerated()), id: \.element.index) { position, subaddr in
                         AddressCard(
-                            label: "Subaddress #\(subaddr.index)",
+                            label: "Subaddress #\(position + 1)",
                             address: subaddr.address,
                             index: subaddr.index,
                             isSelected: selectedIndex == subaddr.index,

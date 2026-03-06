@@ -1,8 +1,8 @@
 import SwiftUI
 import CoreLocation
 
-struct BackgroundSyncView: View {
-    @ObservedObject var syncManager = BackgroundSyncManager.shared
+struct TrustedLocationSyncView: View {
+    @ObservedObject var syncManager = TrustedLocationSyncManager.shared
     @State private var showingExplanation = false
 
     var body: some View {
@@ -13,14 +13,14 @@ struct BackgroundSyncView: View {
                     set: { syncManager.setEnabled($0) }
                 )) {
                     HStack(spacing: 12) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundColor(.orange)
-                        Text("Background Sync")
+                        Image(systemName: "shield.checkered")
+                            .foregroundColor(.green)
+                        Text("Trusted Locations")
                     }
                 }
-                .tint(.orange)
+                .tint(.green)
             } footer: {
-                Text("Keeps your wallet synced even when the app is in the background. Requires \"Always\" location permission.")
+                Text("Define security zones where your wallet stays updated. Requires \"Always\" location permission.")
             }
 
             // Always show permission status section
@@ -115,10 +115,10 @@ struct BackgroundSyncView: View {
                 }
             }
         }
-        .navigationTitle("Background Sync")
+        .navigationTitle("Trusted Locations")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingExplanation) {
-            BackgroundSyncExplanationView()
+            TrustedLocationsExplanationView()
         }
     }
 
@@ -153,7 +153,7 @@ struct BackgroundSyncView: View {
     private var permissionWarningText: String {
         switch syncManager.authorizationStatus {
         case .authorizedWhenInUse:
-            return "Background sync requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable background syncing."
+            return "Trusted Locations requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable trusted zone monitoring."
         case .denied:
             return "Location access was denied. Go to Settings > Location and enable location access, then select \"Always\"."
         case .restricted:
@@ -161,7 +161,7 @@ struct BackgroundSyncView: View {
         case .notDetermined:
             return "Location permission hasn't been granted yet. Go to Settings > Location and select \"Always\"."
         default:
-            return "Please enable \"Always\" location access in Settings to use background sync."
+            return "Please enable \"Always\" location access in Settings to use Trusted Locations."
         }
     }
 
@@ -172,7 +172,7 @@ struct BackgroundSyncView: View {
     }
 }
 
-struct BackgroundSyncExplanationView: View {
+struct TrustedLocationsExplanationView: View {
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -180,20 +180,20 @@ struct BackgroundSyncExplanationView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("How It Works", systemImage: "gearshape.2")
-                            .font(.headline)
-
-                        Text("Background sync keeps your wallet up to date even when you're not using the app, so your balance is always current when you open it.")
-
-                        Text("The system schedules sync tasks at optimal times based on your usage patterns and device state.")
-                    }
-
-                    VStack(alignment: .leading, spacing: 12) {
                         Label("Trusted Locations", systemImage: "shield.checkered")
                             .font(.headline)
                             .foregroundColor(.green)
 
-                        Text("For security, you can set up trusted locations like your home or office. When background sync runs outside these zones, you'll be notified.")
+                        Text("Trusted Locations defines security zones around places you choose. Your wallet stays updated when you're in these safe areas.")
+
+                        Text("Add your home, office, or other safe locations. If your wallet detects activity outside these zones, you'll be notified.")
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("How It Works", systemImage: "gearshape.2")
+                            .font(.headline)
+
+                        Text("When you're inside a trusted zone, your wallet checks for new transactions at optimal times.")
 
                         Text("This protects you from wallet activity on untrusted networks like public Wi-Fi or unknown locations.")
                     }
@@ -213,12 +213,12 @@ struct BackgroundSyncExplanationView: View {
                             .font(.headline)
                             .foregroundColor(.orange)
 
-                        Text("We use low-power location monitoring to minimize battery drain. You may notice slightly higher battery usage with background sync enabled.")
+                        Text("We use low-power location monitoring to minimize battery drain. You may notice slightly higher battery usage when enabled.")
                     }
                 }
                 .padding()
             }
-            .navigationTitle("Background Sync")
+            .navigationTitle("Trusted Locations")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -233,6 +233,6 @@ struct BackgroundSyncExplanationView: View {
 
 #Preview {
     NavigationStack {
-        BackgroundSyncView()
+        TrustedLocationSyncView()
     }
 }

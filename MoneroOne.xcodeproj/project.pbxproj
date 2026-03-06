@@ -19,7 +19,7 @@
 		2B66E3C39AB91C177152ADCB /* MoneroKit in Frameworks */ = {isa = PBXBuildFile; productRef = 21A9BF46E283EEB36F8735D8 /* MoneroKit */; };
 		2DE69D71C831027842B0A4CA /* MoneroOneWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC58487C5764E22EA877B236 /* MoneroOneWidgetsBundle.swift */; };
 		31F34A23191B0E4654DA6B74 /* PortfolioChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1202A246B0E4F7871A06D84B /* PortfolioChartView.swift */; };
-		326517A0B392547A7BA61678 /* BackgroundSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13768B531AB7EA9C67616887 /* BackgroundSyncView.swift */; };
+		326517A0B392547A7BA61678 /* TrustedLocationSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13768B531AB7EA9C67616887 /* TrustedLocationSyncView.swift */; };
 		36DE4F13A569A209F167D332 /* MoneroOneUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9668237F8646D99314673EA /* MoneroOneUITests.swift */; };
 		A1B2C3D4E5F60001AAAA0001 /* UITestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60001AAAA0002 /* UITestHelpers.swift */; };
 		39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED23DE61696E2D6C0C9D6DAC /* SeedPhraseView.swift */; };
@@ -70,7 +70,7 @@
 		D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67F51494AC5434F206AED5C /* ReceiveView.swift */; };
 		D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */; };
 		D5C81DC6A8A3C7E64770CC88 /* SendConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */; };
-		D78301AFEE705847B38A55DD /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB1E04CE3B83B39E5C3DF4B /* BackgroundSyncManager.swift */; };
+		D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */; };
 		DA18F80BA8998B9D71869B82 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A281E883F5B6D0C620D37A9C /* DonationView.swift */; };
 		DA2B7E30A2D8DB0A8AEEEB09 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
 		DCD815950DC4B62A202683AD /* NodeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */; };
@@ -156,7 +156,7 @@
 		108EE77DBE9D8CB6BE79F891 /* PINEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PINEntryView.swift; sourceTree = "<group>"; };
 		1202A246B0E4F7871A06D84B /* PortfolioChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioChartView.swift; sourceTree = "<group>"; };
 		121BE8EA1E45CB3FAE9290C1 /* MoneroOneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoneroOneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		13768B531AB7EA9C67616887 /* BackgroundSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncView.swift; sourceTree = "<group>"; };
+		13768B531AB7EA9C67616887 /* TrustedLocationSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocationSyncView.swift; sourceTree = "<group>"; };
 		1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncActivityAttributes.swift; sourceTree = "<group>"; };
 		184E7EF5F71DC832F69F6207 /* TransactionsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsWidget.swift; sourceTree = "<group>"; };
 		1DF250B2B46B35AB60356114 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
@@ -207,7 +207,7 @@
 		B7C4D9F0B5479B927D727DBA /* SecurityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityTests.swift; sourceTree = "<group>"; };
 		B970167B0BFA69D181797B60 /* SyncActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncActivityManager.swift; sourceTree = "<group>"; };
 		BA5847FCE9402558A35491F8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		BDB1E04CE3B83B39E5C3DF4B /* BackgroundSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManager.swift; sourceTree = "<group>"; };
+		BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocationSyncManager.swift; sourceTree = "<group>"; };
 		C28AE04350FBA393B5C0220F /* SecurityAuditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityAuditTests.swift; sourceTree = "<group>"; };
 		C2B3390E2738445B8D347933 /* ErrorBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorBanner.swift; sourceTree = "<group>"; };
 		C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertNotificationManager.swift; sourceTree = "<group>"; };
@@ -294,7 +294,7 @@
 				UXJZ2UWP4AMFOMV5YUCT0SLA /* TrustedLocationsView.swift */,
 				H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */,
 7C853ADD8257D8AF64818D81 /* AddPriceAlertView.swift */,
-				13768B531AB7EA9C67616887 /* BackgroundSyncView.swift */,
+				13768B531AB7EA9C67616887 /* TrustedLocationSyncView.swift */,
 				023F1A125362A99814A7939A /* BackupSeedView.swift */,
 				39D836D865F70A7477790100 /* BackupView.swift */,
 				DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */,
@@ -422,7 +422,7 @@
 			children = (
 				GL3BJBT1LYNYZPYODUN2Z9VQ /* TrustedLocation.swift */,
 				TCL37IUYOMDWC3RVR9YBDRJA /* TrustedLocationsManager.swift */,
-				BDB1E04CE3B83B39E5C3DF4B /* BackgroundSyncManager.swift */,
+				BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */,
 				4848074569E3E47EE8FE7F31 /* BiometricAuthManager.swift */,
 				8EE7C972F4CD3C984FC4FFE9 /* NetworkMonitor.swift */,
 				D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */,
@@ -773,8 +773,8 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				0D932221213145AEDB7B5082 /* AnimatedMoneroLogo.swift in Sources */,
 				E0ACDE5DE7CC25979C8ABCF8 /* Array+BinarySearch.swift in Sources */,
-				D78301AFEE705847B38A55DD /* BackgroundSyncManager.swift in Sources */,
-				326517A0B392547A7BA61678 /* BackgroundSyncView.swift in Sources */,
+				D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */,
+				326517A0B392547A7BA61678 /* TrustedLocationSyncView.swift in Sources */,
 				5BAC935479DA77D9B89EB6AB /* BackupSeedView.swift in Sources */,
 				E7C33EC8082FAB9206BD8A0B /* BackupView.swift in Sources */,
 				F336976B66186C3C48D2922A /* BalanceCard.swift in Sources */,

@@ -25,7 +25,7 @@ enum TrustedLocationMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Manages trusted locations for secure background sync
+/// Manages trusted location security zones for wallet sync
 /// When trusted locations are configured, the user is warned when syncing outside them
 /// Syncing can optionally be blocked (configurable)
 @MainActor

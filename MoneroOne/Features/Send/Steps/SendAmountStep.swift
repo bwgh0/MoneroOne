@@ -11,7 +11,7 @@ struct SendAmountStep: View {
 
     @State private var showContent = false
     @State private var showMemo = false
-    @FocusState private var keyboardFocused: Bool
+    @State private var softwareKeyboardVisible = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,26 +22,13 @@ struct SendAmountStep: View {
                     // Amount display
                     VStack(spacing: 4) {
                         ZStack {
-                            // Hidden TextField for hardware keyboard / paste support
-                            TextField("", text: $amountString)
-                                .keyboardType(.decimalPad)
-                                .focused($keyboardFocused)
-                                .opacity(0)
-                                .frame(width: 0, height: 0)
-                                .onChange(of: amountString) { newValue in
-                                    // Filter to valid decimal input
-                                    let filtered = filterDecimalInput(newValue)
-                                    if filtered != newValue {
-                                        amountString = filtered
-                                    }
-                                    // Clear send-all when user types
-                                    if isSendingAll {
-                                        let maxStr = "\(unlockedBalance)"
-                                        if amountString != maxStr {
-                                            isSendingAll = false
-                                        }
-                                    }
-                                }
+                            // Hidden input for hardware keyboard support (no software keyboard)
+                            HardwareKeyboardInput(
+                                text: $amountString,
+                                filter: filterDecimalInput
+                            )
+                            .frame(width: 1, height: 1)
+                            .opacity(0.01)
 
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text(amountString.isEmpty ? "0" : amountString)
@@ -151,7 +138,10 @@ struct SendAmountStep: View {
 
             // Keypad + continue
             VStack(spacing: 12) {
-                NumericKeypad(text: $amountString)
+                if !softwareKeyboardVisible {
+                    NumericKeypad(text: $amountString)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
 
                 Button(action: onContinue) {
                     HStack(spacing: 8) {
@@ -174,13 +164,27 @@ struct SendAmountStep: View {
         }
         .navigationTitle("Send to \(formatAddress(recipientAddress))")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: amountString) { newValue in
+            // Clear send-all when user edits amount
+            if isSendingAll {
+                let maxStr = "\(unlockedBalance)"
+                if newValue != maxStr {
+                    isSendingAll = false
+                }
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: softwareKeyboardVisible)
         .onAppear {
             withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
                 showContent = true
             }
             if !memo.isEmpty { showMemo = true }
-            // Focus hidden field for hardware keyboard support
-            keyboardFocused = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            softwareKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            softwareKeyboardVisible = false
         }
     }
 
@@ -237,5 +241,57 @@ struct SendAmountStep: View {
     private func formatAddress(_ addr: String) -> String {
         guard addr.count > 16 else { return addr }
         return "\(addr.prefix(8))...\(addr.suffix(4))"
+    }
+}
+
+// MARK: - Hardware Keyboard Input (no software keyboard)
+
+/// A UIViewRepresentable that accepts hardware keyboard input without showing the software keyboard.
+/// Uses `inputView = UIView()` to suppress the on-screen keyboard entirely.
+private struct HardwareKeyboardInput: UIViewRepresentable {
+    @Binding var text: String
+    var filter: (String) -> String
+
+    func makeUIView(context: Context) -> UITextField {
+        let tf = UITextField()
+        tf.inputView = UIView() // Suppress software keyboard
+        tf.autocorrectionType = .no
+        tf.spellCheckingType = .no
+        tf.autocapitalizationType = .none
+        tf.textColor = .clear
+        tf.tintColor = .clear
+        tf.backgroundColor = .clear
+        tf.delegate = context.coordinator
+        // Auto-focus to receive hardware keyboard input immediately
+        DispatchQueue.main.async { tf.becomeFirstResponder() }
+        return tf
+    }
+
+    func updateUIView(_ tf: UITextField, context: Context) {
+        if tf.text != text {
+            tf.text = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    class Coordinator: NSObject, UITextFieldDelegate {
+        let parent: HardwareKeyboardInput
+
+        init(parent: HardwareKeyboardInput) {
+            self.parent = parent
+        }
+
+        func textField(_ tf: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+            let current = tf.text ?? ""
+            guard let swiftRange = Range(range, in: current) else { return false }
+            let proposed = current.replacingCharacters(in: swiftRange, with: string)
+            let filtered = parent.filter(proposed)
+            parent.text = filtered
+            tf.text = filtered
+            return false
+        }
     }
 }

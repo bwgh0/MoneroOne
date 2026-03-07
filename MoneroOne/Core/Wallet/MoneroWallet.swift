@@ -322,7 +322,9 @@ class MoneroWallet: ObservableObject {
         let piconero = Int((amount * coinRate) as NSDecimalNumber)
         writeDebugLog("estimateFee: calling kit.estimateFee with piconero=\(piconero)")
         do {
-            let fee = try kit.estimateFee(address: address, amount: .value(piconero), priority: priority)
+            let fee = try await Task.detached {
+                try kit.estimateFee(address: address, amount: .value(piconero), priority: priority)
+            }.value
             writeDebugLog("estimateFee: success, fee=\(fee)")
             return Decimal(fee) / coinRate
         } catch {
@@ -363,18 +365,41 @@ class MoneroWallet: ObservableObject {
         guard let kit = kit else { throw WalletError.notUnlocked }
 
         let piconero = Int((amount * coinRate) as NSDecimalNumber)
-        try await kit.send(to: address, amount: .value(piconero), priority: priority, memo: memo)
-        // MoneroKit send doesn't return a hash directly - fetch from recent transactions
+        writeDebugLog("send: starting send to \(address.prefix(16))..., piconero=\(piconero)")
+
+        try await Task.detached {
+            try kit.send(to: address, amount: .value(piconero), priority: priority, memo: memo)
+        }.value
+        writeDebugLog("send: kit.send completed, fetching transactions")
+
+        let txId = await Task.detached { () -> String in
+            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 1)
+            return txInfos.first?.hash ?? ""
+        }.value
+        writeDebugLog("send: got txId=\(txId)")
+
         fetchTransactions()
-        return transactions.first?.id ?? ""
+        return txId
     }
 
     func sendAll(to address: String, priority: SendPriority = .default, memo: String? = nil) async throws -> String {
         guard let kit = kit else { throw WalletError.notUnlocked }
 
-        try await kit.send(to: address, amount: .all, priority: priority, memo: memo)
+        writeDebugLog("sendAll: starting sweep to \(address.prefix(16))...")
+
+        try await Task.detached {
+            try kit.send(to: address, amount: .all, priority: priority, memo: memo)
+        }.value
+        writeDebugLog("sendAll: kit.send completed, fetching transactions")
+
+        let txId = await Task.detached { () -> String in
+            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 1)
+            return txInfos.first?.hash ?? ""
+        }.value
+        writeDebugLog("sendAll: got txId=\(txId)")
+
         fetchTransactions()
-        return transactions.first?.id ?? ""
+        return txId
     }
 
     // MARK: - Subaddresses

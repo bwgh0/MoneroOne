@@ -278,14 +278,14 @@ class MoneroWallet: ObservableObject {
         if info.isPending || info.blockHeight == 0 {
             confirmations = 0
         } else if let kit = kit {
-            let currentHeight = kit.lastBlockInfo
+            let currentHeight = kit.blockHeights?.daemonHeight ?? kit.lastBlockInfo
             if currentHeight > info.blockHeight {
                 confirmations = Int(currentHeight - info.blockHeight)
             } else {
-                confirmations = 10 // Assume confirmed if we can't calculate
+                confirmations = 0 // Height stale — don't assume confirmed
             }
         } else {
-            confirmations = 10 // Default to confirmed if kit unavailable
+            confirmations = 0
         }
 
         // Determine status based on isPending from MoneroKit (this is accurate!)

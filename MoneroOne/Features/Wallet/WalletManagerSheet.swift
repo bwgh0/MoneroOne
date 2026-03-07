@@ -128,32 +128,7 @@ struct WalletManagerRows: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // Add Wallet row
-            Button {} label: {
-                HStack(spacing: 14) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(.secondary.opacity(0.4))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Add Wallet")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        Text("Coming Soon")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary.opacity(0.6))
-                    }
-
-                    Spacer()
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 18)
-            }
-            .glassButtonStyle()
-            .allowsHitTesting(false)
-            .opacity(0.5)
-            .padding(.horizontal)
+            // Future: additional wallet rows will go here
         }
     }
 }

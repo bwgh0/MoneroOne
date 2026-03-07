@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import QuartzCore
 import HdWalletKit
 import MoneroKit
 import CMonero
@@ -37,6 +38,7 @@ class WalletManager: ObservableObject {
     private var connectionStartTime: Date?
     private var reachabilityRetryTask: Task<Void, Never>?
     private var reachabilityRetryCount: Int = 0
+    private var lastSyncPublish: Double = 0
 
     /// URLSession that accepts all certificates (matches NodeManager behavior)
     /// Nodes with self-signed certs pass the settings latency test, so the wallet
@@ -306,6 +308,16 @@ class WalletManager: ObservableObject {
                 case .synced: newState = .synced
                 case .error(let msg): newState = .error(msg)
                 }
+
+                // Throttle rapid syncing progress updates to prevent SwiftUI
+                // view re-renders from swallowing NavigationLink taps.
+                // State transitions (idle/connecting/synced/error) pass immediately.
+                if case .syncing = newState, case .syncing = self.syncState {
+                    let now = CACurrentMediaTime()
+                    if now - self.lastSyncPublish < 0.25 { return }
+                    self.lastSyncPublish = now
+                }
+
                 self.syncState = newState
 
                 // Update connection stage based on sync state

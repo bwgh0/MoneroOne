@@ -33,7 +33,7 @@ struct CommandCenterView: View {
             ReceiveView()
         }
         .sheet(isPresented: $showSend) {
-            SendView()
+            SendFlowView()
         }
         .sheet(isPresented: $showAllTransactions) {
             NavigationStack {

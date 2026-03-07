@@ -47,8 +47,16 @@
 		9292570B3B97ECD35363E7D2 /* TransactionsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184E7EF5F71DC832F69F6207 /* TransactionsWidget.swift */; };
 		9B8891204A64866A6A3404D2 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
 		9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8C8A112B161D2A874330F /* TransactionListView.swift */; };
-		9C8D02FA3E7357EA71230987 /* TransactionProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B1E4D64130CA8B6677FA95 /* TransactionProgressView.swift */; };
-		A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066F201548A5A5EA2351656E /* SendView.swift */; };
+		A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000001 /* HapticFeedback.swift */; };
+		A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000002 /* NumericKeypad.swift */; };
+		A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */; };
+		A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000004 /* GradientSpinner.swift */; };
+		A1B2C3D400000001A0000005 /* SendFlowPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000005 /* SendFlowPhase.swift */; };
+		A1B2C3D400000001A0000006 /* SendFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000006 /* SendFlowView.swift */; };
+		A1B2C3D400000001A0000007 /* SendAddressStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000007 /* SendAddressStep.swift */; };
+		A1B2C3D400000001A0000008 /* SendAmountStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000008 /* SendAmountStep.swift */; };
+		A1B2C3D400000001A0000009 /* SendReviewStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000009 /* SendReviewStep.swift */; };
+		A1B2C3D400000001A000000A /* SendStatusStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A000000A /* SendStatusStep.swift */; };
 		A2173E3306237E1F4E1C9AB9 /* MoneroWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE53A66511AA0C64737C553 /* MoneroWallet.swift */; };
 		A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C28FF15F222C2E02553D871 /* TransactionsPanelView.swift */; };
 		AD0F7D6C1B7BB344FE46EEEA /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */; };
@@ -69,7 +77,6 @@
 		CEF72F50673F6D89DA08FB52 /* NetworkMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5A1C5565C8122238D41E47 /* NetworkMonitorTests.swift */; };
 		D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67F51494AC5434F206AED5C /* ReceiveView.swift */; };
 		D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */; };
-		D5C81DC6A8A3C7E64770CC88 /* SendConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */; };
 		D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */; };
 		DA18F80BA8998B9D71869B82 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A281E883F5B6D0C620D37A9C /* DonationView.swift */; };
 		DA2B7E30A2D8DB0A8AEEEB09 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
@@ -145,14 +152,21 @@
 		023F1A125362A99814A7939A /* BackupSeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSeedView.swift; sourceTree = "<group>"; };
 		029F663A58F5CE2B18C3B33C /* ScrambledText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrambledText.swift; sourceTree = "<group>"; };
 		03AFA2AEF2E9BE07586929E2 /* CommandCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandCenterView.swift; sourceTree = "<group>"; };
-		03B1E4D64130CA8B6677FA95 /* TransactionProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionProgressView.swift; sourceTree = "<group>"; };
 		0522BFB54176E930AB3D4A9B /* MoneroOneWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MoneroOneWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		05799DCC87A0172BABA5972C /* MoneroOneUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		066F201548A5A5EA2351656E /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		093E2F472F307A6400A0715B /* monero-one.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "monero-one.icon"; sourceTree = "<group>"; };
 		09AA838F4EF37023CE4794A9 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceServiceTests.swift; sourceTree = "<group>"; };
-		0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendConfirmationView.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000001 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000002 /* NumericKeypad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericKeypad.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessCheckmarkView.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000004 /* GradientSpinner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradientSpinner.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000005 /* SendFlowPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendFlowPhase.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000006 /* SendFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendFlowView.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000007 /* SendAddressStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendAddressStep.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000008 /* SendAmountStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendAmountStep.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000009 /* SendReviewStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendReviewStep.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A000000A /* SendStatusStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendStatusStep.swift; sourceTree = "<group>"; };
 		0F1C17A0DAB5332E049A04B0 /* GlassSegmentedPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSegmentedPicker.swift; sourceTree = "<group>"; };
 		108EE77DBE9D8CB6BE79F891 /* PINEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PINEntryView.swift; sourceTree = "<group>"; };
 		1202A246B0E4F7871A06D84B /* PortfolioChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioChartView.swift; sourceTree = "<group>"; };
@@ -388,9 +402,12 @@
 				7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */,
 				C2B3390E2738445B8D347933 /* ErrorBanner.swift */,
 				0F1C17A0DAB5332E049A04B0 /* GlassSegmentedPicker.swift */,
+				A1B2C3D400000002A0000004 /* GradientSpinner.swift */,
+				A1B2C3D400000002A0000002 /* NumericKeypad.swift */,
 				108EE77DBE9D8CB6BE79F891 /* PINEntryView.swift */,
 				E494E802F7171F1946F2FA45 /* QRScannerView.swift */,
 				029F663A58F5CE2B18C3B33C /* ScrambledText.swift */,
+				A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -480,11 +497,22 @@
 		BC0EDD05073CA3C3B9CEFE47 /* Send */ = {
 			isa = PBXGroup;
 			children = (
-				0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */,
-				066F201548A5A5EA2351656E /* SendView.swift */,
-				03B1E4D64130CA8B6677FA95 /* TransactionProgressView.swift */,
+				A1B2C3D400000002A0000005 /* SendFlowPhase.swift */,
+				A1B2C3D400000002A0000006 /* SendFlowView.swift */,
+				A1B2C3D400000003A0000001 /* Steps */,
 			);
 			path = Send;
+			sourceTree = "<group>";
+		};
+		A1B2C3D400000003A0000001 /* Steps */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D400000002A0000007 /* SendAddressStep.swift */,
+				A1B2C3D400000002A0000008 /* SendAmountStep.swift */,
+				A1B2C3D400000002A0000009 /* SendReviewStep.swift */,
+				A1B2C3D400000002A000000A /* SendStatusStep.swift */,
+			);
+			path = Steps;
 			sourceTree = "<group>";
 		};
 		C22A77E3D593D0FC140AF36C /* Features */ = {
@@ -557,8 +585,17 @@
 			children = (
 				44E59FA1B4D707E46863E7C8 /* Components */,
 				39546E93F10D127556F1DFC2 /* Extensions */,
+				A1B2C3D400000003A0000002 /* Services */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		A1B2C3D400000003A0000002 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D400000002A0000001 /* HapticFeedback.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -815,15 +852,22 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				E3AAAA2781637EFF950CCADE /* ScrambledText.swift in Sources */,
 				474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */,
 				39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */,
-				D5C81DC6A8A3C7E64770CC88 /* SendConfirmationView.swift in Sources */,
-				A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */,
+				A1B2C3D400000001A0000005 /* SendFlowPhase.swift in Sources */,
+				A1B2C3D400000001A0000006 /* SendFlowView.swift in Sources */,
+				A1B2C3D400000001A0000007 /* SendAddressStep.swift in Sources */,
+				A1B2C3D400000001A0000008 /* SendAmountStep.swift in Sources */,
+				A1B2C3D400000001A0000009 /* SendReviewStep.swift in Sources */,
+				A1B2C3D400000001A000000A /* SendStatusStep.swift in Sources */,
 				F6ABA0841FC56C21D8B64743 /* SettingsView.swift in Sources */,
 				DA2B7E30A2D8DB0A8AEEEB09 /* SyncActivityAttributes.swift in Sources */,
 				E8E7018CE585AB43B38F22C5 /* SyncActivityManager.swift in Sources */,
 				70AEC21FC1DFBF2D77A49E15 /* SyncSettingsView.swift in Sources */,
 				EDA400DA20EDD8E52EA9CC2C /* TransactionDetailView.swift in Sources */,
 				9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */,
-				9C8D02FA3E7357EA71230987 /* TransactionProgressView.swift in Sources */,
+				A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */,
+				A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */,
+				A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */,
+				A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */,
 				A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */,
 				8BFA73260FA46CA7935C386F /* UnlockView.swift in Sources */,
 				28E3D0F995F39C0E7791AF35 /* WalletManager.swift in Sources */,

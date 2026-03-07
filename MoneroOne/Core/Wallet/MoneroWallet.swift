@@ -274,7 +274,7 @@ class MoneroWallet: ObservableObject {
         let fee = Decimal(info.fee) / coinRate
 
         // Calculate confirmations from block height
-        let confirmations: Int
+        let confirmations: Int?
         if info.isPending || info.blockHeight == 0 {
             confirmations = 0
         } else if let kit = kit {
@@ -282,10 +282,10 @@ class MoneroWallet: ObservableObject {
             if currentHeight > info.blockHeight {
                 confirmations = Int(currentHeight - info.blockHeight)
             } else {
-                confirmations = 0 // Height stale — don't assume confirmed
+                confirmations = nil // Height not available yet
             }
         } else {
-            confirmations = 0
+            confirmations = nil
         }
 
         // Determine status based on isPending from MoneroKit (this is accurate!)
@@ -476,7 +476,7 @@ struct MoneroTransaction: Identifiable, Equatable, Hashable {
     let fee: Decimal
     let address: String
     let timestamp: Date
-    let confirmations: Int
+    let confirmations: Int?
     let status: TransactionStatus
     let memo: String?
 

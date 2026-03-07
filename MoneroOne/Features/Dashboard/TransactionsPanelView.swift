@@ -132,12 +132,18 @@ struct TransactionPanelRow: View {
                         .foregroundColor(transaction.type == .incoming ? .green : .primary)
 
                     HStack(spacing: 4) {
-                        Circle()
-                            .fill(transaction.displayStatusColor)
-                            .frame(width: 6, height: 6)
-                        Text(transaction.displayStatusText)
-                            .font(.caption2)
-                            .foregroundColor(transaction.displayStatusColor)
+                        if transaction.isStatusLoading {
+                            ProgressView()
+                                .scaleEffect(0.5)
+                                .frame(width: 6, height: 6)
+                        } else {
+                            Circle()
+                                .fill(transaction.displayStatusColor)
+                                .frame(width: 6, height: 6)
+                            Text(transaction.displayStatusText)
+                                .font(.caption2)
+                                .foregroundColor(transaction.displayStatusColor)
+                        }
                     }
                 }
 

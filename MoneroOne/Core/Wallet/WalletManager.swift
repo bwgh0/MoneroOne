@@ -617,7 +617,7 @@ class WalletManager: ObservableObject {
                 amount: tx.amount,
                 amountFormatted: formatter.string(from: tx.amount as NSDecimalNumber) ?? "0.0000",
                 timestamp: tx.timestamp,
-                isConfirmed: tx.confirmations >= 10
+                isConfirmed: (tx.confirmations ?? 0) >= 10
             )
         }
 

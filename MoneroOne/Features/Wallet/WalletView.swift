@@ -92,7 +92,7 @@ struct WalletView: View {
                     .environmentObject(priceService)
             }
             .sheet(isPresented: $showSend) {
-                SendView()
+                SendFlowView()
                     .environmentObject(walletManager)
                     .environmentObject(priceService)
             }

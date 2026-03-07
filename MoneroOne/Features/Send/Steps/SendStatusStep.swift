@@ -20,17 +20,17 @@ struct SendStatusStep: View {
                 switch phase {
                 case .sending:
                     GradientSpinner()
-                        .transition(.opacity)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
 
                 case .success:
                     SuccessCheckmarkView()
-                        .transition(.opacity)
+                        .transition(.scale(scale: 0.2).combined(with: .opacity))
 
                 case .error:
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 80))
                         .foregroundStyle(.red)
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(.scale(scale: 0.2).combined(with: .opacity))
 
                 default:
                     EmptyView()
@@ -162,6 +162,13 @@ struct SendStatusStep: View {
         .padding()
         .onAppear {
             withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
+                showContent = true
+            }
+        }
+        .onChange(of: phase) { _ in
+            // Reset and re-animate text when transitioning (e.g. sending → success)
+            showContent = false
+            withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
                 showContent = true
             }
         }

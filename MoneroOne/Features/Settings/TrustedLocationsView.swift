@@ -8,24 +8,6 @@ struct TrustedLocationsView: View {
 
     var body: some View {
         List {
-            // Explanation Section
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label {
-                        Text("Security Feature")
-                            .fontWeight(.semibold)
-                    } icon: {
-                        Image(systemName: "shield.checkered")
-                            .foregroundColor(.green)
-                    }
-
-                    Text("Add trusted locations like home or work. Control what happens when syncing from an untrusted location.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.vertical, 4)
-            }
-
             // Sync Mode Selection
             if locationsManager.hasTrustedLocations {
                 Section {
@@ -120,23 +102,6 @@ struct TrustedLocationsView: View {
                 }
             }
 
-            // Privacy Note
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label {
-                        Text("Privacy")
-                            .fontWeight(.semibold)
-                    } icon: {
-                        Image(systemName: "hand.raised.fill")
-                            .foregroundColor(.blue)
-                    }
-
-                    Text("Trusted locations are stored only on your device and never transmitted to any server. You can delete them at any time.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.vertical, 4)
-            }
         }
         .navigationTitle("Trusted Locations")
         .navigationBarTitleDisplayMode(.inline)

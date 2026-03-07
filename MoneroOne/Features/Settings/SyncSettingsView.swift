@@ -4,7 +4,7 @@ import MoneroKit
 
 struct SyncSettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
-    @ObservedObject var syncManager = BackgroundSyncManager.shared
+    @ObservedObject var syncManager = TrustedLocationSyncManager.shared
     @ObservedObject var trustedLocationsManager = TrustedLocationsManager.shared
 
     @State private var showingRestoreHeightSheet = false
@@ -105,46 +105,37 @@ struct SyncSettingsView: View {
                 Text("Set this to when you created your wallet to skip scanning older blocks. Useful if sync is taking too long.")
             }
 
-            // Background Sync
+            // Trusted Locations
             Section {
                 Toggle(isOn: Binding(
                     get: { syncManager.isEnabled },
                     set: { syncManager.setEnabled($0) }
                 )) {
                     Label {
-                        Text("Background Sync")
+                        Text("Trusted Locations")
                     } icon: {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundColor(.orange)
+                        Image(systemName: "shield.checkered")
+                            .foregroundColor(.green)
                     }
                 }
-                .tint(.orange)
+                .tint(.green)
 
                 if syncManager.isEnabled {
-                    // Location Permission Status
-                    HStack {
-                        Text("Location Permission")
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(permissionColor)
-                                .frame(width: 8, height: 8)
-                            Text(permissionStatus)
-                                .foregroundColor(permissionColor)
-                        }
-                    }
-
-                    // Show warning and action button if not authorized always
+                    // Only show permission status when there's a problem
                     if syncManager.authorizationStatus != .authorizedAlways {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
-                                Text("Action Required")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
+                        HStack {
+                            Text("Location Permission")
+                            Spacer()
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(permissionColor)
+                                    .frame(width: 8, height: 8)
+                                Text(permissionStatus)
+                                    .foregroundColor(permissionColor)
                             }
+                        }
 
+                        VStack(alignment: .leading, spacing: 12) {
                             Text(permissionWarningText)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -168,44 +159,19 @@ struct SyncSettingsView: View {
                         .padding(.vertical, 4)
                     }
 
-                    // Trusted Locations - integrated into Background Sync
                     NavigationLink {
                         TrustedLocationsView()
                     } label: {
-                        HStack {
-                            Label {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Trusted Locations")
-                                    Text("Secure zones for background sync")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            } icon: {
-                                Image(systemName: "shield.checkered")
-                                    .foregroundColor(.green)
-                            }
-                            Spacer()
-                            Text(trustedLocationsCount)
-                                .foregroundColor(.secondary)
+                        Label {
+                            Text("Manage Locations")
+                        } icon: {
+                            Image(systemName: "mappin.and.ellipse")
+                                .foregroundColor(.orange)
                         }
                     }
                 }
-
-                Button {
-                    showingBackgroundExplanation = true
-                } label: {
-                    Label("How does this work?", systemImage: "info.circle")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
             } header: {
-                Text("Background Sync")
-            } footer: {
-                if syncManager.isEnabled {
-                    Text("Your wallet syncs automatically in the background. Trusted locations ensure you're notified if sync occurs outside secure zones like home or work.")
-                } else {
-                    Text("Enable to keep your wallet synced when the app is in the background. Requires location access to set up trusted sync zones.")
-                }
+                Text("Trusted Locations")
             }
         }
         .navigationTitle("Sync Settings")
@@ -214,7 +180,7 @@ struct SyncSettingsView: View {
             RestoreHeightSheet()
         }
         .sheet(isPresented: $showingBackgroundExplanation) {
-            BackgroundSyncExplanationView()
+            TrustedLocationsExplanationView()
         }
     }
 
@@ -272,7 +238,7 @@ struct SyncSettingsView: View {
     private var permissionWarningText: String {
         switch syncManager.authorizationStatus {
         case .authorizedWhenInUse:
-            return "Background sync requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable background syncing."
+            return "Trusted Locations requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable trusted zone monitoring."
         case .denied:
             return "Location access was denied. Go to Settings > Location and enable location access, then select \"Always\"."
         case .restricted:
@@ -280,7 +246,7 @@ struct SyncSettingsView: View {
         case .notDetermined:
             return "Location permission hasn't been granted yet. Go to Settings > Location and select \"Always\"."
         default:
-            return "Please enable \"Always\" location access in Settings to use background sync."
+            return "Please enable \"Always\" location access in Settings to use Trusted Locations."
         }
     }
 
@@ -318,45 +284,14 @@ struct RestoreHeightSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                // Current setting section
-                Section {
-                    HStack {
-                        Text("Block Height")
-                        Spacer()
-                        Text(formatHeight(currentRestoreHeight))
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                    }
-                    HStack {
-                        Text("Estimated Date")
-                        Spacer()
-                        if let date = estimatedDate(for: currentRestoreHeight) {
-                            Text(date, style: .date)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("Genesis")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                } header: {
-                    Text("Current Wallet Birthday")
-                }
-
                 Section {
                     DatePicker(
-                        "Wallet Creation Date",
+                        "Wallet Birthday",
                         selection: $selectedDate,
                         in: Self.genesisDate...Date(),
                         displayedComponents: [.date]
                     )
-                    .datePickerStyle(.graphical)
-                } header: {
-                    Text("When did you create this wallet?")
-                } footer: {
-                    Text("Scanning will start from this date. Set this to when you first created the wallet to skip older blocks.")
-                }
-
-                Section {
+                    .datePickerStyle(.compact)
                     HStack {
                         Text("Current Block Height")
                         Spacer()
@@ -379,28 +314,29 @@ struct RestoreHeightSheet: View {
                             .monospacedDigit()
                     }
                 } footer: {
-                    Text("Monero produces ~1 block every 2 minutes.")
+                    Text("Set to when you created your wallet to skip older blocks. Monero produces ~1 block every 2 minutes.")
                 }
-
-                Section {
-                    Button {
-                        showConfirmation = true
-                    } label: {
-                        HStack {
-                            Spacer()
-                            if isUpdating {
-                                ProgressView()
-                                    .padding(.trailing, 8)
-                            }
-                            Text("Update Restore Height")
-                                .fontWeight(.semibold)
-                            Spacer()
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    showConfirmation = true
+                } label: {
+                    HStack {
+                        Spacer()
+                        if isUpdating {
+                            ProgressView()
+                                .padding(.trailing, 8)
                         }
+                        Text("Update Restore Height")
+                            .fontWeight(.semibold)
+                        Spacer()
                     }
-                    .disabled(isUpdating)
-                } footer: {
-                    Text("This will restart scanning from the selected date.")
+                    .padding(.vertical, 12)
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(isUpdating)
+                .padding()
+                .background(.bar)
             }
             .navigationTitle("Restore Height")
             .navigationBarTitleDisplayMode(.inline)

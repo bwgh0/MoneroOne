@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-/// A trusted location where background sync is considered safe
+/// A trusted location defining a security zone for wallet sync
 struct TrustedLocation: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
@@ -43,7 +43,11 @@ struct TrustedLocation: Identifiable, Codable, Equatable {
     // MARK: - Equatable
 
     static func == (lhs: TrustedLocation, rhs: TrustedLocation) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id &&
+        lhs.name == rhs.name &&
+        lhs.coordinate.latitude == rhs.coordinate.latitude &&
+        lhs.coordinate.longitude == rhs.coordinate.longitude &&
+        lhs.radius == rhs.radius
     }
 
     // MARK: - Geofencing

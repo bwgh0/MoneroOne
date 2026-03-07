@@ -25,7 +25,7 @@ enum TrustedLocationMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Manages trusted locations for secure background sync
+/// Manages trusted location security zones for wallet sync
 /// When trusted locations are configured, the user is warned when syncing outside them
 /// Syncing can optionally be blocked (configurable)
 @MainActor
@@ -40,7 +40,9 @@ class TrustedLocationsManager: NSObject, ObservableObject {
     @Published private(set) var lastKnownLocation: CLLocation?
 
     /// User preference for sync behavior outside trusted zones
-    @AppStorage("trustedLocationMode") var syncMode: TrustedLocationMode = .warnOnly
+    @Published var syncMode: TrustedLocationMode {
+        didSet { UserDefaults.standard.set(syncMode.rawValue, forKey: "trustedLocationMode") }
+    }
 
     // MARK: - Private
 
@@ -53,6 +55,8 @@ class TrustedLocationsManager: NSObject, ObservableObject {
     // MARK: - Init
 
     private override init() {
+        let raw = UserDefaults.standard.string(forKey: "trustedLocationMode") ?? TrustedLocationMode.warnOnly.rawValue
+        self.syncMode = TrustedLocationMode(rawValue: raw) ?? .warnOnly
         super.init()
         loadLocations()
     }
@@ -64,6 +68,7 @@ class TrustedLocationsManager: NSObject, ObservableObject {
         trustedLocations.append(location)
         saveLocations()
         startMonitoringRegion(location)
+        reevaluateZoneStatus()
     }
 
     /// Remove a trusted location
@@ -71,6 +76,7 @@ class TrustedLocationsManager: NSObject, ObservableObject {
         trustedLocations.removeAll { $0.id == location.id }
         saveLocations()
         stopMonitoringRegion(location)
+        reevaluateZoneStatus()
     }
 
     /// Update an existing trusted location
@@ -83,6 +89,7 @@ class TrustedLocationsManager: NSObject, ObservableObject {
             saveLocations()
             // Start monitoring new region
             startMonitoringRegion(location)
+            reevaluateZoneStatus()
         }
     }
 
@@ -130,6 +137,20 @@ class TrustedLocationsManager: NSObject, ObservableObject {
     }
 
     // MARK: - Zone Detection
+
+    /// Re-evaluate zone status after locations or settings change
+    private func reevaluateZoneStatus() {
+        if let location = lastKnownLocation {
+            updateZoneStatus(for: location)
+        } else if trustedLocations.isEmpty {
+            currentLocationName = nil
+            isInTrustedZone = true
+        } else {
+            // Have locations but no position yet — assume outside
+            currentLocationName = nil
+            isInTrustedZone = false
+        }
+    }
 
     /// Update current zone status based on a location
     func updateZoneStatus(for location: CLLocation) {

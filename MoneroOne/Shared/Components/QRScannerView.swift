@@ -52,6 +52,8 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        view.accessibilityLabel = "QR code scanner camera preview"
+        view.accessibilityHint = "Point your camera at a Monero QR code to scan it"
         setupCamera()
         setupOverlay()
     }
@@ -186,6 +188,8 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         label.font = .systemFont(ofSize: 16, weight: .medium)
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
+        label.accessibilityLabel = "Scan Monero Address"
+        label.accessibilityHint = "Position a QR code within the scanning area"
         view.addSubview(label)
 
         NSLayoutConstraint.activate([

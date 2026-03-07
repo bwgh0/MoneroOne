@@ -19,10 +19,13 @@ struct UnlockView: View {
 
             // App Logo
             AnimatedMoneroLogo(size: 120)
+                .accessibilityHidden(true)
 
             Text("Monero One")
                 .font(.title)
                 .fontWeight(.bold)
+                .accessibilityLabel("Monero One")
+                .accessibilityAddTraits(.isHeader)
 
             // PIN Entry with dots
             VStack(spacing: 20) {
@@ -43,6 +46,8 @@ struct UnlockView: View {
                         .foregroundColor(.red)
                         .font(.caption)
                         .transition(.opacity)
+                        .accessibilityLabel(error)
+                        .accessibilityAddTraits(.isStaticText)
                         .accessibilityIdentifier("unlock.errorMessage")
                 }
 
@@ -65,6 +70,8 @@ struct UnlockView: View {
                     .padding(.vertical, 12)
                 }
                 .glassButtonStyle()
+                .accessibilityLabel(isUnlocking ? "Unlocking" : "Unlock")
+                .accessibilityHint("Double tap to unlock with your PIN")
                 .accessibilityIdentifier("unlock.unlockButton")
                 .disabled(pin.count < 4 || isUnlocking)
             }
@@ -85,6 +92,8 @@ struct UnlockView: View {
                     .padding(.vertical, 12)
                 }
                 .glassButtonStyle()
+                .accessibilityLabel("Unlock with \(biometricAuth.biometricType.displayName)")
+                .accessibilityHint("Double tap to authenticate with \(biometricAuth.biometricType.displayName)")
                 .disabled(isUnlocking)
             }
 
@@ -96,6 +105,8 @@ struct UnlockView: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }
+            .accessibilityLabel("Forgot PIN")
+            .accessibilityHint("Double tap to reset your wallet and start over")
             .padding(.top, 16)
 
             Spacer()

@@ -50,16 +50,10 @@ targets:
         UIBackgroundModes:
           - location
         NSSupportsLiveActivities: true
-        NSLocationAlwaysAndWhenInUseUsageDescription: "Background sync uses location services to keep your wallet synced. Location data is never stored or transmitted."
-        NSLocationWhenInUseUsageDescription: "Enable background sync to keep your wallet updated."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Trusted Locations creates security zones around places you choose, like home or work. Your wallet only stays updated within these safe zones. Location data never leaves your device."
+        NSLocationWhenInUseUsageDescription: "Choose trusted locations like home or work to define security zones for your wallet. Location data stays on your device."
         NSCameraUsageDescription: "Camera is used to scan QR codes"
         NSFaceIDUsageDescription: "Face ID is used to unlock your wallet"
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: false
-          NSExceptionDomains:
-            lws.monero.one:
-              NSExceptionAllowsInsecureHTTPLoads: true
-              NSIncludesSubdomains: true
     settings:
       base:
         GENERATE_INFOPLIST_FILE: false

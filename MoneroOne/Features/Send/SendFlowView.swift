@@ -151,7 +151,7 @@ struct SendFlowView: View {
 
     private func goForward(to newPhase: SendFlowPhase) {
         navigatingForward = true
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             phase = newPhase
         }
     }

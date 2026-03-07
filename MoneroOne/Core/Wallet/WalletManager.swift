@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import QuartzCore
 import HdWalletKit
 import MoneroKit
 import CMonero
@@ -37,6 +38,7 @@ class WalletManager: ObservableObject {
     private var connectionStartTime: Date?
     private var reachabilityRetryTask: Task<Void, Never>?
     private var reachabilityRetryCount: Int = 0
+    private var lastSyncPublish: Double = 0
 
     /// URLSession that accepts all certificates (matches NodeManager behavior)
     /// Nodes with self-signed certs pass the settings latency test, so the wallet
@@ -292,6 +294,11 @@ class WalletManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self = self else { return }
+
+                // When sync is blocked, ignore state updates from the engine
+                // (wallet2 may fire trailing callbacks after pauseRefresh)
+                if self.isSyncBlocked { return }
+
                 let newState: SyncState
                 switch state {
                 case .idle: newState = .idle
@@ -301,6 +308,16 @@ class WalletManager: ObservableObject {
                 case .synced: newState = .synced
                 case .error(let msg): newState = .error(msg)
                 }
+
+                // Throttle rapid syncing progress updates to prevent SwiftUI
+                // view re-renders from swallowing NavigationLink taps.
+                // State transitions (idle/connecting/synced/error) pass immediately.
+                if case .syncing = newState, case .syncing = self.syncState {
+                    let now = CACurrentMediaTime()
+                    if now - self.lastSyncPublish < 0.25 { return }
+                    self.lastSyncPublish = now
+                }
+
                 self.syncState = newState
 
                 // Update connection stage based on sync state
@@ -699,7 +716,7 @@ class WalletManager: ObservableObject {
     // MARK: - Refresh
 
     func refresh() async {
-        guard !isRefreshing else { return }
+        guard !isRefreshing, !isSyncBlocked else { return }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -719,13 +736,30 @@ class WalletManager: ObservableObject {
         // Don't force .connecting - if already synced and no new blocks, stay synced
         moneroWallet?.startSync()
         moneroWallet?.refresh()
-        // Note: Live Activity is updated by BackgroundSyncManager.handleSyncStateChange()
+        // Note: Live Activity is updated by TrustedLocationSyncManager.handleSyncStateChange()
         // when sync state transitions to .synced - no need to call markSynced() here
     }
 
     /// Restart sync to check for new blocks
     func startSync() {
+        guard !isSyncBlocked else { return }
         moneroWallet?.startSync()
+    }
+
+    /// Whether sync is blocked (e.g. outside trusted zone in block mode)
+    /// When true, startSync() and refresh() become no-ops
+    var isSyncBlocked: Bool = false
+
+    /// Pause sync — stops refresh and state polling
+    func pauseSync() {
+        isSyncBlocked = true
+        moneroWallet?.pauseSync()
+        syncState = .idle
+    }
+
+    /// Resume sync capability (does not start sync, just unblocks it)
+    func resumeSync() {
+        isSyncBlocked = false
     }
 
     // MARK: - Node Management

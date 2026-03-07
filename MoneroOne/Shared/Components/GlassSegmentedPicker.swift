@@ -29,6 +29,9 @@ struct GlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.AllCases: 
                         }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(label(item))
+                .accessibilityAddTraits(selection == item ? .isSelected : [])
+                .accessibilityHint(selection == item ? "Currently selected" : "Double tap to select")
             }
         }
         .padding(4)
@@ -65,6 +68,9 @@ struct CompactGlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.All
                         }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(label(item))
+                .accessibilityAddTraits(selection == item ? .isSelected : [])
+                .accessibilityHint(selection == item ? "Currently selected" : "Double tap to select")
             }
         }
         .padding(3)

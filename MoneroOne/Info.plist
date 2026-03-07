@@ -25,9 +25,9 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID is used to unlock your wallet</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Background sync only occurs in your trusted locations (home, work). This protects your wallet from syncing on untrusted networks.</string>
+	<string>Trusted Locations creates security zones around places you choose, like home or work. Your wallet only stays updated within these safe zones. Location data never leaves your device.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Set trusted locations where your wallet can sync automatically.</string>
+	<string>Choose trusted locations like home or work to define security zones for your wallet. Location data stays on your device.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
@@ -38,6 +38,10 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>one.monero.MoneroOne.priceCheck</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>

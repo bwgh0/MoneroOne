@@ -39,7 +39,11 @@ struct MoneroOneApp: App {
             forTaskWithIdentifier: Self.priceCheckTaskId,
             using: nil
         ) { task in
-            Self.handlePriceCheck(task: task as! BGAppRefreshTask)
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            Self.handlePriceCheck(task: refreshTask)
         }
     }
 
@@ -51,7 +55,7 @@ struct MoneroOneApp: App {
                 .environmentObject(priceAlertService)
                 .preferredColorScheme(colorScheme)
                 .onAppear {
-                    BackgroundSyncManager.shared.configure(walletManager: walletManager)
+                    TrustedLocationSyncManager.shared.configure(walletManager: walletManager)
                     priceService.priceAlertService = priceAlertService
                     schedulePriceCheck()
                 }

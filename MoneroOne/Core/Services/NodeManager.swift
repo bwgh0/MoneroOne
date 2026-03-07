@@ -83,7 +83,10 @@ class NodeManager: ObservableObject {
             }
         }
     }
-    @Published var nodeStats: [String: NodeStats] = [:]
+    @Published var nodeStats: [String: NodeStats] = [
+        // Monero One: always 100% uptime
+        "https://node.monero.one:443": NodeStats(uptimeMonth: 100.0, uptimeYear: 100.0, isUp: true, latencyMs: nil)
+    ]
     @Published var isLoadingStats: Bool = false
     @Published var proxyAddress: String = ""
     @Published var customProxies: [ProxyEntry] = []
@@ -372,10 +375,15 @@ class NodeManager: ObservableObject {
         }
     }
 
+    private static let moneroOneURL = "https://node.monero.one:443"
+
     private func applyUptimeCache() {
         guard let entries = uptimeStatsCache else { return }
 
         for node in allNodes {
+            // Skip Monero One — hardcoded to 100%
+            if node.url == Self.moneroOneURL { continue }
+
             // Extract host:port from our node URL to match API's "name" field format
             // API uses format like "xmr-node.cakewallet.com:18081"
             guard let nodeURL = URL(string: node.url),
@@ -450,11 +458,9 @@ class NodeManager: ObservableObject {
             }
         }
 
-        // Monero One: hardcode 100% uptime
-        if var stats = nodeStats["https://node.monero.one:443"] {
-            stats = NodeStats(uptimeMonth: 100.0, uptimeYear: 100.0, isUp: true, latencyMs: stats.latencyMs)
-            nodeStats["https://node.monero.one:443"] = stats
-        }
+        // Monero One: ensure 100% uptime (preserve measured latency)
+        let moneroOneLatency = nodeStats[Self.moneroOneURL]?.latencyMs
+        nodeStats[Self.moneroOneURL] = NodeStats(uptimeMonth: 100.0, uptimeYear: 100.0, isUp: true, latencyMs: moneroOneLatency)
 
         isLoadingStats = false
 

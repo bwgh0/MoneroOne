@@ -6,6 +6,10 @@ struct BalanceCard: View {
     let syncState: WalletManager.SyncState
     let connectionStage: ConnectionStage
     @ObservedObject var priceService: PriceService
+    var isSyncBlocked: Bool = false
+    var isOutsideTrustedZone: Bool = false
+    var trustedLocationName: String? = nil
+    var isTrustedLocationEnabled: Bool = false
     var onPriceChangeTap: (() -> Void)? = nil
     var onCardTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
@@ -27,27 +31,36 @@ struct BalanceCard: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            // Sync Status - use progressive indicator when connecting, simple status when synced
             HStack {
-                if case .synced = syncState {
-                    // Simple synced indicator
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 8, height: 8)
-                    Text("Synced")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                } else if case .error(let msg) = syncState {
-                    // Error indicator
+                if isSyncBlocked {
                     Circle()
                         .fill(Color.red)
                         .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text("Paused")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .accessibilityLabel("Sync status: paused")
+                } else if case .synced = syncState {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text("Synced")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .accessibilityLabel("Sync status: synced")
+                } else if case .error(let msg) = syncState {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
                     Text("Error: \(msg)")
                         .font(.caption)
                         .foregroundColor(.red)
                         .lineLimit(1)
+                        .accessibilityLabel("Sync error: \(msg)")
                 } else {
-                    // Progressive connection indicator
                     ConnectionStepIndicator(
                         stage: connectionStage,
                         syncProgress: syncProgress
@@ -72,19 +85,20 @@ struct BalanceCard: View {
                         .background((change >= 0 ? Color.green : Color.red).opacity(0.1))
                         .cornerRadius(8)
                     }
+                    .accessibilityLabel("24 hour price change: \(formatPriceChange(change))")
+                    .accessibilityHint("Opens the price chart")
                 }
             }
 
-            // Main Balance
             HStack(spacing: 16) {
-                // Monero symbol with tight circular mask
                 Image("MoneroSymbol")
                     .resizable()
                     .scaledToFill()
                     .frame(width: 48, height: 48)
                     .clipShape(Circle())
-                    .scaleEffect(1.15) // Scale up slightly before clipping for tighter crop
-                    .clipShape(Circle()) // Clip again after scale
+                    .scaleEffect(1.15)
+                    .clipShape(Circle())
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -102,7 +116,6 @@ struct BalanceCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: balance)
 
-                    // Fiat value
                     if let fiatValue = priceService.formatFiatValue(balance) {
                         Text("≈ \(fiatValue)")
                             .font(.subheadline)
@@ -115,6 +128,8 @@ struct BalanceCard: View {
 
                 Spacer()
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Balance: \(XMRFormatter.format(balance)) XMR\(priceService.formatFiatValue(balance).map { ", approximately \($0)" } ?? "")")
 
             // Unlocked Balance
             if unlockedBalance != balance {
@@ -133,22 +148,25 @@ struct BalanceCard: View {
                     }
                     .font(.subheadline)
 
-                    // Explanation for locked funds
                     HStack(spacing: 4) {
                         Image(systemName: "clock")
                             .font(.caption2)
+                            .accessibilityHidden(true)
                         Text("Locked until recent transactions confirm")
                             .font(.caption2)
                     }
                     .foregroundColor(.orange)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Available balance: \(XMRFormatter.format(unlockedBalance)) XMR\(priceService.formatFiatValue(unlockedBalance).map { ", approximately \($0)" } ?? ""). Some funds locked until recent transactions confirm.")
             }
 
-            // Sync Progress
-            if case .syncing(let progress, let remaining) = syncState {
+            // Sync Progress (hidden when blocked)
+            if !isSyncBlocked, case .syncing(let progress, let remaining) = syncState {
                 VStack(spacing: 4) {
                     ProgressView(value: progress / 100)
                         .tint(.orange)
+                        .accessibilityHidden(true)
                     if let remaining = remaining {
                         Text("\(Int(progress))% synced - \(formatBlockCount(remaining)) blocks remaining")
                             .font(.caption2)
@@ -159,6 +177,44 @@ struct BalanceCard: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Sync progress: \(Int(progress)) percent\(remaining.map { ", \(formatBlockCount($0)) blocks remaining" } ?? "")")
+            }
+
+            // Trusted location status
+            if isSyncBlocked {
+                HStack(spacing: 6) {
+                    Image(systemName: "location.slash")
+                        .font(.caption)
+                        .accessibilityHidden(true)
+                    Text("Sync paused — outside trusted zone")
+                        .font(.caption)
+                }
+                .foregroundColor(.red)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Location status: sync paused, outside trusted zone")
+            } else if isOutsideTrustedZone {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.caption)
+                        .accessibilityHidden(true)
+                    Text("Syncing from untrusted location")
+                        .font(.caption)
+                }
+                .foregroundColor(.orange)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Location status: warning, syncing from untrusted location")
+            } else if isTrustedLocationEnabled, let name = trustedLocationName {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.shield")
+                        .font(.caption)
+                        .accessibilityHidden(true)
+                    Text("Syncing from \(name)")
+                        .font(.caption)
+                }
+                .foregroundColor(.green)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Location status: trusted, syncing from \(name)")
             }
         }
         .padding(24)
@@ -212,7 +268,6 @@ private struct ConnectionStepIndicator: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            // Step dots and lines
             HStack(spacing: 0) {
                 ForEach(0..<stageCount, id: \.self) { index in
                     stepDot(for: index)
@@ -222,12 +277,14 @@ private struct ConnectionStepIndicator: View {
                     }
                 }
             }
+            .accessibilityHidden(true)
 
-            // Status text
             Text(statusText)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Connection status: \(statusText)")
     }
 
     @ViewBuilder

@@ -19,7 +19,7 @@
 		2B66E3C39AB91C177152ADCB /* MoneroKit in Frameworks */ = {isa = PBXBuildFile; productRef = 21A9BF46E283EEB36F8735D8 /* MoneroKit */; };
 		2DE69D71C831027842B0A4CA /* MoneroOneWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC58487C5764E22EA877B236 /* MoneroOneWidgetsBundle.swift */; };
 		31F34A23191B0E4654DA6B74 /* PortfolioChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1202A246B0E4F7871A06D84B /* PortfolioChartView.swift */; };
-		326517A0B392547A7BA61678 /* BackgroundSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13768B531AB7EA9C67616887 /* BackgroundSyncView.swift */; };
+		326517A0B392547A7BA61678 /* TrustedLocationSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13768B531AB7EA9C67616887 /* TrustedLocationSyncView.swift */; };
 		36DE4F13A569A209F167D332 /* MoneroOneUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9668237F8646D99314673EA /* MoneroOneUITests.swift */; };
 		A1B2C3D4E5F60001AAAA0001 /* UITestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60001AAAA0002 /* UITestHelpers.swift */; };
 		39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED23DE61696E2D6C0C9D6DAC /* SeedPhraseView.swift */; };
@@ -47,8 +47,16 @@
 		9292570B3B97ECD35363E7D2 /* TransactionsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184E7EF5F71DC832F69F6207 /* TransactionsWidget.swift */; };
 		9B8891204A64866A6A3404D2 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
 		9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8C8A112B161D2A874330F /* TransactionListView.swift */; };
-		9C8D02FA3E7357EA71230987 /* TransactionProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B1E4D64130CA8B6677FA95 /* TransactionProgressView.swift */; };
-		A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066F201548A5A5EA2351656E /* SendView.swift */; };
+		A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000001 /* HapticFeedback.swift */; };
+		A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000002 /* NumericKeypad.swift */; };
+		A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */; };
+		A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000004 /* GradientSpinner.swift */; };
+		A1B2C3D400000001A0000005 /* SendFlowPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000005 /* SendFlowPhase.swift */; };
+		A1B2C3D400000001A0000006 /* SendFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000006 /* SendFlowView.swift */; };
+		A1B2C3D400000001A0000007 /* SendAddressStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000007 /* SendAddressStep.swift */; };
+		A1B2C3D400000001A0000008 /* SendAmountStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000008 /* SendAmountStep.swift */; };
+		A1B2C3D400000001A0000009 /* SendReviewStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000009 /* SendReviewStep.swift */; };
+		A1B2C3D400000001A000000A /* SendStatusStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A000000A /* SendStatusStep.swift */; };
 		A2173E3306237E1F4E1C9AB9 /* MoneroWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE53A66511AA0C64737C553 /* MoneroWallet.swift */; };
 		A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C28FF15F222C2E02553D871 /* TransactionsPanelView.swift */; };
 		AD0F7D6C1B7BB344FE46EEEA /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */; };
@@ -69,8 +77,7 @@
 		CEF72F50673F6D89DA08FB52 /* NetworkMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5A1C5565C8122238D41E47 /* NetworkMonitorTests.swift */; };
 		D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67F51494AC5434F206AED5C /* ReceiveView.swift */; };
 		D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */; };
-		D5C81DC6A8A3C7E64770CC88 /* SendConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */; };
-		D78301AFEE705847B38A55DD /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB1E04CE3B83B39E5C3DF4B /* BackgroundSyncManager.swift */; };
+		D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */; };
 		DA18F80BA8998B9D71869B82 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A281E883F5B6D0C620D37A9C /* DonationView.swift */; };
 		DA2B7E30A2D8DB0A8AEEEB09 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
 		DCD815950DC4B62A202683AD /* NodeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */; };
@@ -100,6 +107,7 @@
 		CND649AMACFN64RTKGHV6PCM /* AddTrustedLocationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */; };
 		5KTMKZ19F24DRHHTSNXITH45 /* DisclaimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */; };
 		PRIVACYINFOBUILD1234ABCD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */; };
+		WIDGETPRIVACYBUILD12345A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = WIDGETPRIVACYREF123456AB /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -144,19 +152,26 @@
 		023F1A125362A99814A7939A /* BackupSeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSeedView.swift; sourceTree = "<group>"; };
 		029F663A58F5CE2B18C3B33C /* ScrambledText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrambledText.swift; sourceTree = "<group>"; };
 		03AFA2AEF2E9BE07586929E2 /* CommandCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandCenterView.swift; sourceTree = "<group>"; };
-		03B1E4D64130CA8B6677FA95 /* TransactionProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionProgressView.swift; sourceTree = "<group>"; };
 		0522BFB54176E930AB3D4A9B /* MoneroOneWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MoneroOneWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		05799DCC87A0172BABA5972C /* MoneroOneUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		066F201548A5A5EA2351656E /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		093E2F472F307A6400A0715B /* monero-one.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "monero-one.icon"; sourceTree = "<group>"; };
 		09AA838F4EF37023CE4794A9 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceServiceTests.swift; sourceTree = "<group>"; };
-		0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendConfirmationView.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000001 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000002 /* NumericKeypad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericKeypad.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessCheckmarkView.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000004 /* GradientSpinner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradientSpinner.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000005 /* SendFlowPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendFlowPhase.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000006 /* SendFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendFlowView.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000007 /* SendAddressStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendAddressStep.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000008 /* SendAmountStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendAmountStep.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A0000009 /* SendReviewStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendReviewStep.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A000000A /* SendStatusStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendStatusStep.swift; sourceTree = "<group>"; };
 		0F1C17A0DAB5332E049A04B0 /* GlassSegmentedPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSegmentedPicker.swift; sourceTree = "<group>"; };
 		108EE77DBE9D8CB6BE79F891 /* PINEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PINEntryView.swift; sourceTree = "<group>"; };
 		1202A246B0E4F7871A06D84B /* PortfolioChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioChartView.swift; sourceTree = "<group>"; };
 		121BE8EA1E45CB3FAE9290C1 /* MoneroOneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoneroOneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		13768B531AB7EA9C67616887 /* BackgroundSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncView.swift; sourceTree = "<group>"; };
+		13768B531AB7EA9C67616887 /* TrustedLocationSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocationSyncView.swift; sourceTree = "<group>"; };
 		1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncActivityAttributes.swift; sourceTree = "<group>"; };
 		184E7EF5F71DC832F69F6207 /* TransactionsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsWidget.swift; sourceTree = "<group>"; };
 		1DF250B2B46B35AB60356114 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
@@ -207,7 +222,7 @@
 		B7C4D9F0B5479B927D727DBA /* SecurityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityTests.swift; sourceTree = "<group>"; };
 		B970167B0BFA69D181797B60 /* SyncActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncActivityManager.swift; sourceTree = "<group>"; };
 		BA5847FCE9402558A35491F8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		BDB1E04CE3B83B39E5C3DF4B /* BackgroundSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManager.swift; sourceTree = "<group>"; };
+		BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocationSyncManager.swift; sourceTree = "<group>"; };
 		C28AE04350FBA393B5C0220F /* SecurityAuditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityAuditTests.swift; sourceTree = "<group>"; };
 		C2B3390E2738445B8D347933 /* ErrorBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorBanner.swift; sourceTree = "<group>"; };
 		C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertNotificationManager.swift; sourceTree = "<group>"; };
@@ -239,6 +254,7 @@
 		H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTrustedLocationView.swift; sourceTree = "<group>"; };
 		ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisclaimerView.swift; sourceTree = "<group>"; };
 		PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		WIDGETPRIVACYREF123456AB /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -294,7 +310,7 @@
 				UXJZ2UWP4AMFOMV5YUCT0SLA /* TrustedLocationsView.swift */,
 				H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */,
 7C853ADD8257D8AF64818D81 /* AddPriceAlertView.swift */,
-				13768B531AB7EA9C67616887 /* BackgroundSyncView.swift */,
+				13768B531AB7EA9C67616887 /* TrustedLocationSyncView.swift */,
 				023F1A125362A99814A7939A /* BackupSeedView.swift */,
 				39D836D865F70A7477790100 /* BackupView.swift */,
 				DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */,
@@ -373,6 +389,7 @@
 				80E783520494A8A2ED1812BA /* MoneroOneWidgets.entitlements */,
 				DC58487C5764E22EA877B236 /* MoneroOneWidgetsBundle.swift */,
 				PRICEWIDGETREF123456789A /* PriceWidget.swift */,
+				WIDGETPRIVACYREF123456AB /* PrivacyInfo.xcprivacy */,
 				5B6DB1BCF707C6A91E194AF5 /* SyncLiveActivity.swift */,
 				184E7EF5F71DC832F69F6207 /* TransactionsWidget.swift */,
 			);
@@ -385,9 +402,12 @@
 				7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */,
 				C2B3390E2738445B8D347933 /* ErrorBanner.swift */,
 				0F1C17A0DAB5332E049A04B0 /* GlassSegmentedPicker.swift */,
+				A1B2C3D400000002A0000004 /* GradientSpinner.swift */,
+				A1B2C3D400000002A0000002 /* NumericKeypad.swift */,
 				108EE77DBE9D8CB6BE79F891 /* PINEntryView.swift */,
 				E494E802F7171F1946F2FA45 /* QRScannerView.swift */,
 				029F663A58F5CE2B18C3B33C /* ScrambledText.swift */,
+				A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -422,7 +442,7 @@
 			children = (
 				GL3BJBT1LYNYZPYODUN2Z9VQ /* TrustedLocation.swift */,
 				TCL37IUYOMDWC3RVR9YBDRJA /* TrustedLocationsManager.swift */,
-				BDB1E04CE3B83B39E5C3DF4B /* BackgroundSyncManager.swift */,
+				BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */,
 				4848074569E3E47EE8FE7F31 /* BiometricAuthManager.swift */,
 				8EE7C972F4CD3C984FC4FFE9 /* NetworkMonitor.swift */,
 				D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */,
@@ -477,11 +497,22 @@
 		BC0EDD05073CA3C3B9CEFE47 /* Send */ = {
 			isa = PBXGroup;
 			children = (
-				0DFE557FBC05404B0DCB7A44 /* SendConfirmationView.swift */,
-				066F201548A5A5EA2351656E /* SendView.swift */,
-				03B1E4D64130CA8B6677FA95 /* TransactionProgressView.swift */,
+				A1B2C3D400000002A0000005 /* SendFlowPhase.swift */,
+				A1B2C3D400000002A0000006 /* SendFlowView.swift */,
+				A1B2C3D400000003A0000001 /* Steps */,
 			);
 			path = Send;
+			sourceTree = "<group>";
+		};
+		A1B2C3D400000003A0000001 /* Steps */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D400000002A0000007 /* SendAddressStep.swift */,
+				A1B2C3D400000002A0000008 /* SendAmountStep.swift */,
+				A1B2C3D400000002A0000009 /* SendReviewStep.swift */,
+				A1B2C3D400000002A000000A /* SendStatusStep.swift */,
+			);
+			path = Steps;
 			sourceTree = "<group>";
 		};
 		C22A77E3D593D0FC140AF36C /* Features */ = {
@@ -554,8 +585,17 @@
 			children = (
 				44E59FA1B4D707E46863E7C8 /* Components */,
 				39546E93F10D127556F1DFC2 /* Extensions */,
+				A1B2C3D400000003A0000002 /* Services */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		A1B2C3D400000003A0000002 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D400000002A0000001 /* HapticFeedback.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -713,6 +753,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				186E1F281B45C7929D9F7CB7 /* Assets.xcassets in Resources */,
+				WIDGETPRIVACYBUILD12345A /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -773,8 +814,8 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				0D932221213145AEDB7B5082 /* AnimatedMoneroLogo.swift in Sources */,
 				E0ACDE5DE7CC25979C8ABCF8 /* Array+BinarySearch.swift in Sources */,
-				D78301AFEE705847B38A55DD /* BackgroundSyncManager.swift in Sources */,
-				326517A0B392547A7BA61678 /* BackgroundSyncView.swift in Sources */,
+				D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */,
+				326517A0B392547A7BA61678 /* TrustedLocationSyncView.swift in Sources */,
 				5BAC935479DA77D9B89EB6AB /* BackupSeedView.swift in Sources */,
 				E7C33EC8082FAB9206BD8A0B /* BackupView.swift in Sources */,
 				F336976B66186C3C48D2922A /* BalanceCard.swift in Sources */,
@@ -811,15 +852,22 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				E3AAAA2781637EFF950CCADE /* ScrambledText.swift in Sources */,
 				474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */,
 				39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */,
-				D5C81DC6A8A3C7E64770CC88 /* SendConfirmationView.swift in Sources */,
-				A1A9106AD3A84ED38D9207EF /* SendView.swift in Sources */,
+				A1B2C3D400000001A0000005 /* SendFlowPhase.swift in Sources */,
+				A1B2C3D400000001A0000006 /* SendFlowView.swift in Sources */,
+				A1B2C3D400000001A0000007 /* SendAddressStep.swift in Sources */,
+				A1B2C3D400000001A0000008 /* SendAmountStep.swift in Sources */,
+				A1B2C3D400000001A0000009 /* SendReviewStep.swift in Sources */,
+				A1B2C3D400000001A000000A /* SendStatusStep.swift in Sources */,
 				F6ABA0841FC56C21D8B64743 /* SettingsView.swift in Sources */,
 				DA2B7E30A2D8DB0A8AEEEB09 /* SyncActivityAttributes.swift in Sources */,
 				E8E7018CE585AB43B38F22C5 /* SyncActivityManager.swift in Sources */,
 				70AEC21FC1DFBF2D77A49E15 /* SyncSettingsView.swift in Sources */,
 				EDA400DA20EDD8E52EA9CC2C /* TransactionDetailView.swift in Sources */,
 				9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */,
-				9C8D02FA3E7357EA71230987 /* TransactionProgressView.swift in Sources */,
+				A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */,
+				A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */,
+				A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */,
+				A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */,
 				A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */,
 				8BFA73260FA46CA7935C386F /* UnlockView.swift in Sources */,
 				28E3D0F995F39C0E7791AF35 /* WalletManager.swift in Sources */,
@@ -1003,7 +1051,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1121,7 +1169,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

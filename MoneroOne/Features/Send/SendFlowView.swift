@@ -143,9 +143,7 @@ struct SendFlowView: View {
         case .address: return 0
         case .amount: return 1
         case .review: return 2
-        case .sending: return 3
-        case .success: return 4
-        case .error: return 4
+        case .sending, .success, .error: return 3
         }
     }
 
@@ -204,11 +202,15 @@ struct SendFlowView: View {
                 }
                 transactionHash = txHash
                 await walletManager.refresh()
-                phase = .success(txHash: txHash)
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    phase = .success(txHash: txHash)
+                }
                 HapticFeedback.shared.transactionSuccess()
             } catch {
                 let msg = friendlyErrorMessage(for: error)
-                phase = .error(message: msg)
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    phase = .error(message: msg)
+                }
                 HapticFeedback.shared.error()
             }
         }

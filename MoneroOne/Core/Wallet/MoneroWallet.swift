@@ -443,6 +443,7 @@ class MoneroWallet: ObservableObject {
 
 extension MoneroWallet: MoneroKitDelegate {
     nonisolated func subAddressesUpdated(subaddresses: [MoneroKit.SubAddress]) {
+        NSLog("[MoneroWallet] subAddressesUpdated: count=%d", subaddresses.count)
         Task { @MainActor in
             self.subaddresses = subaddresses
         }

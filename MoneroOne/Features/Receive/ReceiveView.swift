@@ -279,13 +279,9 @@ struct AddressPickerView: View {
     @State private var isCreating = false
     @State private var showCreateError = false
 
-    private var isSynced: Bool {
-        switch walletManager.syncState {
-        case .synced, .syncing:
-            return true
-        default:
-            return false
-        }
+    /// Subaddress creation only needs the wallet pointer (key derivation), not daemon sync
+    private var canCreateSubaddress: Bool {
+        !walletManager.primaryAddress.isEmpty
     }
 
     var body: some View {
@@ -323,7 +319,7 @@ struct AddressPickerView: View {
                                 .font(.subheadline)
                         }
                     }
-                    .disabled(isCreating || !isSynced)
+                    .disabled(isCreating || !canCreateSubaddress)
                     .accessibilityLabel(isCreating ? "Creating subaddress" : "Create new subaddress")
                     .accessibilityHint("Creates a new subaddress for receiving Monero")
                 }
@@ -382,7 +378,13 @@ struct AddressPickerView: View {
         isCreating = true
 
         Task {
-            let result = walletManager.createSubaddress()
+            var result = walletManager.createSubaddress()
+
+            // Retry once after short delay — wallet2 C++ can fail transiently after node switch
+            if result == nil {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                result = walletManager.createSubaddress()
+            }
 
             await MainActor.run {
                 isCreating = false

@@ -20,6 +20,7 @@ class WalletManager: ObservableObject {
     @Published var transactions: [MoneroTransaction] = []
     @Published var subaddresses: [MoneroKit.SubAddress] = []
     @Published var userCreatedSubaddressIndices: Set<Int> = []
+    @Published private(set) var walletSessionId = UUID()
 
     // Send prefill properties (for donation flow)
     @Published var prefillSendAddress: String?
@@ -37,7 +38,9 @@ class WalletManager: ObservableObject {
     private var connectionTimer: Timer?
     private var connectionStartTime: Date?
     private var reachabilityRetryTask: Task<Void, Never>?
+    private var restartTask: Task<Void, Never>?
     private var reachabilityRetryCount: Int = 0
+    private var currentReachabilityTask: URLSessionDataTask?
     private var lastSyncPublish: Double = 0
 
     /// URLSession that accepts all certificates (matches NodeManager behavior)
@@ -266,6 +269,7 @@ class WalletManager: ObservableObject {
         startConnectionTracking()
 
         isUnlocked = true
+        walletSessionId = UUID()
     }
 
     private func bindToWallet(_ wallet: MoneroWallet) {
@@ -309,6 +313,13 @@ class WalletManager: ObservableObject {
                 case .error(let msg): newState = .error(msg)
                 }
 
+                // Don't let the wallet's initial .idle publish regress from .connecting
+                // during a restart — restartWallet() sets .connecting manually before
+                // the new wallet is created, so the first .idle from wallet2 is stale.
+                if case .idle = newState, case .connecting = self.syncState {
+                    return
+                }
+
                 // Throttle rapid syncing progress updates to prevent SwiftUI
                 // view re-renders from swallowing NavigationLink taps.
                 // State transitions (idle/connecting/synced/error) pass immediately.
@@ -319,6 +330,15 @@ class WalletManager: ObservableObject {
                 }
 
                 self.syncState = newState
+
+                // wallet2 C++ is connecting — cancel HTTP reachability checks
+                // since wallet2 handles TLS/connection independently
+                if case .connecting = newState {
+                    self.reachabilityRetryTask?.cancel()
+                    self.reachabilityRetryTask = nil
+                    self.currentReachabilityTask?.cancel()
+                    self.currentReachabilityTask = nil
+                }
 
                 // Update connection stage based on sync state
                 self.updateConnectionStage()
@@ -366,9 +386,12 @@ class WalletManager: ObservableObject {
             .sink { [weak self] newSubaddresses in
                 guard let self = self else { return }
                 self.subaddresses = newSubaddresses
+                let hasValidIdx0 = newSubaddresses.contains { $0.index == 0 && !$0.address.isEmpty }
+                NSLog("[WalletManager] $subaddresses: count=%d hasValidIdx0=%d primaryAddr.empty=%d", newSubaddresses.count, hasValidIdx0 ? 1 : 0, self.primaryAddress.isEmpty ? 1 : 0)
                 // Update primaryAddress when subaddresses change (polyseed case - addresses populate after wallet opens)
-                if let primary = newSubaddresses.first(where: { $0.index == 0 }), !primary.address.isEmpty {
+                if let primary = newSubaddresses.first(where: { $0.index == 0 && !$0.address.isEmpty }) {
                     if self.primaryAddress.isEmpty {
+                        NSLog("[WalletManager] SETTING primaryAddress from subaddresses sink")
                         self.primaryAddress = primary.address
                     }
                 }
@@ -394,6 +417,9 @@ class WalletManager: ObservableObject {
     }
 
     func lock() {
+        // Cancel Combine subscriptions FIRST — they hold strong refs to the old wallet
+        cancellables.removeAll()
+
         // Capture old wallet so its deallocation (Kit.deinit → C++ close)
         // happens off the main thread.
         let oldWallet = moneroWallet
@@ -441,7 +467,12 @@ class WalletManager: ObservableObject {
 
         // Stage 4: Got daemon height, loading blocks - show wallet height climbing
         if daemonHeight > 0 {
-            connectionStage = .loadingBlocks(wallet: walletHeight, daemon: daemonHeight)
+            // If wallet has caught up to daemon, show syncing (waiting for C++ synchronized flag)
+            if walletHeight >= daemonHeight {
+                connectionStage = .syncing
+            } else {
+                connectionStage = .loadingBlocks(wallet: walletHeight, daemon: daemonHeight)
+            }
             return
         }
 
@@ -488,6 +519,8 @@ class WalletManager: ObservableObject {
         reachabilityRetryCount = 0
         reachabilityRetryTask?.cancel()
         reachabilityRetryTask = nil
+        currentReachabilityTask?.cancel()
+        currentReachabilityTask = nil
 
         // Subscribe to network connectivity changes
         networkMonitorCancellable = NetworkMonitor.shared.$isConnected
@@ -530,9 +563,20 @@ class WalletManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 10
 
-        reachabilitySession.dataTask(with: request) { [weak self] data, response, error in
+        // Cancel any in-flight reachability check to avoid stale results
+        currentReachabilityTask?.cancel()
+
+        let task = reachabilitySession.dataTask(with: request) { [weak self] data, response, error in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
+
+                // Ignore cancelled requests (stale checks from previous node)
+                if let urlError = error as? URLError, urlError.code == .cancelled {
+                    #if DEBUG
+                    NSLog("[WalletManager] Reachability check cancelled (stale), ignoring")
+                    #endif
+                    return
+                }
 
                 if let httpResponse = response as? HTTPURLResponse,
                    (200...299).contains(httpResponse.statusCode),
@@ -554,7 +598,9 @@ class WalletManager: ObservableObject {
                 }
                 self.updateConnectionStage()
             }
-        }.resume()
+        }
+        currentReachabilityTask = task
+        task.resume()
     }
 
     /// Retry reachability test with exponential backoff (5s, 10s, 20s)
@@ -681,13 +727,6 @@ class WalletManager: ObservableObject {
     /// - Returns: The newly created SubAddress, or nil if creation failed
     func createSubaddress() -> MoneroKit.SubAddress? {
         guard let wallet = moneroWallet else { return nil }
-        // Don't create subaddresses while wallet is connecting or in error state
-        switch syncState {
-        case .synced, .syncing:
-            break
-        default:
-            return nil
-        }
         if let newSubaddr = wallet.createSubaddress() {
             userCreatedSubaddressIndices.insert(newSubaddr.index)
             saveUserCreatedSubaddresses()
@@ -797,41 +836,55 @@ class WalletManager: ObservableObject {
 
     // MARK: - Wallet Restart
 
-    /// Restart the wallet off the main thread to avoid UI blocking.
-    /// The old wallet's deallocation (Kit.deinit → _stop() → C++ close) happens
-    /// in a detached task so the main thread is never blocked.
+    /// Restart the wallet, serializing teardown → create to prevent dual C++ connections.
+    /// The old wallet is stopped explicitly before the new one is created.
+    /// Rapid re-entry (e.g. quick node switching) cancels the in-flight restart.
     private func restartWallet(with seed: [String]) {
         guard isUnlocked else { return }
 
         syncState = .connecting
 
-        // Capture old wallet — do NOT let it deallocate on the main thread.
-        // Setting moneroWallet = nil removes our reference, but oldWallet
-        // keeps the Kit alive until the detached task completes.
+        // Cancel any in-flight restart
+        restartTask?.cancel()
+
         let oldWallet = moneroWallet
         moneroWallet = nil
         cancellables.removeAll()
 
-        // Old wallet deallocation happens off main when this task completes
-        Task.detached { [oldWallet] in let _ = oldWallet }
-
-        // Capture values for new wallet (all reads happen on main, fast)
         let walletRestoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
         let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
         let netType = networkType
 
-        // Create new wallet — Kit init runs off main via async create()
-        Task {
+        restartTask = Task {
+            // Stop old wallet explicitly — Kit.stop() queues MoneroCore.stop()
+            // on lifecycleQueue, which calls MONERO_WalletManager_closeWallet()
+            oldWallet?.stop()
+            // Give lifecycleQueue time to process the C++ close
+            try? await Task.sleep(nanoseconds: 100_000_000)
+
+            // Another restart superseded this one
+            guard !Task.isCancelled else { return }
+
             do {
                 let wallet = MoneroWallet()
                 try await wallet.create(seed: seed, restoreHeight: walletRestoreHeight,
                                   resetSuffix: resetSuffix, networkType: netType)
+
+                // Check again — create() takes time, another restart may have fired
+                guard !Task.isCancelled else {
+                    wallet.stop()
+                    return
+                }
+
                 self.moneroWallet = wallet
                 self.bindToWallet(wallet)
+                self.walletSessionId = UUID()
                 self.startConnectionTracking()
             } catch {
-                self.syncState = .error("Failed to reconnect: \(error.localizedDescription)")
+                if !Task.isCancelled {
+                    self.syncState = .error("Failed to reconnect: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -896,6 +949,9 @@ class WalletManager: ObservableObject {
         balance = 0
         unlockedBalance = 0
         transactions = []
+
+        // Cancel Combine subscriptions — they hold strong refs to the old wallet
+        cancellables.removeAll()
 
         // Capture old wallet so its deallocation happens off main thread
         let oldWallet = moneroWallet

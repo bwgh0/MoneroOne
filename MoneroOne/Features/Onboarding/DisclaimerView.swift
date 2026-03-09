@@ -64,7 +64,7 @@ struct DisclaimerView: View {
                         icon: "chart.line.uptrend.xyaxis",
                         iconColor: .purple,
                         title: "Cryptocurrency Is Volatile",
-                        description: "The value of Monero can fluctuate significantly. Only invest what you can afford to lose.",
+                        description: "The value of Monero can fluctuate significantly. Only use funds you can afford to lose.",
                         isChecked: $checkboxes[3]
                     )
                     .accessibilityIdentifier("disclaimer.checkbox.3")

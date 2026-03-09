@@ -12,6 +12,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
     @Published var isSyncing: Bool = false
     @Published var lastSyncTime: Date?
     @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    @Published private(set) var accuracyAuthorization: CLAccuracyAuthorization = .fullAccuracy
     @Published private(set) var currentTrustedLocationName: String?  // Name of current trusted zone (nil if outside)
     @Published private(set) var isSyncBlocked: Bool = false  // True when outside zone + block mode
     @Published private(set) var isOutsideTrustedZone: Bool = false  // True when outside zone (any mode)
@@ -42,6 +43,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
             statusCheckManager?.delegate = self
         }
         authorizationStatus = statusCheckManager?.authorizationStatus ?? .notDetermined
+        accuracyAuthorization = statusCheckManager?.accuracyAuthorization ?? .fullAccuracy
     }
 
     func configure(walletManager: WalletManager) {
@@ -310,15 +312,21 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         let status = authorizationStatus
         return status == .notDetermined || status == .denied || status == .restricted
     }
+
+    var needsPreciseLocation: Bool {
+        accuracyAuthorization == .reducedAccuracy
+    }
 }
 
 // MARK: - CLLocationManagerDelegate
 extension TrustedLocationSyncManager: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
+        let accuracy = manager.accuracyAuthorization
         Task { @MainActor in
             // Always update the published status so UI reflects changes
             authorizationStatus = status
+            accuracyAuthorization = accuracy
 
             // Only act on the main location manager (not the status check manager)
             guard manager === locationManager else { return }

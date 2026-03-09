@@ -38,7 +38,7 @@ struct TrustedLocationSyncView: View {
                 }
 
                 // Show warning if not "Always" permission
-                if syncManager.authorizationStatus != .authorizedAlways {
+                if syncManager.authorizationStatus != .authorizedAlways || syncManager.needsPreciseLocation {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -123,6 +123,9 @@ struct TrustedLocationSyncView: View {
     }
 
     private var permissionStatus: String {
+        if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
+            return "Needs Precise"
+        }
         switch syncManager.authorizationStatus {
         case .authorizedAlways:
             return "Granted"
@@ -140,6 +143,9 @@ struct TrustedLocationSyncView: View {
     }
 
     private var permissionColor: Color {
+        if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
+            return .orange
+        }
         switch syncManager.authorizationStatus {
         case .authorizedAlways:
             return .green
@@ -151,6 +157,9 @@ struct TrustedLocationSyncView: View {
     }
 
     private var permissionWarningText: String {
+        if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
+            return "Trusted Locations requires Precise Location to accurately determine if you're inside a trusted zone. Go to Settings > Location and enable \"Precise Location\"."
+        }
         switch syncManager.authorizationStatus {
         case .authorizedWhenInUse:
             return "Trusted Locations requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable trusted zone monitoring."

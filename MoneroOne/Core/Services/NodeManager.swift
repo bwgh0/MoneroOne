@@ -491,18 +491,12 @@ class NodeManager: ObservableObject {
 
             let parameters: NWParameters
             if usesTLS {
-                #if DEBUG
-                // DEBUG ONLY: Accept all certificates for latency testing
-                // In release builds, use default certificate validation
+                // Accept self-signed certificates — many community Monero nodes use them
                 let tlsOptions = NWProtocolTLS.Options()
                 sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, _, complete in
                     complete(true)
                 }, DispatchQueue.global())
                 parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
-                #else
-                // Production: Use default TLS with proper certificate validation
-                parameters = NWParameters(tls: NWProtocolTLS.Options(), tcp: NWProtocolTCP.Options())
-                #endif
             } else {
                 parameters = NWParameters.tcp
             }

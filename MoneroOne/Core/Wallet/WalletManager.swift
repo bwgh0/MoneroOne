@@ -387,11 +387,15 @@ class WalletManager: ObservableObject {
                 guard let self = self else { return }
                 self.subaddresses = newSubaddresses
                 let hasValidIdx0 = newSubaddresses.contains { $0.index == 0 && !$0.address.isEmpty }
+                #if DEBUG
                 NSLog("[WalletManager] $subaddresses: count=%d hasValidIdx0=%d primaryAddr.empty=%d", newSubaddresses.count, hasValidIdx0 ? 1 : 0, self.primaryAddress.isEmpty ? 1 : 0)
+                #endif
                 // Update primaryAddress when subaddresses change (polyseed case - addresses populate after wallet opens)
                 if let primary = newSubaddresses.first(where: { $0.index == 0 && !$0.address.isEmpty }) {
                     if self.primaryAddress.isEmpty {
+                        #if DEBUG
                         NSLog("[WalletManager] SETTING primaryAddress from subaddresses sink")
+                        #endif
                         self.primaryAddress = primary.address
                     }
                 }
@@ -903,7 +907,9 @@ class WalletManager: ObservableObject {
         if !primaryAddress.isEmpty, let currentSeedMnemonic = currentSeed {
             // Compare with the seed that was used to unlock the current wallet
             if mnemonic != currentSeedMnemonic {
+                #if DEBUG
                 NSLog("[WalletManager] CRITICAL: Keychain seed doesn't match unlocked wallet seed!")
+                #endif
                 throw WalletError.seedMismatch
             }
         }

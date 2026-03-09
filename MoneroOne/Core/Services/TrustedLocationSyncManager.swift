@@ -77,7 +77,9 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         .dropFirst() // Skip initial emission
         .receive(on: DispatchQueue.main)
         .sink { [weak self] mode, inZone, locations, unlocked in
+            #if DEBUG
             NSLog("[TrustedSync] State changed — mode=\(mode.rawValue) inZone=\(inZone) locations=\(locations.count) unlocked=\(unlocked)")
+            #endif
             self?.recomputeSyncState()
         }
         .store(in: &cancellables)
@@ -130,7 +132,9 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
     /// Recompute sync state in response to settings changes (mode, zone, locations)
     private func recomputeSyncState() {
         guard let wallet = walletManager, wallet.isUnlocked else {
+            #if DEBUG
             NSLog("[TrustedSync] recompute skipped — wallet nil or locked")
+            #endif
             return
         }
 
@@ -138,7 +142,9 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         let wasBlocked = isSyncBlocked
         let shouldBlock = trustedLocationsManager.shouldBlockSync()
 
+        #if DEBUG
         NSLog("[TrustedSync] recompute — outsideZone=\(outsideZone) wasBlocked=\(wasBlocked) shouldBlock=\(shouldBlock) syncMode=\(trustedLocationsManager.syncMode.rawValue) isInTrustedZone=\(trustedLocationsManager.isInTrustedZone) hasLocations=\(trustedLocationsManager.hasTrustedLocations)")
+        #endif
 
         isOutsideTrustedZone = outsideZone
         isSyncBlocked = shouldBlock
@@ -146,7 +152,9 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
 
         if shouldBlock && !wasBlocked {
             // Newly blocked — pause the actual sync engine
+            #if DEBUG
             NSLog("[TrustedSync] BLOCKING sync — pausing wallet")
+            #endif
             wallet.pauseSync()
             isSyncing = false
             if #available(iOS 16.2, *), isEnabled {
@@ -162,7 +170,9 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
             }
         } else if wasBlocked {
             // Was blocked, now unblocked — resume sync
+            #if DEBUG
             NSLog("[TrustedSync] UNBLOCKING sync — resuming wallet")
+            #endif
             wallet.resumeSync()
             performSync()
         } else {

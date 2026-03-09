@@ -124,7 +124,9 @@ class MoneroWallet: ObservableObject {
             ? (Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081")
             : "https://node.monero.one:443"
         let savedURL = UserDefaults.standard.string(forKey: urlKey) ?? defaultURL
-        let url = URL(string: savedURL) ?? URL(string: defaultURL) ?? URL(string: "https://node.monero.one:443")!
+        guard let url = URL(string: savedURL) ?? URL(string: defaultURL) else {
+            return MoneroKit.Node(url: URL(string: "https://node.monero.one:443")!, isTrusted: false)
+        }
 
         let login = UserDefaults.standard.string(forKey: loginKey)
         let password = UserDefaults.standard.string(forKey: passwordKey)
@@ -443,7 +445,9 @@ class MoneroWallet: ObservableObject {
 
 extension MoneroWallet: MoneroKitDelegate {
     nonisolated func subAddressesUpdated(subaddresses: [MoneroKit.SubAddress]) {
+        #if DEBUG
         NSLog("[MoneroWallet] subAddressesUpdated: count=%d", subaddresses.count)
+        #endif
         Task { @MainActor in
             self.subaddresses = subaddresses
         }

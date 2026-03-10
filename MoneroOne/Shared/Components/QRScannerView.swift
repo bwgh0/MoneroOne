@@ -2,7 +2,7 @@ import SwiftUI
 import AVFoundation
 
 struct QRScannerView: UIViewControllerRepresentable {
-    let onCodeScanned: (String) -> Void
+    let onCodeScanned: (String, String?) -> Void
     @Environment(\.dismiss) private var dismiss
 
     func makeUIViewController(context: Context) -> QRScannerViewController {
@@ -18,16 +18,16 @@ struct QRScannerView: UIViewControllerRepresentable {
     }
 
     class Coordinator: NSObject, QRScannerViewControllerDelegate {
-        let onCodeScanned: (String) -> Void
+        let onCodeScanned: (String, String?) -> Void
         let dismiss: DismissAction
 
-        init(onCodeScanned: @escaping (String) -> Void, dismiss: DismissAction) {
+        init(onCodeScanned: @escaping (String, String?) -> Void, dismiss: DismissAction) {
             self.onCodeScanned = onCodeScanned
             self.dismiss = dismiss
         }
 
-        func didScanCode(_ code: String) {
-            onCodeScanned(code)
+        func didScanCode(_ code: String, amount: String?) {
+            onCodeScanned(code, amount)
             dismiss()
         }
 
@@ -38,7 +38,7 @@ struct QRScannerView: UIViewControllerRepresentable {
 }
 
 protocol QRScannerViewControllerDelegate: AnyObject {
-    func didScanCode(_ code: String)
+    func didScanCode(_ code: String, amount: String?)
     func didFailWithError(_ error: Error)
 }
 
@@ -212,25 +212,34 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
            let stringValue = metadataObject.stringValue {
 
             // Parse monero: URI or plain address
-            let address = parseMoneroURI(stringValue)
+            let (address, amount) = parseMoneroURI(stringValue)
 
             hasScanned = true
             AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
-            delegate?.didScanCode(address)
+            delegate?.didScanCode(address, amount: amount)
         }
     }
 
-    private func parseMoneroURI(_ string: String) -> String {
+    private func parseMoneroURI(_ string: String) -> (address: String, amount: String?) {
         // Handle monero: URI format
         // monero:ADDRESS?tx_amount=AMOUNT&recipient_name=NAME&tx_description=DESC
         if string.lowercased().hasPrefix("monero:") {
             let withoutScheme = String(string.dropFirst(7))
             if let questionIndex = withoutScheme.firstIndex(of: "?") {
-                return String(withoutScheme[..<questionIndex])
+                let address = String(withoutScheme[..<questionIndex])
+                let query = String(withoutScheme[withoutScheme.index(after: questionIndex)...])
+                var amount: String? = nil
+                for param in query.components(separatedBy: "&") {
+                    let parts = param.components(separatedBy: "=")
+                    if parts.count == 2 && parts[0] == "tx_amount" {
+                        amount = parts[1]
+                    }
+                }
+                return (address, amount)
             }
-            return withoutScheme
+            return (withoutScheme, nil)
         }
-        return string
+        return (string, nil)
     }
 }
 
@@ -253,8 +262,8 @@ enum ScannerError: LocalizedError {
 
 #if DEBUG
 #Preview {
-    QRScannerView { code in
-        print("Scanned: \(code)")
+    QRScannerView { code, amount in
+        print("Scanned: \(code), amount: \(amount ?? "nil")")
     }
 }
 #endif

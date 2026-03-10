@@ -205,6 +205,10 @@ class WalletManager: ObservableObject {
         if let date = restoreDate {
             let restoreHeight = MoneroWallet.restoreHeight(for: date)
             UserDefaults.standard.set(restoreHeight, forKey: "\(networkPrefix)restoreHeight")
+        } else {
+            // Clear any stale restore height from a previous wallet.
+            // For Polyseed, the C++ library decodes the birthday internally.
+            UserDefaults.standard.removeObject(forKey: "\(networkPrefix)restoreHeight")
         }
 
         hasWallet = true
@@ -449,6 +453,23 @@ class WalletManager: ObservableObject {
                 let addr = wallet.primaryAddress
                 if !addr.isEmpty && self.primaryAddress.isEmpty {
                     self.primaryAddress = addr
+                }
+            }
+            .store(in: &cancellables)
+
+        // When the C++ library reports a different restore height (e.g. Polyseed birthday),
+        // persist it so Settings and progress calculations use the correct value.
+        wallet.$actualRestoreHeight
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] height in
+                guard let self = self else { return }
+                if height > 0 && height != self.restoreHeight {
+                    #if DEBUG
+                    NSLog("[WalletManager] Persisting C++ restore height: %llu (was %llu)", height, self.restoreHeight)
+                    #endif
+                    self.restoreHeight = height
+                    UserDefaults.standard.set(Int(height), forKey: "\(self.networkPrefix)restoreHeight")
                 }
             }
             .store(in: &cancellables)

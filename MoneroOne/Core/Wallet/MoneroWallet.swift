@@ -18,10 +18,18 @@ class MoneroWallet: ObservableObject {
     // MARK: - Connection Progress Tracking
     @Published var daemonHeight: UInt64 = 0
     @Published var walletHeight: UInt64 = 0
+    /// Actual restore height as decoded by the C++ library (e.g. Polyseed birthday)
+    @Published var actualRestoreHeight: UInt64?
 
     /// Primary address (index 0) - from storage (pre-computed)
     var primaryAddress: String {
         kit?.primaryAddress ?? ""
+    }
+
+    /// The actual refresh-from-block-height as set by the C++ wallet.
+    /// For Polyseed, this is the decoded birthday height.
+    var refreshFromBlockHeight: UInt64 {
+        kit?.refreshFromBlockHeight ?? 0
     }
 
     enum SyncState: Equatable {
@@ -474,6 +482,15 @@ extension MoneroWallet: MoneroKitDelegate {
     nonisolated func transactionsUpdated(inserted: [MoneroKit.TransactionInfo], updated: [MoneroKit.TransactionInfo]) {
         Task { @MainActor in
             fetchTransactions()
+        }
+    }
+
+    nonisolated func restoreHeightUpdated(height: UInt64) {
+        #if DEBUG
+        NSLog("[MoneroWallet] restoreHeightUpdated: %llu", height)
+        #endif
+        Task { @MainActor in
+            self.actualRestoreHeight = height
         }
     }
 }

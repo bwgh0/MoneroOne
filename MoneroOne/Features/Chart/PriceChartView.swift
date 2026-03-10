@@ -68,10 +68,15 @@ struct PriceChartView: View {
                 // Calculate domain after initial load (onChange doesn't fire on initial value)
                 let rate = priceService.usdToSelectedRate
                 let prices = priceService.chartData.map { $0.price * rate }
-                if let minPrice = prices.min(), let maxPrice = prices.max() {
+                if let minPrice = prices.min(), let maxPrice = prices.max(),
+                   minPrice.isFinite && maxPrice.isFinite {
                     let range = maxPrice - minPrice
-                    let padding = range * 0.05
-                    cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+                    if range > 0 {
+                        let padding = range * 0.05
+                        cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+                    } else {
+                        cachedYDomain = (minPrice * 0.95)...(maxPrice * 1.05)
+                    }
                 }
             }
             .onChange(of: selectedTimeRange) { newValue in
@@ -98,25 +103,35 @@ struct PriceChartView: View {
                 // Recalculate domain only when data changes
                 let rate = priceService.usdToSelectedRate
                 let prices = priceService.chartData.map { $0.price * rate }
-                guard let minPrice = prices.min(), let maxPrice = prices.max() else {
+                guard let minPrice = prices.min(), let maxPrice = prices.max(),
+                      minPrice.isFinite && maxPrice.isFinite else {
                     cachedYDomain = 0...100
                     return
                 }
                 let range = maxPrice - minPrice
-                let padding = range * 0.05
-                cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+                if range > 0 {
+                    let padding = range * 0.05
+                    cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+                } else {
+                    cachedYDomain = (minPrice * 0.95)...(maxPrice * 1.05)
+                }
             }
             .onChange(of: priceService.currentChartRange) { _ in
                 // Recalculate domain when range changes (even if count is same)
                 let rate = priceService.usdToSelectedRate
                 let prices = priceService.chartData.map { $0.price * rate }
-                guard let minPrice = prices.min(), let maxPrice = prices.max() else {
+                guard let minPrice = prices.min(), let maxPrice = prices.max(),
+                      minPrice.isFinite && maxPrice.isFinite else {
                     cachedYDomain = 0...100
                     return
                 }
                 let range = maxPrice - minPrice
-                let padding = range * 0.05
-                cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+                if range > 0 {
+                    let padding = range * 0.05
+                    cachedYDomain = (minPrice - padding)...(maxPrice + padding)
+                } else {
+                    cachedYDomain = (minPrice * 0.95)...(maxPrice * 1.05)
+                }
             }
             .refreshable {
                 await priceService.fetchPrice()
@@ -322,6 +337,7 @@ struct PriceChartView: View {
                 .chartYScale(domain: chartYDomain)
                 .chartXSelectionIfAvailable(value: $selectedDate)
                 .frame(height: 240)
+                .clipped()
                 .accessibilityLabel("Price chart for \(selectedTimeRange.rawValue)")
                 .accessibilityHint("Shows XMR price trend over the selected time range")
             }

@@ -63,8 +63,11 @@ struct SendFlowView: View {
                 }
             }
             .sheet(isPresented: $showScanner) {
-                QRScannerView { scannedAddress in
+                QRScannerView { scannedAddress, scannedAmount in
                     recipientAddress = scannedAddress
+                    if let amount = scannedAmount {
+                        amountString = amount
+                    }
                 }
             }
         }

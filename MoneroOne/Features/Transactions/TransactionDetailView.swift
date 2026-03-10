@@ -63,12 +63,17 @@ struct TransactionDetailView: View {
                 HStack {
                     Text("Status")
                     Spacer()
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(transaction.displayStatusColor)
-                            .frame(width: 8, height: 8)
-                            .accessibilityHidden(true)
-                        Text(transaction.displayStatusText)
+                    if transaction.isStatusLoading {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    } else {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(transaction.displayStatusColor)
+                                .frame(width: 8, height: 8)
+                                .accessibilityHidden(true)
+                            Text(transaction.displayStatusText)
+                        }
                     }
                 }
                 .accessibilityElement(children: .combine)
@@ -78,11 +83,16 @@ struct TransactionDetailView: View {
                 HStack {
                     Text("Confirmations")
                     Spacer()
-                    Text("\(transaction.confirmations)")
-                        .foregroundColor(.secondary)
+                    if let confirmations = transaction.confirmations {
+                        Text("\(confirmations)")
+                            .foregroundColor(.secondary)
+                    } else {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    }
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Confirmations: \(transaction.confirmations)")
+                .accessibilityLabel("Confirmations: \(transaction.confirmations ?? 0)")
 
                 // Memo
                 if let memo = transaction.memo, !memo.isEmpty {

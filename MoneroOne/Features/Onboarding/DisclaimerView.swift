@@ -55,7 +55,7 @@ struct DisclaimerView: View {
                         icon: "doc.text.fill",
                         iconColor: .blue,
                         title: "Protect Your Seed Phrase",
-                        description: "If you lose your 16-word seed phrase, your funds are permanently lost. Write it down and store it securely offline.",
+                        description: "If you lose your seed phrase, your funds are permanently lost. Write it down and store it securely offline.",
                         isChecked: $checkboxes[2]
                     )
                     .accessibilityIdentifier("disclaimer.checkbox.2")
@@ -64,7 +64,7 @@ struct DisclaimerView: View {
                         icon: "chart.line.uptrend.xyaxis",
                         iconColor: .purple,
                         title: "Cryptocurrency Is Volatile",
-                        description: "The value of Monero can fluctuate significantly. Only invest what you can afford to lose.",
+                        description: "The value of Monero can fluctuate significantly. Only use funds you can afford to lose.",
                         isChecked: $checkboxes[3]
                     )
                     .accessibilityIdentifier("disclaimer.checkbox.3")

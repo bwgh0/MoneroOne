@@ -18,10 +18,18 @@ class MoneroWallet: ObservableObject {
     // MARK: - Connection Progress Tracking
     @Published var daemonHeight: UInt64 = 0
     @Published var walletHeight: UInt64 = 0
+    /// Actual restore height as decoded by the C++ library (e.g. Polyseed birthday)
+    @Published var actualRestoreHeight: UInt64?
 
     /// Primary address (index 0) - from storage (pre-computed)
     var primaryAddress: String {
         kit?.primaryAddress ?? ""
+    }
+
+    /// The actual refresh-from-block-height as set by the C++ wallet.
+    /// For Polyseed, this is the decoded birthday height.
+    var refreshFromBlockHeight: UInt64 {
+        kit?.refreshFromBlockHeight ?? 0
     }
 
     enum SyncState: Equatable {
@@ -124,7 +132,9 @@ class MoneroWallet: ObservableObject {
             ? (Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081")
             : "https://node.monero.one:443"
         let savedURL = UserDefaults.standard.string(forKey: urlKey) ?? defaultURL
-        let url = URL(string: savedURL) ?? URL(string: defaultURL) ?? URL(string: "https://node.monero.one:443")!
+        guard let url = URL(string: savedURL) ?? URL(string: defaultURL) else {
+            return MoneroKit.Node(url: URL(string: "https://node.monero.one:443")!, isTrusted: false)
+        }
 
         let login = UserDefaults.standard.string(forKey: loginKey)
         let password = UserDefaults.standard.string(forKey: passwordKey)
@@ -218,6 +228,9 @@ class MoneroWallet: ObservableObject {
             let progressPercent = Double(min(99, progress))
             syncState = .syncing(progress: progressPercent, remaining: remainingBlocksCount > 0 ? remainingBlocksCount : nil)
         case .notSynced(let error):
+            #if DEBUG
+            NSLog("[MoneroWallet] notSynced raw error: %@", String(describing: error))
+            #endif
             syncState = .error(friendlyErrorMessage(for: error))
         case .idle:
             syncState = .idle
@@ -232,6 +245,9 @@ class MoneroWallet: ObservableObject {
 
     private func friendlyErrorMessage(for error: Error) -> String {
         let errorString = String(describing: error)
+        #if DEBUG
+        NSLog("[MoneroWallet] friendlyErrorMessage input: '%@' containsTimeout=%d", errorString, errorString.lowercased().contains("timeout") ? 1 : 0)
+        #endif
 
         // Check for common MoneroKit errors
         if errorString.contains("WalletStateError") {
@@ -244,7 +260,7 @@ class MoneroWallet: ObservableObject {
             }
         }
 
-        if errorString.lowercased().contains("timeout") {
+        if errorString.lowercased().contains("timeout") || errorString.lowercased().contains("timed out") {
             return "Connection timed out. Try again or switch nodes."
         }
 
@@ -274,18 +290,18 @@ class MoneroWallet: ObservableObject {
         let fee = Decimal(info.fee) / coinRate
 
         // Calculate confirmations from block height
-        let confirmations: Int
+        let confirmations: Int?
         if info.isPending || info.blockHeight == 0 {
             confirmations = 0
         } else if let kit = kit {
-            let currentHeight = kit.lastBlockInfo
+            let currentHeight = kit.blockHeights?.daemonHeight ?? kit.lastBlockInfo
             if currentHeight > info.blockHeight {
                 confirmations = Int(currentHeight - info.blockHeight)
             } else {
-                confirmations = 10 // Assume confirmed if we can't calculate
+                confirmations = nil // Height not available yet
             }
         } else {
-            confirmations = 10 // Default to confirmed if kit unavailable
+            confirmations = nil
         }
 
         // Determine status based on isPending from MoneroKit (this is accurate!)
@@ -443,6 +459,9 @@ class MoneroWallet: ObservableObject {
 
 extension MoneroWallet: MoneroKitDelegate {
     nonisolated func subAddressesUpdated(subaddresses: [MoneroKit.SubAddress]) {
+        #if DEBUG
+        NSLog("[MoneroWallet] subAddressesUpdated: count=%d", subaddresses.count)
+        #endif
         Task { @MainActor in
             self.subaddresses = subaddresses
         }
@@ -465,6 +484,15 @@ extension MoneroWallet: MoneroKitDelegate {
             fetchTransactions()
         }
     }
+
+    nonisolated func restoreHeightUpdated(height: UInt64) {
+        #if DEBUG
+        NSLog("[MoneroWallet] restoreHeightUpdated: %llu", height)
+        #endif
+        Task { @MainActor in
+            self.actualRestoreHeight = height
+        }
+    }
 }
 
 // MARK: - Transaction Model
@@ -476,7 +504,7 @@ struct MoneroTransaction: Identifiable, Equatable, Hashable {
     let fee: Decimal
     let address: String
     let timestamp: Date
-    let confirmations: Int
+    let confirmations: Int?
     let status: TransactionStatus
     let memo: String?
 

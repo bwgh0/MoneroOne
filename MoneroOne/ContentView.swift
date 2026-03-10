@@ -14,6 +14,7 @@ struct ContentView: View {
                 UnlockView()
             } else {
                 MainTabView()
+                    .id(walletManager.walletSessionId)
             }
         }
         .accessibilityIdentifier("contentView.root")

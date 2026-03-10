@@ -122,7 +122,7 @@ struct SyncSettingsView: View {
 
                 if syncManager.isEnabled {
                     // Only show permission status when there's a problem
-                    if syncManager.authorizationStatus != .authorizedAlways {
+                    if syncManager.authorizationStatus != .authorizedAlways || syncManager.needsPreciseLocation {
                         HStack {
                             Text("Location Permission")
                             Spacer()
@@ -217,6 +217,9 @@ struct SyncSettingsView: View {
     }
 
     private var permissionStatus: String {
+        if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
+            return "Needs Precise Location"
+        }
         switch syncManager.authorizationStatus {
         case .authorizedAlways: return "Enabled"
         case .authorizedWhenInUse: return "Needs Always Permission"
@@ -228,6 +231,9 @@ struct SyncSettingsView: View {
     }
 
     private var permissionColor: Color {
+        if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
+            return .orange
+        }
         switch syncManager.authorizationStatus {
         case .authorizedAlways: return .green
         case .authorizedWhenInUse: return .orange
@@ -236,6 +242,9 @@ struct SyncSettingsView: View {
     }
 
     private var permissionWarningText: String {
+        if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
+            return "Trusted Locations requires Precise Location to accurately determine if you're inside a trusted zone. Go to Settings > Location and enable \"Precise Location\"."
+        }
         switch syncManager.authorizationStatus {
         case .authorizedWhenInUse:
             return "Trusted Locations requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable trusted zone monitoring."

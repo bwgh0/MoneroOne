@@ -325,7 +325,8 @@ class PriceService: ObservableObject {
 
         for i in 1..<data.count {
             let smoothedPrice = alpha * data[i].price + (1 - alpha) * result[i - 1].price
-            result.append(PriceDataPoint(timestamp: data[i].timestamp, price: smoothedPrice))
+            let safePrice = smoothedPrice.isFinite ? smoothedPrice : data[i].price
+            result.append(PriceDataPoint(timestamp: data[i].timestamp, price: safePrice))
         }
 
         return result
@@ -404,6 +405,18 @@ class PriceService: ObservableObject {
             if let expectedSeconds = expectedSeconds {
                 let cutoffDate = Date().addingTimeInterval(-expectedSeconds)
                 allPoints = allPoints.filter { $0.timestamp >= cutoffDate }
+            }
+
+            // Filter out invalid and outlier data points
+            allPoints = allPoints.filter { $0.price.isFinite && $0.price > 0 }
+            if allPoints.count >= 3 {
+                let sorted = allPoints.map(\.price).sorted()
+                let median = sorted[sorted.count / 2]
+                allPoints = allPoints.filter { $0.price >= median / 10 && $0.price <= median * 10 }
+            }
+            guard allPoints.count >= 2 else {
+                isLoadingChart = false
+                return
             }
 
             // Downsample using LTTB - increased point counts for smoother curves

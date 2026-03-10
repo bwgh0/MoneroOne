@@ -42,6 +42,7 @@ class WalletManager: ObservableObject {
     private var reachabilityRetryCount: Int = 0
     private var currentReachabilityTask: URLSessionDataTask?
     private var lastSyncPublish: Double = 0
+    private var errorDebounceTask: Task<Void, Never>?
 
     /// URLSession that accepts all certificates (matches NodeManager behavior)
     /// Nodes with self-signed certs pass the settings latency test, so the wallet
@@ -313,6 +314,10 @@ class WalletManager: ObservableObject {
                 case .error(let msg): newState = .error(msg)
                 }
 
+                #if DEBUG
+                NSLog("[WalletManager] wallet2 syncState: %@ (current: %@)", "\(state)", "\(self.syncState)")
+                #endif
+
                 // Don't let the wallet's initial .idle publish regress from .connecting
                 // during a restart — restartWallet() sets .connecting manually before
                 // the new wallet is created, so the first .idle from wallet2 is stale.
@@ -328,6 +333,35 @@ class WalletManager: ObservableObject {
                     if now - self.lastSyncPublish < 0.25 { return }
                     self.lastSyncPublish = now
                 }
+
+                // Debounce error states — wallet2 fires transient .notSynced
+                // between refresh cycles that would cause UI to oscillate between
+                // "Sync failed" and "Connecting". Only surface errors that persist.
+                if case .error(let msg) = newState {
+                    #if DEBUG
+                    NSLog("[WalletManager] Error received, debouncing 3s: %@", msg)
+                    #endif
+                    self.errorDebounceTask?.cancel()
+                    self.errorDebounceTask = Task { [weak self] in
+                        try? await Task.sleep(nanoseconds: 3_000_000_000) // 3s
+                        guard let self = self, !Task.isCancelled else { return }
+                        #if DEBUG
+                        NSLog("[WalletManager] Error persisted 3s, surfacing: %@", msg)
+                        #endif
+                        self.syncState = newState
+                        self.updateConnectionStage()
+                    }
+                    return
+                }
+
+                // Non-error state arrived — cancel any pending error debounce
+                if self.errorDebounceTask != nil {
+                    #if DEBUG
+                    NSLog("[WalletManager] Non-error state cancelled pending error debounce")
+                    #endif
+                }
+                self.errorDebounceTask?.cancel()
+                self.errorDebounceTask = nil
 
                 self.syncState = newState
 
@@ -457,6 +491,15 @@ class WalletManager: ObservableObject {
     /// Update connection stage based on REAL detection, not timers
     /// Called when sync state, heights, or network status change
     private func updateConnectionStage() {
+        let oldStage = connectionStage
+        defer {
+            #if DEBUG
+            if connectionStage != oldStage {
+                NSLog("[WalletManager] connectionStage: %@ → %@", "\(oldStage)", "\(connectionStage)")
+            }
+            #endif
+        }
+
         // Stage 6: Synced
         if case .synced = syncState {
             connectionStage = .synced
@@ -773,6 +816,16 @@ class WalletManager: ObservableObject {
             reachabilityRetryTask?.cancel()
             reachabilityRetryTask = nil
             updateConnectionStage()
+        }
+
+        // If wallet2 is in an error state, a simple refresh won't recover —
+        // the C++ connection is dead. Do a full restart instead.
+        if case .error = syncState, let seed = currentSeed {
+            #if DEBUG
+            NSLog("[WalletManager] refresh(): wallet in error state, doing full restart")
+            #endif
+            restartWallet(with: seed)
+            return
         }
 
         // Let MoneroKit determine actual sync state via walletStateDidChange() callback

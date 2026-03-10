@@ -220,6 +220,9 @@ class MoneroWallet: ObservableObject {
             let progressPercent = Double(min(99, progress))
             syncState = .syncing(progress: progressPercent, remaining: remainingBlocksCount > 0 ? remainingBlocksCount : nil)
         case .notSynced(let error):
+            #if DEBUG
+            NSLog("[MoneroWallet] notSynced raw error: %@", String(describing: error))
+            #endif
             syncState = .error(friendlyErrorMessage(for: error))
         case .idle:
             syncState = .idle
@@ -234,6 +237,9 @@ class MoneroWallet: ObservableObject {
 
     private func friendlyErrorMessage(for error: Error) -> String {
         let errorString = String(describing: error)
+        #if DEBUG
+        NSLog("[MoneroWallet] friendlyErrorMessage input: '%@' containsTimeout=%d", errorString, errorString.lowercased().contains("timeout") ? 1 : 0)
+        #endif
 
         // Check for common MoneroKit errors
         if errorString.contains("WalletStateError") {
@@ -246,7 +252,7 @@ class MoneroWallet: ObservableObject {
             }
         }
 
-        if errorString.lowercased().contains("timeout") {
+        if errorString.lowercased().contains("timeout") || errorString.lowercased().contains("timed out") {
             return "Connection timed out. Try again or switch nodes."
         }
 

@@ -55,7 +55,7 @@ struct DisclaimerView: View {
                         icon: "doc.text.fill",
                         iconColor: .blue,
                         title: "Protect Your Seed Phrase",
-                        description: "If you lose your 16-word seed phrase, your funds are permanently lost. Write it down and store it securely offline.",
+                        description: "If you lose your seed phrase, your funds are permanently lost. Write it down and store it securely offline.",
                         isChecked: $checkboxes[2]
                     )
                     .accessibilityIdentifier("disclaimer.checkbox.2")

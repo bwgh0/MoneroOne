@@ -124,6 +124,7 @@ struct ChartSwitcherCard: View {
 
             chartView
                 .frame(height: 140)
+                .clipped()
                 .accessibilityLabel("\(chartMode.rawValue) chart for \(selectedTimeRange.rawValue)")
                 .accessibilityHint("Shows \(chartMode == .price ? "XMR price" : "portfolio value") trend")
         }
@@ -253,8 +254,17 @@ struct ChartSwitcherCard: View {
 
     private func updateCachedYDomain() {
         let range = chartMode == .price ? chartPriceRange : chartPortfolioRange
-        let padding = (range.max - range.min) * 0.05
-        cachedYDomain = (range.min - padding)...(range.max + padding)
+        guard range.min.isFinite && range.max.isFinite else {
+            cachedYDomain = 0...100
+            return
+        }
+        let span = range.max - range.min
+        if span > 0 {
+            let padding = span * 0.05
+            cachedYDomain = (range.min - padding)...(range.max + padding)
+        } else {
+            cachedYDomain = (range.min * 0.95)...(range.max * 1.05)
+        }
     }
 
     @ViewBuilder

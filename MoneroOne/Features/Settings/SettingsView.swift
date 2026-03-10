@@ -162,15 +162,15 @@ struct SettingsView: View {
                     HStack {
                         SettingsRow(
                             icon: "info.circle",
-                            title: "Build",
+                            title: "Version",
                             color: .gray
                         )
                         Spacer()
-                        Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")
+                        Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"))")
                             .foregroundColor(.secondary)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Build number, \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown")")
+                    .accessibilityLabel("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"), build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown")")
 
                     Link(destination: URL(string: "https://monero.one")!) {
                         SettingsRow(

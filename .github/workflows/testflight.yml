@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build-and-upload:
@@ -102,6 +104,11 @@ jobs:
           shasum -a 256 MoneroOne.ipa > SHA256SUMS.txt
           echo "SHA-256 hash:"
           cat SHA256SUMS.txt
+
+      - name: Attest IPA provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: build/release/MoneroOne.ipa
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

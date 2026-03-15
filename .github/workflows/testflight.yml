@@ -3,8 +3,8 @@ name: Deploy to TestFlight
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags (v1.0.0, v1.2.3, etc.)
-  workflow_dispatch:  # Allow manual trigger
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build-and-upload:
@@ -13,8 +13,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for sync
 
       - name: Checkout MoneroKit.Swift
         uses: actions/checkout@v4
@@ -24,7 +22,6 @@ jobs:
 
       - name: Fix MoneroKit path for CI
         run: |
-          # Update all local package reference paths in pbxproj (with and without quotes)
           sed -i '' 's|\.\./MoneroKit\.Swift|MoneroKit.Swift|g' MoneroOne.xcodeproj/project.pbxproj
 
       - name: Setup Xcode
@@ -84,21 +81,52 @@ jobs:
               -authenticationKeyID "$API_KEY_ID" \
               -authenticationKeyIssuerID "$API_ISSUER_ID"; then
               echo "Upload succeeded!"
-              exit 0
+              break
             fi
 
             if [ $attempt -lt $max_attempts ]; then
               echo "Upload failed. Retrying in ${backoff}s..."
               sleep $backoff
               backoff=$((backoff * 2))
-              rm -rf build/export  # Clean up for retry
+              rm -rf build/export
             fi
 
             attempt=$((attempt + 1))
           done
 
-          echo "All $max_attempts attempts failed."
-          exit 1
+          if [ $attempt -gt $max_attempts ]; then
+            echo "All $max_attempts attempts failed."
+            exit 1
+          fi
+
+      - name: Export IPA for sideloading
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/MoneroOne.xcarchive \
+            -exportPath build/release \
+            -exportOptionsPlist ExportOptions-Dev.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8 \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID"
+
+      - name: Generate SHA-256 hash
+        run: |
+          cd build/release
+          shasum -a 256 MoneroOne.ipa > SHA256SUMS.txt
+          echo "SHA-256 hash:"
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/release/MoneroOne.ipa
+            build/release/SHA256SUMS.txt
+          generate_release_notes: true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -107,49 +135,3 @@ jobs:
           name: build-logs
           path: ~/Library/Logs/DiagnosticReports/
           if-no-files-found: ignore
-
-  sync-to-public:
-    needs: build-and-upload
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')  # Only sync on version tags
-
-    steps:
-      - name: Checkout private repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Sync to public repo
-        env:
-          PUBLIC_REPO_PAT: ${{ secrets.PUBLIC_REPO_PAT }}
-        run: |
-          # Get the tag name
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-
-          # Configure git
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-
-          # Clone public repo
-          git clone https://x-access-token:${PUBLIC_REPO_PAT}@github.com/bwgh0/MoneroOne-public.git public-repo
-
-          # Copy files (excluding .git and private files)
-          rsync -av --delete \
-            --exclude='.git' \
-            --exclude='ICON_SETUP.md' \
-            --exclude='.build' \
-            --exclude='build' \
-            --exclude='DerivedData' \
-            --exclude='*.xcuserstate' \
-            --exclude='xcuserdata' \
-            --exclude='public-repo' \
-            ./ public-repo/
-
-          # Commit and push
-          cd public-repo
-          git add -A
-          git commit -m "Release ${TAG_NAME}" || echo "No changes to commit"
-          git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}" || echo "Tag already exists"
-          git push origin main --tags
-
-          echo "✅ Synced ${TAG_NAME} to public repo"

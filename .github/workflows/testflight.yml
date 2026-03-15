@@ -24,6 +24,25 @@ jobs:
         run: |
           sed -i '' 's|\.\./MoneroKit\.Swift|MoneroKit.Swift|g' MoneroOne.xcodeproj/project.pbxproj
 
+      - name: Set version from tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"           # v1.0.2-22
+          VERSION="${TAG%-*}"                 # v1.0.2
+          VERSION="${VERSION#v}"              # 1.0.2
+          BUILD="${TAG##*-}"                  # 22
+
+          echo "Version: $VERSION  Build: $BUILD"
+
+          # Update Info.plists
+          plutil -replace CFBundleShortVersionString -string "$VERSION" MoneroOne/Info.plist
+          plutil -replace CFBundleVersion -string "$BUILD" MoneroOne/Info.plist
+          plutil -replace CFBundleShortVersionString -string "$VERSION" MoneroOneWidgets/Info.plist
+          plutil -replace CFBundleVersion -string "$BUILD" MoneroOneWidgets/Info.plist
+
+          # Update pbxproj
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*/CURRENT_PROJECT_VERSION = $BUILD/g" MoneroOne.xcodeproj/project.pbxproj
+          sed -i '' "s/MARKETING_VERSION = [0-9.]*/MARKETING_VERSION = $VERSION/g" MoneroOne.xcodeproj/project.pbxproj
+
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:

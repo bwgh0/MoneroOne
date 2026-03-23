@@ -10,7 +10,8 @@ struct CurrencySettingsView: View {
         ("cad", "Canadian Dollar"),
         ("aud", "Australian Dollar"),
         ("jpy", "Japanese Yen"),
-        ("cny", "Chinese Yuan")
+        ("cny", "Chinese Yuan"),
+        ("try", "Turkish Lira")
     ]
 
     var body: some View {
@@ -114,6 +115,7 @@ struct CurrencySettingsView: View {
         case "aud": return "🇦🇺"
         case "jpy": return "🇯🇵"
         case "cny": return "🇨🇳"
+        case "try": return "🇹🇷"
         default: return "💵"
         }
     }

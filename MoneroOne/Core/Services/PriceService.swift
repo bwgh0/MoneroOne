@@ -55,7 +55,7 @@ class PriceService: ObservableObject {
     // Optional alert service for triggering price alerts
     weak var priceAlertService: PriceAlertService?
 
-    static let supportedCurrencies = ["usd", "eur", "gbp", "cad", "aud", "jpy", "cny"]
+    static let supportedCurrencies = ["usd", "eur", "gbp", "cad", "aud", "jpy", "cny", "try"]
 
     static let currencySymbols: [String: String] = [
         "usd": "$",
@@ -64,7 +64,8 @@ class PriceService: ObservableObject {
         "cad": "C$",
         "aud": "A$",
         "jpy": "¥",
-        "cny": "¥"
+        "cny": "¥",
+        "try": "₺"
     ]
 
     init() {

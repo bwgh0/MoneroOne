@@ -964,7 +964,6 @@ class WalletManager: ObservableObject {
 
                 self.moneroWallet = wallet
                 self.bindToWallet(wallet)
-                self.walletSessionId = UUID()
                 self.startConnectionTracking()
             } catch {
                 if !Task.isCancelled {

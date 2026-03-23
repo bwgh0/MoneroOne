@@ -12,6 +12,8 @@ struct SendAmountStep: View {
     @State private var showContent = false
     @State private var showMemo = false
     @State private var softwareKeyboardVisible = false
+    @State private var isFiatMode = false
+    @State private var fiatString = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,37 +26,77 @@ struct SendAmountStep: View {
                         ZStack {
                             // Hidden input for hardware keyboard support (no software keyboard)
                             HardwareKeyboardInput(
-                                text: $amountString,
-                                filter: filterDecimalInput
+                                text: isFiatMode ? $fiatString : $amountString,
+                                filter: isFiatMode ? filterFiatInput : filterDecimalInput
                             )
+                            .id(isFiatMode ? "fiat" : "xmr")
                             .frame(width: 1, height: 1)
                             .opacity(0.01)
 
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(amountString.isEmpty ? "0" : amountString)
-                                    .font(.system(size: 56, weight: .bold, design: .rounded))
-                                    .monospacedDigit()
-                                    .contentTransition(.numericText())
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.4)
+                                if isFiatMode {
+                                    Text(priceService.currencySymbol)
+                                        .font(.title2.weight(.medium))
+                                        .foregroundStyle(.secondary)
+                                    Text(fiatString.isEmpty ? "0" : fiatString)
+                                        .font(.system(size: 56, weight: .bold, design: .rounded))
+                                        .monospacedDigit()
+                                        .contentTransition(.numericText())
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.4)
+                                } else {
+                                    Text(amountString.isEmpty ? "0" : amountString)
+                                        .font(.system(size: 56, weight: .bold, design: .rounded))
+                                        .monospacedDigit()
+                                        .contentTransition(.numericText())
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.4)
 
-                                Text("XMR")
-                                    .font(.title2.weight(.medium))
-                                    .foregroundStyle(.secondary)
+                                    Text("XMR")
+                                        .font(.title2.weight(.medium))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             .accessibilityElement(children: .combine)
-                            .accessibilityLabel("\(amountString.isEmpty ? "0" : amountString) XMR")
+                            .accessibilityLabel(isFiatMode
+                                ? "\(fiatString.isEmpty ? "0" : fiatString) \(priceService.selectedCurrency.uppercased())"
+                                : "\(amountString.isEmpty ? "0" : amountString) XMR")
                         }
 
-                        // Fiat equivalent
-                        if let amountDecimal = Decimal(string: amountString),
-                           amountDecimal > 0,
-                           let fiat = priceService.formatFiatValue(amountDecimal) {
-                            Text("≈ \(fiat)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .contentTransition(.numericText())
+                        // Secondary amount + swap button
+                        Button {
+                            toggleFiatMode()
+                        } label: {
+                            HStack(spacing: 6) {
+                                if isFiatMode {
+                                    Text("≈ \(amountString.isEmpty || amountString == "0" ? "0" : amountString) XMR")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .contentTransition(.numericText())
+                                } else if let amountDecimal = Decimal(string: amountString),
+                                          amountDecimal > 0,
+                                          let fiat = priceService.formatFiatValue(amountDecimal) {
+                                    Text("≈ \(fiat)")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .contentTransition(.numericText())
+                                } else {
+                                    Text("≈ \(priceService.currencySymbol)0")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Image(systemName: "arrow.up.arrow.down")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.orange)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.1))
+                            .clipShape(Capsule())
                         }
+                        .disabled(priceService.xmrPrice == nil)
+                        .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
@@ -85,8 +127,10 @@ struct SendAmountStep: View {
                         .accessibilityLabel("Paste amount from clipboard")
 
                         Button("Max") {
+                            isFiatMode = false
                             isSendingAll = true
                             amountString = "\(unlockedBalance)"
+                            fiatString = ""
                             HapticFeedback.shared.softTick()
                         }
                         .font(.caption.weight(.semibold))
@@ -139,7 +183,8 @@ struct SendAmountStep: View {
             // Keypad + continue
             VStack(spacing: 12) {
                 if !softwareKeyboardVisible {
-                    NumericKeypad(text: $amountString)
+                    NumericKeypad(text: isFiatMode ? $fiatString : $amountString,
+                                  maxDecimalPlaces: isFiatMode ? 2 : 12)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
@@ -171,6 +216,11 @@ struct SendAmountStep: View {
                 if newValue != maxStr {
                     isSendingAll = false
                 }
+            }
+        }
+        .onChange(of: fiatString) { _ in
+            if isFiatMode {
+                syncXMRFromFiat()
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: softwareKeyboardVisible)
@@ -232,6 +282,87 @@ struct SendAmountStep: View {
             let afterDecimal = result.distance(from: dotIndex, to: result.endIndex) - 1
             if afterDecimal > 12 {
                 result = String(result.prefix(result.count - (afterDecimal - 12)))
+            }
+        }
+
+        return result
+    }
+
+    private func toggleFiatMode() {
+        guard priceService.xmrPrice != nil else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isFiatMode.toggle()
+        }
+        if isFiatMode {
+            // Sync fiat from current XMR amount
+            syncFiatFromXMR()
+        }
+        HapticFeedback.shared.softTick()
+    }
+
+    private func syncFiatFromXMR() {
+        guard let price = priceService.xmrPrice,
+              let xmr = Double(amountString), xmr > 0 else {
+            fiatString = ""
+            return
+        }
+        let fiat = xmr * price
+        fiatString = formatFiatNumber(fiat)
+    }
+
+    private func syncXMRFromFiat() {
+        guard let price = priceService.xmrPrice, price > 0,
+              let fiat = Double(fiatString), fiat > 0 else {
+            amountString = ""
+            return
+        }
+        let xmr = fiat / price
+        var result = filterDecimalInput(String(format: "%.12f", xmr))
+        // Trim trailing zeros for cleaner display
+        while result.contains(".") && (result.hasSuffix("0") || result.hasSuffix(".")) {
+            result.removeLast()
+        }
+        amountString = result
+    }
+
+    private func formatFiatNumber(_ value: Double) -> String {
+        let s = String(format: "%.2f", value)
+        // Trim trailing zeros after decimal
+        if s.contains(".") {
+            var trimmed = s
+            while trimmed.hasSuffix("0") { trimmed.removeLast() }
+            if trimmed.hasSuffix(".") { trimmed.removeLast() }
+            return trimmed
+        }
+        return s
+    }
+
+    private func filterFiatInput(_ input: String) -> String {
+        var hasDecimal = false
+        var result = ""
+
+        for char in input {
+            if char.isNumber {
+                result.append(char)
+            } else if (char == "." || char == ",") && !hasDecimal {
+                hasDecimal = true
+                result.append(".")
+            }
+        }
+
+        // Prevent leading zeros
+        if result.count > 1 && result.first == "0" && result.dropFirst().first != "." {
+            result = String(result.drop(while: { $0 == "0" }))
+            if result.isEmpty || result.first == "." {
+                result = "0" + result
+            }
+        }
+
+        // Limit decimal places to 2 for fiat
+        if let dotIndex = result.firstIndex(of: ".") {
+            let afterDecimal = result.distance(from: dotIndex, to: result.endIndex) - 1
+            if afterDecimal > 2 {
+                result = String(result.prefix(result.count - (afterDecimal - 2)))
             }
         }
 

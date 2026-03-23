@@ -335,6 +335,16 @@ class MoneroWallet: ObservableObject {
             throw WalletError.notUnlocked
         }
 
+        // Guard against calling C++ estimateTransactionFee before wallet has a daemon connection —
+        // wallet2 calls abort() instead of returning an error when not connected.
+        switch syncState {
+        case .synced, .syncing:
+            break // wallet has a connection, safe to call C++
+        default:
+            writeDebugLog("estimateFee: wallet not synced (state: \(syncState)), refusing to call C++")
+            throw MoneroCoreError.transactionEstimationFailed("Wallet is not synced. Please wait for sync to complete.")
+        }
+
         let piconero = Int((amount * coinRate) as NSDecimalNumber)
         writeDebugLog("estimateFee: calling kit.estimateFee with piconero=\(piconero)")
         do {

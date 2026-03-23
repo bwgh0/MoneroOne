@@ -5,8 +5,11 @@ struct ReceiveView: View {
     @Environment(\.dismiss) var dismiss
     @State private var copied = false
     @State private var requestAmount = ""
+    @State private var requestFiatAmount = ""
+    @State private var isFiatMode = false
     @State private var showShareSheet = false
     @AppStorage("selectedSubaddressIndex") private var selectedAddressIndex: Int = 0
+    @EnvironmentObject var priceService: PriceService
 
     /// Computes the effective address index, falling back to 0 if selected subaddress doesn't exist
     /// This avoids race conditions by not modifying state during view computation
@@ -98,37 +101,88 @@ struct ReceiveView: View {
 
                     // Request Amount (Optional)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Request Amount (optional)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        HStack {
+                            Text("Request Amount (optional)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            if priceService.xmrPrice != nil {
+                                Button {
+                                    toggleReceiveFiatMode()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.up.arrow.down")
+                                            .font(.caption2.weight(.semibold))
+                                        Text(isFiatMode ? "XMR" : priceService.selectedCurrency.uppercased())
+                                            .font(.caption.weight(.semibold))
+                                    }
+                                    .foregroundStyle(.orange)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.orange.opacity(0.1))
+                                    .clipShape(Capsule())
+                                }
+                                .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
+                            }
+                        }
 
                         HStack {
-                            TextField("0.0", text: $requestAmount)
-                                .font(.system(.body, design: .rounded))
-                                .keyboardType(.decimalPad)
-                                .accessibilityLabel("Request amount in XMR")
-                                .accessibilityHint("Enter an optional amount to embed in the QR code")
+                            if isFiatMode {
+                                Text(priceService.currencySymbol)
+                                    .foregroundColor(.secondary)
+                                TextField("0.00", text: $requestFiatAmount)
+                                    .font(.system(.body, design: .rounded))
+                                    .keyboardType(.decimalPad)
+                                    .accessibilityLabel("Request amount in \(priceService.selectedCurrency.uppercased())")
+                                    .onChange(of: requestFiatAmount) { _ in
+                                        syncReceiveXMRFromFiat()
+                                    }
+                            } else {
+                                TextField("0.0", text: $requestAmount)
+                                    .font(.system(.body, design: .rounded))
+                                    .keyboardType(.decimalPad)
+                                    .accessibilityLabel("Request amount in XMR")
+                                    .accessibilityHint("Enter an optional amount to embed in the QR code")
 
-                            Text("XMR")
-                                .foregroundColor(.secondary)
-                                .accessibilityHidden(true)
+                                Text("XMR")
+                                    .foregroundColor(.secondary)
+                                    .accessibilityHidden(true)
+                            }
                         }
                         .padding()
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
-                        .toolbar {
-                            ToolbarItemGroup(placement: .keyboard) {
-                                Spacer()
-                                Button("Done") {
-                                    UIApplication.shared.sendAction(
-                                        #selector(UIResponder.resignFirstResponder),
-                                        to: nil, from: nil, for: nil
-                                    )
-                                }
+
+                        // Show converted amount
+                        if isFiatMode {
+                            if !requestAmount.isEmpty, let amt = Decimal(string: requestAmount), amt > 0 {
+                                Text("≈ \(requestAmount) XMR")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 4)
                             }
+                        } else if let amt = Decimal(string: requestAmount), amt > 0,
+                                  let fiat = priceService.formatFiatValue(amt) {
+                            Text("≈ \(fiat)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 4)
                         }
                     }
                     .padding(.horizontal)
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") {
+                                UIApplication.shared.sendAction(
+                                    #selector(UIResponder.resignFirstResponder),
+                                    to: nil, from: nil, for: nil
+                                )
+                            }
+                        }
+                    }
 
                     // Selected Address Card - Tap to change
                     NavigationLink {
@@ -245,6 +299,36 @@ struct ReceiveView: View {
     private func formatAddress(_ addr: String) -> String {
         guard addr.count > 24 else { return addr }
         return "\(addr.prefix(12))...\(addr.suffix(8))"
+    }
+
+    private func toggleReceiveFiatMode() {
+        isFiatMode.toggle()
+        if isFiatMode {
+            // Sync fiat from current XMR
+            if let price = priceService.xmrPrice,
+               let xmr = Double(requestAmount), xmr > 0 {
+                let fiat = xmr * price
+                requestFiatAmount = String(format: "%.2f", fiat)
+            } else {
+                requestFiatAmount = ""
+            }
+        }
+        HapticFeedback.shared.softTick()
+    }
+
+    private func syncReceiveXMRFromFiat() {
+        guard let price = priceService.xmrPrice, price > 0,
+              let fiat = Double(requestFiatAmount), fiat > 0 else {
+            requestAmount = ""
+            return
+        }
+        let xmr = fiat / price
+        var s = String(format: "%.12f", xmr)
+        // Trim trailing zeros
+        while s.contains(".") && (s.hasSuffix("0") || s.hasSuffix(".")) {
+            s.removeLast()
+        }
+        requestAmount = s
     }
 
     private func copyAddress() {
@@ -500,4 +584,5 @@ struct AddressCardButtonStyle: ButtonStyle {
 #Preview {
     ReceiveView()
         .environmentObject(WalletManager())
+        .environmentObject(PriceService())
 }

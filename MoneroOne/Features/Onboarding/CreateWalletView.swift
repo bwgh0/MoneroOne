@@ -17,6 +17,7 @@ struct CreateWalletView: View {
     @State private var showErrorAlert = false
     @State private var selectedSeedType: WalletManager.SeedType = .polyseed
     @State private var selectedPINLength = 6
+    @State private var copiedSeed = false
     @FocusState private var focusedField: PINField?
 
     // Biometrics
@@ -384,6 +385,28 @@ struct CreateWalletView: View {
 
             SeedPhraseView(words: mnemonic)
                 .padding()
+
+            Button {
+                UIPasteboard.general.string = mnemonic.joined(separator: " ")
+                HapticFeedback.shared.softTick()
+                copiedSeed = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    copiedSeed = false
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: copiedSeed ? "checkmark" : "doc.on.doc")
+                        .font(.caption)
+                    Text(copiedSeed ? "Copied" : "Copy to Clipboard")
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.15))
+                .clipShape(Capsule())
+            }
+            .accessibilityLabel(copiedSeed ? "Seed phrase copied" : "Copy seed phrase to clipboard")
 
             Toggle("I have written down my seed phrase", isOn: $confirmed)
                 .accessibilityLabel("I have written down my seed phrase")

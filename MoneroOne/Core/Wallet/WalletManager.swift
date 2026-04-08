@@ -892,8 +892,7 @@ class WalletManager: ObservableObject {
     @discardableResult
     func setNode(url: String, isTrusted: Bool = false, login: String? = nil, password: String? = nil) -> Bool {
         UserDefaults.standard.set(url, forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL")
-        UserDefaults.standard.set(login, forKey: isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin")
-        UserDefaults.standard.set(password, forKey: isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword")
+        NodeCredentialStore.save(login: login, password: password, isTestnet: isTestnet)
 
         if let seed = currentSeed {
             restartWallet(with: seed)
@@ -1261,8 +1260,9 @@ private class AllCertsTrustDelegate: NSObject, URLSessionDelegate, URLSessionTas
                 return
             }
             let isTestnet = UserDefaults.standard.bool(forKey: "isTestnet")
-            let login = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin")
-            let password = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword")
+            let creds = NodeCredentialStore.load(isTestnet: isTestnet)
+            let login = creds.login
+            let password = creds.password
             if let login = login, !login.isEmpty {
                 let credential = URLCredential(user: login, password: password ?? "", persistence: .forSession)
                 completionHandler(.useCredential, credential)

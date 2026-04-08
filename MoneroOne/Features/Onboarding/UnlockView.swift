@@ -160,12 +160,20 @@ struct UnlockView: View {
             do {
                 try await walletManager.unlock(pin: pin)
                 // Success - ContentView will show MainTabView
+            } catch KeychainError.lockedOut(let remainingSeconds) {
+                let minutes = remainingSeconds / 60
+                let seconds = remainingSeconds % 60
+                if minutes > 0 {
+                    errorMessage = "Too many attempts. Try again in \(minutes)m \(seconds)s"
+                } else {
+                    errorMessage = "Too many attempts. Try again in \(seconds)s"
+                }
+                pin = ""
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
             } catch {
                 attempts += 1
                 errorMessage = "Invalid PIN"
                 pin = ""
-
-                // Haptic feedback
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             }
             isUnlocking = false

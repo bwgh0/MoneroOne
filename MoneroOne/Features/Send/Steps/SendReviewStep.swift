@@ -8,6 +8,7 @@ struct SendReviewStep: View {
     @Binding var estimatedFee: Decimal?
     let priceService: PriceService
     let walletManager: WalletManager
+    let sendInProgress: Bool
     let onConfirm: () -> Void
 
     @State private var feeError: String?
@@ -165,12 +166,12 @@ struct SendReviewStep: View {
                         Text("Send")
                             .font(.callout.weight(.semibold))
                     }
-                    .foregroundStyle(estimatedFee != nil ? .orange : .gray)
+                    .foregroundStyle(estimatedFee != nil && !sendInProgress ? .orange : .gray)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 }
                 .glassButtonStyle()
-                .disabled(estimatedFee == nil)
+                .disabled(estimatedFee == nil || sendInProgress)
                 .accessibilityLabel("Send transaction")
                 .accessibilityHint(estimatedFee != nil ? "Double tap to send \(XMRFormatter.format(amount)) XMR" : "Waiting for fee estimate")
             }

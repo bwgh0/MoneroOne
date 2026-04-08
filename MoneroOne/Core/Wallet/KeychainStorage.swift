@@ -113,20 +113,21 @@ class KeychainStorage {
     // Biometric PIN is shared across networks (same PIN unlocks both)
     private let biometricPinKey = "one.monero.MoneroOne.biometricpin"
 
-    // MARK: - Rate Limiting
+    // MARK: - Rate Limiting (Keychain-backed)
 
-    private let failedAttemptsKey = "pinFailedAttempts"
-    private let lockoutUntilKey = "pinLockoutUntil"
+    private let rateLimitService = "one.monero.MoneroOne.rateLimit"
+    private let failedAttemptsAccount = "failedAttempts"
+    private let lockoutUntilAccount = "lockoutUntil"
     private let maxAttempts = 5
 
     private var failedAttempts: Int {
-        get { UserDefaults.standard.integer(forKey: failedAttemptsKey) }
-        set { UserDefaults.standard.set(newValue, forKey: failedAttemptsKey) }
+        get { getRateLimitInt(failedAttemptsAccount) }
+        set { setRateLimitValue(failedAttemptsAccount, value: "\(newValue)") }
     }
 
     private var lockoutUntil: TimeInterval {
-        get { UserDefaults.standard.double(forKey: lockoutUntilKey) }
-        set { UserDefaults.standard.set(newValue, forKey: lockoutUntilKey) }
+        get { getRateLimitDouble(lockoutUntilAccount) }
+        set { setRateLimitValue(lockoutUntilAccount, value: "\(newValue)") }
     }
 
     /// Check if PIN entry is currently locked out
@@ -157,6 +158,64 @@ class KeychainStorage {
             let actualLockoutMinutes = min(lockoutMinutes, maxLockoutMinutes)
             lockoutUntil = Date().timeIntervalSince1970 + (actualLockoutMinutes * 60)
         }
+    }
+
+    /// One-time migration of rate limiting from UserDefaults to Keychain
+    func migrateRateLimitIfNeeded() {
+        let migrated = UserDefaults.standard.bool(forKey: "rateLimitMigratedToKeychain")
+        guard !migrated else { return }
+
+        let oldAttempts = UserDefaults.standard.integer(forKey: "pinFailedAttempts")
+        let oldLockout = UserDefaults.standard.double(forKey: "pinLockoutUntil")
+        if oldAttempts > 0 { failedAttempts = oldAttempts }
+        if oldLockout > 0 { lockoutUntil = oldLockout }
+
+        UserDefaults.standard.removeObject(forKey: "pinFailedAttempts")
+        UserDefaults.standard.removeObject(forKey: "pinLockoutUntil")
+        UserDefaults.standard.set(true, forKey: "rateLimitMigratedToKeychain")
+    }
+
+    private func setRateLimitValue(_ account: String, value: String) {
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: rateLimitService,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        guard let data = value.data(using: .utf8) else { return }
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: rateLimitService,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    private func getRateLimitString(_ account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: rateLimitService,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func getRateLimitInt(_ account: String) -> Int {
+        guard let str = getRateLimitString(account) else { return 0 }
+        return Int(str) ?? 0
+    }
+
+    private func getRateLimitDouble(_ account: String) -> Double {
+        guard let str = getRateLimitString(account) else { return 0 }
+        return Double(str) ?? 0
     }
 
     // MARK: - Seed Storage
@@ -444,6 +503,13 @@ class KeychainStorage {
         }
         deleteBiometricPin()
         resetFailedAttempts()
+
+        // Clear rate limiting Keychain entries
+        let rateLimitQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: rateLimitService,
+        ]
+        SecItemDelete(rateLimitQuery as CFDictionary)
     }
 
     /// Delete biometric PIN
@@ -553,8 +619,7 @@ class KeychainStorage {
         }
 
         guard result == kCCSuccess else {
-            // Fall back to simple hash if PBKDF2 fails
-            return Data(SHA256.hash(data: Data(pin.utf8)))
+            fatalError("PBKDF2 key derivation failed with CCStatus \(result). This indicates a programming error in key derivation parameters.")
         }
 
         return derivedKey

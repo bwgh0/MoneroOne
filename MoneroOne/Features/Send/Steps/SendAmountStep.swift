@@ -7,6 +7,7 @@ struct SendAmountStep: View {
     let recipientAddress: String
     let unlockedBalance: Decimal
     let priceService: PriceService
+    var amountPrefilledFromQR: Bool = false
     let onContinue: () -> Void
 
     @State private var showContent = false
@@ -20,6 +21,17 @@ struct SendAmountStep: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Spacer(minLength: 12)
+
+                    if amountPrefilledFromQR {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.yellow)
+                                .font(.caption2)
+                            Text("Amount pre-filled from QR code")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
 
                     // Amount display
                     VStack(spacing: 4) {

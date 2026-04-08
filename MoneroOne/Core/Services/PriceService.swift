@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CommonCrypto
 import WidgetKit
 
 struct PriceDataPoint: Identifiable, Equatable {
@@ -44,12 +45,12 @@ class PriceService: ObservableObject {
     private let initialRetryDelay: TimeInterval = 2
     private let requestTimeout: TimeInterval = 15
 
-    // URLSession with explicit timeouts
+    // URLSession with cert pinning for monero.one
     private lazy var priceSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 30
-        return URLSession(configuration: config)
+        return URLSession(configuration: config, delegate: PriceCertPinningDelegate(), delegateQueue: nil)
     }()
 
     // Optional alert service for triggering price alerts
@@ -549,4 +550,78 @@ struct CMCChartData: Codable {
 struct CMCPoint: Codable {
     let s: String  // timestamp as string
     let v: [Double]  // [price, volume, marketCap]
+}
+
+// MARK: - Certificate Pinning
+
+/// Pins the monero.one TLS certificate to prevent MITM price manipulation.
+/// Hashes are SHA-256 of the SubjectPublicKeyInfo (SPKI) DER encoding.
+/// Regenerate with:
+///   openssl s_client -connect monero.one:443 -servername monero.one 2>/dev/null \
+///     | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der \
+///     | openssl dgst -sha256 -binary | base64
+private class PriceCertPinningDelegate: NSObject, URLSessionDelegate {
+    // Leaf cert + intermediate CA for rotation tolerance
+    static let pinnedSPKIHashes: Set<String> = [
+        "RR2KH1dazA/4qlmld7f1kMO4bdCrvpsEYr6yqKMWsn0=",  // monero.one leaf
+        "G9LNNAql897egYsabashkzUCTEJkWBzgoEtk8X/678c=",  // intermediate CA
+    ]
+
+    // ASN.1 header for RSA 2048 SubjectPublicKeyInfo
+    // SecKeyCopyExternalRepresentation returns raw key bytes without this header,
+    // but the openssl-derived hashes include it, so we must prepend it.
+    private static let rsa2048SPKIHeader: [UInt8] = [
+        0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
+        0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03, 0x82, 0x01, 0x0f, 0x00
+    ]
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              challenge.protectionSpace.host == "monero.one",
+              let serverTrust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        // Evaluate the trust chain first
+        var error: CFError?
+        guard SecTrustEvaluateWithError(serverTrust, &error) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        // Check each certificate in the chain for a pinned SPKI hash
+        guard let certChain = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate] else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        for cert in certChain {
+            guard let publicKey = SecCertificateCopyKey(cert),
+                  let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else {
+                continue
+            }
+
+            // Rebuild the full SPKI by prepending the ASN.1 header to the raw key
+            var spkiData = Data(Self.rsa2048SPKIHeader)
+            spkiData.append(publicKeyData)
+
+            var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+            spkiData.withUnsafeBytes { bytes in
+                _ = CC_SHA256(bytes.baseAddress, CC_LONG(spkiData.count), &hash)
+            }
+            let hashBase64 = Data(hash).base64EncodedString()
+
+            if Self.pinnedSPKIHashes.contains(hashBase64) {
+                completionHandler(.useCredential, URLCredential(trust: serverTrust))
+                return
+            }
+        }
+
+        // No pinned hash matched — reject connection
+        completionHandler(.cancelAuthenticationChallenge, nil)
+    }
 }

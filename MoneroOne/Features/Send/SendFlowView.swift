@@ -20,6 +20,8 @@ struct SendFlowView: View {
 
     // UI state
     @State private var showScanner = false
+    @State private var sendInProgress = false
+    @State private var amountPrefilledFromQR = false
 
     var body: some View {
         NavigationStack {
@@ -67,6 +69,7 @@ struct SendFlowView: View {
                     recipientAddress = scannedAddress
                     if let amount = scannedAmount {
                         amountString = amount
+                        amountPrefilledFromQR = true
                     }
                 }
             }
@@ -102,6 +105,7 @@ struct SendFlowView: View {
                 recipientAddress: recipientAddress,
                 unlockedBalance: walletManager.unlockedBalance,
                 priceService: priceService,
+                amountPrefilledFromQR: amountPrefilledFromQR,
                 onContinue: {
                     HapticFeedback.shared.buttonPress()
                     goForward(to: .review)
@@ -117,7 +121,10 @@ struct SendFlowView: View {
                 estimatedFee: $estimatedFee,
                 priceService: priceService,
                 walletManager: walletManager,
+                sendInProgress: sendInProgress,
                 onConfirm: {
+                    guard !sendInProgress else { return }
+                    sendInProgress = true
                     HapticFeedback.shared.sendInitiated()
                     goForward(to: .sending)
                     sendTransaction()
@@ -131,6 +138,8 @@ struct SendFlowView: View {
                 priceService: priceService,
                 onDone: { dismiss() },
                 onRetry: {
+                    guard !sendInProgress else { return }
+                    sendInProgress = true
                     goForward(to: .sending)
                     sendTransaction()
                 },
@@ -210,6 +219,7 @@ struct SendFlowView: View {
                 }
                 HapticFeedback.shared.transactionSuccess()
             } catch {
+                sendInProgress = false
                 let msg = friendlyErrorMessage(for: error)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     phase = .error(message: msg)

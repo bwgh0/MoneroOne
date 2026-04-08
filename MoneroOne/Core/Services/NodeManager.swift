@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Security
 
 struct ProxyEntry: Identifiable, Codable, Equatable {
     var id: String { address }
@@ -57,6 +58,86 @@ struct NodeStats {
 
     enum UptimeColor {
         case green, yellow, red, unknown
+    }
+}
+
+// MARK: - Secure Node Credential Storage
+
+/// Stores node RPC credentials in the Keychain instead of UserDefaults.
+struct NodeCredentialStore {
+    private static let service = "one.monero.MoneroOne.nodeCredentials"
+
+    static func save(login: String?, password: String?, isTestnet: Bool) {
+        let loginKey = isTestnet ? "testnetNodeLogin" : "nodeLogin"
+        let passwordKey = isTestnet ? "testnetNodePassword" : "nodePassword"
+        set(loginKey, value: login)
+        set(passwordKey, value: password)
+    }
+
+    static func load(isTestnet: Bool) -> (login: String?, password: String?) {
+        let loginKey = isTestnet ? "testnetNodeLogin" : "nodeLogin"
+        let passwordKey = isTestnet ? "testnetNodePassword" : "nodePassword"
+        return (get(loginKey), get(passwordKey))
+    }
+
+    static func clear(isTestnet: Bool) {
+        save(login: nil, password: nil, isTestnet: isTestnet)
+    }
+
+    /// One-time migration from UserDefaults to Keychain
+    static func migrateFromUserDefaultsIfNeeded() {
+        let migrated = UserDefaults.standard.bool(forKey: "nodeCredsMigratedToKeychain")
+        guard !migrated else { return }
+
+        for testnet in [false, true] {
+            let loginKey = testnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin"
+            let passwordKey = testnet ? "selectedTestnetNodePassword" : "selectedNodePassword"
+            let login = UserDefaults.standard.string(forKey: loginKey)
+            let password = UserDefaults.standard.string(forKey: passwordKey)
+            if login != nil || password != nil {
+                save(login: login, password: password, isTestnet: testnet)
+                UserDefaults.standard.removeObject(forKey: loginKey)
+                UserDefaults.standard.removeObject(forKey: passwordKey)
+            }
+        }
+        UserDefaults.standard.set(true, forKey: "nodeCredsMigratedToKeychain")
+    }
+
+    private static func set(_ key: String, value: String?) {
+        let account = key
+        // Delete existing
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        guard let value = value, !value.isEmpty,
+              let data = value.data(using: .utf8) else { return }
+
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    private static func get(_ key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 }
 
@@ -134,13 +215,6 @@ class NodeManager: ObservableObject {
     private var autoSelectKey: String {
         isTestnet ? "autoSelectTestnetNode" : "autoSelectNode"
     }
-    private var selectedNodeLoginKey: String {
-        isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin"
-    }
-    private var selectedNodePasswordKey: String {
-        isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword"
-    }
-
     var isTestnet: Bool {
         UserDefaults.standard.bool(forKey: "isTestnet")
     }
@@ -150,6 +224,9 @@ class NodeManager: ObservableObject {
     }
 
     init() {
+        // Migrate node credentials from UserDefaults to Keychain
+        NodeCredentialStore.migrateFromUserDefaultsIfNeeded()
+
         // Determine which node list to use based on network
         let testnet = UserDefaults.standard.bool(forKey: "isTestnet")
         let nodeKey = testnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
@@ -185,9 +262,8 @@ class NodeManager: ObservableObject {
     func selectNode(_ node: MoneroNode) {
         selectedNode = node
         UserDefaults.standard.set(node.url, forKey: selectedNodeKey)
-        // Persist credentials (or clear them for nodes without auth)
-        UserDefaults.standard.set(node.login, forKey: selectedNodeLoginKey)
-        UserDefaults.standard.set(node.password, forKey: selectedNodePasswordKey)
+        // Persist credentials securely in Keychain
+        NodeCredentialStore.save(login: node.login, password: node.password, isTestnet: isTestnet)
     }
 
     func addCustomNode(name: String, url: String, isTrusted: Bool = false, login: String? = nil, password: String? = nil) {

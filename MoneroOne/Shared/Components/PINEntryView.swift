@@ -83,6 +83,13 @@ struct PINEntryView: View {
                 }
             }
         }
+        .onChange(of: pin) { newValue in
+            if newValue.isEmpty && autoFocus {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isFocused = true
+                }
+            }
+        }
     }
 }
 

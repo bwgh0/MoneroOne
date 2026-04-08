@@ -125,9 +125,6 @@ class MoneroWallet: ObservableObject {
     private func defaultNode(for networkType: MoneroKit.NetworkType = .mainnet) -> MoneroKit.Node {
         let isTestnet = networkType == .testnet
         let urlKey = isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
-        let loginKey = isTestnet ? "selectedTestnetNodeLogin" : "selectedNodeLogin"
-        let passwordKey = isTestnet ? "selectedTestnetNodePassword" : "selectedNodePassword"
-
         let defaultURL = isTestnet
             ? (Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081")
             : "https://node.monero.one:443"
@@ -136,8 +133,9 @@ class MoneroWallet: ObservableObject {
             return MoneroKit.Node(url: URL(string: "https://node.monero.one:443")!, isTrusted: false)
         }
 
-        let login = UserDefaults.standard.string(forKey: loginKey)
-        let password = UserDefaults.standard.string(forKey: passwordKey)
+        let creds = NodeCredentialStore.load(isTestnet: isTestnet)
+        let login = creds.login
+        let password = creds.password
         let proxy = UserDefaults.standard.string(forKey: "proxyAddress")
 
         return MoneroKit.Node(

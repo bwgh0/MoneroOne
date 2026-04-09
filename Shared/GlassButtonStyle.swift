@@ -9,8 +9,9 @@ struct GlassFallbackButtonStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(colorScheme == .light
-                        ? Color.white.opacity(0.8)
+                        ? Color.white
                         : Color.white.opacity(0.1))
+                    .shadow(color: .black.opacity(colorScheme == .light ? 0.12 : 0), radius: 4, y: 2)
                     .opacity(configuration.isPressed ? 0.6 : 1.0)
             )
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)

@@ -842,6 +842,24 @@ class WalletManager: ObservableObject {
         return try await wallet.sendAll(to: address, memo: memo)
     }
 
+    // MARK: - Seed Export
+
+    /// Returns the legacy 25-word seed from the running wallet.
+    func getLegacySeed() -> [String]? {
+        moneroWallet?.getLegacySeed()
+    }
+
+    /// Returns the polyseed (16 words) if wallet was created with one.
+    func getPolyseed() -> [String]? {
+        moneroWallet?.getPolyseed()
+    }
+
+    /// Detected seed type for the current wallet
+    var detectedSeedType: SeedType? {
+        guard let seed = currentSeed else { return nil }
+        return SeedType.detect(from: seed.count)
+    }
+
     // MARK: - Subaddresses
 
     /// Create a new subaddress for receiving payments

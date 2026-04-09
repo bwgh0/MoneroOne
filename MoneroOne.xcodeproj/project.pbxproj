@@ -32,7 +32,6 @@
 		474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AA838F4EF37023CE4794A9 /* SecurityView.swift */; };
 		53961F04EC40C1BB78F573E5 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885C8AC405766D0B3663F27F /* MainTabView.swift */; };
 		56577DF4FAD66E7D92F18767 /* WalletManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E684EE43DA20220CE2D58B /* WalletManagerTests.swift */; };
-		5BAC935479DA77D9B89EB6AB /* BackupSeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 023F1A125362A99814A7939A /* BackupSeedView.swift */; };
 		5C75645DBD84C0B8D1365716 /* MoneroOneUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05799DCC87A0172BABA5972C /* MoneroOneUITestsLaunchTests.swift */; };
 		6B3AD2E53A2A967DFDB3A407 /* NodeManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70806977F6367D918B532021 /* NodeManagerTests.swift */; };
 		70AEC21FC1DFBF2D77A49E15 /* SyncSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21A52926BAFEF95AC6BB226 /* SyncSettingsView.swift */; };
@@ -69,7 +68,6 @@
 		B26B777D35F8E8A65AE64ED7 /* MoneroOneWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0522BFB54176E930AB3D4A9B /* MoneroOneWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B54C66B7EE7EB85A39DF435B /* PriceAlertService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8689F5157606DB44F6B09ECD /* PriceAlertService.swift */; };
 		B6CA1E6614A397E2BC1F155A /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6282B77F4ACF513576365CA3 /* WelcomeView.swift */; };
-		B72151A37AE7101488DCDB4F /* CompactPriceChartCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51624E6C452EB61B1CB39BE3 /* CompactPriceChartCard.swift */; };
 		B7E8275313B16877F1E2B0CB /* CreateWalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5488A55F65931268A5493C9B /* CreateWalletView.swift */; };
 		BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C853ADD8257D8AF64818D81 /* AddPriceAlertView.swift */; };
 		C02CD290FCDCDEFC8A848C31 /* PriceAlertNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */; };
@@ -151,7 +149,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		023F1A125362A99814A7939A /* BackupSeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSeedView.swift; sourceTree = "<group>"; };
 		029F663A58F5CE2B18C3B33C /* ScrambledText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrambledText.swift; sourceTree = "<group>"; };
 		03AFA2AEF2E9BE07586929E2 /* CommandCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandCenterView.swift; sourceTree = "<group>"; };
 		0522BFB54176E930AB3D4A9B /* MoneroOneWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MoneroOneWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -188,7 +185,6 @@
 		4C28FF15F222C2E02553D871 /* TransactionsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionsPanelView.swift; sourceTree = "<group>"; };
 		4C85070F2B5AF97C618DAD09 /* Array+BinarySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+BinarySearch.swift"; sourceTree = "<group>"; };
 		50B87EA15DE9A6C8674D5669 /* BalanceWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BalanceWidget.swift; sourceTree = "<group>"; };
-		51624E6C452EB61B1CB39BE3 /* CompactPriceChartCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactPriceChartCard.swift; sourceTree = "<group>"; };
 		5488A55F65931268A5493C9B /* CreateWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateWalletView.swift; sourceTree = "<group>"; };
 		5B6DB1BCF707C6A91E194AF5 /* SyncLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLiveActivity.swift; sourceTree = "<group>"; };
 		5BDCBAC09269EA2BCBDEDE3C /* PriceAlertsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertsView.swift; sourceTree = "<group>"; };
@@ -316,7 +312,6 @@
 				H7X7RRL39ILWJQ1KVSLXGVSV /* AddTrustedLocationView.swift */,
 7C853ADD8257D8AF64818D81 /* AddPriceAlertView.swift */,
 				13768B531AB7EA9C67616887 /* TrustedLocationSyncView.swift */,
-				023F1A125362A99814A7939A /* BackupSeedView.swift */,
 				39D836D865F70A7477790100 /* BackupView.swift */,
 				DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */,
 				A281E883F5B6D0C620D37A9C /* DonationView.swift */,
@@ -465,7 +460,6 @@
 			children = (
 				A361562E962BC3431AA9FD83 /* ChartSwitcherCard.swift */,
 				03AFA2AEF2E9BE07586929E2 /* CommandCenterView.swift */,
-				51624E6C452EB61B1CB39BE3 /* CompactPriceChartCard.swift */,
 				23FC248118281F12977CA025 /* QuickActionsCard.swift */,
 				4C28FF15F222C2E02553D871 /* TransactionsPanelView.swift */,
 			);
@@ -823,13 +817,11 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				E0ACDE5DE7CC25979C8ABCF8 /* Array+BinarySearch.swift in Sources */,
 				D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */,
 				326517A0B392547A7BA61678 /* TrustedLocationSyncView.swift in Sources */,
-				5BAC935479DA77D9B89EB6AB /* BackupSeedView.swift in Sources */,
 				E7C33EC8082FAB9206BD8A0B /* BackupView.swift in Sources */,
 				F336976B66186C3C48D2922A /* BalanceCard.swift in Sources */,
 				AED7CF4AF876D3B29142BC6C /* BiometricAuthManager.swift in Sources */,
 				CC10B0220529EEB60498C537 /* ChartSwitcherCard.swift in Sources */,
 				3B8992253B39E12706EEC3BC /* CommandCenterView.swift in Sources */,
-				B72151A37AE7101488DCDB4F /* CompactPriceChartCard.swift in Sources */,
 				C0E85580EF176D61DF97BA87 /* ContentView.swift in Sources */,
 				B7E8275313B16877F1E2B0CB /* CreateWalletView.swift in Sources */,
 				C4EE7FC3ED57B61F7C24C722 /* CurrencySettingsView.swift in Sources */,

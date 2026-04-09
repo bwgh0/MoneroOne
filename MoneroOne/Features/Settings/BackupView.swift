@@ -10,8 +10,29 @@ struct BackupView: View {
     @State private var showCopiedFeedback = false
     @State private var showCopiedAlert = false
     @State private var clipboardClearTask: DispatchWorkItem?
+    @State private var legacySeed: [String]?
+    @State private var polyseedWords: [String]?
+    @State private var selectedFormat = 0  // 0 = original, 1 = alternate
 
     private let clipboardClearDelay: TimeInterval = 300 // Clear clipboard after 5 minutes
+
+    private var alternateFormats: [(label: String, words: [String])] {
+        var formats: [(String, [String])] = []
+        if let poly = polyseedWords, poly != seedPhrase {
+            formats.append(("Polyseed (\(poly.count) words)", poly))
+        }
+        if let legacy = legacySeed, legacy != seedPhrase {
+            formats.append(("Legacy (\(legacy.count) words)", legacy))
+        }
+        return formats
+    }
+
+    private var displayedSeed: [String] {
+        if selectedFormat > 0, selectedFormat <= alternateFormats.count {
+            return alternateFormats[selectedFormat - 1].words
+        }
+        return seedPhrase
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -86,7 +107,21 @@ struct BackupView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
 
-            SeedPhraseView(words: seedPhrase)
+            if !alternateFormats.isEmpty {
+                Picker("Format", selection: $selectedFormat) {
+                    Text("Original (\(seedPhrase.count) words)").tag(0)
+                    ForEach(Array(alternateFormats.enumerated()), id: \.offset) { index, format in
+                        Text(format.label).tag(index + 1)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Text("\(displayedSeed.count) words")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            SeedPhraseView(words: displayedSeed)
                 .padding()
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(16)
@@ -125,7 +160,7 @@ struct BackupView: View {
     }
 
     private func copyToClipboard() {
-        let fullPhrase = seedPhrase.joined(separator: " ")
+        let fullPhrase = displayedSeed.joined(separator: " ")
 
         // Cancel any existing clear task
         clipboardClearTask?.cancel()
@@ -155,12 +190,15 @@ struct BackupView: View {
     }
 
     private func unlockSeed() {
-        // In real implementation, decrypt seed from keychain
         do {
             if let seed = try KeychainStorage().getSeed(pin: pin) {
                 seedPhrase = seed.split(separator: " ").map(String.init)
                 isUnlocked = true
                 errorMessage = nil
+
+                // Load alternate seed formats from running wallet
+                legacySeed = walletManager.getLegacySeed()
+                polyseedWords = walletManager.getPolyseed()
             } else {
                 errorMessage = "Invalid PIN"
             }

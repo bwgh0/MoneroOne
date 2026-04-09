@@ -426,6 +426,20 @@ class MoneroWallet: ObservableObject {
         return txId
     }
 
+    // MARK: - Seed Export
+
+    /// Returns the legacy 25-word seed from the running wallet.
+    func getLegacySeed() -> [String]? {
+        guard let seed = kit?.getLegacySeed(), !seed.isEmpty else { return nil }
+        return seed.split(separator: " ").map(String.init)
+    }
+
+    /// Returns the polyseed (16 words) if wallet was created with one.
+    func getPolyseed() -> [String]? {
+        guard let seed = kit?.getPolyseed(), !seed.isEmpty else { return nil }
+        return seed.split(separator: " ").map(String.init)
+    }
+
     // MARK: - Subaddresses
 
     /// Create a new subaddress for receiving payments

@@ -128,6 +128,9 @@ struct SendFlowView: View {
                     HapticFeedback.shared.sendInitiated()
                     goForward(to: .sending)
                     sendTransaction()
+                },
+                onUpgradeToSendAll: {
+                    isSendingAll = true
                 }
             )
 

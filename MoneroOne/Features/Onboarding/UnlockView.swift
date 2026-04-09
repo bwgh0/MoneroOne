@@ -12,6 +12,8 @@ struct UnlockView: View {
     @State private var attempts = 0
     @State private var lastBiometricAttempt: Date?
     @State private var showForgotPINConfirmation = false
+    @State private var lockoutTimer: Timer?
+    @State private var lockoutEndDate: Date?
 
     var body: some View {
         VStack(spacing: 32) {
@@ -161,13 +163,9 @@ struct UnlockView: View {
                 try await walletManager.unlock(pin: pin)
                 // Success - ContentView will show MainTabView
             } catch KeychainError.lockedOut(let remainingSeconds) {
-                let minutes = remainingSeconds / 60
-                let seconds = remainingSeconds % 60
-                if minutes > 0 {
-                    errorMessage = "Too many attempts. Try again in \(minutes)m \(seconds)s"
-                } else {
-                    errorMessage = "Too many attempts. Try again in \(seconds)s"
-                }
+                lockoutEndDate = Date().addingTimeInterval(Double(remainingSeconds))
+                updateLockoutMessage()
+                startLockoutTimer()
                 pin = ""
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             } catch {
@@ -177,6 +175,34 @@ struct UnlockView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             }
             isUnlocking = false
+        }
+    }
+
+    private func updateLockoutMessage() {
+        guard let endDate = lockoutEndDate else { return }
+        let remaining = Int(endDate.timeIntervalSinceNow)
+        if remaining <= 0 {
+            errorMessage = nil
+            lockoutEndDate = nil
+            lockoutTimer?.invalidate()
+            lockoutTimer = nil
+        } else {
+            let minutes = remaining / 60
+            let seconds = remaining % 60
+            if minutes > 0 {
+                errorMessage = "Too many attempts. Try again in \(minutes)m \(seconds)s"
+            } else {
+                errorMessage = "Too many attempts. Try again in \(seconds)s"
+            }
+        }
+    }
+
+    private func startLockoutTimer() {
+        lockoutTimer?.invalidate()
+        lockoutTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            DispatchQueue.main.async {
+                updateLockoutMessage()
+            }
         }
     }
 

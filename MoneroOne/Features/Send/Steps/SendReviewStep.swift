@@ -13,6 +13,8 @@ struct SendReviewStep: View {
 
     @State private var feeError: String?
     @State private var showContent = false
+    @State private var upgradedToSendAll = false
+    var onUpgradeToSendAll: (() -> Void)?
 
     private var amount: Decimal {
         Decimal(string: amountString) ?? 0
@@ -60,13 +62,28 @@ struct SendReviewStep: View {
 
                         // Amount
                         VStack(spacing: 4) {
-                            Text(isSendingAll ? "All Funds" : "\(XMRFormatter.format(amount)) XMR")
-                                .font(.title.weight(.bold))
-
-                            if let fiat = priceService.formatFiatValue(amount) {
-                                Text("≈ \(fiat)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                            if isSendingAll || upgradedToSendAll {
+                                Text("All Funds")
+                                    .font(.title.weight(.bold))
+                                if let fee = estimatedFee {
+                                    let sendAmount = walletManager.unlockedBalance - fee
+                                    Text("\(XMRFormatter.format(sendAmount)) XMR")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    if let fiat = priceService.formatFiatValue(sendAmount) {
+                                        Text("≈ \(fiat)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            } else {
+                                Text("\(XMRFormatter.format(amount)) XMR")
+                                    .font(.title.weight(.bold))
+                                if let fiat = priceService.formatFiatValue(amount) {
+                                    Text("≈ \(fiat)")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -182,6 +199,12 @@ struct SendReviewStep: View {
         .task {
             do {
                 estimatedFee = try await walletManager.estimateFee(to: recipientAddress, amount: amount)
+
+                // If amount + fee exceeds balance, auto-upgrade to send all
+                if let fee = estimatedFee, amount + fee > walletManager.unlockedBalance, !isSendingAll {
+                    upgradedToSendAll = true
+                    onUpgradeToSendAll?()
+                }
             } catch {
                 feeError = error.localizedDescription
             }

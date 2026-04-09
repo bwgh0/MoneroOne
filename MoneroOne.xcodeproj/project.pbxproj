@@ -15,6 +15,7 @@
 		1BA4AE0A0A268DE7F27D1308 /* GlassButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D3AE9C07684C76F5645BB /* GlassButtonStyle.swift */; };
 		282C36ABD1B88FEEFDF153A6 /* SecurityAuditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28AE04350FBA393B5C0220F /* SecurityAuditTests.swift */; };
 		A1B2C3D4E5F60001DEADBEEF /* SecurityAuditFixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002DEADBEEF /* SecurityAuditFixTests.swift */; };
+		A1B2C3D4E5F60004DEADBEEF /* DiagnosticLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003DEADBEEF /* DiagnosticLog.swift */; };
 		28E3D0F995F39C0E7791AF35 /* WalletManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 833C5B007D9D33E833CFE48B /* WalletManager.swift */; };
 		2A841431F06DE4BF09DCE55B /* GlassSegmentedPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F1C17A0DAB5332E049A04B0 /* GlassSegmentedPicker.swift */; };
 		2B66E3C39AB91C177152ADCB /* MoneroKit in Frameworks */ = {isa = PBXBuildFile; productRef = 21A9BF46E283EEB36F8735D8 /* MoneroKit */; };
@@ -226,6 +227,7 @@
 		BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocationSyncManager.swift; sourceTree = "<group>"; };
 		C28AE04350FBA393B5C0220F /* SecurityAuditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityAuditTests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002DEADBEEF /* SecurityAuditFixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityAuditFixTests.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60003DEADBEEF /* DiagnosticLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLog.swift; sourceTree = "<group>"; };
 		C2B3390E2738445B8D347933 /* ErrorBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorBanner.swift; sourceTree = "<group>"; };
 		C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertNotificationManager.swift; sourceTree = "<group>"; };
 		CAA44CACB97519C2456A1D98 /* UnlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockView.swift; sourceTree = "<group>"; };
@@ -449,6 +451,7 @@
 				4848074569E3E47EE8FE7F31 /* BiometricAuthManager.swift */,
 				8EE7C972F4CD3C984FC4FFE9 /* NetworkMonitor.swift */,
 				D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */,
+				A1B2C3D4E5F60003DEADBEEF /* DiagnosticLog.swift */,
 				C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */,
 				8689F5157606DB44F6B09ECD /* PriceAlertService.swift */,
 				FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */,
@@ -840,6 +843,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				A2173E3306237E1F4E1C9AB9 /* MoneroWallet.swift in Sources */,
 				4694ED2DC8BB7AB49669AFFE /* NetworkMonitor.swift in Sources */,
 				DCD815950DC4B62A202683AD /* NodeManager.swift in Sources */,
+				A1B2C3D4E5F60004DEADBEEF /* DiagnosticLog.swift in Sources */,
 				3FA12723C8F524DD76D5080C /* NodeSettingsView.swift in Sources */,
 				84BEB133F2C7D5434D9A865D /* PINEntryView.swift in Sources */,
 				31F34A23191B0E4654DA6B74 /* PortfolioChartView.swift in Sources */,

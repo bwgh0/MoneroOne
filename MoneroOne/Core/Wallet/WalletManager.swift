@@ -54,6 +54,15 @@ class WalletManager: ObservableObject {
         return URLSession(configuration: config, delegate: AllCertsTrustDelegate.shared, delegateQueue: nil)
     }()
 
+    /// URLSession with standard TLS validation — used for diagnostic comparison.
+    /// If this fails but reachabilitySession succeeds, the node has a cert issue
+    /// that wallet2 C++ will also fail on.
+    private lazy var strictTLSSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 10
+        return URLSession(configuration: config)
+    }()
+
     enum SyncState: Equatable {
         case idle
         case connecting
@@ -322,6 +331,7 @@ class WalletManager: ObservableObject {
                 #if DEBUG
                 NSLog("[WalletManager] wallet2 syncState: %@ (current: %@)", "\(state)", "\(self.syncState)")
                 #endif
+                DiagnosticLog.shared.log("Sync: \(state)")
 
                 // Don't let the wallet's initial .idle publish regress from .connecting
                 // during a restart — restartWallet() sets .connecting manually before
@@ -346,6 +356,7 @@ class WalletManager: ObservableObject {
                     #if DEBUG
                     NSLog("[WalletManager] Error received, debouncing 3s: %@", msg)
                     #endif
+                    DiagnosticLog.shared.log("wallet2 error: \(msg)")
                     self.errorDebounceTask?.cancel()
                     self.errorDebounceTask = Task { [weak self] in
                         try? await Task.sleep(nanoseconds: 3_000_000_000) // 3s
@@ -394,7 +405,11 @@ class WalletManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] height in
                 guard let self = self else { return }
+                let oldHeight = self.daemonHeight
                 self.daemonHeight = height
+                if oldHeight == 0 && height > 0 {
+                    DiagnosticLog.shared.log("Daemon connected: height=\(height)")
+                }
                 let now = CACurrentMediaTime()
                 guard now - self.lastHeightPublish >= 0.5 else { return }
                 self.lastHeightPublish = now
@@ -521,11 +536,12 @@ class WalletManager: ObservableObject {
     private func updateConnectionStage() {
         let oldStage = connectionStage
         defer {
-            #if DEBUG
             if connectionStage != oldStage {
+                DiagnosticLog.shared.log("Stage: \(oldStage) → \(connectionStage) (daemon=\(daemonHeight), wallet=\(walletHeight), nodeReachable=\(String(describing: nodeReachable)))")
+                #if DEBUG
                 NSLog("[WalletManager] connectionStage: %@ → %@", "\(oldStage)", "\(connectionStage)")
+                #endif
             }
-            #endif
         }
 
         // Stage 6: Synced
@@ -633,6 +649,7 @@ class WalletManager: ObservableObject {
         }
 
         let infoURL = baseURL.appendingPathComponent("get_info")
+        DiagnosticLog.shared.log("Reachability check: \(nodeURLString)")
         var request = URLRequest(url: infoURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -661,13 +678,19 @@ class WalletManager: ObservableObject {
                     #if DEBUG
                     NSLog("[WalletManager] Node reachable: %@", nodeURLString)
                     #endif
+                    DiagnosticLog.shared.log("Node reachable: \(nodeURLString)")
+                    // Run strict TLS check for diagnostics — tells us if wallet2 will have cert issues
+                    self.runStrictTLSCheck(url: infoURL, nodeURLString: nodeURLString)
                     self.nodeReachable = true
                     self.reachabilityRetryCount = 0
                     self.reachabilityRetryTask?.cancel()
                     self.reachabilityRetryTask = nil
                 } else {
+                    let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    let errMsg = error?.localizedDescription ?? "no error"
+                    DiagnosticLog.shared.log("Node unreachable: \(nodeURLString) (HTTP \(code), \(errMsg))")
                     #if DEBUG
-                    NSLog("[WalletManager] Node unreachable: %@ (HTTP %d)", nodeURLString, (response as? HTTPURLResponse)?.statusCode ?? 0)
+                    NSLog("[WalletManager] Node unreachable: %@ (HTTP %d)", nodeURLString, code)
                     #endif
                     self.nodeReachable = false
                 }
@@ -676,6 +699,29 @@ class WalletManager: ObservableObject {
         }
         currentReachabilityTask = task
         task.resume()
+    }
+
+    /// Diagnostic-only: test the node with standard TLS validation (no cert bypass).
+    /// If this fails, wallet2 C++ will likely fail too since it uses its own OpenSSL.
+    private func runStrictTLSCheck(url: URL, nodeURLString: String) {
+        guard nodeURLString.hasPrefix("https") else { return } // Only relevant for HTTPS nodes
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10
+
+        strictTLSSession.dataTask(with: request) { data, response, error in
+            if let error = error {
+                DiagnosticLog.shared.log("TLS STRICT FAILED: \(nodeURLString) — \(error.localizedDescription)")
+                DiagnosticLog.shared.log("⚠ Node cert may be invalid — wallet2 C++ will likely also fail")
+            } else if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                DiagnosticLog.shared.log("TLS strict: OK (\(nodeURLString))")
+            } else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                DiagnosticLog.shared.log("TLS strict: HTTP \(code) (\(nodeURLString))")
+            }
+        }.resume()
     }
 
     /// Retry reachability test with exponential backoff (5s, 10s, 20s)
@@ -926,6 +972,8 @@ class WalletManager: ObservableObject {
     private func restartWallet(with seed: [String]) {
         guard isUnlocked else { return }
 
+        let nodeURL = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL") ?? "default"
+        DiagnosticLog.shared.log("Restarting wallet with node: \(nodeURL)")
         syncState = .connecting
 
         // Cancel any in-flight restart

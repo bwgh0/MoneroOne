@@ -31,6 +31,7 @@ struct SettingsView: View {
     @State private var showSecurity = false
     @State private var showDeleteConfirmation = false
     @State private var showResetSyncConfirmation = false
+    @State private var showDiagnosticShare = false
 
     private var syncStatusText: String {
         switch walletManager.syncState {
@@ -155,6 +156,23 @@ struct SettingsView: View {
                         .accessibilityLabel("Sync Settings, status \(syncStatusText)")
                     }
                     .accessibilityIdentifier("settings.syncRow")
+                }
+
+                // Troubleshooting
+                Section("Troubleshooting") {
+                    Button {
+                        showDiagnosticShare = true
+                    } label: {
+                        SettingsRow(
+                            icon: "doc.text.magnifyingglass",
+                            title: "Share Diagnostic Log",
+                            color: .purple
+                        )
+                    }
+                    .sheet(isPresented: $showDiagnosticShare) {
+                        let logText = DiagnosticLog.shared.export()
+                        ShareSheet(items: [logText])
+                    }
                 }
 
                 // About Section

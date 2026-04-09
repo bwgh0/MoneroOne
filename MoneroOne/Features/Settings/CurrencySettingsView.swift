@@ -11,7 +11,15 @@ struct CurrencySettingsView: View {
         ("aud", "Australian Dollar"),
         ("jpy", "Japanese Yen"),
         ("cny", "Chinese Yuan"),
-        ("try", "Turkish Lira")
+        ("try", "Turkish Lira"),
+        ("rub", "Russian Ruble"),
+        ("chf", "Swiss Franc"),
+        ("brl", "Brazilian Real"),
+        ("inr", "Indian Rupee"),
+        ("krw", "South Korean Won"),
+        ("mxn", "Mexican Peso"),
+        ("pln", "Polish Złoty"),
+        ("uah", "Ukrainian Hryvnia")
     ]
 
     var body: some View {
@@ -116,6 +124,14 @@ struct CurrencySettingsView: View {
         case "jpy": return "🇯🇵"
         case "cny": return "🇨🇳"
         case "try": return "🇹🇷"
+        case "rub": return "🇷🇺"
+        case "chf": return "🇨🇭"
+        case "brl": return "🇧🇷"
+        case "inr": return "🇮🇳"
+        case "krw": return "🇰🇷"
+        case "mxn": return "🇲🇽"
+        case "pln": return "🇵🇱"
+        case "uah": return "🇺🇦"
         default: return "💵"
         }
     }

@@ -32,6 +32,9 @@ struct MoneroOneApp: App {
         }
         #endif
 
+        // Install crash handlers so diagnostic log captures crash info
+        DiagnosticLog.shared.installCrashHandlers()
+
         // Migrate keychain items to new accessibility level (fixes wallet loss after device lock)
         KeychainStorage().migrateKeychainAccessibilityIfNeeded()
 

@@ -67,6 +67,52 @@ jobs:
             -project MoneroOne.xcodeproj \
             -scheme MoneroOne
 
+      - name: Revoke old CI certificates if at limit
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        continue-on-error: true
+        run: |
+          pip3 install -q --break-system-packages PyJWT cryptography
+          python3 << 'PYEOF'
+          import jwt, time, os, json, urllib.request
+
+          key_id = os.environ['API_KEY_ID']
+          issuer = os.environ['API_ISSUER_ID']
+          key = open(os.path.expanduser(f'~/.appstoreconnect/private_keys/AuthKey_{key_id}.p8')).read()
+
+          token = jwt.encode(
+              {'iss': issuer, 'iat': int(time.time()), 'exp': int(time.time()) + 1200, 'aud': 'appstoreconnect-v1'},
+              key, algorithm='ES256', headers={'kid': key_id}
+          )
+
+          req = urllib.request.Request(
+              'https://api.appstoreconnect.apple.com/v1/certificates?limit=200',
+              headers={'Authorization': f'Bearer {token}'}
+          )
+          data = json.loads(urllib.request.urlopen(req).read())
+          certs = data.get('data', [])
+
+          ci_certs = [c for c in certs if 'Created via API' in c['attributes'].get('name', '')]
+          print(f'Found {len(ci_certs)} CI-created certs out of {len(certs)} total')
+
+          if len(ci_certs) > 1:
+              ci_sorted = sorted(ci_certs, key=lambda c: c['attributes']['expirationDate'], reverse=True)
+              for c in ci_sorted[1:]:
+                  cert_id = c['id']
+                  print(f'Revoking: {cert_id} ({c["attributes"]["name"]})')
+                  try:
+                      urllib.request.urlopen(urllib.request.Request(
+                          f'https://api.appstoreconnect.apple.com/v1/certificates/{cert_id}',
+                          headers={'Authorization': f'Bearer {token}'}, method='DELETE'
+                      ))
+                  except Exception as e:
+                      print(f'  Failed: {e}')
+
+          remaining = json.loads(urllib.request.urlopen(req).read()).get('data', [])
+          print(f'Remaining certificates: {len(remaining)}')
+          PYEOF
+
       - name: Build and Archive
         env:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}

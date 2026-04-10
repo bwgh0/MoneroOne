@@ -67,6 +67,42 @@ jobs:
             -project MoneroOne.xcodeproj \
             -scheme MoneroOne
 
+      - name: Revoke old CI certificates if at limit
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          # List all iOS distribution certs via App Store Connect API
+          TOKEN=$(ruby -rjson -ropenssl -rbase64 -e '
+            key = OpenSSL::PKey.read(File.read(ENV["HOME"] + "/.appstoreconnect/private_keys/AuthKey_" + ENV["API_KEY_ID"] + ".p8"))
+            header = { alg: "ES256", kid: ENV["API_KEY_ID"], typ: "JWT" }
+            payload = { iss: ENV["API_ISSUER_ID"], iat: Time.now.to_i, exp: Time.now.to_i + 1200, aud: "appstoreconnect-v1" }
+            h = Base64.urlsafe_encode64(header.to_json, padding: false)
+            p = Base64.urlsafe_encode64(payload.to_json, padding: false)
+            sig = key.sign("SHA256", "#{h}.#{p}")
+            # Convert DER signature to raw r||s
+            asn = OpenSSL::ASN1.decode(sig)
+            r = asn.value[0].value.to_s(2).rjust(32, "\x00")[-32..]
+            s = asn.value[1].value.to_s(2).rjust(32, "\x00")[-32..]
+            puts "#{h}.#{p}.#{Base64.urlsafe_encode64(r + s, padding: false)}"
+          ')
+
+          # Get all certs, keep only the newest 2 Apple Distribution certs, revoke the rest
+          CERTS=$(curl -s -H "Authorization: Bearer $TOKEN" \
+            "https://api.appstoreconnect.apple.com/v1/certificates?filter[certificateType]=APPLE_DISTRIBUTION&limit=200")
+
+          CERT_COUNT=$(echo "$CERTS" | jq '.data | length')
+          echo "Found $CERT_COUNT distribution certificates"
+
+          if [ "$CERT_COUNT" -gt 2 ]; then
+            # Sort by expiration, skip newest 2, revoke the rest
+            echo "$CERTS" | jq -r '.data | sort_by(.attributes.expirationDate) | .[:-2] | .[].id' | while read -r CERT_ID; do
+              echo "Revoking certificate: $CERT_ID"
+              curl -s -X DELETE -H "Authorization: Bearer $TOKEN" \
+                "https://api.appstoreconnect.apple.com/v1/certificates/$CERT_ID"
+            done
+          fi
+
       - name: Build and Archive
         env:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}

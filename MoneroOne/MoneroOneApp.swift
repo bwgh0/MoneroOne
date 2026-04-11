@@ -13,7 +13,6 @@ struct MoneroOneApp: App {
     @AppStorage("autoLockMinutes") private var autoLockMinutes = 5
     @AppStorage("appearanceMode") private var appearanceMode = 0
     @State private var backgroundTime: Date?
-    @State private var showPrivacyOverlay = false
 
     static let priceCheckTaskId = "one.monero.MoneroOne.priceCheck"
 
@@ -56,24 +55,16 @@ struct MoneroOneApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ZStack {
-                ContentView()
-                    .environmentObject(walletManager)
-                    .environmentObject(priceService)
-                    .environmentObject(priceAlertService)
-                    .preferredColorScheme(colorScheme)
-                    .onAppear {
-                        TrustedLocationSyncManager.shared.configure(walletManager: walletManager)
-                        priceService.priceAlertService = priceAlertService
-                        schedulePriceCheck()
-                    }
-
-                if showPrivacyOverlay {
-                    Color.clear
-                        .background(.ultraThinMaterial)
-                        .ignoresSafeArea()
+            ContentView()
+                .environmentObject(walletManager)
+                .environmentObject(priceService)
+                .environmentObject(priceAlertService)
+                .preferredColorScheme(colorScheme)
+                .onAppear {
+                    TrustedLocationSyncManager.shared.configure(walletManager: walletManager)
+                    priceService.priceAlertService = priceAlertService
+                    schedulePriceCheck()
                 }
-            }
         }
         .onChange(of: scenePhase) { newPhase in
             handleScenePhaseChange(newPhase: newPhase)
@@ -83,7 +74,6 @@ struct MoneroOneApp: App {
     private func handleScenePhaseChange(newPhase: ScenePhase) {
         switch newPhase {
         case .inactive:
-            showPrivacyOverlay = true
             // Lock immediately when going inactive (before background)
             if walletManager.isUnlocked && autoLockMinutes == 0 {
                 walletManager.lock()
@@ -99,7 +89,6 @@ struct MoneroOneApp: App {
             // Schedule next price check when going to background
             schedulePriceCheck()
         case .active:
-            showPrivacyOverlay = false
             // Check if we should lock based on time in background
             if walletManager.isUnlocked, let bgTime = backgroundTime, autoLockMinutes > 0 {
                 let elapsed = Date().timeIntervalSince(bgTime)

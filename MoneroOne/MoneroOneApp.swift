@@ -34,10 +34,8 @@ struct MoneroOneApp: App {
         // Install crash handlers so diagnostic log captures crash info
         DiagnosticLog.shared.installCrashHandlers()
 
-        // Migrate keychain items to new accessibility level (fixes wallet loss after device lock)
+        // Migrate keychain items (fast no-op after first run — uses UserDefaults flags)
         KeychainStorage().migrateKeychainAccessibilityIfNeeded()
-
-        // Migrate rate limiting from UserDefaults to Keychain
         KeychainStorage().migrateRateLimitIfNeeded()
 
         // Register background task for price checking

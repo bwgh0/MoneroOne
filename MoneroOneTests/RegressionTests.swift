@@ -726,13 +726,17 @@ final class TrustedLocationRegressionTests: XCTestCase {
         let id = UUID()
         let loc1 = TrustedLocation(id: id, name: "Home",
                                     coordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0))
+        let loc1Copy = TrustedLocation(id: id, name: "Home",
+                                        coordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0))
         let loc2 = TrustedLocation(id: id, name: "Work",
                                     coordinate: CLLocationCoordinate2D(latitude: 1, longitude: 1))
         let loc3 = TrustedLocation(name: "Other",
                                     coordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0))
 
-        // Same ID = equal (even if different name/coord)
-        XCTAssertEqual(loc1, loc2)
+        // All fields equal = equal (needed for SwiftUI view diffing on rename/move)
+        XCTAssertEqual(loc1, loc1Copy)
+        // Same ID but different name/coord = not equal (rename triggers SwiftUI update)
+        XCTAssertNotEqual(loc1, loc2)
         // Different ID = not equal
         XCTAssertNotEqual(loc1, loc3)
     }

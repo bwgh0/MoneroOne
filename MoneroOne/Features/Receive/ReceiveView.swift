@@ -462,12 +462,12 @@ struct AddressPickerView: View {
         isCreating = true
 
         Task {
-            var result = walletManager.createSubaddress()
+            var result = await walletManager.createSubaddress()
 
             // Retry once after short delay — wallet2 C++ can fail transiently after node switch
             if result == nil {
                 try? await Task.sleep(nanoseconds: 500_000_000)
-                result = walletManager.createSubaddress()
+                result = await walletManager.createSubaddress()
             }
 
             await MainActor.run {

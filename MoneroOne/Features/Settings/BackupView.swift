@@ -45,11 +45,10 @@ struct BackupView: View {
         .padding()
         .navigationTitle("Backup")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // Recover PIN length from keychain if UserDefaults was reset
-            if UserDefaults.standard.object(forKey: "preferredPINLength") == nil,
-               let keychainLength = KeychainStorage().getPinLength() {
-                preferredPINLength = keychainLength
+        .task {
+            if UserDefaults.standard.object(forKey: "preferredPINLength") == nil {
+                let length = await Task.detached { KeychainStorage().getPinLength() }.value
+                if let length { preferredPINLength = length }
             }
         }
     }
@@ -190,20 +189,26 @@ struct BackupView: View {
     }
 
     private func unlockSeed() {
-        do {
-            if let seed = try KeychainStorage().getSeed(pin: pin) {
-                seedPhrase = seed.split(separator: " ").map(String.init)
-                isUnlocked = true
-                errorMessage = nil
+        Task.detached {
+            do {
+                if let seed = try KeychainStorage().getSeed(pin: pin) {
+                    let words = seed.split(separator: " ").map(String.init)
+                    let legacy = walletManager.getLegacySeed()
+                    let poly = walletManager.getPolyseed()
 
-                // Load alternate seed formats from running wallet
-                legacySeed = walletManager.getLegacySeed()
-                polyseedWords = walletManager.getPolyseed()
-            } else {
-                errorMessage = "Invalid PIN"
+                    await MainActor.run {
+                        seedPhrase = words
+                        legacySeed = legacy
+                        polyseedWords = poly
+                        isUnlocked = true
+                        errorMessage = nil
+                    }
+                } else {
+                    await MainActor.run { errorMessage = "Invalid PIN" }
+                }
+            } catch {
+                await MainActor.run { errorMessage = error.localizedDescription }
             }
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }

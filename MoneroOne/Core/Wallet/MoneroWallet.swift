@@ -80,8 +80,8 @@ class MoneroWallet: ObservableObject {
 
         // Heavy Kit init (SQLite + C++ + crypto) off main thread
         let reachability = reachabilityManager
-        let newKit = try await Task.detached {
-            try MoneroKit.Kit(
+        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs) = try await Task.detached {
+            let kit = try MoneroKit.Kit(
                 wallet: credentials,
                 account: 0,
                 restoreHeight: restoreHeight,
@@ -91,10 +91,16 @@ class MoneroWallet: ObservableObject {
                 reachabilityManager: reachability,
                 logger: nil
             )
+            // Pre-fetch initial state off main to avoid blocking when setupKit runs
+            let balance = kit.balanceInfo
+            let address = kit.receiveAddress
+            let state = kit.walletState
+            let subaddrs = kit.usedAddresses
+            return (kit, balance, address, state, subaddrs)
         }.value
 
         kit = newKit
-        setupKit()
+        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
     }
 
     /// Create watch-only wallet
@@ -105,8 +111,8 @@ class MoneroWallet: ObservableObject {
 
         // Heavy Kit init (SQLite + C++ + crypto) off main thread
         let reachability = reachabilityManager
-        let newKit = try await Task.detached {
-            try MoneroKit.Kit(
+        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs) = try await Task.detached {
+            let kit = try MoneroKit.Kit(
                 wallet: .watch(address: address, viewKey: viewKey),
                 account: 0,
                 restoreHeight: restoreHeight,
@@ -116,10 +122,11 @@ class MoneroWallet: ObservableObject {
                 reachabilityManager: reachability,
                 logger: nil
             )
+            return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses)
         }.value
 
         kit = newKit
-        setupKit()
+        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
     }
 
     private func defaultNode(for networkType: MoneroKit.NetworkType = .mainnet) -> MoneroKit.Node {
@@ -158,17 +165,17 @@ class MoneroWallet: ObservableObject {
     static let testnetNodes: [(name: String, url: String)] = []
     #endif
 
-    private func setupKit() {
+    private func setupKit(initialBalance: MoneroKit.BalanceInfo, initialAddress: String, initialState: MoneroKit.WalletState, initialSubaddrs: [MoneroKit.SubAddress]) {
         guard let kit = kit else { return }
 
         // Set delegate
         kit.delegate = self
 
-        // Get initial values
-        updateBalance(kit.balanceInfo)
-        address = kit.receiveAddress
-        updateSyncState(kit.walletState)
-        subaddresses = kit.usedAddresses
+        // Apply pre-fetched initial values (no C++ calls on main)
+        updateBalance(initialBalance)
+        address = initialAddress
+        updateSyncState(initialState)
+        subaddresses = initialSubaddrs
 
         // Start syncing
         kit.start()
@@ -194,12 +201,21 @@ class MoneroWallet: ObservableObject {
     }
 
     func refresh() {
-        kit?.refresh()
+        // kit.refresh() does heavy C++ work (balance, subaddress, tx fetch, wallet store)
+        // and blocks on wallet2's mutex while the refresh thread is scanning blocks.
+        // Dispatch off main to prevent multi-second UI freezes during pull-to-refresh.
+        guard let kit = kit else { return }
+        Task.detached {
+            kit.refresh()
+        }
     }
 
     /// Restart sync to check for new blocks
     func startSync() {
-        kit?.startSync()
+        guard let kit = kit else { return }
+        Task.detached {
+            kit.startSync()
+        }
     }
 
     /// Pause sync — stops refresh and state polling
@@ -278,12 +294,18 @@ class MoneroWallet: ObservableObject {
 
     func fetchTransactions() {
         guard let kit = kit else { return }
+        let rate = coinRate
 
-        let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 100)
-        transactions = txInfos.map { mapTransaction($0) }
+        Task.detached {
+            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 100)
+            let mapped = txInfos.map { MoneroWallet.mapTransaction($0, coinRate: rate, kit: kit) }
+            await MainActor.run { [weak self] in
+                self?.transactions = mapped
+            }
+        }
     }
 
-    private func mapTransaction(_ info: MoneroKit.TransactionInfo) -> MoneroTransaction {
+    nonisolated private static func mapTransaction(_ info: MoneroKit.TransactionInfo, coinRate: Decimal, kit: MoneroKit.Kit) -> MoneroTransaction {
         let amount = Decimal(info.amount) / coinRate
         let fee = Decimal(info.fee) / coinRate
 
@@ -291,15 +313,13 @@ class MoneroWallet: ObservableObject {
         let confirmations: Int?
         if info.isPending || info.blockHeight == 0 {
             confirmations = 0
-        } else if let kit = kit {
+        } else {
             let currentHeight = kit.blockHeights?.daemonHeight ?? kit.lastBlockInfo
             if currentHeight > info.blockHeight {
                 confirmations = Int(currentHeight - info.blockHeight)
             } else {
-                confirmations = nil // Height not available yet
+                confirmations = nil
             }
-        } else {
-            confirmations = nil
         }
 
         // Determine status based on isPending from MoneroKit (this is accurate!)

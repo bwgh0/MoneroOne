@@ -247,7 +247,10 @@ class WalletManager: ObservableObject {
     // MARK: - Wallet Unlock
 
     func unlock(pin: String) async throws {
-        guard let seedPhrase = try keychain.getSeed(pin: pin) else {
+        let seedResult = try await Task.detached {
+            try self.keychain.getSeed(pin: pin)
+        }.value
+        guard let seedPhrase = seedResult else {
             throw WalletError.invalidPin
         }
 
@@ -294,7 +297,6 @@ class WalletManager: ObservableObject {
             .sink { [weak self] newBalance in
                 guard let self = self else { return }
                 self.balance = newBalance
-                // Update widget when balance changes while synced
                 if case .synced = self.syncState {
                     self.saveWidgetDataIfEnabled()
                 }
@@ -434,7 +436,6 @@ class WalletManager: ObservableObject {
             .sink { [weak self] newTransactions in
                 guard let self = self else { return }
                 self.transactions = newTransactions
-                // Update widget when transactions change while synced
                 if case .synced = self.syncState {
                     self.saveWidgetDataIfEnabled()
                 }
@@ -459,8 +460,6 @@ class WalletManager: ObservableObject {
                         self.primaryAddress = primary.address
                     }
                 }
-                // Note: Subaddress 1 auto-creation is handled explicitly after bindToWallet() with delay
-                // to ensure polyseed wallets have time to initialize addresses asynchronously
             }
             .store(in: &cancellables)
 
@@ -750,57 +749,54 @@ class WalletManager: ObservableObject {
 
     // MARK: - Widget Data
 
-    /// Save current wallet data for home screen widget
-    /// - Parameter enabled: Override the enabled state. If nil, reads from UserDefaults.
+    /// Save current wallet data for home screen widget.
+    /// Captures state on main, then does all formatting/IO on a background queue.
     func saveWidgetData(enabled: Bool? = nil) {
-        // Use passed value, or check UserDefaults
+        // Snapshot only — fast reads, then immediately hand off
         let isEnabled = enabled ?? UserDefaults.standard.bool(forKey: "widgetEnabled")
+        let snapBalance = balance
+        let snapSyncState = syncState
+        let snapTransactions = Array(transactions.prefix(5))
+        let snapIsTestnet = isTestnet
 
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 4
-        formatter.maximumFractionDigits = 4
+        DispatchQueue.global(qos: .utility).async {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            formatter.minimumFractionDigits = 4
+            formatter.maximumFractionDigits = 4
 
-        let balanceFormatted = formatter.string(from: balance as NSDecimalNumber) ?? "0.0000"
+            let balanceFormatted = formatter.string(from: snapBalance as NSDecimalNumber) ?? "0.0000"
 
-        // Convert sync state to widget sync status
-        let widgetSyncStatus: WidgetData.SyncStatus
-        switch syncState {
-        case .synced:
-            widgetSyncStatus = .synced
-        case .syncing:
-            widgetSyncStatus = .syncing
-        case .connecting:
-            widgetSyncStatus = .connecting
-        case .idle, .error:
-            widgetSyncStatus = .offline
+            let widgetSyncStatus: WidgetData.SyncStatus
+            switch snapSyncState {
+            case .synced: widgetSyncStatus = .synced
+            case .syncing: widgetSyncStatus = .syncing
+            case .connecting: widgetSyncStatus = .connecting
+            case .idle, .error: widgetSyncStatus = .offline
+            }
+
+            let recentTransactions = snapTransactions.map { tx in
+                WidgetTransaction(
+                    id: tx.id,
+                    isIncoming: tx.type == .incoming,
+                    amount: tx.amount,
+                    amountFormatted: formatter.string(from: tx.amount as NSDecimalNumber) ?? "0.0000",
+                    timestamp: tx.timestamp,
+                    isConfirmed: (tx.confirmations ?? 0) >= 10
+                )
+            }
+
+            var widgetData = WidgetDataManager.shared.load() ?? WidgetDataManager.placeholder
+            widgetData.balance = snapBalance
+            widgetData.balanceFormatted = balanceFormatted
+            widgetData.syncStatus = widgetSyncStatus
+            widgetData.lastUpdated = Date()
+            widgetData.recentTransactions = recentTransactions
+            widgetData.isTestnet = snapIsTestnet
+            widgetData.isEnabled = isEnabled
+
+            WidgetDataManager.shared.save(widgetData)
         }
-
-        // Convert recent transactions
-        let recentTransactions = transactions.prefix(5).map { tx in
-            WidgetTransaction(
-                id: tx.id,
-                isIncoming: tx.type == .incoming,
-                amount: tx.amount,
-                amountFormatted: formatter.string(from: tx.amount as NSDecimalNumber) ?? "0.0000",
-                timestamp: tx.timestamp,
-                isConfirmed: (tx.confirmations ?? 0) >= 10
-            )
-        }
-
-        // Load existing data to preserve price fields from PriceService
-        var widgetData = WidgetDataManager.shared.load() ?? WidgetDataManager.placeholder
-
-        // Update wallet-related fields only
-        widgetData.balance = balance
-        widgetData.balanceFormatted = balanceFormatted
-        widgetData.syncStatus = widgetSyncStatus
-        widgetData.lastUpdated = Date()
-        widgetData.recentTransactions = Array(recentTransactions)
-        widgetData.isTestnet = isTestnet
-        widgetData.isEnabled = isEnabled
-
-        WidgetDataManager.shared.save(widgetData)
     }
 
     /// Save widget data if widget is enabled - called during sync cycles
@@ -809,7 +805,8 @@ class WalletManager: ObservableObject {
         guard UserDefaults.standard.bool(forKey: "widgetEnabled") else { return }
 
         // Debounce: cancel any pending save and schedule a new one.
-        // This avoids JSON encode + file I/O on every balance/tx/state change.
+        // Run ENTIRELY off main — saveWidgetData does formatting, fiat conversion,
+        // and file I/O that can block main for 100s of ms on device.
         widgetReloadTask?.cancel()
         widgetReloadTask = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
@@ -864,9 +861,10 @@ class WalletManager: ObservableObject {
 
     /// Create a new subaddress for receiving payments
     /// - Returns: The newly created SubAddress, or nil if creation failed
-    func createSubaddress() -> MoneroKit.SubAddress? {
+    func createSubaddress() async -> MoneroKit.SubAddress? {
         guard let wallet = moneroWallet else { return nil }
-        if let newSubaddr = wallet.createSubaddress() {
+        let result = wallet.createSubaddress()
+        if let newSubaddr = result {
             userCreatedSubaddressIndices.insert(newSubaddr.index)
             saveUserCreatedSubaddresses()
             return newSubaddr

@@ -30,7 +30,7 @@ private func crashSignalHandler(signal: Int32) {
     Darwin.raise(signal)
 }
 
-/// In-memory diagnostic log buffer for troubleshooting sync issues.
+/// In-memory diagnostic log buffer for troubleshooting sync/network issues.
 /// Captures connection and sync events so users can share them with support.
 final class DiagnosticLog {
     static let shared = DiagnosticLog()
@@ -89,10 +89,11 @@ final class DiagnosticLog {
     func log(_ message: String) {
         let now = Date()
         logger.info("\(message)")
-        queue.sync {
-            entries.append((now, message))
-            if entries.count > maxEntries {
-                entries.removeFirst(entries.count - maxEntries)
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.entries.append((now, message))
+            if self.entries.count > self.maxEntries {
+                self.entries.removeFirst(self.entries.count - self.maxEntries)
             }
         }
     }

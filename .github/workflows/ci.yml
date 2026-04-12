@@ -42,3 +42,11 @@ jobs:
             -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
             -configuration Debug \
             build
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -project MoneroOne.xcodeproj \
+            -scheme MoneroOne \
+            -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
+            -only-testing:MoneroOneTests

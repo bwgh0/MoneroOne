@@ -490,6 +490,127 @@ class KeychainStorage {
         return status == errSecSuccess || status == errSecInteractionNotAllowed
     }
 
+    // MARK: - Wallet-ID-Scoped Methods
+
+    /// Save seed encrypted with PIN for a specific wallet
+    func saveSeed(_ seed: String, pin: String, walletId: UUID) throws {
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+        let salt = generateSalt()
+        let pinHash = hashPin(pin, salt: salt)
+
+        guard let encryptedSeed = encrypt(seed, with: pin, salt: salt) else {
+            throw KeychainError.encryptionFailed
+        }
+
+        // Delete existing
+        deleteSeed(walletId: walletId)
+
+        // Save encrypted seed
+        try saveKeychainItem(account: "\(prefix).seed", data: encryptedSeed)
+        try saveKeychainItem(account: "\(prefix).pinhash", data: pinHash)
+        try saveKeychainItem(account: "\(prefix).salt", data: salt)
+
+        resetFailedAttempts()
+    }
+
+    /// Retrieve seed for a specific wallet
+    func getSeed(pin: String, walletId: UUID) throws -> String? {
+        if isLockedOut {
+            throw KeychainError.lockedOut(remainingSeconds: lockoutRemainingSeconds)
+        }
+
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+
+        // Verify PIN against this wallet's stored hash
+        guard verifyPin(pin, pinHashAccount: "\(prefix).pinhash", saltAccount: "\(prefix).salt") else {
+            recordFailedAttempt()
+            return nil
+        }
+
+        resetFailedAttempts()
+
+        guard let salt = getKeychainData(account: "\(prefix).salt") else { return nil }
+        guard let encryptedData = getKeychainData(account: "\(prefix).seed") else { return nil }
+        return decrypt(encryptedData, with: pin, salt: salt)
+    }
+
+    /// Delete seed for a specific wallet
+    func deleteSeed(walletId: UUID) {
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+        for suffix in ["seed", "pinhash", "salt"] {
+            deleteKeychainItem(account: "\(prefix).\(suffix)")
+        }
+    }
+
+    /// Check if a wallet has a stored seed
+    func hasSeed(walletId: UUID) -> Bool {
+        let account = "one.monero.MoneroOne.wallet.\(walletId.uuidString).seed"
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: false
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    /// Copy raw keychain data from one account to another (for migration)
+    func copyKeychainData(fromAccount: String, toAccount: String) {
+        guard let data = getKeychainData(account: fromAccount) else { return }
+        deleteKeychainItem(account: toAccount)
+        try? saveKeychainItem(account: toAccount, data: data)
+    }
+
+    // MARK: - Keychain Helpers
+
+    private func saveKeychainItem(account: String, data: Data) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw KeychainError.saveFailed
+        }
+    }
+
+    private func getKeychainData(account: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    private func deleteKeychainItem(account: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+
+    /// Verify PIN against a specific pinHash/salt account pair
+    private func verifyPin(_ pin: String, pinHashAccount: String, saltAccount: String) -> Bool {
+        guard let storedHash = getKeychainData(account: pinHashAccount) else { return false }
+
+        if let salt = getKeychainData(account: saltAccount) {
+            let inputHash = hashPin(pin, salt: salt)
+            if storedHash == inputHash { return true }
+
+            let legacyIterHash = deriveKey(from: pin, salt: salt, keyLength: 32, iterations: Self.legacyIterations)
+            if storedHash == legacyIterHash { return true }
+        }
+
+        let legacyHash = hashPinLegacy(pin)
+        return storedHash == legacyHash
+    }
+
     /// Delete all keychain items (used by UI tests for clean state)
     func deleteAll() {
         for prefix in ["mainnet", "testnet"] {
@@ -501,6 +622,8 @@ class KeychainStorage {
                 SecItemDelete(query as CFDictionary)
             }
         }
+        // Also delete all wallet-ID-scoped items
+        deleteAllWalletKeychainItems()
         deleteBiometricPin()
         resetFailedAttempts()
 
@@ -510,6 +633,25 @@ class KeychainStorage {
             kSecAttrService as String: rateLimitService,
         ]
         SecItemDelete(rateLimitQuery as CFDictionary)
+    }
+
+    /// Delete all wallet-ID-scoped keychain items (matches prefix pattern)
+    private func deleteAllWalletKeychainItems() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else { return }
+
+        for item in items {
+            if let account = item[kSecAttrAccount as String] as? String,
+               account.hasPrefix("one.monero.MoneroOne.wallet.") {
+                deleteKeychainItem(account: account)
+            }
+        }
     }
 
     /// Delete biometric PIN

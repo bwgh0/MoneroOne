@@ -10,7 +10,9 @@ import WidgetKit
 @MainActor
 class WalletManager: ObservableObject {
     // MARK: - Published State
-    @Published var hasWallet: Bool = false
+    @Published var wallets: [WalletInfo] = []
+    @Published var activeWallet: WalletInfo?
+    var hasWallet: Bool { !wallets.isEmpty }
     @Published var isUnlocked: Bool = false
     @Published var balance: Decimal = 0
     @Published var unlockedBalance: Decimal = 0
@@ -113,9 +115,11 @@ class WalletManager: ObservableObject {
 
     // MARK: - Private
     private let keychain = KeychainStorage()
+    private let walletStore = WalletStore()
     private var moneroWallet: MoneroWallet?
     private var cancellables = Set<AnyCancellable>()
     private var currentSeed: [String]?
+    private var currentPin: String?
     private var isRefreshing = false
     private var widgetReloadTask: Task<Void, Never>?
 
@@ -126,7 +130,56 @@ class WalletManager: ObservableObject {
     }
 
     private func checkForExistingWallet() {
-        hasWallet = keychain.hasSeed()
+        var loaded = walletStore.loadWallets()
+
+        // Migration: single-wallet → multi-wallet
+        if loaded.isEmpty && keychain.hasSeed() {
+            loaded = migrateFromSingleWallet()
+        }
+
+        self.wallets = loaded
+
+        if let activeId = walletStore.activeWalletId,
+           let active = loaded.first(where: { $0.id == activeId }) {
+            self.activeWallet = active
+        } else if let first = loaded.first {
+            self.activeWallet = first
+            walletStore.setActiveWalletId(first.id)
+        }
+    }
+
+    /// One-time migration from legacy single-wallet storage to multi-wallet
+    private func migrateFromSingleWallet() -> [WalletInfo] {
+        let seedType = UserDefaults.standard.string(forKey: "\(networkPrefix)seedType") ?? "polyseed"
+        let restoreH = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+        let subaddrIndices = UserDefaults.standard.array(forKey: "\(networkPrefix)userCreatedSubaddressIndices") as? [Int] ?? []
+
+        let walletId = UUID()
+        let info = WalletInfo(
+            id: walletId,
+            name: "Personal Wallet",
+            seedType: seedType,
+            createdAt: Date(),
+            restoreHeight: restoreH,
+            syncResetCount: resetCount,
+            userCreatedSubaddressIndices: subaddrIndices,
+            cachedPrimaryAddress: nil,
+            cachedBalance: nil
+        )
+
+        // Copy keychain data from legacy keys to wallet-ID-scoped keys
+        let legacyPrefix = "one.monero.MoneroOne.\(isTestnet ? "testnet" : "mainnet")"
+        let newPrefix = info.keychainPrefix
+        keychain.copyKeychainData(fromAccount: "\(legacyPrefix).seed", toAccount: "\(newPrefix).seed")
+        keychain.copyKeychainData(fromAccount: "\(legacyPrefix).pinhash", toAccount: "\(newPrefix).pinhash")
+        keychain.copyKeychainData(fromAccount: "\(legacyPrefix).salt", toAccount: "\(newPrefix).salt")
+
+        walletStore.saveWallets([info])
+        walletStore.setActiveWalletId(walletId)
+        UserDefaults.standard.set(true, forKey: "one.monero.walletStore.migrated")
+
+        return [info]
     }
 
     // MARK: - Wallet Creation
@@ -180,51 +233,92 @@ class WalletManager: ObservableObject {
         }
     }
 
-    func saveWallet(mnemonic: [String], pin: String, restoreHeight: UInt64? = nil) throws {
+    func addWallet(name: String, emoji: String = "\u{1F4B0}", mnemonic: [String], pin: String, restoreHeight: UInt64? = nil) throws {
         let seedPhrase = mnemonic.joined(separator: " ")
-        try keychain.saveSeed(seedPhrase, pin: pin)
 
-        // Auto-detect and save seed type based on word count
-        if let seedType = SeedType.detect(from: mnemonic.count) {
-            UserDefaults.standard.set(seedType.rawValue, forKey: "\(networkPrefix)seedType")
-        }
+        // Check for duplicate seed across existing wallets
+        try checkForDuplicateSeed(seedPhrase, pin: pin)
 
-        // Save restore height if provided (network-specific)
-        if let height = restoreHeight {
-            UserDefaults.standard.set(height, forKey: "\(networkPrefix)restoreHeight")
-        }
+        let seedType = SeedType.detect(from: mnemonic.count)?.rawValue ?? "polyseed"
 
-        hasWallet = true
+        let walletId = UUID()
+        let info = WalletInfo(
+            id: walletId,
+            name: name,
+            emoji: emoji,
+            seedType: seedType,
+            createdAt: Date(),
+            restoreHeight: restoreHeight ?? 0,
+            syncResetCount: 0,
+            userCreatedSubaddressIndices: [],
+            cachedPrimaryAddress: nil,
+            cachedBalance: nil
+        )
+
+        try keychain.saveSeed(seedPhrase, pin: pin, walletId: walletId)
+        walletStore.addWallet(info)
+        walletStore.setActiveWalletId(walletId)
+
+        wallets = walletStore.loadWallets()
+        activeWallet = info
+        currentPin = pin
     }
 
-    func restoreWallet(mnemonic: [String], pin: String, restoreDate: Date? = nil) throws {
+    /// Legacy single-arg overload used by ChangePIN — re-encrypts active wallet's seed
+    func saveWallet(mnemonic: [String], pin: String) throws {
+        guard let active = activeWallet else { throw WalletError.saveFailed }
+        let seedPhrase = mnemonic.joined(separator: " ")
+        try keychain.saveSeed(seedPhrase, pin: pin, walletId: active.id)
+        currentPin = pin
+    }
+
+    func restoreWallet(name: String, emoji: String = "\u{1F4B0}", mnemonic: [String], pin: String, restoreDate: Date? = nil) throws {
         guard validateMnemonic(mnemonic) else {
             throw WalletError.invalidMnemonic
         }
 
         let seedPhrase = mnemonic.joined(separator: " ")
-        try keychain.saveSeed(seedPhrase, pin: pin)
 
-        // Auto-detect and save seed type based on word count
-        if let seedType = SeedType.detect(from: mnemonic.count) {
-            UserDefaults.standard.set(seedType.rawValue, forKey: "\(networkPrefix)seedType")
-        }
+        // Check for duplicate seed across existing wallets
+        try checkForDuplicateSeed(seedPhrase, pin: pin)
 
-        // Calculate restore height from date (network-specific)
-        // Note: Polyseed (16 words) has embedded birthday, so restoreDate is optional for it
+        let seedType = SeedType.detect(from: mnemonic.count)?.rawValue ?? "polyseed"
+
+        var height: UInt64 = 0
         if let date = restoreDate {
-            let restoreHeight = MoneroWallet.restoreHeight(for: date)
-            UserDefaults.standard.set(restoreHeight, forKey: "\(networkPrefix)restoreHeight")
-        } else {
-            // Clear any stale restore height from a previous wallet.
-            // For Polyseed, the C++ library decodes the birthday internally.
-            UserDefaults.standard.removeObject(forKey: "\(networkPrefix)restoreHeight")
+            height = UInt64(RestoreHeight.getHeight(date: date))
         }
 
-        hasWallet = true
+        let walletId = UUID()
+        let info = WalletInfo(
+            id: walletId,
+            name: name,
+            emoji: emoji,
+            seedType: seedType,
+            createdAt: Date(),
+            restoreHeight: height,
+            syncResetCount: 0,
+            userCreatedSubaddressIndices: [],
+            cachedPrimaryAddress: nil,
+            cachedBalance: nil
+        )
+
+        try keychain.saveSeed(seedPhrase, pin: pin, walletId: walletId)
+        walletStore.addWallet(info)
+        walletStore.setActiveWalletId(walletId)
+
+        wallets = walletStore.loadWallets()
+        activeWallet = info
+        currentPin = pin
     }
 
-    private func validateMnemonic(_ mnemonic: [String]) -> Bool {
+    /// Legacy restoreWallet without name parameter (used by existing callers during transition)
+    func restoreWallet(mnemonic: [String], pin: String, restoreDate: Date? = nil) throws {
+        let name = walletStore.nextWalletName(existing: wallets)
+        try restoreWallet(name: name, mnemonic: mnemonic, pin: pin, restoreDate: restoreDate)
+    }
+
+    func validateMnemonic(_ mnemonic: [String]) -> Bool {
         // Accept 16 (polyseed), 24 (BIP39), or 25 (legacy Monero) word mnemonics
         let validCounts = [16, 24, 25]
         guard validCounts.contains(mnemonic.count) else { return false }
@@ -247,8 +341,23 @@ class WalletManager: ObservableObject {
     // MARK: - Wallet Unlock
 
     func unlock(pin: String) async throws {
+        guard let active = activeWallet else {
+            // Fallback: try legacy keychain for pre-migration unlock
+            let legacySeedResult = try await Task.detached {
+                try self.keychain.getSeed(pin: pin)
+            }.value
+            guard let seedPhrase = legacySeedResult else {
+                throw WalletError.invalidPin
+            }
+            let mnemonic = seedPhrase.split(separator: " ").map(String.init)
+            currentSeed = mnemonic
+            currentPin = pin
+            try await startWalletFromSeed(mnemonic)
+            return
+        }
+
         let seedResult = try await Task.detached {
-            try self.keychain.getSeed(pin: pin)
+            try self.keychain.getSeed(pin: pin, walletId: active.id)
         }.value
         guard let seedPhrase = seedResult else {
             throw WalletError.invalidPin
@@ -256,11 +365,31 @@ class WalletManager: ObservableObject {
 
         let mnemonic = seedPhrase.split(separator: " ").map(String.init)
         currentSeed = mnemonic
+        currentPin = pin
+        try await startWalletFromSeed(mnemonic)
+    }
 
-        // Start privacy mode wallet
+    /// Common wallet start logic used by unlock and switchToWallet
+    private func startWalletFromSeed(_ mnemonic: [String]) async throws {
+        // Tear down existing wallet if running (e.g. adding a wallet while unlocked)
+        cancellables.removeAll()
+        if let oldWallet = moneroWallet {
+            moneroWallet = nil
+            oldWallet.stop()
+            // Give lifecycleQueue time to process the C++ close
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        // Intentionally skip @Published resets here: firing 7 back-to-back
+        // mutations during a sheet-collapse transition races SwiftUI's
+        // AttributeGraph teardown on iOS 26 and crashes (EXC_BAD_ACCESS in
+        // AttributeInvalidatingSubscriber). The new wallet populates these
+        // fields once it loads, and syncState is set below.
+        syncState = .connecting
+
         let wallet = MoneroWallet()
-        let walletRestoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
-        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+        let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
+        let resetCount = activeWallet?.syncResetCount ?? 0
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
 
         do {
@@ -269,8 +398,6 @@ class WalletManager: ObservableObject {
             throw WalletError.invalidMnemonic
         }
 
-        // Try to get address from wallet - may be empty initially for polyseed until wallet opens
-        // The address will be populated via delegate callback when Kit._start() runs
         let runtimeAddress = wallet.primaryAddress
         if !runtimeAddress.isEmpty {
             self.primaryAddress = runtimeAddress
@@ -279,10 +406,8 @@ class WalletManager: ObservableObject {
         moneroWallet = wallet
         bindToWallet(wallet)
 
-        // Load user-created subaddress indices for filtering in UI
         loadUserCreatedSubaddresses()
 
-        // Start connection progress tracking
         restoreHeight = walletRestoreHeight
         startConnectionTracking()
 
@@ -490,13 +615,16 @@ class WalletManager: ObservableObject {
                     NSLog("[WalletManager] Persisting C++ restore height: %llu (was %llu)", height, self.restoreHeight)
                     #endif
                     self.restoreHeight = height
-                    UserDefaults.standard.set(Int(height), forKey: "\(self.networkPrefix)restoreHeight")
+                    self.updateRestoreHeight(height)
                 }
             }
             .store(in: &cancellables)
     }
 
     func lock() {
+        // Cache current wallet data before locking
+        cacheActiveWalletData()
+
         // Cancel Combine subscriptions FIRST — they hold strong refs to the old wallet
         cancellables.removeAll()
 
@@ -507,6 +635,7 @@ class WalletManager: ObservableObject {
         Task.detached { [oldWallet] in let _ = oldWallet }
 
         currentSeed = nil
+        currentPin = nil
         isUnlocked = false
         balance = 0
         unlockedBalance = 0
@@ -526,6 +655,19 @@ class WalletManager: ObservableObject {
         reachabilityRetryTask = nil
         networkMonitorCancellable?.cancel()
         networkMonitorCancellable = nil
+    }
+
+    /// Cache balance and address into WalletInfo for switcher display
+    private func cacheActiveWalletData() {
+        guard var info = activeWallet else { return }
+        info.cachedBalance = balance
+        info.cachedPrimaryAddress = primaryAddress.isEmpty ? nil : primaryAddress
+        info.userCreatedSubaddressIndices = Array(userCreatedSubaddressIndices)
+        walletStore.updateWallet(info)
+        activeWallet = info
+        if let idx = wallets.firstIndex(where: { $0.id == info.id }) {
+            wallets[idx] = info
+        }
     }
 
     // MARK: - Connection Stage
@@ -602,7 +744,7 @@ class WalletManager: ObservableObject {
     /// Start connection stage tracking when wallet unlocks
     private func startConnectionTracking() {
         // Load restore height for stage calculation
-        restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        restoreHeight = activeWallet?.restoreHeight ?? 0
 
         // Reset node reachability and retry state
         nodeReachable = nil
@@ -875,11 +1017,14 @@ class WalletManager: ObservableObject {
     // MARK: - User-Created Subaddress Persistence
 
     private func saveUserCreatedSubaddresses() {
-        UserDefaults.standard.set(Array(userCreatedSubaddressIndices), forKey: "\(networkPrefix)userCreatedSubaddressIndices")
+        guard var info = activeWallet else { return }
+        info.userCreatedSubaddressIndices = Array(userCreatedSubaddressIndices)
+        walletStore.updateWallet(info)
+        activeWallet = info
     }
 
     private func loadUserCreatedSubaddresses() {
-        let saved = UserDefaults.standard.array(forKey: "\(networkPrefix)userCreatedSubaddressIndices") as? [Int] ?? []
+        let saved = activeWallet?.userCreatedSubaddressIndices ?? []
         userCreatedSubaddressIndices = Set(saved)
     }
 
@@ -999,8 +1144,8 @@ class WalletManager: ObservableObject {
         moneroWallet = nil
         cancellables.removeAll()
 
-        let walletRestoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
-        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+        let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
+        let resetCount = activeWallet?.syncResetCount ?? 0
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
         let netType = networkType
 
@@ -1039,16 +1184,14 @@ class WalletManager: ObservableObject {
     // MARK: - Seed Access
 
     func getSeedPhrase(pin: String) throws -> [String]? {
-        guard let seedPhrase = try keychain.getSeed(pin: pin) else {
+        guard let active = activeWallet else { return nil }
+        guard let seedPhrase = try keychain.getSeed(pin: pin, walletId: active.id) else {
             return nil
         }
         let mnemonic = seedPhrase.split(separator: " ").map(String.init)
 
         // CRITICAL: Verify seed matches the currently unlocked wallet
-        // This is defense-in-depth since Fix #1 (network-prefixed keychain keys) already
-        // prevents cross-network seed confusion. This check catches any remaining edge cases.
         if !primaryAddress.isEmpty, let currentSeedMnemonic = currentSeed {
-            // Compare with the seed that was used to unlock the current wallet
             if mnemonic != currentSeedMnemonic {
                 #if DEBUG
                 NSLog("[WalletManager] CRITICAL: Keychain seed doesn't match unlocked wallet seed!")
@@ -1058,6 +1201,11 @@ class WalletManager: ObservableObject {
         }
 
         return mnemonic
+    }
+
+    /// Expose current PIN for adding wallets (only available while unlocked)
+    var currentPinForAddWallet: String? {
+        currentPin
     }
 
     // MARK: - Biometric Unlock
@@ -1088,7 +1236,7 @@ class WalletManager: ObservableObject {
     // MARK: - Reset Sync
 
     func resetSyncData() {
-        guard let seed = currentSeed else {
+        guard let seed = currentSeed, var info = activeWallet else {
             syncState = .error("No wallet to reset")
             return
         }
@@ -1110,19 +1258,23 @@ class WalletManager: ObservableObject {
         // Clear MoneroKit wallet data directory
         clearWalletCache()
 
-        // Increment reset counter to force new walletId (network-specific)
-        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount") + 1
-        UserDefaults.standard.set(resetCount, forKey: "\(networkPrefix)syncResetCount")
+        // Increment reset counter via WalletStore
+        info.syncResetCount += 1
+        walletStore.updateWallet(info)
+        activeWallet = info
+        if let idx = wallets.firstIndex(where: { $0.id == info.id }) {
+            wallets[idx] = info
+        }
 
-        // Get restore height from UserDefaults (network-specific)
-        let restoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
+        let walletRestoreHeight = info.restoreHeight
+        let resetSuffix = "\(info.syncResetCount)"
         let netType = networkType
 
         // Create new wallet — Kit init runs off main via async create()
         Task {
             do {
                 let wallet = MoneroWallet()
-                try await wallet.create(seed: seed, restoreHeight: restoreHeight, resetSuffix: "\(resetCount)", networkType: netType)
+                try await wallet.create(seed: seed, restoreHeight: walletRestoreHeight, resetSuffix: resetSuffix, networkType: netType)
                 self.moneroWallet = wallet
                 self.bindToWallet(wallet)
             } catch {
@@ -1155,22 +1307,199 @@ class WalletManager: ObservableObject {
     // MARK: - Delete Wallet
 
     func deleteWallet() {
-        lock()
-        keychain.deleteSeed()
-        // Clear network-specific data for both networks
-        UserDefaults.standard.removeObject(forKey: "mainnet_restoreHeight")
-        UserDefaults.standard.removeObject(forKey: "testnet_restoreHeight")
-        UserDefaults.standard.removeObject(forKey: "mainnet_syncResetCount")
-        UserDefaults.standard.removeObject(forKey: "testnet_syncResetCount")
-        UserDefaults.standard.removeObject(forKey: "mainnet_seedType")
-        UserDefaults.standard.removeObject(forKey: "testnet_seedType")
-        // Clear selected subaddress index (prevents stale index for next wallet)
-        UserDefaults.standard.removeObject(forKey: "selectedSubaddressIndex")
-        // Clear user-created subaddress indices
-        UserDefaults.standard.removeObject(forKey: "mainnet_userCreatedSubaddressIndices")
-        UserDefaults.standard.removeObject(forKey: "testnet_userCreatedSubaddressIndices")
+        guard let active = activeWallet else { return }
+        deleteWallet(id: active.id)
+    }
+
+    func deleteWallet(id: UUID) {
+        let isDeletingActive = (id == activeWallet?.id)
+
+        // Delete keychain data for this wallet
+        keychain.deleteSeed(walletId: id)
+        walletStore.removeWallet(id: id)
+        wallets = walletStore.loadWallets()
+
+        if isDeletingActive {
+            // Stop current wallet
+            cancellables.removeAll()
+            errorDebounceTask?.cancel()
+            errorDebounceTask = nil
+            currentReachabilityTask?.cancel()
+            currentReachabilityTask = nil
+            connectionTimer?.invalidate()
+            connectionTimer = nil
+            reachabilityRetryCount = 0
+            let oldWallet = moneroWallet
+            moneroWallet = nil
+            Task.detached { [oldWallet] in let _ = oldWallet }
+            currentSeed = nil
+            isUnlocked = false
+            balance = 0
+            unlockedBalance = 0
+            address = ""
+            primaryAddress = ""
+            syncState = .idle
+            transactions = []
+            subaddresses = []
+            userCreatedSubaddressIndices = []
+
+            if let next = wallets.first {
+                // Switch to next wallet
+                activeWallet = next
+                walletStore.setActiveWalletId(next.id)
+
+                // If we have the PIN, auto-switch
+                if let pin = currentPin {
+                    Task {
+                        try? await switchToWallet(id: next.id, pin: pin)
+                    }
+                }
+            } else {
+                activeWallet = nil
+                currentPin = nil
+                walletStore.setActiveWalletId(nil)
+            }
+        }
+    }
+
+    // MARK: - Network Switching
+
+    // MARK: - Multi-Wallet
+
+    /// Phase 1: Instant UI update (synchronous, no await).
+    /// Returns (target, previousWalletInfo) if the switch should proceed, nil otherwise.
+    func prepareSwitchToWallet(id: UUID) -> (target: WalletInfo, previous: WalletInfo?)? {
+        guard let target = wallets.first(where: { $0.id == id }) else { return nil }
+        guard target.id != activeWallet?.id else { return nil }
+
+        // Snapshot previous wallet data in-memory only (no disk I/O)
+        var previousInfo: WalletInfo?
+        if var info = activeWallet {
+            info.cachedBalance = balance
+            info.cachedPrimaryAddress = primaryAddress.isEmpty ? nil : primaryAddress
+            info.userCreatedSubaddressIndices = Array(userCreatedSubaddressIndices)
+            previousInfo = info
+            activeWallet = info
+            if let idx = wallets.firstIndex(where: { $0.id == info.id }) {
+                wallets[idx] = info
+            }
+        }
+
+        // Set new active wallet immediately — UI sees the change NOW
+        activeWallet = target
+        walletStore.setActiveWalletId(target.id)
+
+        // Show cached data instantly
+        balance = target.cachedBalance ?? 0
+        primaryAddress = target.cachedPrimaryAddress ?? ""
+        address = target.cachedPrimaryAddress ?? ""
+        syncState = .connecting
+        currentSeed = nil
+        connectionStage = .connecting
+        daemonHeight = 0
+        walletHeight = 0
+        restoreHeight = target.restoreHeight
+        walletSessionId = UUID()
+        transactions = []
+        subaddresses = []
         userCreatedSubaddressIndices = []
-        hasWallet = false
+
+        return (target, previousInfo)
+    }
+
+    /// Phase 2: Heavy work (async, runs in background after UI has updated).
+    func completeSwitchToWallet(target: WalletInfo, persistPrevious: WalletInfo? = nil) async throws {
+        // Persist previous wallet's cached data to disk (off the animation hot path)
+        if let previous = persistPrevious {
+            walletStore.updateWallet(previous)
+        }
+
+        // Let the collapse animation finish before tearing down the old wallet
+        try await Task.sleep(nanoseconds: 400_000_000) // 0.4s — just past the 0.35s animation
+
+        // Tear down old wallet
+        cancellables.removeAll()
+        let oldWallet = moneroWallet
+        moneroWallet = nil
+        oldWallet?.stop()
+
+        // Decrypt and start new wallet
+        guard let pin = currentPin else { throw WalletError.notUnlocked }
+        guard let seedPhrase = try keychain.getSeed(pin: pin, walletId: target.id) else {
+            throw WalletError.invalidPin
+        }
+        let mnemonic = seedPhrase.split(separator: " ").map(String.init)
+        currentSeed = mnemonic
+        try await startWalletFromSeed(mnemonic)
+    }
+
+    /// Switch to a different wallet. Requires the app to be unlocked (currentPin available).
+    func switchToWallet(id: UUID) async throws {
+        guard let pin = currentPin else {
+            throw WalletError.notUnlocked
+        }
+        try await switchToWallet(id: id, pin: pin)
+    }
+
+    /// Switch to a different wallet with explicit PIN (convenience that calls both phases sequentially)
+    func switchToWallet(id: UUID, pin: String) async throws {
+        guard let result = prepareSwitchToWallet(id: id) else { return }
+        try await completeSwitchToWallet(target: result.target, persistPrevious: result.previous)
+    }
+
+    /// Rename a wallet (and optionally change its emoji)
+    func renameWallet(id: UUID, name: String, emoji: String? = nil) {
+        guard var info = wallets.first(where: { $0.id == id }) else { return }
+        info.name = name
+        if let emoji { info.emoji = emoji }
+        walletStore.updateWallet(info)
+        if let idx = wallets.firstIndex(where: { $0.id == id }) {
+            wallets[idx] = info
+        }
+        if activeWallet?.id == id {
+            activeWallet = info
+        }
+    }
+
+    /// Re-encrypt all wallet seeds when PIN changes
+    func reencryptAllWallets(oldPin: String, newPin: String) throws {
+        // First, decrypt all seeds with old PIN (fail fast before writing anything)
+        var seeds: [(UUID, String)] = []
+        for wallet in wallets {
+            guard let seed = try keychain.getSeed(pin: oldPin, walletId: wallet.id) else {
+                throw WalletError.invalidPin
+            }
+            seeds.append((wallet.id, seed))
+        }
+
+        // Now re-encrypt all with new PIN
+        for (walletId, seed) in seeds {
+            try keychain.saveSeed(seed, pin: newPin, walletId: walletId)
+        }
+
+        currentPin = newPin
+    }
+
+    /// Check if a seed phrase already exists in any wallet
+    func checkForDuplicateSeed(_ seedPhrase: String, pin: String) throws {
+        for wallet in wallets {
+            if let existingSeed = try? keychain.getSeed(pin: pin, walletId: wallet.id),
+               existingSeed == seedPhrase {
+                throw WalletError.duplicateWallet(existingName: wallet.name)
+            }
+        }
+    }
+
+    /// Update restore height for the active wallet and persist
+    func updateRestoreHeight(_ height: UInt64) {
+        guard var info = activeWallet else { return }
+        info.restoreHeight = height
+        walletStore.updateWallet(info)
+        activeWallet = info
+        if let idx = wallets.firstIndex(where: { $0.id == info.id }) {
+            wallets[idx] = info
+        }
+        restoreHeight = height
     }
 
     // MARK: - Network Switching
@@ -1199,10 +1528,8 @@ class WalletManager: ObservableObject {
         transactions = []
         syncState = .connecting
 
-        // Reinitialize with new network (will use different walletId due to network suffix)
-        // Note: isTestnet has already been toggled by the caller
-        let walletRestoreHeight = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
-        let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
+        let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
+        let resetCount = activeWallet?.syncResetCount ?? 0
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
         let netType = networkType
 
@@ -1228,7 +1555,8 @@ enum WalletError: LocalizedError {
     case saveFailed
     case notUnlocked
     case biometricFailed
-    case seedMismatch  // Seed doesn't match current wallet address
+    case seedMismatch
+    case duplicateWallet(existingName: String)
 
     var errorDescription: String? {
         switch self {
@@ -1238,6 +1566,7 @@ enum WalletError: LocalizedError {
         case .notUnlocked: return "Wallet is locked"
         case .biometricFailed: return "Biometric authentication failed"
         case .seedMismatch: return "Seed phrase doesn't match current wallet"
+        case .duplicateWallet(let name): return "This seed phrase is already used by \"\(name)\""
         }
     }
 }

@@ -28,6 +28,7 @@ struct MoneroOneApp: App {
                 UserDefaults.standard.removePersistentDomain(forName: bundleId)
             }
             KeychainStorage().deleteAll()
+            WalletStore().deleteAll()
         }
         #endif
 

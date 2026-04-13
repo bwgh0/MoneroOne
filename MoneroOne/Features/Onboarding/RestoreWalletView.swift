@@ -6,6 +6,13 @@ struct RestoreWalletView: View {
     @Environment(\.dismiss) var dismiss
     @AppStorage("preferredPINLength") private var preferredPINLength = 6
 
+    // Multi-wallet parameters
+    var isAddingWallet: Bool = false
+    var existingPin: String? = nil
+
+    @State private var walletName: String = ""
+    @State private var walletEmoji: String = "\u{1F4B0}"
+
     @State private var seedInput = ""
     @State private var pin = ""
     @State private var confirmPin = ""
@@ -33,6 +40,7 @@ struct RestoreWalletView: View {
         case creationDate
         case setPIN
         case biometricSetup
+        case nameWallet
         case restoring
     }
 
@@ -68,6 +76,8 @@ struct RestoreWalletView: View {
                 setPINView
             case .biometricSetup:
                 biometricSetupView
+            case .nameWallet:
+                nameWalletView
             case .restoring:
                 restoringView
             }
@@ -313,8 +323,7 @@ struct RestoreWalletView: View {
 
                 Button {
                     enableBiometrics = false
-                    step = .restoring
-                    restoreWallet()
+                    step = .nameWallet
                 } label: {
                     Text("Skip for Now")
                         .font(.callout.weight(.medium))
@@ -327,6 +336,51 @@ struct RestoreWalletView: View {
             .padding(.horizontal)
 
             Spacer()
+        }
+    }
+
+    private var nameWalletView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            EmojiPickerCircle(emoji: $walletEmoji, size: 80, fontSize: 44)
+
+            TextField("Wallet Name", text: $walletName)
+                .font(.title3.weight(.medium))
+                .multilineTextAlignment(.center)
+                .submitLabel(.done)
+                .padding(12)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(10)
+                .padding(.horizontal, 40)
+
+            Text("You can change this later")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button {
+                step = .restoring
+                restoreWallet()
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Restore Wallet")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(Color.orange)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            }
+            .glassButtonStyle()
+            .padding(.horizontal)
+        }
+        .onAppear {
+            if walletName.isEmpty {
+                walletName = WalletStore().nextWalletName(existing: walletManager.wallets)
+            }
         }
     }
 
@@ -384,12 +438,15 @@ struct RestoreWalletView: View {
     }
 
     private func proceedAfterPIN() {
+        if isAddingWallet {
+            step = .nameWallet
+            return
+        }
         checkBiometrics()
         if biometricsAvailable {
             step = .biometricSetup
         } else {
-            step = .restoring
-            restoreWallet()
+            step = .nameWallet
         }
     }
 
@@ -406,8 +463,7 @@ struct RestoreWalletView: View {
                 await MainActor.run {
                     if success {
                         enableBiometrics = true
-                        step = .restoring
-                        restoreWallet()
+                        step = .nameWallet
                     }
                 }
             } catch {
@@ -418,16 +474,39 @@ struct RestoreWalletView: View {
     }
 
     private func validateAndProceed() {
-        if isValidSeedCount {
-            errorMessage = nil
-            // Skip date picker for polyseed - birthday is embedded in the seed
-            if isPolyseed {
-                step = .setPIN
+        guard isValidSeedCount else {
+            errorMessage = "Please enter 16, 24, or 25 words"
+            return
+        }
+
+        // Validate mnemonic words (BIP39 word list check for 24-word seeds)
+        guard walletManager.validateMnemonic(seedWords) else {
+            errorMessage = "Invalid seed phrase. Please check your words and try again."
+            return
+        }
+
+        // Check for duplicate wallet (only when PIN is available, i.e. adding to existing wallets)
+        if isAddingWallet, let pin = existingPin {
+            do {
+                try walletManager.checkForDuplicateSeed(seedWords.joined(separator: " "), pin: pin)
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
+        }
+
+        errorMessage = nil
+
+        // All checks passed — proceed
+        if isPolyseed {
+            if isAddingWallet, let existingPin = existingPin {
+                pin = existingPin
+                step = .nameWallet
             } else {
-                step = .creationDate
+                step = .setPIN
             }
         } else {
-            errorMessage = "Please enter 16, 24, or 25 words"
+            step = .creationDate
         }
     }
 
@@ -463,7 +542,12 @@ struct RestoreWalletView: View {
             }
 
             Button {
-                step = .setPIN
+                if isAddingWallet, let existingPin = existingPin {
+                    pin = existingPin
+                    step = .nameWallet
+                } else {
+                    step = .setPIN
+                }
             } label: {
                 Text("Continue")
                     .fontWeight(.semibold)
@@ -498,23 +582,31 @@ struct RestoreWalletView: View {
     private func restoreWallet() {
         Task {
             do {
-                // For polyseed (16 words), the wallet birthday is embedded in the seed
-                // so we don't need a restore date - wallet2 will extract it automatically
                 let restoreDate: Date?
                 if isPolyseed {
                     restoreDate = nil
                 } else {
                     restoreDate = useCreationDate ? walletCreationDate : nil
                 }
-                try walletManager.restoreWallet(mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
-                KeychainStorage().savePinLength(selectedPINLength)
 
-                // Enable biometrics if user opted in
-                if enableBiometrics {
+                let name = walletName.trimmingCharacters(in: .whitespaces).isEmpty ? WalletStore().nextWalletName(existing: walletManager.wallets) : walletName.trimmingCharacters(in: .whitespaces)
+                let emoji = walletEmoji
+                try walletManager.restoreWallet(name: name, emoji: emoji, mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
+
+                if !isAddingWallet {
+                    KeychainStorage().savePinLength(selectedPINLength)
+                }
+
+                // Enable biometrics if user opted in (only for first wallet)
+                if enableBiometrics && !isAddingWallet {
                     try walletManager.enableBiometricUnlock(pin: pin)
                 }
 
                 try await walletManager.unlock(pin: pin)
+
+                if isAddingWallet {
+                    dismiss()
+                }
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription

@@ -17,6 +17,8 @@ struct DynamicGreeting: View {
     var body: some View {
         Text(timeBasedGreeting)
             .font(.largeTitle.weight(.bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
     }
 }
 

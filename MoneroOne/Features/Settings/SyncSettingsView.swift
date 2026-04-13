@@ -434,9 +434,8 @@ struct RestoreHeightSheet: View {
         isUpdating = true
         let newHeight = estimatedHeight
 
-        // Save to UserDefaults (network-specific)
-        let networkPrefix = walletManager.isTestnet ? "testnet_" : "mainnet_"
-        UserDefaults.standard.set(Int(newHeight), forKey: "\(networkPrefix)restoreHeight")
+        // Update restore height via WalletManager (persists to WalletStore)
+        walletManager.updateRestoreHeight(newHeight)
 
         Task {
             // Small delay to show loading state

@@ -189,26 +189,18 @@ struct BackupView: View {
     }
 
     private func unlockSeed() {
-        Task.detached {
-            do {
-                if let seed = try KeychainStorage().getSeed(pin: pin) {
-                    let words = seed.split(separator: " ").map(String.init)
-                    let legacy = walletManager.getLegacySeed()
-                    let poly = walletManager.getPolyseed()
-
-                    await MainActor.run {
-                        seedPhrase = words
-                        legacySeed = legacy
-                        polyseedWords = poly
-                        isUnlocked = true
-                        errorMessage = nil
-                    }
-                } else {
-                    await MainActor.run { errorMessage = "Invalid PIN" }
-                }
-            } catch {
-                await MainActor.run { errorMessage = error.localizedDescription }
+        do {
+            if let seed = try walletManager.getSeedPhrase(pin: pin) {
+                seedPhrase = seed
+                legacySeed = walletManager.getLegacySeed()
+                polyseedWords = walletManager.getPolyseed()
+                isUnlocked = true
+                errorMessage = nil
+            } else {
+                errorMessage = "Invalid PIN"
             }
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

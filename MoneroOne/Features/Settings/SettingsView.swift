@@ -281,13 +281,13 @@ struct SettingsView: View {
             } message: {
                 Text("This will clear all sync progress and re-sync from the beginning. Your wallet and keys are not affected.")
             }
-            .alert("Remove Wallet from Device?", isPresented: $showDeleteConfirmation) {
+            .alert("Remove \(walletManager.activeWallet?.name ?? "Wallet") from Device?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
                 Button("Remove", role: .destructive) {
                     walletManager.deleteWallet()
                 }
             } message: {
-                Text("This removes wallet data from this device only. Your wallet still exists on the blockchain and can be recovered with your seed phrase.")
+                Text("This removes \"\(walletManager.activeWallet?.name ?? "this wallet")\" from this device only. Your wallet still exists on the blockchain and can be recovered with your seed phrase.")
             }
         }
     }

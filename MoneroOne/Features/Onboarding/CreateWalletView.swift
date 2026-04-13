@@ -7,6 +7,13 @@ struct CreateWalletView: View {
     @Environment(\.dismiss) var dismiss
     @AppStorage("preferredPINLength") private var preferredPINLength = 6
 
+    // Multi-wallet parameters
+    var isAddingWallet: Bool = false
+    var existingPin: String? = nil
+
+    @State private var walletName: String = ""
+    @State private var walletEmoji: String = "\u{1F4B0}"
+
     @State private var mnemonic: [String] = []
     @State private var showSeedPhrase = false
     @State private var confirmed = false
@@ -35,7 +42,8 @@ struct CreateWalletView: View {
         case setPIN
         case biometricSetup
         case showSeed
-        case confirmSeed
+        case nameWallet
+        case creating
     }
 
     private var biometricIcon: String {
@@ -67,8 +75,10 @@ struct CreateWalletView: View {
                 biometricSetupView
             case .showSeed:
                 showSeedView
-            case .confirmSeed:
-                confirmSeedView
+            case .nameWallet:
+                nameWalletView
+            case .creating:
+                creatingView
             }
         }
         .padding()
@@ -157,7 +167,12 @@ struct CreateWalletView: View {
 
             Button {
                 mnemonic = walletManager.generateNewWallet(type: selectedSeedType)
-                step = .setPIN
+                if isAddingWallet, let existingPin = existingPin {
+                    pin = existingPin
+                    step = .showSeed
+                } else {
+                    step = .setPIN
+                }
             } label: {
                 HStack(spacing: 8) {
                     Text("Continue")
@@ -415,7 +430,7 @@ struct CreateWalletView: View {
                 .padding(.horizontal)
 
             Button {
-                step = .confirmSeed
+                step = .nameWallet
             } label: {
                 HStack(spacing: 8) {
                     Text("Continue")
@@ -436,7 +451,51 @@ struct CreateWalletView: View {
         }
     }
 
-    private var confirmSeedView: some View {
+    private var nameWalletView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            EmojiPickerCircle(emoji: $walletEmoji, size: 80, fontSize: 44)
+
+            TextField("Wallet Name", text: $walletName)
+                .font(.title3.weight(.medium))
+                .multilineTextAlignment(.center)
+                .submitLabel(.done)
+                .padding(12)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(10)
+                .padding(.horizontal, 40)
+
+            Text("You can change this later")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button {
+                step = .creating
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Continue")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(Color.orange)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            }
+            .glassButtonStyle()
+            .padding(.horizontal)
+        }
+        .onAppear {
+            if walletName.isEmpty {
+                walletName = WalletStore().nextWalletName(existing: walletManager.wallets)
+            }
+        }
+    }
+
+    private var creatingView: some View {
         VStack(spacing: 24) {
             Text("Creating your wallet...")
                 .font(.headline)
@@ -471,6 +530,10 @@ struct CreateWalletView: View {
     }
 
     private func proceedAfterPIN() {
+        if isAddingWallet {
+            step = .showSeed
+            return
+        }
         checkBiometrics()
         if biometricsAvailable {
             step = .biometricSetup
@@ -509,15 +572,24 @@ struct CreateWalletView: View {
                 // (no transactions can exist before the wallet was created)
                 let chainHeight = await fetchCurrentChainHeight()
 
-                try walletManager.saveWallet(mnemonic: mnemonic, pin: pin, restoreHeight: chainHeight)
-                KeychainStorage().savePinLength(selectedPINLength)
+                let name = walletName.trimmingCharacters(in: .whitespaces).isEmpty ? WalletStore().nextWalletName(existing: walletManager.wallets) : walletName.trimmingCharacters(in: .whitespaces)
+                let emoji = walletEmoji
+                try walletManager.addWallet(name: name, emoji: emoji, mnemonic: mnemonic, pin: pin, restoreHeight: chainHeight)
 
-                // Enable biometrics if user opted in
-                if enableBiometrics {
+                if !isAddingWallet {
+                    KeychainStorage().savePinLength(selectedPINLength)
+                }
+
+                // Enable biometrics if user opted in (only for first wallet)
+                if enableBiometrics && !isAddingWallet {
                     try walletManager.enableBiometricUnlock(pin: pin)
                 }
 
                 try await walletManager.unlock(pin: pin)
+
+                if isAddingWallet {
+                    dismiss()
+                }
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription

@@ -11,6 +11,7 @@
 		REGR3SS10NT3STS00000001 /* RegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = REGR3SS10NT3STS00000002 /* RegressionTests.swift */; };
 		093E2F482F307A6400A0715B /* monero-one.icon in Resources */ = {isa = PBXBuildFile; fileRef = 093E2F472F307A6400A0715B /* monero-one.icon */; };
 		0D932221213145AEDB7B5082 /* AnimatedMoneroLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */; };
+		0D932221213145AEDB7B5083 /* AnimatedWalletIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7821313ACB80A039D75B32D5 /* AnimatedWalletIcon.swift */; };
 		186E1F281B45C7929D9F7CB7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FF6022942E141D54562F131E /* Assets.xcassets */; };
 		1BA4AE0A0A268DE7F27D1308 /* GlassButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D3AE9C07684C76F5645BB /* GlassButtonStyle.swift */; };
 		282C36ABD1B88FEEFDF153A6 /* SecurityAuditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28AE04350FBA393B5C0220F /* SecurityAuditTests.swift */; };
@@ -108,6 +109,9 @@
 		5KTMKZ19F24DRHHTSNXITH45 /* DisclaimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */; };
 		PRIVACYINFOBUILD1234ABCD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */; };
 		WIDGETPRIVACYBUILD12345A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = WIDGETPRIVACYREF123456AB /* PrivacyInfo.xcprivacy */; };
+		AA0000000000000000000002 /* WalletInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WalletInfo.swift */; };
+		AA0000000000000000000004 /* WalletStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* WalletStore.swift */; };
+		AA0000000000000000000006 /* AddWalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AddWalletView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -194,6 +198,7 @@
 		70806977F6367D918B532021 /* NodeManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeManagerTests.swift; sourceTree = "<group>"; };
 		73D8C8A112B161D2A874330F /* TransactionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionListView.swift; sourceTree = "<group>"; };
 		7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedMoneroLogo.swift; sourceTree = "<group>"; };
+		7821313ACB80A039D75B32D5 /* AnimatedWalletIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedWalletIcon.swift; sourceTree = "<group>"; };
 		78543F60FF832ABD15C47107 /* BiometricAuthManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricAuthManagerTests.swift; sourceTree = "<group>"; };
 		REGR3SS10NT3STS00000002 /* RegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegressionTests.swift; sourceTree = "<group>"; };
 		7BE0BF27D62647071D8D9F0E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -255,6 +260,9 @@
 		ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisclaimerView.swift; sourceTree = "<group>"; };
 		PRIVACYINFOREF12345ABCDE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		WIDGETPRIVACYREF123456AB /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AA0000000000000000000001 /* WalletInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletInfo.swift; sourceTree = "<group>"; };
+		AA0000000000000000000003 /* WalletStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletStore.swift; sourceTree = "<group>"; };
+		AA0000000000000000000005 /* AddWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWalletView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -400,6 +408,7 @@
 			isa = PBXGroup;
 			children = (
 				7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */,
+				7821313ACB80A039D75B32D5 /* AnimatedWalletIcon.swift */,
 				C2B3390E2738445B8D347933 /* ErrorBanner.swift */,
 				0F1C17A0DAB5332E049A04B0 /* GlassSegmentedPicker.swift */,
 				A1B2C3D400000002A0000004 /* GradientSpinner.swift */,
@@ -428,6 +437,7 @@
 		533CA045DC4B388B4341E079 /* Wallet */ = {
 			isa = PBXGroup;
 			children = (
+				AA0000000000000000000005 /* AddWalletView.swift */,
 				A39B30F864DF425DCA258A4B /* BalanceCard.swift */,
 				885C8AC405766D0B3663F27F /* MainTabView.swift */,
 				1202A246B0E4F7871A06D84B /* PortfolioChartView.swift */,
@@ -489,7 +499,9 @@
 				D0473A18D6E6F4D2AFB34CBE /* KeychainStorage.swift */,
 				TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */,
 				6BE53A66511AA0C64737C553 /* MoneroWallet.swift */,
+				AA0000000000000000000001 /* WalletInfo.swift */,
 				833C5B007D9D33E833CFE48B /* WalletManager.swift */,
+				AA0000000000000000000003 /* WalletStore.swift */,
 			);
 			path = Wallet;
 			sourceTree = "<group>";
@@ -814,6 +826,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				5KTMKZ19F24DRHHTSNXITH45 /* DisclaimerView.swift in Sources */,
 BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				0D932221213145AEDB7B5082 /* AnimatedMoneroLogo.swift in Sources */,
+				0D932221213145AEDB7B5083 /* AnimatedWalletIcon.swift in Sources */,
 				E0ACDE5DE7CC25979C8ABCF8 /* Array+BinarySearch.swift in Sources */,
 				D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */,
 				326517A0B392547A7BA61678 /* TrustedLocationSyncView.swift in Sources */,
@@ -878,6 +891,9 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				F65EECC001BAE93898D97CB6 /* WidgetSettingsView.swift in Sources */,
 				XMRFORMAT123456789ABCDEF0 /* XMRFormatter.swift in Sources */,
 				TXSTATUS123456789ABCDEF01 /* MoneroTransaction+Status.swift in Sources */,
+				AA0000000000000000000002 /* WalletInfo.swift in Sources */,
+				AA0000000000000000000004 /* WalletStore.swift in Sources */,
+				AA0000000000000000000006 /* AddWalletView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

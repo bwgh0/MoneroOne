@@ -280,15 +280,8 @@ struct ChangePINView: View {
         errorMessage = nil
 
         do {
-            // Verify current PIN and get seed
-            guard let seed = try walletManager.getSeedPhrase(pin: currentPIN) else {
-                errorMessage = "Invalid current PIN"
-                isChanging = false
-                return
-            }
-
-            // Save wallet with new PIN
-            try walletManager.saveWallet(mnemonic: seed, pin: newPIN)
+            // Re-encrypt all wallets with new PIN
+            try walletManager.reencryptAllWallets(oldPin: currentPIN, newPin: newPIN)
             KeychainStorage().savePinLength(selectedPINLength)
 
             // Update biometric PIN if enabled

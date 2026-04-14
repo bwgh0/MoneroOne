@@ -39,9 +39,28 @@ private struct EmojiTextFieldRepresentable: UIViewRepresentable {
         init(parent: EmojiTextFieldRepresentable) { self.parent = parent }
 
         func textField(_ tf: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
-            let cleaned = string.filter { $0.unicodeScalars.allSatisfy { $0.properties.isEmoji && $0.properties.isEmojiPresentation } }
-            if let last = cleaned.last {
-                parent.emoji = String(last)
+            // Accept any Character that represents an emoji cluster. Legacy
+            // Misc-Symbols / Dingbats emoji (❤️ ☮️ ↩️ ✌️) have
+            // isEmojiPresentation == false — they're text-style by default and
+            // become emoji only when paired with VS16 (U+FE0F). A naïve
+            // `allSatisfy(isEmojiPresentation)` check drops those entire clusters.
+            let pickedEmoji = string.last { ch in
+                let scalars = ch.unicodeScalars
+                if scalars.contains(where: { $0.properties.isEmojiPresentation }) {
+                    return true
+                }
+                // Text-style emoji explicitly promoted to emoji presentation via
+                // VS16. Require the cluster to actually contain an emoji-marked
+                // scalar above the ASCII / digit range so `#`, `*`, and `0-9`
+                // (all flagged isEmoji) aren't mistakenly accepted.
+                let hasVS16 = scalars.contains(where: { $0.value == 0xFE0F })
+                let hasHighEmojiScalar = scalars.contains {
+                    $0.properties.isEmoji && $0.value >= 0x203C
+                }
+                return hasVS16 && hasHighEmojiScalar
+            }
+            if let ch = pickedEmoji {
+                parent.emoji = String(ch)
                 parent.isActive = false
                 tf.resignFirstResponder()
             }

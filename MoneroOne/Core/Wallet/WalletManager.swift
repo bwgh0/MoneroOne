@@ -1014,6 +1014,13 @@ class WalletManager: ObservableObject {
         return nil
     }
 
+    /// Rename a subaddress. Label is persisted via wallet2's `.keys` cache on disk.
+    @discardableResult
+    func setSubaddressLabel(index: Int, label: String) -> Bool {
+        guard let wallet = moneroWallet else { return false }
+        return wallet.setSubaddressLabel(index: index, label: label)
+    }
+
     // MARK: - User-Created Subaddress Persistence
 
     private func saveUserCreatedSubaddresses() {

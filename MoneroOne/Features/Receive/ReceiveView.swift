@@ -40,6 +40,10 @@ struct ReceiveView: View {
             return "Main Address"
         } else {
             let subaddresses = walletManager.subaddresses.filter { $0.index > 0 && !$0.address.isEmpty }
+            if let subaddr = subaddresses.first(where: { $0.index == effectiveAddressIndex }),
+               !subaddr.label.isEmpty {
+                return subaddr.label
+            }
             if let position = subaddresses.firstIndex(where: { $0.index == effectiveAddressIndex }) {
                 return "Subaddress #\(position + 1)"
             }
@@ -356,12 +360,38 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 // MARK: - Address Picker View
 
+/// Splits a wallet2 label into a leading emoji grapheme (if any) and remaining name.
+/// wallet2 stores a single `std::string` per subaddress, so we pack "<emoji> <name>"
+/// and parse on edit.
+func splitSubaddressLabel(_ raw: String) -> (emoji: String, name: String) {
+    guard let first = raw.first else { return ("", "") }
+    let isEmoji = first.unicodeScalars.contains {
+        $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value > 0x238C)
+    }
+    if isEmoji {
+        let name = raw.dropFirst().trimmingCharacters(in: .whitespaces)
+        return (String(first), name)
+    }
+    return ("", raw)
+}
+
+/// Packs emoji + name back into wallet2's label string.
+func joinSubaddressLabel(emoji: String, name: String) -> String {
+    let trimmedName = name.trimmingCharacters(in: .whitespaces)
+    if emoji.isEmpty { return trimmedName }
+    if trimmedName.isEmpty { return emoji }
+    return "\(emoji) \(trimmedName)"
+}
+
 struct AddressPickerView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
     @Binding var selectedIndex: Int
     @State private var isCreating = false
     @State private var showCreateError = false
+    @State private var renameIndex: Int? = nil
+    @State private var renameText: String = ""
+    @State private var renameEmoji: String = ""
 
     /// Subaddress creation only needs the wallet pointer (key derivation), not daemon sync
     private var canCreateSubaddress: Bool {
@@ -434,16 +464,24 @@ struct AddressPickerView: View {
                     .padding(.vertical, 32)
                 } else {
                     ForEach(Array(actualSubaddresses.enumerated()), id: \.element.index) { position, subaddr in
+                        let displayLabel = subaddr.label.isEmpty ? "Subaddress #\(position + 1)" : subaddr.label
                         AddressCard(
-                            label: "Subaddress #\(position + 1)",
+                            label: displayLabel,
                             address: subaddr.address,
                             index: subaddr.index,
                             isSelected: selectedIndex == subaddr.index,
-                            showWarning: false
-                        ) {
-                            selectedIndex = subaddr.index
-                            dismiss()
-                        }
+                            showWarning: false,
+                            onSelect: {
+                                selectedIndex = subaddr.index
+                                dismiss()
+                            },
+                            onRename: {
+                                let parts = splitSubaddressLabel(subaddr.label)
+                                renameEmoji = parts.emoji
+                                renameText = parts.name
+                                renameIndex = subaddr.index
+                            }
+                        )
                     }
                 }
             }
@@ -455,6 +493,24 @@ struct AddressPickerView: View {
             Button("OK") {}
         } message: {
             Text("Please wait until the wallet finishes syncing and try again.")
+        }
+        .sheet(isPresented: Binding(
+            get: { renameIndex != nil },
+            set: { if !$0 { renameIndex = nil } }
+        )) {
+            RenameSubaddressSheet(
+                name: $renameText,
+                emoji: $renameEmoji,
+                onSave: {
+                    if let idx = renameIndex {
+                        let packed = joinSubaddressLabel(emoji: renameEmoji, name: renameText)
+                        walletManager.setSubaddressLabel(index: idx, label: packed)
+                    }
+                    renameIndex = nil
+                },
+                onCancel: { renameIndex = nil }
+            )
+            .presentationDetents([.medium])
         }
     }
 
@@ -495,6 +551,7 @@ struct AddressCard: View {
     let isSelected: Bool
     let showWarning: Bool
     let onSelect: () -> Void
+    var onRename: (() -> Void)? = nil
 
     var body: some View {
         Button(action: onSelect) {
@@ -525,6 +582,17 @@ struct AddressCard: View {
                     }
 
                     Spacer()
+
+                    if let onRename {
+                        Button(action: onRename) {
+                            Image(systemName: "pencil")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(8)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Rename \(label)")
+                    }
 
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
@@ -578,6 +646,61 @@ struct AddressCardButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Rename Subaddress Sheet
+
+struct RenameSubaddressSheet: View {
+    @Binding var name: String
+    @Binding var emoji: String
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                EmojiPickerCircle(emoji: $emoji)
+                    .padding(.top, 8)
+
+                Text("Tap to pick an emoji")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                TextField("Label", text: $name)
+                    .textInputAutocapitalization(.sentences)
+                    .font(.subheadline)
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 32)
+
+                Text("Labels stay on this device and aren't backed up with your seed.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
+                Spacer()
+            }
+            .navigationTitle("Rename Subaddress")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave()
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 

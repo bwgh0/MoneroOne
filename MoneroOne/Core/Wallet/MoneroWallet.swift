@@ -469,6 +469,13 @@ class MoneroWallet: ObservableObject {
         return kit.createSubaddress()
     }
 
+    /// Update label on an existing subaddress, persisted via wallet2 cache.
+    @discardableResult
+    func setSubaddressLabel(index: Int, label: String) -> Bool {
+        guard let kit = kit else { return false }
+        return kit.setSubaddressLabel(index: index, label: label)
+    }
+
     // MARK: - Validation
 
     static func isValidAddress(_ address: String, networkType: MoneroKit.NetworkType = .mainnet) -> Bool {

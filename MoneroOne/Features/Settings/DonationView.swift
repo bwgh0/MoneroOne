@@ -82,7 +82,7 @@ struct DonationView: View {
                             Text("Send XMR")
                                 .fontWeight(.medium)
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(walletManager.isViewOnly ? Color.secondary.opacity(0.6) : .white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
@@ -94,6 +94,10 @@ struct DonationView: View {
                         )
                         .cornerRadius(12)
                     }
+                    .disabled(walletManager.isViewOnly)
+                    .opacity(walletManager.isViewOnly ? 0.55 : 1)
+                    .accessibilityLabel(walletManager.isViewOnly ? "Send XMR, disabled for view-only wallet" : "Send XMR")
+                    .accessibilityHint(walletManager.isViewOnly ? "This wallet is view-only and cannot send" : "Prefills send screen with donation address")
                 }
                 .padding(.horizontal)
 

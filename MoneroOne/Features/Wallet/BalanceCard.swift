@@ -6,6 +6,7 @@ struct BalanceCard: View {
     let syncState: WalletManager.SyncState
     let connectionStage: ConnectionStage
     @ObservedObject var priceService: PriceService
+    var isViewOnly: Bool = false
     var isSyncBlocked: Bool = false
     var isOutsideTrustedZone: Bool = false
     var trustedLocationName: String? = nil
@@ -66,6 +67,22 @@ struct BalanceCard: View {
                         syncProgress: syncProgress
                     )
                 }
+
+                if isViewOnly {
+                    HStack(spacing: 4) {
+                        Image(systemName: "eye.fill")
+                            .font(.caption2)
+                        Text("View-only")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.orange))
+                    .padding(.leading, 6)
+                    .accessibilityLabel("View-only wallet")
+                }
+
                 Spacer()
 
                 // Price change indicator (tappable)

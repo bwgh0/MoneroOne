@@ -22,6 +22,11 @@ class WalletManager: ObservableObject {
     @Published var transactions: [MoneroTransaction] = []
     @Published var subaddresses: [MoneroKit.SubAddress] = []
     @Published var userCreatedSubaddressIndices: Set<Int> = []
+    /// True when the active wallet was opened from an address + view key and
+    /// has no spend key on-device. Drives `SendFlow` disable + UI badges.
+    /// Derived from `activeWallet?.source` in the start paths; a hardware
+    /// wallet variant later flips this to `false` too via the same property.
+    @Published private(set) var isViewOnly: Bool = false
     @Published private(set) var walletSessionId = UUID()
 
     // Send prefill properties (for donation flow)
@@ -150,16 +155,18 @@ class WalletManager: ObservableObject {
 
     /// One-time migration from legacy single-wallet storage to multi-wallet
     private func migrateFromSingleWallet() -> [WalletInfo] {
-        let seedType = UserDefaults.standard.string(forKey: "\(networkPrefix)seedType") ?? "polyseed"
+        let seedTypeRaw = UserDefaults.standard.string(forKey: "\(networkPrefix)seedType") ?? "polyseed"
         let restoreH = UInt64(UserDefaults.standard.integer(forKey: "\(networkPrefix)restoreHeight"))
         let resetCount = UserDefaults.standard.integer(forKey: "\(networkPrefix)syncResetCount")
         let subaddrIndices = UserDefaults.standard.array(forKey: "\(networkPrefix)userCreatedSubaddressIndices") as? [Int] ?? []
+
+        let source = (try? WalletSource(rawString: seedTypeRaw)) ?? .seed(.polyseed)
 
         let walletId = UUID()
         let info = WalletInfo(
             id: walletId,
             name: "Personal Wallet",
-            seedType: seedType,
+            source: source,
             createdAt: Date(),
             restoreHeight: restoreH,
             syncResetCount: resetCount,
@@ -239,14 +246,12 @@ class WalletManager: ObservableObject {
         // Check for duplicate seed across existing wallets
         try checkForDuplicateSeed(seedPhrase, pin: pin)
 
-        let seedType = SeedType.detect(from: mnemonic.count)?.rawValue ?? "polyseed"
-
         let walletId = UUID()
         let info = WalletInfo(
             id: walletId,
             name: name,
             emoji: emoji,
-            seedType: seedType,
+            source: .seeded(wordCount: mnemonic.count),
             createdAt: Date(),
             restoreHeight: restoreHeight ?? 0,
             syncResetCount: 0,
@@ -282,8 +287,6 @@ class WalletManager: ObservableObject {
         // Check for duplicate seed across existing wallets
         try checkForDuplicateSeed(seedPhrase, pin: pin)
 
-        let seedType = SeedType.detect(from: mnemonic.count)?.rawValue ?? "polyseed"
-
         var height: UInt64 = 0
         if let date = restoreDate {
             height = UInt64(RestoreHeight.getHeight(date: date))
@@ -294,7 +297,7 @@ class WalletManager: ObservableObject {
             id: walletId,
             name: name,
             emoji: emoji,
-            seedType: seedType,
+            source: .seeded(wordCount: mnemonic.count),
             createdAt: Date(),
             restoreHeight: height,
             syncResetCount: 0,
@@ -316,6 +319,63 @@ class WalletManager: ObservableObject {
     func restoreWallet(mnemonic: [String], pin: String, restoreDate: Date? = nil) throws {
         let name = walletStore.nextWalletName(existing: wallets)
         try restoreWallet(name: name, mnemonic: mnemonic, pin: pin, restoreDate: restoreDate)
+    }
+
+    /// Restore a view-only wallet from an address + private view key pair.
+    /// Skips mnemonic validation (no seed) and checks for an address
+    /// collision instead of a seed collision.
+    func restoreViewOnlyWallet(
+        name: String,
+        emoji: String = "\u{1F441}",
+        address: String,
+        viewKey: String,
+        pin: String,
+        restoreDate: Date? = nil
+    ) throws {
+        let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedViewKey = viewKey.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        guard MoneroWallet.isValidAddress(trimmedAddress, networkType: networkType) else {
+            throw WalletError.invalidMnemonic
+        }
+        // View keys are 64 lowercase hex characters
+        let viewKeyRegex = try? NSRegularExpression(pattern: "^[0-9a-f]{64}$", options: [])
+        let viewKeyRange = NSRange(location: 0, length: trimmedViewKey.utf16.count)
+        guard viewKeyRegex?.firstMatch(in: trimmedViewKey, options: [], range: viewKeyRange) != nil else {
+            throw WalletError.invalidMnemonic
+        }
+
+        // Reject if an existing wallet already tracks this address
+        if let existing = wallets.first(where: { $0.cachedPrimaryAddress == trimmedAddress }) {
+            throw WalletError.duplicateWallet(existingName: existing.name)
+        }
+
+        var height: UInt64 = 0
+        if let date = restoreDate {
+            height = UInt64(RestoreHeight.getHeight(date: date))
+        }
+
+        let walletId = UUID()
+        let info = WalletInfo(
+            id: walletId,
+            name: name,
+            emoji: emoji,
+            source: .viewOnly,
+            createdAt: Date(),
+            restoreHeight: height,
+            syncResetCount: 0,
+            userCreatedSubaddressIndices: [],
+            cachedPrimaryAddress: trimmedAddress,
+            cachedBalance: nil
+        )
+
+        try keychain.saveViewOnly(address: trimmedAddress, viewKey: trimmedViewKey, pin: pin, walletId: walletId)
+        walletStore.addWallet(info)
+        walletStore.setActiveWalletId(walletId)
+
+        wallets = walletStore.loadWallets()
+        activeWallet = info
+        currentPin = pin
     }
 
     func validateMnemonic(_ mnemonic: [String]) -> Bool {
@@ -356,17 +416,32 @@ class WalletManager: ObservableObject {
             return
         }
 
-        let seedResult = try await Task.detached {
-            try self.keychain.getSeed(pin: pin, walletId: active.id)
-        }.value
-        guard let seedPhrase = seedResult else {
-            throw WalletError.invalidPin
-        }
-
-        let mnemonic = seedPhrase.split(separator: " ").map(String.init)
-        currentSeed = mnemonic
         currentPin = pin
-        try await startWalletFromSeed(mnemonic)
+
+        // Dispatch on the wallet's origin type. New wallet kinds (hardware)
+        // slot in as additional cases; seed and view-only are live today.
+        switch active.source {
+        case .seed:
+            let seedResult = try await Task.detached {
+                try self.keychain.getSeed(pin: pin, walletId: active.id)
+            }.value
+            guard let seedPhrase = seedResult else {
+                throw WalletError.invalidPin
+            }
+            let mnemonic = seedPhrase.split(separator: " ").map(String.init)
+            currentSeed = mnemonic
+            try await startWalletFromSeed(mnemonic)
+
+        case .viewOnly:
+            let viewKeys = try await Task.detached {
+                try self.keychain.getViewOnly(pin: pin, walletId: active.id)
+            }.value
+            guard let keys = viewKeys else {
+                throw WalletError.invalidPin
+            }
+            currentSeed = nil
+            try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
+        }
     }
 
     /// Common wallet start logic used by unlock and switchToWallet
@@ -411,6 +486,55 @@ class WalletManager: ObservableObject {
         restoreHeight = walletRestoreHeight
         startConnectionTracking()
 
+        isViewOnly = false
+        isUnlocked = true
+        walletSessionId = UUID()
+    }
+
+    /// Open a view-only wallet from a primary address + private view key.
+    /// Mirrors `startWalletFromSeed` but routes through `MoneroWallet.createWatchOnly`.
+    private func startWalletFromViewKey(address: String, viewKey: String) async throws {
+        cancellables.removeAll()
+        if let oldWallet = moneroWallet {
+            moneroWallet = nil
+            oldWallet.stop()
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        // Same rationale as `startWalletFromSeed`: skip the batch of 7
+        // @Published resets — only nudge `syncState` so the UI shows a
+        // progress cue while the watch-only wallet loads.
+        syncState = .connecting
+
+        let wallet = MoneroWallet()
+        let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
+
+        do {
+            try await wallet.createWatchOnly(
+                address: address,
+                viewKey: viewKey,
+                restoreHeight: walletRestoreHeight,
+                networkType: networkType
+            )
+        } catch {
+            throw WalletError.saveFailed
+        }
+
+        // View-only wallets get their primary address directly from the user —
+        // wallet2's runtime address may be empty until first refresh for certain
+        // network configurations, so prefer the supplied address as a fallback.
+        let runtimeAddress = wallet.primaryAddress
+        self.primaryAddress = runtimeAddress.isEmpty ? address : runtimeAddress
+
+        moneroWallet = wallet
+        bindToWallet(wallet)
+
+        loadUserCreatedSubaddresses()
+
+        restoreHeight = walletRestoreHeight
+        startConnectionTracking()
+
+        isViewOnly = true
         isUnlocked = true
         walletSessionId = UUID()
     }
@@ -1210,6 +1334,20 @@ class WalletManager: ObservableObject {
         return mnemonic
     }
 
+    /// Fetch the address + private view key for a view-only wallet. Used by
+    /// the Backup screen to export the same pair the user originally pasted.
+    func getViewOnlyKeys(pin: String) throws -> (address: String, viewKey: String)? {
+        guard let active = activeWallet else { return nil }
+        return try keychain.getViewOnly(pin: pin, walletId: active.id)
+    }
+
+    /// The live wallet's private view key (64 hex chars). Works for both
+    /// seeded and view-only wallets so any wallet can be exported to
+    /// another device as view-only.
+    var currentViewKey: String? {
+        moneroWallet?.secretViewKey
+    }
+
     /// Expose current PIN for adding wallets (only available while unlocked)
     var currentPinForAddWallet: String? {
         currentPin
@@ -1321,7 +1459,9 @@ class WalletManager: ObservableObject {
     func deleteWallet(id: UUID) {
         let isDeletingActive = (id == activeWallet?.id)
 
-        // Delete keychain data for this wallet
+        // Delete keychain data for this wallet — both seed and view-only slots;
+        // deleteSeed wipes shared pinhash/salt as well.
+        keychain.deleteViewOnly(walletId: id)
         keychain.deleteSeed(walletId: id)
         walletStore.removeWallet(id: id)
         wallets = walletStore.loadWallets()
@@ -1430,14 +1570,29 @@ class WalletManager: ObservableObject {
         moneroWallet = nil
         oldWallet?.stop()
 
-        // Decrypt and start new wallet
         guard let pin = currentPin else { throw WalletError.notUnlocked }
-        guard let seedPhrase = try keychain.getSeed(pin: pin, walletId: target.id) else {
-            throw WalletError.invalidPin
+
+        // Route by wallet source. View-only wallets have no seed on-device, so
+        // they can't be started via `startWalletFromSeed` — the previous
+        // unconditional `getSeed` path returned nil for them and the error was
+        // silently swallowed by the `try?` at the switcher call site, leaving
+        // the UI stuck at "connecting" with no wallet running.
+        switch target.source {
+        case .seed:
+            guard let seedPhrase = try keychain.getSeed(pin: pin, walletId: target.id) else {
+                throw WalletError.invalidPin
+            }
+            let mnemonic = seedPhrase.split(separator: " ").map(String.init)
+            currentSeed = mnemonic
+            try await startWalletFromSeed(mnemonic)
+
+        case .viewOnly:
+            guard let keys = try keychain.getViewOnly(pin: pin, walletId: target.id) else {
+                throw WalletError.invalidPin
+            }
+            currentSeed = nil
+            try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
         }
-        let mnemonic = seedPhrase.split(separator: " ").map(String.init)
-        currentSeed = mnemonic
-        try await startWalletFromSeed(mnemonic)
     }
 
     /// Switch to a different wallet. Requires the app to be unlocked (currentPin available).

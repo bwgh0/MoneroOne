@@ -48,16 +48,29 @@ struct SettingsView: View {
             List {
                 // Wallet Section
                 Section("Wallet") {
+                    if !walletManager.isViewOnly {
+                        NavigationLink {
+                            BackupView()
+                        } label: {
+                            SettingsRow(
+                                icon: "key.fill",
+                                title: "Backup Seed Phrase",
+                                color: .orange
+                            )
+                        }
+                        .accessibilityIdentifier("settings.backupRow")
+                    }
+
                     NavigationLink {
-                        BackupView()
+                        ExportViewKeyView()
                     } label: {
                         SettingsRow(
-                            icon: "key.fill",
-                            title: "Backup Seed Phrase",
-                            color: .orange
+                            icon: "eye.fill",
+                            title: "Export View Key",
+                            color: .purple
                         )
                     }
-                    .accessibilityIdentifier("settings.backupRow")
+                    .accessibilityIdentifier("settings.exportViewKeyRow")
 
                     NavigationLink {
                         SecurityView()

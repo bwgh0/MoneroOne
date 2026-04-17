@@ -42,7 +42,7 @@ struct AddWalletView: View {
                     .glassButtonStyle()
 
                     NavigationLink {
-                        RestoreWalletView(
+                        RestorePickerView(
                             isAddingWallet: true,
                             existingPin: walletManager.currentPinForAddWallet
                         )
@@ -50,7 +50,7 @@ struct AddWalletView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.counterclockwise.circle.fill")
                                 .font(.callout.weight(.semibold))
-                            Text("Restore from Seed")
+                            Text("Restore Wallet")
                                 .font(.callout.weight(.semibold))
                         }
                         .foregroundStyle(.orange)

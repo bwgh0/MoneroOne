@@ -61,7 +61,7 @@ struct WelcomeView: View {
                     }
                     .glassButtonStyle()
                     .accessibilityLabel("Restore Wallet")
-                    .accessibilityHint("Double tap to restore an existing wallet from a seed phrase")
+                    .accessibilityHint("Double tap to restore an existing wallet from a seed phrase or view key")
                     .accessibilityIdentifier("welcome.restoreButton")
                 }
                 .padding(.horizontal, 40)
@@ -71,7 +71,7 @@ struct WelcomeView: View {
                 CreateWalletView()
             }
             .navigationDestination(isPresented: $showRestore) {
-                RestoreWalletView()
+                RestorePickerView()
             }
         }
     }

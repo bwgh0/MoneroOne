@@ -112,6 +112,11 @@
 		AA0000000000000000000002 /* WalletInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WalletInfo.swift */; };
 		AA0000000000000000000004 /* WalletStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* WalletStore.swift */; };
 		AA0000000000000000000006 /* AddWalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AddWalletView.swift */; };
+		AA0000000000000000000008 /* WalletSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* WalletSource.swift */; };
+		AA000000000000000000000A /* RestoreViewKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000009 /* RestoreViewKeyView.swift */; };
+		AA000000000000000000000C /* RestorePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000B /* RestorePickerView.swift */; };
+		AA000000000000000000000E /* SelectableOptionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000D /* SelectableOptionCard.swift */; };
+		AA0000000000000000000010 /* ExportViewKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000F /* ExportViewKeyView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -263,6 +268,11 @@
 		AA0000000000000000000001 /* WalletInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletInfo.swift; sourceTree = "<group>"; };
 		AA0000000000000000000003 /* WalletStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletStore.swift; sourceTree = "<group>"; };
 		AA0000000000000000000005 /* AddWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWalletView.swift; sourceTree = "<group>"; };
+		AA0000000000000000000007 /* WalletSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletSource.swift; sourceTree = "<group>"; };
+		AA0000000000000000000009 /* RestoreViewKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreViewKeyView.swift; sourceTree = "<group>"; };
+		AA000000000000000000000B /* RestorePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestorePickerView.swift; sourceTree = "<group>"; };
+		AA000000000000000000000D /* SelectableOptionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableOptionCard.swift; sourceTree = "<group>"; };
+		AA000000000000000000000F /* ExportViewKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportViewKeyView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -321,6 +331,7 @@
 7C853ADD8257D8AF64818D81 /* AddPriceAlertView.swift */,
 				13768B531AB7EA9C67616887 /* TrustedLocationSyncView.swift */,
 				39D836D865F70A7477790100 /* BackupView.swift */,
+				AA000000000000000000000F /* ExportViewKeyView.swift */,
 				DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */,
 				A281E883F5B6D0C620D37A9C /* DonationView.swift */,
 				B03E2005118D429FE332C194 /* NodeSettingsView.swift */,
@@ -416,6 +427,7 @@
 				108EE77DBE9D8CB6BE79F891 /* PINEntryView.swift */,
 				E494E802F7171F1946F2FA45 /* QRScannerView.swift */,
 				029F663A58F5CE2B18C3B33C /* ScrambledText.swift */,
+				AA000000000000000000000D /* SelectableOptionCard.swift */,
 				A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */,
 			);
 			path = Components;
@@ -501,6 +513,7 @@
 				6BE53A66511AA0C64737C553 /* MoneroWallet.swift */,
 				AA0000000000000000000001 /* WalletInfo.swift */,
 				833C5B007D9D33E833CFE48B /* WalletManager.swift */,
+				AA0000000000000000000007 /* WalletSource.swift */,
 				AA0000000000000000000003 /* WalletStore.swift */,
 			);
 			path = Wallet;
@@ -585,6 +598,8 @@
 				ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */,
 5488A55F65931268A5493C9B /* CreateWalletView.swift */,
 				DEFDF397CD9F75684D51EA38 /* RestoreWalletView.swift */,
+				AA0000000000000000000009 /* RestoreViewKeyView.swift */,
+				AA000000000000000000000B /* RestorePickerView.swift */,
 				ED23DE61696E2D6C0C9D6DAC /* SeedPhraseView.swift */,
 				CAA44CACB97519C2456A1D98 /* UnlockView.swift */,
 				6282B77F4ACF513576365CA3 /* WelcomeView.swift */,
@@ -894,6 +909,11 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				AA0000000000000000000002 /* WalletInfo.swift in Sources */,
 				AA0000000000000000000004 /* WalletStore.swift in Sources */,
 				AA0000000000000000000006 /* AddWalletView.swift in Sources */,
+				AA0000000000000000000008 /* WalletSource.swift in Sources */,
+				AA000000000000000000000A /* RestoreViewKeyView.swift in Sources */,
+				AA000000000000000000000C /* RestorePickerView.swift in Sources */,
+				AA000000000000000000000E /* SelectableOptionCard.swift in Sources */,
+				AA0000000000000000000010 /* ExportViewKeyView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

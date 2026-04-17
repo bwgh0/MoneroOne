@@ -60,13 +60,15 @@ struct CommandCenterView: View {
                     syncState: walletManager.syncState,
                     connectionStage: walletManager.connectionStage,
                     priceService: priceService,
+                    isViewOnly: walletManager.isViewOnly,
                     onPriceChangeTap: nil,
                     onCardTap: nil
                 )
 
                 QuickActionsCard(
                     onSend: { showSend = true },
-                    onReceive: { showReceive = true }
+                    onReceive: { showReceive = true },
+                    isSendDisabled: walletManager.isViewOnly
                 )
 
                 Spacer()
@@ -106,13 +108,15 @@ struct CommandCenterView: View {
                     syncState: walletManager.syncState,
                     connectionStage: walletManager.connectionStage,
                     priceService: priceService,
+                    isViewOnly: walletManager.isViewOnly,
                     onPriceChangeTap: nil,
                     onCardTap: nil
                 )
 
                 QuickActionsCard(
                     onSend: { showSend = true },
-                    onReceive: { showReceive = true }
+                    onReceive: { showReceive = true },
+                    isSendDisabled: walletManager.isViewOnly
                 )
 
                 ChartSwitcherCard(balance: walletManager.balance)

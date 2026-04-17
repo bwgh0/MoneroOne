@@ -23,44 +23,61 @@ struct SendFlowView: View {
     @State private var sendInProgress = false
     @State private var amountPrefilledFromQR = false
 
+    /// A wallet opened from keys alone (view-only) or from an external device
+    /// without a live signing path cannot produce transactions. wallet2
+    /// rejects `createTransaction` in that mode as a safety net, but we block
+    /// the entire flow here so the user sees a clear reason instead of a
+    /// mid-flow error.
+    private var canSign: Bool {
+        walletManager.activeWallet?.source.canSignLocally ?? true
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
-                phaseContent
-                    .id(phaseIndex)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: navigatingForward ? .trailing : .leading).combined(with: .opacity),
-                        removal: .move(edge: navigatingForward ? .leading : .trailing).combined(with: .opacity)
-                    ))
+                if canSign {
+                    phaseContent
+                        .id(phaseIndex)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: navigatingForward ? .trailing : .leading).combined(with: .opacity),
+                            removal: .move(edge: navigatingForward ? .leading : .trailing).combined(with: .opacity)
+                        ))
+                } else {
+                    viewOnlyBlockedView
+                }
             }
             .clipped()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    switch phase {
-                    case .address:
-                        Button("Cancel") { dismiss() }
-                    case .amount:
-                        Button {
-                            HapticFeedback.shared.buttonPress()
-                            goBack(to: .address)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                Text("Back")
+                    if !canSign {
+                        Button("Close") { dismiss() }
+                    } else {
+                        switch phase {
+                        case .address:
+                            Button("Cancel") { dismiss() }
+                        case .amount:
+                            Button {
+                                HapticFeedback.shared.buttonPress()
+                                goBack(to: .address)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                    Text("Back")
+                                }
                             }
-                        }
-                    case .review:
-                        Button {
-                            HapticFeedback.shared.buttonPress()
-                            goBack(to: .amount)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                Text("Back")
+                        case .review:
+                            Button {
+                                HapticFeedback.shared.buttonPress()
+                                goBack(to: .amount)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                    Text("Back")
+                                }
                             }
+                        default:
+                            EmptyView()
                         }
-                    default:
-                        EmptyView()
                     }
                 }
             }
@@ -148,6 +165,32 @@ struct SendFlowView: View {
                 },
                 onClose: { dismiss() }
             )
+        }
+    }
+
+    // MARK: - View-only block
+
+    /// Shown in place of the send flow when the active wallet cannot sign
+    /// locally — today that's view-only, later that's also a hardware wallet
+    /// without the device present. The close button exits the sheet.
+    private var viewOnlyBlockedView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "eye.slash.circle.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(.orange)
+
+            Text("View-Only Wallet")
+                .font(.title2.weight(.semibold))
+
+            Text("This wallet was restored from a private view key, so it can't sign transactions on this device. To spend, open the wallet that owns the spend key.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            Spacer()
         }
     }
 

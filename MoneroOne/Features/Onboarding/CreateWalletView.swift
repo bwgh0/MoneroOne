@@ -98,72 +98,24 @@ struct CreateWalletView: View {
             Text("Choose Seed Format")
                 .font(.headline)
 
-            VStack(alignment: .leading, spacing: 16) {
-                // Polyseed option (recommended)
-                Button {
-                    selectedSeedType = .polyseed
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("Polyseed")
-                                    .font(.headline)
-                                Text("Recommended")
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 2)
-                                    .background(Color.orange.opacity(0.2))
-                                    .foregroundColor(.orange)
-                                    .cornerRadius(4)
-                            }
-                            Text("16 words with embedded wallet birthday")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            Text("Faster restoration, same security")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: selectedSeedType == .polyseed ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(selectedSeedType == .polyseed ? .orange : .gray)
-                            .font(.title2)
-                    }
-                    .padding()
-                    .background(selectedSeedType == .polyseed ? Color.orange.opacity(0.1) : Color(.secondarySystemBackground))
-                    .cornerRadius(12)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Polyseed, recommended. 16 words with embedded wallet birthday. \(selectedSeedType == .polyseed ? "Selected" : "Not selected")")
-                .accessibilityHint("Double tap to select Polyseed format")
-
-                // Standard option
-                Button {
-                    selectedSeedType = .bip39
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Standard")
-                                .font(.headline)
-                            Text("24 words (BIP39 format)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            Text("Compatible with more wallets")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: selectedSeedType == .bip39 ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(selectedSeedType == .bip39 ? .orange : .gray)
-                            .font(.title2)
-                    }
-                    .padding()
-                    .background(selectedSeedType == .bip39 ? Color.orange.opacity(0.1) : Color(.secondarySystemBackground))
-                    .cornerRadius(12)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Standard. 24 words, BIP39 format. Compatible with more wallets. \(selectedSeedType == .bip39 ? "Selected" : "Not selected")")
-                .accessibilityHint("Double tap to select Standard format")
+            VStack(spacing: 12) {
+                SelectableOptionCard(
+                    id: WalletManager.SeedType.polyseed,
+                    selection: $selectedSeedType,
+                    title: "Polyseed",
+                    badge: "Recommended",
+                    subtitle: "16 words with embedded wallet birthday",
+                    detail: "Faster restoration, same security."
+                )
+                SelectableOptionCard(
+                    id: WalletManager.SeedType.bip39,
+                    selection: $selectedSeedType,
+                    title: "Standard",
+                    subtitle: "24 words (BIP39 format)",
+                    detail: "Compatible with more wallets."
+                )
             }
+            .padding(.horizontal, 4)
 
             Button {
                 mnemonic = walletManager.generateNewWallet(type: selectedSeedType)

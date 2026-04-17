@@ -4,6 +4,7 @@ import SwiftUI
 struct QuickActionsCard: View {
     let onSend: () -> Void
     let onReceive: () -> Void
+    var isSendDisabled: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -11,6 +12,7 @@ struct QuickActionsCard: View {
                 title: "Send",
                 icon: "arrow.up.circle.fill",
                 color: .orange,
+                isDisabled: isSendDisabled,
                 action: onSend
             )
 
@@ -29,6 +31,7 @@ struct QuickActionButton: View {
     let title: String
     let icon: String
     let color: Color
+    var isDisabled: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -39,13 +42,15 @@ struct QuickActionButton: View {
                 Text(title)
                     .font(.callout.weight(.semibold))
             }
-            .foregroundStyle(color)
+            .foregroundStyle(isDisabled ? Color.secondary.opacity(0.6) : color)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
         .glassButtonStyle()
-        .accessibilityLabel(title)
-        .accessibilityHint("Double tap to \(title.lowercased()) Monero")
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
+        .accessibilityLabel(isDisabled ? "\(title), disabled for view-only wallet" : title)
+        .accessibilityHint(isDisabled ? "This wallet is view-only and cannot send" : "Double tap to \(title.lowercased()) Monero")
     }
 }
 

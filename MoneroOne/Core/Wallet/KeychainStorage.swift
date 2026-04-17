@@ -553,6 +553,82 @@ class KeychainStorage {
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 
+    // MARK: - View-only wallet storage
+
+    private struct ViewOnlyKeys: Codable {
+        let address: String
+        let viewKey: String
+    }
+
+    /// Save an address + private view key pair for a view-only wallet.
+    /// Shares the PIN hash / salt slots with the seed path so the unlock
+    /// flow is identical regardless of wallet source.
+    func saveViewOnly(address: String, viewKey: String, pin: String, walletId: UUID) throws {
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+        let salt = generateSalt()
+        let pinHash = hashPin(pin, salt: salt)
+
+        let payload = ViewOnlyKeys(address: address, viewKey: viewKey)
+        guard
+            let payloadData = try? JSONEncoder().encode(payload),
+            let payloadString = String(data: payloadData, encoding: .utf8),
+            let encrypted = encrypt(payloadString, with: pin, salt: salt)
+        else {
+            throw KeychainError.encryptionFailed
+        }
+
+        deleteViewOnly(walletId: walletId)
+        deleteSeed(walletId: walletId) // ensure no stale seed shares these slots
+
+        try saveKeychainItem(account: "\(prefix).viewonly", data: encrypted)
+        try saveKeychainItem(account: "\(prefix).pinhash", data: pinHash)
+        try saveKeychainItem(account: "\(prefix).salt", data: salt)
+
+        resetFailedAttempts()
+    }
+
+    func getViewOnly(pin: String, walletId: UUID) throws -> (address: String, viewKey: String)? {
+        if isLockedOut {
+            throw KeychainError.lockedOut(remainingSeconds: lockoutRemainingSeconds)
+        }
+
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+
+        guard verifyPin(pin, pinHashAccount: "\(prefix).pinhash", saltAccount: "\(prefix).salt") else {
+            recordFailedAttempt()
+            return nil
+        }
+
+        resetFailedAttempts()
+
+        guard
+            let salt = getKeychainData(account: "\(prefix).salt"),
+            let encrypted = getKeychainData(account: "\(prefix).viewonly"),
+            let decoded = decrypt(encrypted, with: pin, salt: salt),
+            let data = decoded.data(using: .utf8),
+            let payload = try? JSONDecoder().decode(ViewOnlyKeys.self, from: data)
+        else {
+            return nil
+        }
+        return (payload.address, payload.viewKey)
+    }
+
+    func deleteViewOnly(walletId: UUID) {
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+        deleteKeychainItem(account: "\(prefix).viewonly")
+        // Leave pinhash/salt — shared with seed path; deleteWallet cleans those
+    }
+
+    func hasViewOnly(walletId: UUID) -> Bool {
+        let account = "one.monero.MoneroOne.wallet.\(walletId.uuidString).viewonly"
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: false
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
     /// Copy raw keychain data from one account to another (for migration)
     func copyKeychainData(fromAccount: String, toAccount: String) {
         guard let data = getKeychainData(account: fromAccount) else { return }

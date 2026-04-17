@@ -22,6 +22,7 @@ struct WalletView: View {
                             syncState: walletManager.syncState,
                             connectionStage: walletManager.connectionStage,
                             priceService: priceService,
+                            isViewOnly: walletManager.isViewOnly,
                             isSyncBlocked: trustedLocationSync.isSyncBlocked,
                             isOutsideTrustedZone: trustedLocationSync.isOutsideTrustedZone,
                             trustedLocationName: trustedLocationSync.currentTrustedLocationName,
@@ -39,13 +40,14 @@ struct WalletView: View {
                             CompactActionButton(
                                 title: "Send",
                                 icon: "arrow.up.circle.fill",
-                                color: .orange
+                                color: .orange,
+                                isDisabled: walletManager.isViewOnly
                             ) {
                                 showSend = true
                             }
                             .accessibilityIdentifier("wallet.sendButton")
-                            .accessibilityLabel("Send Monero")
-                            .accessibilityHint("Opens the send transaction screen")
+                            .accessibilityLabel(walletManager.isViewOnly ? "Send Monero, disabled for view-only wallet" : "Send Monero")
+                            .accessibilityHint(walletManager.isViewOnly ? "This wallet is view-only and cannot send" : "Opens the send transaction screen")
 
                             CompactActionButton(
                                 title: "Receive",
@@ -139,6 +141,7 @@ struct CompactActionButton: View {
     let title: String
     let icon: String
     let color: Color
+    var isDisabled: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -149,11 +152,13 @@ struct CompactActionButton: View {
                 Text(title)
                     .font(.callout.weight(.semibold))
             }
-            .foregroundStyle(color)
+            .foregroundStyle(isDisabled ? Color.secondary.opacity(0.6) : color)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
         .glassButtonStyle()
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
     }
 }
 

@@ -476,6 +476,9 @@ class MoneroWallet: ObservableObject {
         return kit.setSubaddressLabel(index: index, label: label)
     }
 
+    /// The wallet's private view key, or nil if not yet loaded.
+    var secretViewKey: String? { kit?.secretViewKey }
+
     // MARK: - Validation
 
     static func isValidAddress(_ address: String, networkType: MoneroKit.NetworkType = .mainnet) -> Bool {

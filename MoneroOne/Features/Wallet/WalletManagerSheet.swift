@@ -73,6 +73,23 @@ private struct EmojiTextFieldRepresentable: UIViewRepresentable {
     }
 }
 
+/// Corner badge that sits on the bottom-right of a wallet avatar circle to
+/// mark view-only wallets. Uses the avatar's existing real estate so the
+/// wallet name line stays uncluttered — modeled on iOS's app-icon badges.
+struct ViewOnlyAvatarBadge: View {
+    var body: some View {
+        Image(systemName: "eye.fill")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 18, height: 18)
+            .background(Circle().fill(Color.orange))
+            .overlay(
+                Circle().strokeBorder(Color(.systemBackground), lineWidth: 1.5)
+            )
+            .accessibilityLabel("View-only wallet")
+    }
+}
+
 /// A tappable emoji circle that opens the system emoji keyboard for picking any emoji.
 struct EmojiPickerCircle: View {
     @Binding var emoji: String
@@ -165,6 +182,11 @@ struct WalletSwitcherButton: View {
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(.ultraThinMaterial))
                 .clipShape(Circle())
+                .overlay(alignment: .bottomTrailing) {
+                    if walletManager.isViewOnly {
+                        ViewOnlyAvatarBadge().offset(x: 3, y: 3)
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(walletManager.activeWallet?.name ?? "Wallet")
@@ -231,6 +253,11 @@ struct WalletRow: View {
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(.ultraThinMaterial))
                     .clipShape(Circle())
+                    .overlay(alignment: .bottomTrailing) {
+                        if wallet.isViewOnly {
+                            ViewOnlyAvatarBadge().offset(x: 3, y: 3)
+                        }
+                    }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(wallet.name)

@@ -546,9 +546,12 @@ class WalletManager: ObservableObject {
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
             moneroWallet = nil
-            oldWallet.stop()
-            // Give lifecycleQueue time to process the C++ close
-            try await Task.sleep(nanoseconds: 100_000_000)
+            // Await full C++ teardown — `Kit.stop()` is fire-and-forget on
+            // a background dispatch queue, and starting a new wallet before
+            // wallet2's refresh thread has joined leaves two wallets
+            // touching the same process-global C++ state, which crashes
+            // SIGSEGV on the bg refresh thread.
+            await oldWallet.stopAsync()
         }
 
         // Intentionally skip @Published resets here: firing 7 back-to-back
@@ -604,8 +607,9 @@ class WalletManager: ObservableObject {
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
             moneroWallet = nil
-            oldWallet.stop()
-            try await Task.sleep(nanoseconds: 100_000_000)
+            // See `startWalletFromSeed` — must await C++ teardown before
+            // creating the new (view-only) wallet to avoid a wallet2 race.
+            await oldWallet.stopAsync()
         }
 
         // Same rationale as `startWalletFromSeed`: skip the batch of 7
@@ -1394,11 +1398,11 @@ class WalletManager: ObservableObject {
         let netType = networkType
 
         restartTask = Task {
-            // Stop old wallet explicitly — Kit.stop() queues MoneroCore.stop()
-            // on lifecycleQueue, which calls MONERO_WalletManager_closeWallet()
-            oldWallet?.stop()
-            // Give lifecycleQueue time to process the C++ close
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            // Stop old wallet explicitly — `stopAsync` blocks until
+            // MONERO_WalletManager_closeWallet() returns and wallet2's
+            // refresh thread has joined, so the new wallet doesn't share
+            // process-global C++ state with a still-running old one.
+            await oldWallet?.stopAsync()
 
             // Another restart superseded this one
             guard !Task.isCancelled else { return }
@@ -1410,7 +1414,7 @@ class WalletManager: ObservableObject {
 
                 // Check again — create() takes time, another restart may have fired
                 guard !Task.isCancelled else {
-                    wallet.stop()
+                    await wallet.stopAsync()
                     return
                 }
 
@@ -1718,11 +1722,15 @@ class WalletManager: ObservableObject {
         // Let the collapse animation finish before tearing down the old wallet
         try await Task.sleep(nanoseconds: 400_000_000) // 0.4s — just past the 0.35s animation
 
-        // Tear down old wallet
+        // Tear down old wallet — await full C++ teardown via `stopAsync`
+        // before falling through to `startWalletFromSeed/ViewKey`, which
+        // also call `stopAsync` (no-op now that moneroWallet is nil) and
+        // then create the new wallet. Fire-and-forget `stop()` plus a
+        // 100ms sleep was racing wallet2's refresh-thread join.
         cancellables.removeAll()
         let oldWallet = moneroWallet
         moneroWallet = nil
-        oldWallet?.stop()
+        await oldWallet?.stopAsync()
 
         guard let pin = currentPin else { throw WalletError.notUnlocked }
 

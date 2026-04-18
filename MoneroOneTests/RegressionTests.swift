@@ -169,31 +169,23 @@ final class WalletLifecycleRegressionTests: XCTestCase {
         }
     }
 
-    /// Restore height is saved per-network
+    /// Restore height is saved per-wallet (multi-wallet model — each
+    /// network gets its own WalletInfo so heights can't bleed across).
     func testRestoreHeightPerNetwork() async throws {
         let mnemonic = walletManager.generateNewWallet()
 
-        // Save on mainnet with height
         UserDefaults.standard.set(false, forKey: "isTestnet")
         try walletManager.saveWallet(mnemonic: mnemonic, pin: "1234", restoreHeight: 3000000)
+        XCTAssertEqual(walletManager.activeWallet?.restoreHeight, 3000000)
 
-        let mainnetHeight = UserDefaults.standard.integer(forKey: "mainnet_restoreHeight")
-        XCTAssertEqual(UInt64(mainnetHeight), 3000000)
-
-        // Switch to testnet and save with different height (don't delete — that clears both)
         UserDefaults.standard.set(true, forKey: "isTestnet")
         let wm2 = WalletManager()
         try wm2.saveWallet(mnemonic: mnemonic, pin: "1234", restoreHeight: 1500000)
+        XCTAssertEqual(wm2.activeWallet?.restoreHeight, 1500000)
 
-        let testnetHeight = UserDefaults.standard.integer(forKey: "testnet_restoreHeight")
-        XCTAssertEqual(UInt64(testnetHeight), 1500000)
-
-        // Mainnet height should be untouched
-        XCTAssertEqual(UserDefaults.standard.integer(forKey: "mainnet_restoreHeight"), 3000000)
-
-        // Cleanup
         wm2.deleteWallet()
         UserDefaults.standard.set(false, forKey: "isTestnet")
+        XCTAssertEqual(walletManager.activeWallet?.restoreHeight, 3000000)
         walletManager.deleteWallet()
     }
 }

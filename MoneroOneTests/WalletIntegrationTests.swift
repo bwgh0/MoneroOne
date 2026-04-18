@@ -37,8 +37,7 @@ final class WalletIntegrationTests: XCTestCase {
 
         try walletManager.saveWallet(mnemonic: mnemonic, pin: pin, restoreHeight: restoreHeight)
 
-        let savedHeight = UserDefaults.standard.integer(forKey: "mainnet_restoreHeight")
-        XCTAssertEqual(UInt64(savedHeight), restoreHeight)
+        XCTAssertEqual(walletManager.activeWallet?.restoreHeight, restoreHeight)
     }
 
     // MARK: - Wallet Restore Flow Tests
@@ -83,9 +82,7 @@ final class WalletIntegrationTests: XCTestCase {
 
         try walletManager.restoreWallet(mnemonic: testMnemonic, pin: pin, restoreDate: restoreDate)
 
-        // Restore height should be set
-        let savedHeight = UserDefaults.standard.integer(forKey: "mainnet_restoreHeight")
-        XCTAssertGreaterThan(savedHeight, 0)
+        XCTAssertGreaterThan(walletManager.activeWallet?.restoreHeight ?? 0, 0)
     }
 
     // MARK: - Unlock Flow Tests

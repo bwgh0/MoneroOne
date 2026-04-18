@@ -293,12 +293,25 @@ class WalletManager: ObservableObject {
         currentPin = pin
     }
 
-    /// Legacy single-arg overload used by ChangePIN — re-encrypts active wallet's seed
-    func saveWallet(mnemonic: [String], pin: String) throws {
+    /// Legacy overload preserved for ChangePIN and the test suite.
+    /// - When no active wallet exists, behaves like `addWallet` so single-
+    ///   wallet flows (and the integration tests written against them)
+    ///   continue to work unchanged.
+    /// - When an active wallet exists, re-encrypts that wallet's seed
+    ///   under the new PIN and optionally bumps its restore height.
+    func saveWallet(mnemonic: [String], pin: String, restoreHeight: UInt64? = nil) throws {
+        if activeWallet == nil {
+            let name = walletStore.nextWalletName(existing: wallets)
+            try addWallet(name: name, mnemonic: mnemonic, pin: pin, restoreHeight: restoreHeight)
+            return
+        }
         guard let active = activeWallet else { throw WalletError.saveFailed }
         let seedPhrase = mnemonic.joined(separator: " ")
         try keychain.saveSeed(seedPhrase, pin: pin, walletId: active.id)
         currentPin = pin
+        if let h = restoreHeight {
+            updateRestoreHeight(h)
+        }
     }
 
     func restoreWallet(name: String, emoji: String = "\u{1F4B0}", mnemonic: [String], pin: String, restoreDate: Date? = nil) throws {
@@ -1860,7 +1873,7 @@ class WalletManager: ObservableObject {
 
 // MARK: - Errors
 
-enum WalletError: LocalizedError {
+enum WalletError: LocalizedError, Equatable {
     case invalidMnemonic
     case invalidPin
     case saveFailed

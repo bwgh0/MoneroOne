@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AnimatedWalletIcon: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
     @State private var shineOffset: CGFloat = -1.5
     @State private var floating = false
@@ -8,6 +9,21 @@ struct AnimatedWalletIcon: View {
     var size: CGFloat = 120
 
     private var cornerRadius: CGFloat { size * 0.24 }
+
+    /// Orange tint over `.ultraThinMaterial` reads warm and atmospheric in
+    /// dark mode but turns muddy/peach against the light material. Drop the
+    /// tint entirely in light mode — the shadow alone defines the tile.
+    private var backgroundGradientColors: [Color] {
+        if colorScheme == .dark {
+            return [
+                Color.orange.opacity(0.25),
+                Color.orange.opacity(0.08),
+                Color.clear
+            ]
+        } else {
+            return [.clear, .clear, .clear]
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,11 +33,7 @@ struct AnimatedWalletIcon: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [
-                                Color.orange.opacity(0.25),
-                                Color.orange.opacity(0.08),
-                                Color.clear
-                            ],
+                            colors: backgroundGradientColors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -89,9 +101,11 @@ struct AnimatedWalletIcon: View {
             }
             .offset(y: floating ? -8 : 8)
 
-            // Orange glow below
+            // Glow below — orange halo in dark mode for warmth, neutral
+            // gray in light mode so the shadow reads as depth rather than
+            // peach tint.
             Ellipse()
-                .fill(Color.orange)
+                .fill(colorScheme == .dark ? Color.orange : Color.black)
                 .frame(width: size * 0.6, height: size * 0.06)
                 .blur(radius: 16)
                 .opacity(floating ? 0.15 : 0.45)

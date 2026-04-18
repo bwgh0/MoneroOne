@@ -11,14 +11,15 @@ final class SecurityAuditTests: XCTestCase {
 
     override func setUp() async throws {
         walletManager = WalletManager()
-        // Clear any existing state
-        walletManager.deleteWallet()
+        // Clear any existing state — multi-wallet store can hold residue
+        // from prior test runs across both networks.
+        walletManager.deleteAllWallets()
         // Reset network to mainnet for consistent test state
         UserDefaults.standard.set(false, forKey: "isTestnet")
     }
 
     override func tearDown() async throws {
-        walletManager.deleteWallet()
+        walletManager.deleteAllWallets()
         walletManager = nil
         // Clean up UserDefaults
         UserDefaults.standard.removeObject(forKey: "isTestnet")
@@ -272,59 +273,50 @@ final class SecurityAuditTests: XCTestCase {
 
     // MARK: - Integration Tests
 
-    /// Test full scenario: Create wallet on mainnet, switch to testnet, verify seeds are separate
+    /// Mainnet and testnet wallets coexist in the multi-wallet store with
+    /// independent keychain entries. Creating a testnet wallet must not
+    /// touch the mainnet wallet's seed.
     func testFullNetworkSwitchScenario() async throws {
         let keychain = KeychainStorage()
         let pin = "123456"
 
-        // 1. Create wallet on mainnet
+        // 1. Create wallet on mainnet via the multi-wallet API
         UserDefaults.standard.set(false, forKey: "isTestnet")
         let mainnetMnemonic = walletManager.generateNewWallet()
-        try walletManager.saveWallet(mnemonic: mainnetMnemonic, pin: pin)
+        try walletManager.addWallet(name: "Mainnet", mnemonic: mainnetMnemonic, pin: pin)
+        let mainnetId = try XCTUnwrap(walletManager.activeWallet?.id)
 
-        // Verify
         XCTAssertTrue(walletManager.hasWallet, "Should have mainnet wallet")
 
-        // 2. Unlock on mainnet
-        try await walletManager.unlock(pin: pin)
-        try await Task.sleep(nanoseconds: 500_000_000)
-
-        // 3. Get seed on mainnet (should match)
-        let retrievedMainnet = try walletManager.getSeedPhrase(pin: pin)
-        XCTAssertEqual(retrievedMainnet, mainnetMnemonic, "Mainnet seed should match")
-
-        // 4. Lock wallet
-        walletManager.lock()
-
-        // 5. Switch to testnet
+        // 2. Switch to testnet and add a separate testnet wallet
         UserDefaults.standard.set(true, forKey: "isTestnet")
-
-        // 6. On testnet, we shouldn't have a wallet yet
         let testnetManager = WalletManager()
-        XCTAssertFalse(testnetManager.hasWallet, "Should not have testnet wallet yet")
-
-        // 7. Create testnet wallet
         let testnetMnemonic = testnetManager.generateNewWallet()
-        try testnetManager.saveWallet(mnemonic: testnetMnemonic, pin: pin)
+        try testnetManager.addWallet(name: "Testnet", mnemonic: testnetMnemonic, pin: pin)
+        let testnetId = try XCTUnwrap(testnetManager.activeWallet?.id)
 
-        // 8. Verify testnet wallet exists
-        XCTAssertTrue(testnetManager.hasWallet, "Should have testnet wallet")
+        // 3. Multi-wallet store keeps both wallets visible regardless of
+        //    the network flag — no per-network filtering.
+        XCTAssertTrue(testnetManager.wallets.contains(where: { $0.id == mainnetId }))
+        XCTAssertTrue(testnetManager.wallets.contains(where: { $0.id == testnetId }))
+        XCTAssertNotEqual(mainnetId, testnetId)
 
-        // 9. Switch back to mainnet
-        UserDefaults.standard.set(false, forKey: "isTestnet")
+        // 4. Each wallet's seed lives under its own keychain slot, so
+        //    creating the testnet wallet must not have overwritten the
+        //    mainnet seed.
+        let mainnetSeedAgain = try keychain.getSeed(pin: pin, walletId: mainnetId)
+        XCTAssertEqual(
+            mainnetSeedAgain?.split(separator: " ").map(String.init),
+            mainnetMnemonic,
+            "Mainnet seed should be unchanged"
+        )
 
-        // 10. Mainnet wallet should still exist with correct seed
-        let mainnetManager2 = WalletManager()
-        XCTAssertTrue(mainnetManager2.hasWallet, "Mainnet wallet should still exist")
-
-        let mainnetSeedAgain = try mainnetManager2.getSeedPhrase(pin: pin)
-        XCTAssertEqual(mainnetSeedAgain, mainnetMnemonic, "Mainnet seed should be unchanged")
-
-        // Clean up
-        mainnetManager2.deleteWallet()
-        UserDefaults.standard.set(true, forKey: "isTestnet")
-        testnetManager.deleteWallet()
-        UserDefaults.standard.set(false, forKey: "isTestnet")
+        let testnetSeedAgain = try keychain.getSeed(pin: pin, walletId: testnetId)
+        XCTAssertEqual(
+            testnetSeedAgain?.split(separator: " ").map(String.init),
+            testnetMnemonic,
+            "Testnet seed should be retrievable"
+        )
     }
 
     /// Test that rapid network switching doesn't corrupt data

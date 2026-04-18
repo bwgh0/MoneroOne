@@ -13,12 +13,21 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        if horizontalSizeClass == .regular {
-            // iPad: TabView with CommandCenterView instead of WalletView
-            iPadTabView
-        } else {
-            // iPhone: Keep existing TabView
-            iPhoneTabView
+        Group {
+            if horizontalSizeClass == .regular {
+                // iPad: TabView with CommandCenterView instead of WalletView
+                iPadTabView
+            } else {
+                // iPhone: Keep existing TabView
+                iPhoneTabView
+            }
+        }
+        .onChange(of: walletManager.shouldShowSendView) { show in
+            // Donate XMR (and other deep-link send triggers) live outside the
+            // wallet tab. Bounce to the wallet tab so WalletView's sheet can present.
+            if show {
+                selectedTab = .wallet
+            }
         }
     }
 

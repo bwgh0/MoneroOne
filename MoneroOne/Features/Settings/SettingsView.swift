@@ -278,11 +278,11 @@ struct SettingsView: View {
                     } label: {
                         SettingsRow(
                             icon: "trash",
-                            title: "Remove Wallet from Device",
+                            title: "Remove All Wallets from Device",
                             color: .red
                         )
                     }
-                    .accessibilityHint("Removes wallet data from this device. Recovery with seed phrase is still possible.")
+                    .accessibilityHint("Removes every wallet from this device. Recovery with seed phrase is still possible.")
                 }
             }
             .navigationTitle("Settings")
@@ -294,13 +294,13 @@ struct SettingsView: View {
             } message: {
                 Text("This will clear all sync progress and re-sync from the beginning. Your wallet and keys are not affected.")
             }
-            .alert("Remove \(walletManager.activeWallet?.name ?? "Wallet") from Device?", isPresented: $showDeleteConfirmation) {
+            .alert("Remove All Wallets from Device?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
-                Button("Remove", role: .destructive) {
-                    walletManager.deleteWallet()
+                Button("Remove All", role: .destructive) {
+                    walletManager.deleteAllWallets()
                 }
             } message: {
-                Text("This removes \"\(walletManager.activeWallet?.name ?? "this wallet")\" from this device only. Your wallet still exists on the blockchain and can be recovered with your seed phrase.")
+                Text("This removes every wallet from this device only. Your wallets still exist on the blockchain and can be recovered with your seed phrases.")
             }
         }
     }

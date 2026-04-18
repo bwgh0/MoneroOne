@@ -246,60 +246,7 @@ struct WalletRow: View {
     }
 
     var body: some View {
-        Button { onTap() } label: {
-            HStack(spacing: 14) {
-                Text(wallet.emoji)
-                    .font(.system(size: 24))
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(.ultraThinMaterial))
-                    .clipShape(Circle())
-                    .overlay(alignment: .bottomTrailing) {
-                        if wallet.isViewOnly {
-                            ViewOnlyAvatarBadge().offset(x: 3, y: 3)
-                        }
-                    }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(wallet.name)
-                        .font(.subheadline.weight(.semibold))
-
-                    HStack(spacing: 0) {
-                        Text(XMRFormatter.format(wallet.cachedBalance ?? 0))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .layoutPriority(0)
-                        Text(" XMR")
-                            .layoutPriority(1)
-                    }
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.orange)
-
-                    if !truncated.isEmpty {
-                        Text(truncated)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .monospaced()
-                    }
-                }
-
-                Spacer()
-
-                // Rename pencil
-                Image(systemName: "pencil.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.secondary.opacity(0.5))
-                    .onTapGesture { onRename() }
-
-                Circle()
-                    .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
-                    .frame(width: 24, height: 24)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
-        }
-        .glassButtonStyle()
-        .opacity(0.85)
-        .overlay(alignment: .trailing) {
+        ZStack(alignment: .trailing) {
             if showDeleteZone {
                 Button {
                     withAnimation(.snappy(duration: 0.25)) {
@@ -319,9 +266,64 @@ struct WalletRow: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.trailing, -26)
-                .transition(.scale.combined(with: .opacity))
+                .padding(.trailing, 12)
+                .transition(.opacity)
             }
+
+            Button { onTap() } label: {
+                HStack(spacing: 14) {
+                    Text(wallet.emoji)
+                        .font(.system(size: 24))
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(.ultraThinMaterial))
+                        .clipShape(Circle())
+                        .overlay(alignment: .bottomTrailing) {
+                            if wallet.isViewOnly {
+                                ViewOnlyAvatarBadge().offset(x: 3, y: 3)
+                            }
+                        }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(wallet.name)
+                            .font(.subheadline.weight(.semibold))
+
+                        HStack(spacing: 0) {
+                            Text(XMRFormatter.format(wallet.cachedBalance ?? 0))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .layoutPriority(0)
+                            Text(" XMR")
+                                .layoutPriority(1)
+                        }
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.orange)
+
+                        if !truncated.isEmpty {
+                            Text(truncated)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospaced()
+                        }
+                    }
+
+                    Spacer()
+
+                    // Rename pencil
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary.opacity(0.5))
+                        .onTapGesture { onRename() }
+
+                    Circle()
+                        .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
+                        .frame(width: 24, height: 24)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 18)
+            }
+            .glassButtonStyle()
+            .opacity(0.85)
+            .offset(x: showDeleteZone ? -88 : 0)
         }
         .padding(.horizontal)
         .highPriorityGesture(

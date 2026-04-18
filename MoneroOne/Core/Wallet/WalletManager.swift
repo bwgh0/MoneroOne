@@ -142,6 +142,14 @@ class WalletManager: ObservableObject {
             loaded = migrateFromSingleWallet()
         }
 
+        // One-time scrub of legacy global keychain entries for installs that
+        // migrated before the wipe-on-migrate fix shipped. Idempotent and
+        // guarded by its own flag so it runs exactly once per install.
+        if !loaded.isEmpty && !UserDefaults.standard.bool(forKey: "one.monero.legacyKeychainWiped") {
+            keychain.wipeLegacyGlobalSeedEntries()
+            UserDefaults.standard.set(true, forKey: "one.monero.legacyKeychainWiped")
+        }
+
         self.wallets = loaded
 
         if let activeId = walletStore.activeWalletId,
@@ -181,6 +189,14 @@ class WalletManager: ObservableObject {
         keychain.copyKeychainData(fromAccount: "\(legacyPrefix).seed", toAccount: "\(newPrefix).seed")
         keychain.copyKeychainData(fromAccount: "\(legacyPrefix).pinhash", toAccount: "\(newPrefix).pinhash")
         keychain.copyKeychainData(fromAccount: "\(legacyPrefix).salt", toAccount: "\(newPrefix).salt")
+
+        // Wipe the originals — leaving them in place means the legacy seed
+        // is still readable from the global slot and the fallback unlock
+        // path could silently hand it to a future install with a corrupted
+        // WalletInfo list. Wipe both networks since the active one could
+        // change before the opposite network's migration runs.
+        keychain.wipeLegacyGlobalSeedEntries()
+        UserDefaults.standard.set(true, forKey: "one.monero.legacyKeychainWiped")
 
         walletStore.saveWallets([info])
         walletStore.setActiveWalletId(walletId)
@@ -243,8 +259,15 @@ class WalletManager: ObservableObject {
     func addWallet(name: String, emoji: String = "\u{1F4B0}", mnemonic: [String], pin: String, restoreHeight: UInt64? = nil) throws {
         let seedPhrase = mnemonic.joined(separator: " ")
 
-        // Check for duplicate seed across existing wallets
-        try checkForDuplicateSeed(seedPhrase, pin: pin)
+        // Dedupe on the on-disk wallet ID (SHA-256 of seed+network) rather
+        // than the previous PIN-dependent seed comparison. Two wallets with
+        // the same seed map to the same wallet2 `.keys` cache file, so we
+        // must reject before save to prevent two WalletInfo entries from
+        // both pointing at the same on-disk wallet (which would corrupt
+        // restore-height, sync state, and make delete-one nuke-both).
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        let candidateDerivedId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
+        try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: candidateDerivedId, pin: pin)
 
         let walletId = UUID()
         let info = WalletInfo(
@@ -257,7 +280,8 @@ class WalletManager: ObservableObject {
             syncResetCount: 0,
             userCreatedSubaddressIndices: [],
             cachedPrimaryAddress: nil,
-            cachedBalance: nil
+            cachedBalance: nil,
+            derivedWalletId: candidateDerivedId
         )
 
         try keychain.saveSeed(seedPhrase, pin: pin, walletId: walletId)
@@ -284,8 +308,9 @@ class WalletManager: ObservableObject {
 
         let seedPhrase = mnemonic.joined(separator: " ")
 
-        // Check for duplicate seed across existing wallets
-        try checkForDuplicateSeed(seedPhrase, pin: pin)
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        let candidateDerivedId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
+        try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: candidateDerivedId, pin: pin)
 
         var height: UInt64 = 0
         if let date = restoreDate {
@@ -303,7 +328,8 @@ class WalletManager: ObservableObject {
             syncResetCount: 0,
             userCreatedSubaddressIndices: [],
             cachedPrimaryAddress: nil,
-            cachedBalance: nil
+            cachedBalance: nil,
+            derivedWalletId: candidateDerivedId
         )
 
         try keychain.saveSeed(seedPhrase, pin: pin, walletId: walletId)
@@ -323,7 +349,11 @@ class WalletManager: ObservableObject {
 
     /// Restore a view-only wallet from an address + private view key pair.
     /// Skips mnemonic validation (no seed) and checks for an address
-    /// collision instead of a seed collision.
+    /// collision instead of a seed collision. Async so we can run a
+    /// pre-flight wallet2 validation that proves the view key actually
+    /// matches the address before persisting anything — wallet2's
+    /// `generate_from_keys` compares `privViewKey * G` against the
+    /// address's embedded public view key and throws on mismatch.
     func restoreViewOnlyWallet(
         name: String,
         emoji: String = "\u{1F441}",
@@ -331,7 +361,7 @@ class WalletManager: ObservableObject {
         viewKey: String,
         pin: String,
         restoreDate: Date? = nil
-    ) throws {
+    ) async throws {
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedViewKey = viewKey.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
@@ -350,6 +380,34 @@ class WalletManager: ObservableObject {
             throw WalletError.duplicateWallet(existingName: existing.name)
         }
 
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        let candidateDerivedId = MoneroWallet.stableWalletId(for: trimmedAddress + trimmedViewKey + networkSuffix)
+        // Belt-and-braces collision check against a previously restored
+        // view-only wallet that didn't have `cachedPrimaryAddress` populated.
+        if let existing = wallets.first(where: { $0.derivedWalletId == candidateDerivedId }) {
+            throw WalletError.duplicateWallet(existingName: existing.name)
+        }
+
+        // Pre-flight validation — open a throwaway wallet2 instance to prove
+        // the view key matches the address. wallet2 throws here instead of
+        // silently producing an empty wallet, which would mislead the user
+        // into thinking their funds are gone. The files wallet2 writes are
+        // keyed by the same stable ID the real unlock path will reuse, so
+        // there's no garbage left on disk.
+        let validator = MoneroWallet()
+        do {
+            try await validator.createWatchOnly(
+                address: trimmedAddress,
+                viewKey: trimmedViewKey,
+                restoreHeight: 0,
+                networkType: networkType
+            )
+        } catch {
+            validator.stop()
+            throw WalletError.invalidViewKey
+        }
+        validator.stop()
+
         var height: UInt64 = 0
         if let date = restoreDate {
             height = UInt64(RestoreHeight.getHeight(date: date))
@@ -366,7 +424,8 @@ class WalletManager: ObservableObject {
             syncResetCount: 0,
             userCreatedSubaddressIndices: [],
             cachedPrimaryAddress: trimmedAddress,
-            cachedBalance: nil
+            cachedBalance: nil,
+            derivedWalletId: candidateDerivedId
         )
 
         try keychain.saveViewOnly(address: trimmedAddress, viewKey: trimmedViewKey, pin: pin, walletId: walletId)
@@ -401,19 +460,13 @@ class WalletManager: ObservableObject {
     // MARK: - Wallet Unlock
 
     func unlock(pin: String) async throws {
+        // No fallback to the legacy global-keychain seed path: migration
+        // runs in `checkForExistingWallet()` and produces a `WalletInfo`;
+        // reaching here with `activeWallet == nil` means there is no
+        // wallet on this device — surface invalidPin so the onboarding
+        // flow takes over instead of silently unlocking legacy data.
         guard let active = activeWallet else {
-            // Fallback: try legacy keychain for pre-migration unlock
-            let legacySeedResult = try await Task.detached {
-                try self.keychain.getSeed(pin: pin)
-            }.value
-            guard let seedPhrase = legacySeedResult else {
-                throw WalletError.invalidPin
-            }
-            let mnemonic = seedPhrase.split(separator: " ").map(String.init)
-            currentSeed = mnemonic
-            currentPin = pin
-            try await startWalletFromSeed(mnemonic)
-            return
+            throw WalletError.invalidPin
         }
 
         currentPin = pin
@@ -432,6 +485,10 @@ class WalletManager: ObservableObject {
             currentSeed = mnemonic
             try await startWalletFromSeed(mnemonic)
 
+            // Populate derivedWalletId lazily for wallets created before the
+            // field existed, so future duplicate-seed checks catch them.
+            populateDerivedWalletIdIfMissing(for: active.id, seedPhrase: seedPhrase)
+
         case .viewOnly:
             let viewKeys = try await Task.detached {
                 try self.keychain.getViewOnly(pin: pin, walletId: active.id)
@@ -441,7 +498,33 @@ class WalletManager: ObservableObject {
             }
             currentSeed = nil
             try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
+
+            populateDerivedWalletIdIfMissing(for: active.id, viewOnlyAddress: keys.address, viewKey: keys.viewKey)
         }
+    }
+
+    /// Fill in `derivedWalletId` on a legacy WalletInfo once we've unlocked
+    /// its secret material. Idempotent — a no-op if already populated.
+    private func populateDerivedWalletIdIfMissing(for walletId: UUID, seedPhrase: String) {
+        guard var info = wallets.first(where: { $0.id == walletId }), info.derivedWalletId == nil else { return }
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        info.derivedWalletId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
+        walletStore.updateWallet(info)
+        if let idx = wallets.firstIndex(where: { $0.id == walletId }) {
+            wallets[idx] = info
+        }
+        if activeWallet?.id == walletId { activeWallet = info }
+    }
+
+    private func populateDerivedWalletIdIfMissing(for walletId: UUID, viewOnlyAddress: String, viewKey: String) {
+        guard var info = wallets.first(where: { $0.id == walletId }), info.derivedWalletId == nil else { return }
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        info.derivedWalletId = MoneroWallet.stableWalletId(for: viewOnlyAddress + viewKey + networkSuffix)
+        walletStore.updateWallet(info)
+        if let idx = wallets.firstIndex(where: { $0.id == walletId }) {
+            wallets[idx] = info
+        }
+        if activeWallet?.id == walletId { activeWallet = info }
     }
 
     /// Common wallet start logic used by unlock and switchToWallet
@@ -1085,6 +1168,7 @@ class WalletManager: ObservableObject {
     // MARK: - Send
 
     func estimateFee(to address: String, amount: Decimal) async throws -> Decimal {
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
@@ -1092,6 +1176,7 @@ class WalletManager: ObservableObject {
     }
 
     func send(to address: String, amount: Decimal, memo: String? = nil) async throws -> String {
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
@@ -1099,6 +1184,7 @@ class WalletManager: ObservableObject {
     }
 
     func sendAll(to address: String, memo: String? = nil) async throws -> String {
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
@@ -1316,7 +1402,20 @@ class WalletManager: ObservableObject {
 
     func getSeedPhrase(pin: String) throws -> [String]? {
         guard let active = activeWallet else { return nil }
-        guard let seedPhrase = try keychain.getSeed(pin: pin, walletId: active.id) else {
+        return try getSeedPhrase(pin: pin, expectedWalletId: active.id)
+    }
+
+    /// Seed export gated on the caller's expected wallet identity. Export
+    /// screens capture the active wallet's ID at `.onAppear` and pass it
+    /// here so a mid-view wallet swap is rejected rather than silently
+    /// returning the new wallet's seed. `walletMismatch` is distinct from
+    /// `invalidPin` so the UI can tell the user the wallet changed.
+    func getSeedPhrase(pin: String, expectedWalletId: UUID) throws -> [String]? {
+        guard let active = activeWallet else { return nil }
+        guard active.id == expectedWalletId else {
+            throw WalletError.walletMismatch
+        }
+        guard let seedPhrase = try keychain.getSeed(pin: pin, walletId: expectedWalletId) else {
             return nil
         }
         let mnemonic = seedPhrase.split(separator: " ").map(String.init)
@@ -1346,6 +1445,24 @@ class WalletManager: ObservableObject {
     /// another device as view-only.
     var currentViewKey: String? {
         moneroWallet?.secretViewKey
+    }
+
+    /// Atomic snapshot of everything the view-key export screen needs,
+    /// gated on the caller's expected wallet ID. Returns nil if the
+    /// active wallet changed underneath the caller — callers should
+    /// treat nil as "dismiss the export sheet". Pulling all four fields
+    /// inside a single guard prevents a mid-switch race from producing
+    /// a share payload with wallet A's address and wallet B's view key.
+    func exportViewKeyData(expectedWalletId: UUID) -> (address: String, viewKey: String, restoreHeight: UInt64)? {
+        guard let active = activeWallet, active.id == expectedWalletId else { return nil }
+        guard let wallet = moneroWallet else { return nil }
+        let snapshotAddress = primaryAddress
+        guard let snapshotViewKey = wallet.secretViewKey, !snapshotViewKey.isEmpty else { return nil }
+        let snapshotHeight = restoreHeight
+        // Re-verify after the reads: if `activeWallet` moved between the
+        // first guard and the last field read, we must discard the tuple.
+        guard activeWallet?.id == expectedWalletId else { return nil }
+        return (snapshotAddress, snapshotViewKey, snapshotHeight)
     }
 
     /// Expose current PIN for adding wallets (only available while unlocked)
@@ -1623,28 +1740,60 @@ class WalletManager: ObservableObject {
         }
     }
 
-    /// Re-encrypt all wallet seeds when PIN changes
+    /// Re-encrypt every wallet's secret material when PIN changes. Walks
+    /// wallets by `source` so view-only wallets (which have no seed) are
+    /// re-encrypted through their view-key slot — the previous
+    /// seed-only loop hit `invalidPin` on view-only entries and aborted
+    /// the whole PIN change, leaving mixed installs unable to rotate.
     func reencryptAllWallets(oldPin: String, newPin: String) throws {
-        // First, decrypt all seeds with old PIN (fail fast before writing anything)
         var seeds: [(UUID, String)] = []
+        var viewOnlyKeys: [(UUID, String, String)] = []
         for wallet in wallets {
-            guard let seed = try keychain.getSeed(pin: oldPin, walletId: wallet.id) else {
-                throw WalletError.invalidPin
+            switch wallet.source {
+            case .seed:
+                guard let seed = try keychain.getSeed(pin: oldPin, walletId: wallet.id) else {
+                    throw WalletError.invalidPin
+                }
+                seeds.append((wallet.id, seed))
+            case .viewOnly:
+                guard let keys = try keychain.getViewOnly(pin: oldPin, walletId: wallet.id) else {
+                    throw WalletError.invalidPin
+                }
+                viewOnlyKeys.append((wallet.id, keys.address, keys.viewKey))
             }
-            seeds.append((wallet.id, seed))
         }
 
-        // Now re-encrypt all with new PIN
         for (walletId, seed) in seeds {
             try keychain.saveSeed(seed, pin: newPin, walletId: walletId)
+        }
+        for (walletId, address, viewKey) in viewOnlyKeys {
+            try keychain.saveViewOnly(address: address, viewKey: viewKey, pin: newPin, walletId: walletId)
         }
 
         currentPin = newPin
     }
 
-    /// Check if a seed phrase already exists in any wallet
-    func checkForDuplicateSeed(_ seedPhrase: String, pin: String) throws {
+    /// Convenience that derives the ID internally — use when the caller
+    /// only has the seed string on hand (e.g. pre-restore UI checks).
+    func checkForDuplicateSeed(seedPhrase: String, pin: String) throws {
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        let derivedId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
+        try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: derivedId, pin: pin)
+    }
+
+    /// Reject a seed that matches one already on-device. Primary check is
+    /// the derived wallet ID (SHA-256 of seed+network) — needs no PIN and
+    /// catches duplicates regardless of which PIN each wallet was saved
+    /// under. The PIN-gated seed comparison is kept as a fallback for
+    /// wallets created before `derivedWalletId` existed.
+    func checkForDuplicateSeed(seedPhrase: String, derivedId: String, pin: String) throws {
         for wallet in wallets {
+            if let storedId = wallet.derivedWalletId, storedId == derivedId {
+                throw WalletError.duplicateWallet(existingName: wallet.name)
+            }
+        }
+        // Fallback: only hits legacy wallets whose derivedWalletId is nil.
+        for wallet in wallets where wallet.derivedWalletId == nil {
             if let existingSeed = try? keychain.getSeed(pin: pin, walletId: wallet.id),
                existingSeed == seedPhrase {
                 throw WalletError.duplicateWallet(existingName: wallet.name)
@@ -1719,6 +1868,9 @@ enum WalletError: LocalizedError {
     case biometricFailed
     case seedMismatch
     case duplicateWallet(existingName: String)
+    case invalidViewKey
+    case walletMismatch
+    case viewOnlyCannotSend
 
     var errorDescription: String? {
         switch self {
@@ -1729,6 +1881,9 @@ enum WalletError: LocalizedError {
         case .biometricFailed: return "Biometric authentication failed"
         case .seedMismatch: return "Seed phrase doesn't match current wallet"
         case .duplicateWallet(let name): return "This seed phrase is already used by \"\(name)\""
+        case .invalidViewKey: return "View key doesn't match this address"
+        case .walletMismatch: return "Active wallet changed — please retry"
+        case .viewOnlyCannotSend: return "View-only wallets cannot send transactions"
         }
     }
 }

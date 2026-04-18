@@ -494,12 +494,12 @@ class MoneroWallet: ObservableObject {
     // MARK: - Wallet ID
 
     /// Generate a stable wallet ID from seed words - ensures sync data persists across app restarts
-    private static func stableWalletId(for seed: [String]) -> String {
+    static func stableWalletId(for seed: [String]) -> String {
         stableWalletId(for: seed.joined(separator: " "))
     }
 
     /// Generate a stable wallet ID from any string (seed phrase or address+viewKey)
-    private static func stableWalletId(for identifier: String) -> String {
+    static func stableWalletId(for identifier: String) -> String {
         let data = Data(identifier.utf8)
         let hash = SHA256.hash(data: data)
         // Use first 16 bytes as a UUID-like identifier

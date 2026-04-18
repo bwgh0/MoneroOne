@@ -488,7 +488,7 @@ struct RestoreWalletView: View {
         // Check for duplicate wallet (only when PIN is available, i.e. adding to existing wallets)
         if isAddingWallet, let pin = existingPin {
             do {
-                try walletManager.checkForDuplicateSeed(seedWords.joined(separator: " "), pin: pin)
+                try walletManager.checkForDuplicateSeed(seedPhrase: seedWords.joined(separator: " "), pin: pin)
             } catch {
                 errorMessage = error.localizedDescription
                 return

@@ -332,7 +332,7 @@ struct RestoreViewKeyView: View {
                     ? WalletStore().nextWalletName(existing: walletManager.wallets)
                     : walletName.trimmingCharacters(in: .whitespaces)
 
-                try walletManager.restoreViewOnlyWallet(
+                try await walletManager.restoreViewOnlyWallet(
                     name: name,
                     emoji: walletEmoji,
                     address: trimmedAddress,

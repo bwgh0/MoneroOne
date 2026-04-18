@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BackupView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @Environment(\.dismiss) private var dismiss
     @AppStorage("preferredPINLength") private var preferredPINLength = 6
     @State private var pin = ""
     @State private var isUnlocked = false
@@ -13,6 +14,10 @@ struct BackupView: View {
     @State private var legacySeed: [String]?
     @State private var polyseedWords: [String]?
     @State private var selectedFormat = 0  // 0 = original, 1 = alternate
+    /// Wallet this screen was opened for. Captured at `.onAppear` so a
+    /// mid-session wallet switch can't redirect the seed read to another
+    /// wallet — if the active wallet ID diverges from this, dismiss.
+    @State private var boundWalletId: UUID?
 
     private let clipboardClearDelay: TimeInterval = 300 // Clear clipboard after 5 minutes
 
@@ -46,9 +51,20 @@ struct BackupView: View {
         .navigationTitle("Backup")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            if boundWalletId == nil {
+                boundWalletId = walletManager.activeWallet?.id
+            }
             if UserDefaults.standard.object(forKey: "preferredPINLength") == nil {
                 let length = await Task.detached { KeychainStorage().getPinLength() }.value
                 if let length { preferredPINLength = length }
+            }
+        }
+        .onChange(of: walletManager.activeWallet?.id) { _, newId in
+            // Active wallet switched out from under us — any seed we might
+            // still show belongs to a different wallet than the one the
+            // user opened this screen for. Dismiss before leaking it.
+            if let bound = boundWalletId, bound != newId {
+                dismiss()
             }
         }
     }
@@ -189,8 +205,12 @@ struct BackupView: View {
     }
 
     private func unlockSeed() {
+        guard let boundId = boundWalletId ?? walletManager.activeWallet?.id else {
+            errorMessage = "No wallet"
+            return
+        }
         do {
-            if let seed = try walletManager.getSeedPhrase(pin: pin) {
+            if let seed = try walletManager.getSeedPhrase(pin: pin, expectedWalletId: boundId) {
                 seedPhrase = seed
                 legacySeed = walletManager.getLegacySeed()
                 polyseedWords = walletManager.getPolyseed()
@@ -199,6 +219,8 @@ struct BackupView: View {
             } else {
                 errorMessage = "Invalid PIN"
             }
+        } catch WalletError.walletMismatch {
+            dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }

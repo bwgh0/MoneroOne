@@ -8,22 +8,42 @@ import MoneroKit
 /// their PIN.
 struct ExportViewKeyView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @Environment(\.dismiss) private var dismiss
     @State private var clipboardClearTask: DispatchWorkItem?
+    /// Snapshot of the wallet this screen was opened for. All three export
+    /// fields (address, view key, restore height) are captured together at
+    /// appearance so a mid-view wallet switch can't swap the displayed
+    /// values — the sheet dismisses instead. Without this the @Published
+    /// fields would re-render live into the card and silently retarget.
+    @State private var snapshot: ExportSnapshot?
+    @State private var boundWalletId: UUID?
 
     private let clipboardClearDelay: TimeInterval = 300
+
+    fileprivate struct ExportSnapshot: Equatable {
+        let walletId: UUID
+        let address: String
+        let viewKey: String
+        let restoreHeight: UInt64
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                ViewKeyExportCard(
-                    title: "Pair Another Device",
-                    subtitle: "Share these to set up a view-only wallet — it can watch incoming transactions but cannot spend.",
-                    address: walletManager.primaryAddress,
-                    viewKey: walletManager.currentViewKey ?? "",
-                    restoreHeight: walletManager.restoreHeight,
-                    clipboardClearDelay: clipboardClearDelay,
-                    clipboardClearTask: $clipboardClearTask
-                )
+                if let snap = snapshot {
+                    ViewKeyExportCard(
+                        title: "Pair Another Device",
+                        subtitle: "Share these to set up a view-only wallet — it can watch incoming transactions but cannot spend.",
+                        address: snap.address,
+                        viewKey: snap.viewKey,
+                        restoreHeight: snap.restoreHeight,
+                        clipboardClearDelay: clipboardClearDelay,
+                        clipboardClearTask: $clipboardClearTask
+                    )
+                } else {
+                    ProgressView()
+                        .padding(.top, 60)
+                }
 
                 Text("The private view key reveals every incoming transaction. Share it only with people you trust to watch your balance.")
                     .font(.caption)
@@ -36,7 +56,42 @@ struct ExportViewKeyView: View {
         }
         .navigationTitle("View Key")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: walletManager.activeWallet?.id) {
+            refreshSnapshot()
+        }
+        // walletSessionId is @Published and bumped whenever the wallet2
+        // instance is (re)created — catches the case where the sheet opens
+        // before the view key has loaded into the running wallet.
+        .onChange(of: walletManager.walletSessionId) { _, _ in refreshSnapshot() }
+        .onChange(of: walletManager.primaryAddress) { _, _ in refreshSnapshot() }
+        .onChange(of: walletManager.restoreHeight) { _, _ in refreshSnapshot() }
         .onDisappear { clipboardClearTask?.cancel() }
+    }
+
+    private func refreshSnapshot() {
+        guard let activeId = walletManager.activeWallet?.id else {
+            dismiss()
+            return
+        }
+        // First appearance — bind this sheet to whichever wallet is active.
+        if boundWalletId == nil {
+            boundWalletId = activeId
+        }
+        // Active wallet diverged from the one this sheet was opened for —
+        // bail rather than redraw with the new wallet's keys.
+        if let bound = boundWalletId, bound != activeId {
+            dismiss()
+            return
+        }
+        guard let data = walletManager.exportViewKeyData(expectedWalletId: activeId) else {
+            return
+        }
+        snapshot = ExportSnapshot(
+            walletId: activeId,
+            address: data.address,
+            viewKey: data.viewKey,
+            restoreHeight: data.restoreHeight
+        )
     }
 }
 

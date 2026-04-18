@@ -636,6 +636,26 @@ class KeychainStorage {
         try? saveKeychainItem(account: toAccount, data: data)
     }
 
+    /// Delete a keychain item by account. Exposed so migration can scrub
+    /// legacy global-key entries after copying them into wallet-ID-scoped
+    /// slots. Idempotent — a missing item is a no-op.
+    func deleteKeychainAccount(_ account: String) {
+        deleteKeychainItem(account: account)
+    }
+
+    /// Wipe the legacy single-wallet global keychain entries for both
+    /// mainnet and testnet. Call exactly once per install after migration
+    /// has copied them into wallet-ID-scoped slots. Leaving the originals
+    /// in place means a partial WalletInfo-list corruption could silently
+    /// fall back to reading the legacy seed under the wrong identity.
+    func wipeLegacyGlobalSeedEntries() {
+        for network in ["mainnet", "testnet"] {
+            for suffix in ["seed", "pinhash", "salt"] {
+                deleteKeychainItem(account: "one.monero.MoneroOne.\(network).\(suffix)")
+            }
+        }
+    }
+
     // MARK: - Keychain Helpers
 
     private func saveKeychainItem(account: String, data: Data) throws {

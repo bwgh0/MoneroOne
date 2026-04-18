@@ -349,6 +349,10 @@ struct WalletManagerRows: View {
     @State private var renameEmoji = ""
     @State private var deleteWalletId: UUID?
     @State private var isSwitching = false
+    /// Guards the destructive Delete button on the confirmation alert —
+    /// rapid double-taps would invoke `deleteWallet(id:)` twice and race
+    /// the in-flight `completeSwitchToWallet` teardown.
+    @State private var isDeleting = false
 
     private var otherWallets: [WalletInfo] {
         walletManager.wallets.filter { $0.id != walletManager.activeWallet?.id }
@@ -435,13 +439,23 @@ struct WalletManagerRows: View {
             get: { deleteWalletId != nil },
             set: { if !$0 { deleteWalletId = nil } }
         )) {
-            Button("Cancel", role: .cancel) { deleteWalletId = nil }
-            Button("Delete", role: .destructive) {
-                if let id = deleteWalletId {
-                    walletManager.deleteWallet(id: id)
-                }
+            Button("Cancel", role: .cancel) {
                 deleteWalletId = nil
+                isDeleting = false
             }
+            Button("Delete", role: .destructive) {
+                guard !isDeleting, let id = deleteWalletId else { return }
+                isDeleting = true
+                walletManager.deleteWallet(id: id)
+                deleteWalletId = nil
+                // Reset the guard after the teardown sleep inside
+                // `completeSwitchToWallet` would have finished, so a later
+                // delete on a different wallet isn't permanently blocked.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    isDeleting = false
+                }
+            }
+            .disabled(isDeleting)
         } message: {
             Text("This removes the wallet from this device. You can recover it with the seed phrase.")
         }

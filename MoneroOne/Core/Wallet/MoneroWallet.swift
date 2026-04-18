@@ -200,6 +200,17 @@ class MoneroWallet: ObservableObject {
         kit?.stop()
     }
 
+    /// Awaits actual C++ teardown completion. Use before starting another
+    /// wallet (so wallet2's process-global state isn't shared between two
+    /// live wallets) or before iOS suspends the process in the background
+    /// (so the refresh thread isn't frozen mid-HTTP-op).
+    func stopAsync() async {
+        #if DEBUG
+        print("[MoneroWallet] stopAsync() called")
+        #endif
+        await kit?.stopAsync()
+    }
+
     func refresh() {
         // kit.refresh() does heavy C++ work (balance, subaddress, tx fetch, wallet store)
         // and blocks on wallet2's mutex while the refresh thread is scanning blocks.
@@ -218,7 +229,11 @@ class MoneroWallet: ObservableObject {
         }
     }
 
-    /// Pause sync — stops refresh and state polling
+    /// Pause wallet2's refresh thread without tearing down the wallet.
+    /// Call this when the app goes to background so iOS doesn't suspend the
+    /// process mid-HTTP-fetch, which leaves wallet2's asio state torn and
+    /// crashes when the app resumes. Cheaper than `stopAsync` — preserves
+    /// pointers/callbacks so `startSync()` resumes from where we left off.
     func pauseSync() {
         kit?.pauseSync()
     }

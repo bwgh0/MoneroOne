@@ -1,5 +1,6 @@
 import SwiftUI
 import BackgroundTasks
+import UIKit
 import os.log
 
 private let logger = Logger(subsystem: "one.monero.MoneroOne", category: "App")
@@ -84,6 +85,23 @@ struct MoneroOneApp: App {
             } else if walletManager.isUnlocked && autoLockMinutes > 0 {
                 // Store time for delayed lock check
                 backgroundTime = Date()
+                // Pause wallet2's refresh thread under a background-task
+                // assertion so iOS doesn't suspend us mid-HTTP-fetch and
+                // leave wallet2's asio state torn (which crashes when the
+                // app resumes and the async op completes against freed
+                // memory). Without the bg task, iOS can yank scheduling
+                // before `pauseSync` finishes signalling the refresh
+                // thread.
+                let app = UIApplication.shared
+                var taskId: UIBackgroundTaskIdentifier = .invalid
+                taskId = app.beginBackgroundTask(withName: "PauseWalletSync") {
+                    app.endBackgroundTask(taskId)
+                    taskId = .invalid
+                }
+                walletManager.pauseSync()
+                if taskId != .invalid {
+                    app.endBackgroundTask(taskId)
+                }
             }
             // Schedule next price check when going to background
             schedulePriceCheck()
@@ -100,7 +118,8 @@ struct MoneroOneApp: App {
 
             // Trigger sync refresh when returning to foreground
             if walletManager.isUnlocked {
-                logger.info("App became active, triggering refresh")
+                logger.info("App became active, resuming sync and triggering refresh")
+                walletManager.resumeSync()
                 Task {
                     await walletManager.refresh()
                 }

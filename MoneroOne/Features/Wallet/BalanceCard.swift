@@ -284,24 +284,44 @@ private struct ConnectionStepIndicator: View {
     private let lineHeight: CGFloat = 2
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 0) {
-                ForEach(0..<stageCount, id: \.self) { index in
-                    stepDot(for: index)
+        // When the connection stage reaches synced, collapse to the same
+        // simple green-dot pill the outer view shows when wallet2's
+        // syncState is .synced. Without this, a brief drift between the
+        // two state machines (e.g. connectionStage = .synced while
+        // syncState is still .syncing(100%)) renders the full
+        // 5-orange + green ladder labelled "Synced", which looks broken.
+        if stage == .synced {
+            HStack {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                Text("Synced")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Sync status: synced")
+        } else {
+            VStack(spacing: 6) {
+                HStack(spacing: 0) {
+                    ForEach(0..<stageCount, id: \.self) { index in
+                        stepDot(for: index)
 
-                    if index < stageCount - 1 {
-                        stepLine(for: index)
+                        if index < stageCount - 1 {
+                            stepLine(for: index)
+                        }
                     }
                 }
-            }
-            .accessibilityHidden(true)
+                .accessibilityHidden(true)
 
-            Text(statusText)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                Text(statusText)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Connection status: \(statusText)")
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Connection status: \(statusText)")
     }
 
     @ViewBuilder

@@ -555,8 +555,19 @@ class WalletManager: ObservableObject {
         // mutations during a sheet-collapse transition races SwiftUI's
         // AttributeGraph teardown on iOS 26 and crashes (EXC_BAD_ACCESS in
         // AttributeInvalidatingSubscriber). The new wallet populates these
-        // fields once it loads, and syncState is set below.
-        syncState = .connecting
+        // fields once it loads.
+        //
+        // syncState is also set to .connecting in `prepareSwitchToWallet`
+        // (the synchronous Phase 1). `@Published` fires the publisher even
+        // when the value hasn't changed, so re-assigning here would deliver
+        // a notification 400ms into Phase 2 — exactly when the wallet
+        // switcher sheet's AttributeGraph nodes are being torn down,
+        // tripping the same crash. Guard with an equality check so the
+        // publisher only fires when the state genuinely transitioned (i.e.
+        // we entered through `unlock`, not `switchToWallet`).
+        if syncState != .connecting {
+            syncState = .connecting
+        }
 
         let wallet = MoneroWallet()
         let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
@@ -598,9 +609,12 @@ class WalletManager: ObservableObject {
         }
 
         // Same rationale as `startWalletFromSeed`: skip the batch of 7
-        // @Published resets — only nudge `syncState` so the UI shows a
-        // progress cue while the watch-only wallet loads.
-        syncState = .connecting
+        // @Published resets and only nudge `syncState` if it actually
+        // changed, otherwise the redundant publisher fire races the
+        // collapsing wallet-switcher sheet's AttributeGraph teardown.
+        if syncState != .connecting {
+            syncState = .connecting
+        }
 
         let wallet = MoneroWallet()
         let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
@@ -1584,6 +1598,16 @@ class WalletManager: ObservableObject {
     func deleteWallet() {
         guard let active = activeWallet else { return }
         deleteWallet(id: active.id)
+    }
+
+    /// Wipes every wallet on this device. After this returns, `wallets` is empty
+    /// and `ContentView` will route to onboarding.
+    func deleteAllWallets() {
+        // Tear down active wallet first so deleteWallet(id:) doesn't auto-switch.
+        let ids = wallets.map { $0.id }
+        for id in ids {
+            deleteWallet(id: id)
+        }
     }
 
     func deleteWallet(id: UUID) {

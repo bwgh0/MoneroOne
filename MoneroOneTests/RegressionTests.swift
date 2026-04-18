@@ -12,12 +12,12 @@ final class WalletLifecycleRegressionTests: XCTestCase {
 
     override func setUp() async throws {
         walletManager = WalletManager()
-        walletManager.deleteWallet()
+        walletManager.deleteAllWallets()
         UserDefaults.standard.set(false, forKey: "isTestnet")
     }
 
     override func tearDown() async throws {
-        walletManager.deleteWallet()
+        walletManager.deleteAllWallets()
         walletManager = nil
         UserDefaults.standard.removeObject(forKey: "isTestnet")
     }
@@ -53,8 +53,9 @@ final class WalletLifecycleRegressionTests: XCTestCase {
         let polyseed = walletManager.generateNewWallet(type: .polyseed)
         try walletManager.saveWallet(mnemonic: polyseed, pin: "1234")
 
-        let savedType = UserDefaults.standard.string(forKey: "mainnet_seedType")
-        XCTAssertEqual(savedType, "polyseed")
+        // Multi-wallet refactor moved seed type from `mainnet_seedType`
+        // UserDefault into the per-wallet `WalletInfo.source` field.
+        XCTAssertEqual(walletManager.activeWallet?.source, .seed(.polyseed))
     }
 
     /// Unlock with correct PIN succeeds, wrong PIN fails

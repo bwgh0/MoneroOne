@@ -89,18 +89,20 @@ struct MoneroOneApp: App {
                 // assertion so iOS doesn't suspend us mid-HTTP-fetch and
                 // leave wallet2's asio state torn (which crashes when the
                 // app resumes and the async op completes against freed
-                // memory). Without the bg task, iOS can yank scheduling
-                // before `pauseSync` finishes signalling the refresh
-                // thread.
+                // memory). Use `pauseSyncAsync` so the bg-task assertion
+                // is held until wallet2 has actually stopped scanning,
+                // not just until the dispatch was queued.
                 let app = UIApplication.shared
                 var taskId: UIBackgroundTaskIdentifier = .invalid
                 taskId = app.beginBackgroundTask(withName: "PauseWalletSync") {
                     app.endBackgroundTask(taskId)
                     taskId = .invalid
                 }
-                walletManager.pauseSync()
-                if taskId != .invalid {
-                    app.endBackgroundTask(taskId)
+                Task {
+                    await walletManager.pauseSyncAsync()
+                    if taskId != .invalid {
+                        app.endBackgroundTask(taskId)
+                    }
                 }
             }
             // Schedule next price check when going to background

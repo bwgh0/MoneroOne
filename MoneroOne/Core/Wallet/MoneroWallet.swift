@@ -212,21 +212,16 @@ class MoneroWallet: ObservableObject {
     }
 
     func refresh() {
-        // kit.refresh() does heavy C++ work (balance, subaddress, tx fetch, wallet store)
-        // and blocks on wallet2's mutex while the refresh thread is scanning blocks.
-        // Dispatch off main to prevent multi-second UI freezes during pull-to-refresh.
-        guard let kit = kit else { return }
-        Task.detached {
-            kit.refresh()
-        }
+        // Kit.refresh() now dispatches its wallet2 work onto the kit's own
+        // lifecycle queue, so callers no longer need to wrap in Task.detached
+        // to stay off main. Wrapping again would just shuffle threads —
+        // wallet2 still ends up serialized on lifecycleQueue.
+        kit?.refresh()
     }
 
     /// Restart sync to check for new blocks
     func startSync() {
-        guard let kit = kit else { return }
-        Task.detached {
-            kit.startSync()
-        }
+        kit?.startSync()
     }
 
     /// Pause wallet2's refresh thread without tearing down the wallet.
@@ -234,8 +229,18 @@ class MoneroWallet: ObservableObject {
     /// process mid-HTTP-fetch, which leaves wallet2's asio state torn and
     /// crashes when the app resumes. Cheaper than `stopAsync` — preserves
     /// pointers/callbacks so `startSync()` resumes from where we left off.
+    /// Fire-and-forget; for "must finish before iOS suspends" use
+    /// `pauseSyncAsync`.
     func pauseSync() {
         kit?.pauseSync()
+    }
+
+    /// Async variant of `pauseSync` that resolves only after wallet2's
+    /// refresh thread has actually been signalled to stop. Use under a
+    /// `beginBackgroundTask` assertion so iOS doesn't suspend the process
+    /// before pause completes.
+    func pauseSyncAsync() async {
+        await kit?.pauseSyncAsync()
     }
 
     // MARK: - Balance

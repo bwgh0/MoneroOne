@@ -1,34 +1,28 @@
 import Foundation
 import os.log
 
-// MARK: - Crash Handler (file-level for signal safety)
+// MARK: - Previous-crash bridge file
+//
+// Historically a custom signal handler wrote a truncated Swift backtrace
+// to this file and re-raised the signal so iOS would still produce a
+// crash report. The re-raise pattern wiped the real crashing-thread state
+// from the resulting .ips (iOS captures post-handler state, which is
+// typically just the main runloop), so every crash looked like a mystery.
+//
+// The signal handler is gone. Apple's default reporter + the dSYM that
+// CI uploads with each archive gives proper symbolicated stacks in Xcode
+// Organizer and in the device's Analytics Data .ips files — strictly
+// more info than our handler ever provided.
+//
+// We still `loadPreviousCrash()` so any file left over from older builds
+// with the handler installed surfaces once at next launch, then gets
+// deleted. Safe to remove this entirely once none of those builds are in
+// the wild anymore.
 
 private let crashLogPath: String = {
     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     return docs.appendingPathComponent("crash_report.txt").path
 }()
-
-private func crashSignalHandler(signal: Int32) {
-    let names: [Int32: String] = [SIGABRT: "SIGABRT", SIGSEGV: "SIGSEGV", SIGBUS: "SIGBUS", SIGFPE: "SIGFPE", SIGILL: "SIGILL"]
-    let name = names[signal] ?? "SIGNAL(\(signal))"
-    let timestamp = ISO8601DateFormatter().string(from: Date())
-
-    // Get thread backtrace — limited but better than nothing
-    var info = "CRASH: \(name) at \(timestamp)\n"
-    info += "Thread: \(Thread.current)\n"
-    for symbol in Thread.callStackSymbols.prefix(20) {
-        info += "\(symbol)\n"
-    }
-
-    // Write directly to file (signal-safe: no ObjC, no allocations beyond the string above)
-    if let data = info.data(using: .utf8) {
-        FileManager.default.createFile(atPath: crashLogPath, contents: data)
-    }
-
-    // Re-raise to let the default handler produce the real crash report
-    Darwin.signal(signal, SIG_DFL)
-    Darwin.raise(signal)
-}
 
 /// In-memory diagnostic log buffer for troubleshooting sync/network issues.
 /// Captures connection and sync events so users can share them with support.
@@ -42,28 +36,6 @@ final class DiagnosticLog {
 
     private init() {
         loadPreviousCrash()
-    }
-
-    /// Install signal handlers and exception handler. Call once at app launch.
-    func installCrashHandlers() {
-        Darwin.signal(SIGABRT, crashSignalHandler)
-        Darwin.signal(SIGSEGV, crashSignalHandler)
-        Darwin.signal(SIGBUS, crashSignalHandler)
-        Darwin.signal(SIGFPE, crashSignalHandler)
-        Darwin.signal(SIGILL, crashSignalHandler)
-
-        NSSetUncaughtExceptionHandler { exception in
-            let timestamp = ISO8601DateFormatter().string(from: Date())
-            var info = "UNCAUGHT EXCEPTION at \(timestamp)\n"
-            info += "Name: \(exception.name.rawValue)\n"
-            info += "Reason: \(exception.reason ?? "none")\n"
-            for symbol in exception.callStackSymbols.prefix(20) {
-                info += "\(symbol)\n"
-            }
-            if let data = info.data(using: .utf8) {
-                FileManager.default.createFile(atPath: crashLogPath, contents: data)
-            }
-        }
     }
 
     /// Load crash report from previous session if one exists

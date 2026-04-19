@@ -89,7 +89,13 @@ class MoneroWallet: ObservableObject {
                 node: walletNode,
                 networkType: networkType,
                 reachabilityManager: reachability,
-                logger: nil
+                logger: nil,
+                // Wallet2's epee logger writes to a process-global std::ofstream
+                // from multiple internal boost threads without a mutex. Two
+                // workers logging concurrently corrupt the streambuf and
+                // segfault in _platform_memmove. Silence the logger so the
+                // race has nothing to race on. Level 0 = fatal-only.
+                moneroCoreLogLevel: 0
             )
             // Pre-fetch initial state off main to avoid blocking when setupKit runs
             let balance = kit.balanceInfo
@@ -120,7 +126,9 @@ class MoneroWallet: ObservableObject {
                 node: walletNode,
                 networkType: networkType,
                 reachabilityManager: reachability,
-                logger: nil
+                logger: nil,
+                // See `create` — silence wallet2's unlocked logger writes.
+                moneroCoreLogLevel: 0
             )
             return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses)
         }.value

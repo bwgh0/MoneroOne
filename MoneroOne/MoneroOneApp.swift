@@ -33,9 +33,6 @@ struct MoneroOneApp: App {
         }
         #endif
 
-        // Install crash handlers so diagnostic log captures crash info
-        DiagnosticLog.shared.installCrashHandlers()
-
         // Migrate keychain items (fast no-op after first run — uses UserDefaults flags)
         KeychainStorage().migrateKeychainAccessibilityIfNeeded()
         KeychainStorage().migrateRateLimitIfNeeded()

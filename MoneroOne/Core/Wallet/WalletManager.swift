@@ -1329,10 +1329,22 @@ class WalletManager: ObservableObject {
     /// When true, startSync() and refresh() become no-ops
     var isSyncBlocked: Bool = false
 
-    /// Pause sync — stops refresh and state polling
+    /// Pause sync — stops refresh and state polling. Fire-and-forget;
+    /// returns before wallet2 actually stops scanning. Use the async
+    /// variant when the next thing must wait for the pause to complete.
     func pauseSync() {
         isSyncBlocked = true
         moneroWallet?.pauseSync()
+        syncState = .idle
+    }
+
+    /// Async variant of `pauseSync` for the background scene-phase path,
+    /// where iOS suspending the process before wallet2 has stopped scanning
+    /// leaves asio state torn and crashes on resume. Caller wraps this in
+    /// a `beginBackgroundTask` assertion to buy enough time.
+    func pauseSyncAsync() async {
+        isSyncBlocked = true
+        await moneroWallet?.pauseSyncAsync()
         syncState = .idle
     }
 

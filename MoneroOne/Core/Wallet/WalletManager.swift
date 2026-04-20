@@ -269,6 +269,15 @@ class WalletManager: ObservableObject {
         let candidateDerivedId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
         try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: candidateDerivedId, pin: pin)
 
+        // Persist the currently-active wallet's in-memory balance/address
+        // before we swap active to the new wallet. Otherwise the multi-
+        // wallet switcher shows a stale (or nil → 0) cachedBalance for
+        // the previous wallet until the user locks or switches to and
+        // from it. cachedBalance is only written in `lock` and
+        // `prepareSwitchToWallet` today, neither of which fires during
+        // addWallet.
+        cacheActiveWalletData()
+
         let walletId = UUID()
         let info = WalletInfo(
             id: walletId,
@@ -324,6 +333,10 @@ class WalletManager: ObservableObject {
         let networkSuffix = networkType == .testnet ? "_testnet" : ""
         let candidateDerivedId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
         try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: candidateDerivedId, pin: pin)
+
+        // See `addWallet` — snapshot prior active so its balance doesn't
+        // read as 0 in the switcher after the restore swaps active.
+        cacheActiveWalletData()
 
         var height: UInt64 = 0
         if let date = restoreDate {
@@ -420,6 +433,10 @@ class WalletManager: ObservableObject {
             throw WalletError.invalidViewKey
         }
         validator.stop()
+
+        // See `addWallet` — snapshot prior active so its balance doesn't
+        // read as 0 in the switcher after the restore swaps active.
+        cacheActiveWalletData()
 
         var height: UInt64 = 0
         if let date = restoreDate {

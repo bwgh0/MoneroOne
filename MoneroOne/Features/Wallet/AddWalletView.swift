@@ -5,7 +5,7 @@ struct AddWalletView: View {
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $walletManager.addWalletPath) {
             VStack(spacing: 24) {
                 Spacer()
 
@@ -23,12 +23,7 @@ struct AddWalletView: View {
                 Spacer()
 
                 VStack(spacing: 12) {
-                    NavigationLink {
-                        CreateWalletView(
-                            isAddingWallet: true,
-                            existingPin: walletManager.currentPinForAddWallet
-                        )
-                    } label: {
+                    NavigationLink(value: WalletManager.AddWalletDestination.createWallet) {
                         HStack(spacing: 8) {
                             Image(systemName: "plus.circle.fill")
                                 .font(.callout.weight(.semibold))
@@ -41,12 +36,7 @@ struct AddWalletView: View {
                     }
                     .glassButtonStyle()
 
-                    NavigationLink {
-                        RestorePickerView(
-                            isAddingWallet: true,
-                            existingPin: walletManager.currentPinForAddWallet
-                        )
-                    } label: {
+                    NavigationLink(value: WalletManager.AddWalletDestination.restorePicker) {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.counterclockwise.circle.fill")
                                 .font(.callout.weight(.semibold))
@@ -68,6 +58,32 @@ struct AddWalletView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .navigationDestination(for: WalletManager.AddWalletDestination.self) { dest in
+                switch dest {
+                case .createWallet:
+                    CreateWalletView(
+                        isAddingWallet: true,
+                        existingPin: walletManager.currentPinForAddWallet
+                    )
+                case .restorePicker:
+                    RestorePickerView(
+                        isAddingWallet: true,
+                        existingPin: walletManager.currentPinForAddWallet
+                    )
+                case .restoreSeed:
+                    RestoreWalletView(
+                        isAddingWallet: true,
+                        existingPin: walletManager.currentPinForAddWallet
+                    )
+                case .restoreViewKey:
+                    RestoreViewKeyView(
+                        isAddingWallet: true,
+                        existingPin: walletManager.currentPinForAddWallet
+                    )
+                }
+            }
         }
+        .onAppear { walletManager.addWalletSheetPresented = true }
+        .onDisappear { walletManager.addWalletSheetPresented = false }
     }
 }

@@ -14,7 +14,13 @@ struct RestorePickerView: View {
     var isAddingWallet: Bool = false
     var existingPin: String? = nil
 
+    @EnvironmentObject var walletManager: WalletManager
     @State private var selection: Kind = .seed
+    // Onboarding-only fallback: when presented from WelcomeView there's no
+    // add-wallet NavigationStack to push into, so we use local flags. The
+    // add-wallet case pushes via walletManager.addWalletPath instead, which
+    // survives the view-tree tear-down iOS does when snapshotting for the
+    // app switcher.
     @State private var navigateToSeed = false
     @State private var navigateToViewKey = false
 
@@ -48,9 +54,16 @@ struct RestorePickerView: View {
             Spacer()
 
             Button {
-                switch selection {
-                case .seed: navigateToSeed = true
-                case .viewOnly: navigateToViewKey = true
+                if isAddingWallet {
+                    switch selection {
+                    case .seed: walletManager.addWalletPath.append(.restoreSeed)
+                    case .viewOnly: walletManager.addWalletPath.append(.restoreViewKey)
+                    }
+                } else {
+                    switch selection {
+                    case .seed: navigateToSeed = true
+                    case .viewOnly: navigateToViewKey = true
+                    }
                 }
             } label: {
                 HStack(spacing: 8) {

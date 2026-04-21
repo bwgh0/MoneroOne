@@ -1754,17 +1754,24 @@ class WalletManager: ObservableObject {
             walletStore.updateWallet(previous)
         }
 
-        // Let the collapse animation finish before tearing down the old wallet
-        try await Task.sleep(nanoseconds: 400_000_000) // 0.4s — just past the 0.35s animation
-
-        // Tear down old wallet — await full C++ teardown via `stopAsync`
-        // before falling through to `startWalletFromSeed/ViewKey`, which
-        // also call `stopAsync` (no-op now that moneroWallet is nil) and
-        // then create the new wallet. Fire-and-forget `stop()` plus a
-        // 100ms sleep was racing wallet2's refresh-thread join.
+        // Cancel old wallet's Combine bindings BEFORE the animation sleep.
+        // Otherwise the still-running old wallet keeps publishing $balance,
+        // $address, $transactions, etc. into this manager for 400ms, clobbering
+        // the new wallet's cached values set in prepareSwitchToWallet and
+        // leaving the UI showing the new wallet's name with the old wallet's
+        // data until some later republish refreshes it.
         cancellables.removeAll()
         let oldWallet = moneroWallet
         moneroWallet = nil
+
+        // Let the collapse animation finish before tearing down the old wallet
+        try await Task.sleep(nanoseconds: 400_000_000) // 0.4s — just past the 0.35s animation
+
+        // Await full C++ teardown via `stopAsync` before falling through to
+        // `startWalletFromSeed/ViewKey`, which also call `stopAsync` (no-op
+        // now that moneroWallet is nil) and then create the new wallet.
+        // Fire-and-forget `stop()` plus a 100ms sleep was racing wallet2's
+        // refresh-thread join.
         await oldWallet?.stopAsync()
 
         guard let pin = currentPin else { throw WalletError.notUnlocked }

@@ -16,24 +16,39 @@ struct RestoreViewKeyView: View {
     var isAddingWallet: Bool = false
     var existingPin: String? = nil
 
-    @State private var addressInput = ""
-    @State private var viewKeyInput = ""
-    @State private var walletName: String = ""
-    @State private var walletEmoji: String = "\u{1F441}"
+    // @SceneStorage — iOS rebuilds the view tree when snapshotting for the
+    // app switcher, which wipes plain @State and kicks the user back to the
+    // first step with empty fields. SceneStorage is restored across the
+    // rebuild so typed keys + the current step survive.
+    @SceneStorage("restoreVK.addressInput") private var addressInput = ""
+    @SceneStorage("restoreVK.viewKeyInput") private var viewKeyInput = ""
+    @SceneStorage("restoreVK.walletName") private var walletName: String = ""
+    @SceneStorage("restoreVK.walletEmoji") private var walletEmoji: String = "\u{1F441}"
     @State private var pin = ""
     @State private var confirmPin = ""
-    @State private var step: Step = .enterKeys
+    @SceneStorage("restoreVK.step") private var step: Step = .enterKeys
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
     @State private var isRestoring = false
-    @State private var walletCreationDate: Date = Date()
-    @State private var useCreationDate = true
+    @SceneStorage("restoreVK.creationDate") private var walletCreationDateTS: Double = Date().timeIntervalSince1970
+    @SceneStorage("restoreVK.useCreationDate") private var useCreationDate = true
     @State private var selectedPINLength = 6
     @FocusState private var focusedField: PINField?
 
+    private var walletCreationDate: Date {
+        Date(timeIntervalSince1970: walletCreationDateTS)
+    }
+
+    private var walletCreationDateBinding: Binding<Date> {
+        Binding(
+            get: { Date(timeIntervalSince1970: walletCreationDateTS) },
+            set: { walletCreationDateTS = $0.timeIntervalSince1970 }
+        )
+    }
+
     private enum PINField { case pin, confirmPin }
 
-    private enum Step {
+    private enum Step: String {
         case enterKeys
         case creationDate
         case setPIN
@@ -103,9 +118,24 @@ struct RestoreViewKeyView: View {
                     .foregroundColor(.secondary)
                     .padding(.top, 8)
 
-                Text("Primary Address")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack {
+                    Text("Primary Address")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button {
+                        pasteAddress()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.clipboard")
+                            Text("Paste")
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("restoreViewKey.pasteAddressButton")
+                }
                 TextField("4..." , text: $addressInput, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
@@ -122,9 +152,24 @@ struct RestoreViewKeyView: View {
                         .foregroundColor(.red)
                 }
 
-                Text("Private View Key")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack {
+                    Text("Private View Key")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button {
+                        pasteViewKey()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.clipboard")
+                            Text("Paste")
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("restoreViewKey.pasteViewKeyButton")
+                }
                 TextField("64 lowercase hex characters", text: $viewKeyInput, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
@@ -178,7 +223,7 @@ struct RestoreViewKeyView: View {
             if useCreationDate {
                 DatePicker(
                     "Creation date",
-                    selection: $walletCreationDate,
+                    selection: walletCreationDateBinding,
                     in: Self.genesisDate...Date(),
                     displayedComponents: [.date]
                 )
@@ -319,6 +364,18 @@ struct RestoreViewKeyView: View {
                 .foregroundColor(.secondary)
             Spacer()
         }
+    }
+
+    private func pasteAddress() {
+        guard let clipboard = UIPasteboard.general.string else { return }
+        addressInput = clipboard.trimmingCharacters(in: .whitespacesAndNewlines)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    private func pasteViewKey() {
+        guard let clipboard = UIPasteboard.general.string else { return }
+        viewKeyInput = clipboard.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     private func restore() {

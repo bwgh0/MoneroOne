@@ -29,6 +29,27 @@ class WalletManager: ObservableObject {
     @Published private(set) var isViewOnly: Bool = false
     @Published private(set) var walletSessionId = UUID()
 
+    /// True while the Add Wallet sheet is presented over an unlocked session.
+    /// The scenePhase handler consults this to skip auto-lock when the user
+    /// briefly leaves the app to copy a seed or view key from a password
+    /// manager — otherwise the lock dismisses the whole sheet tree and the
+    /// user loses any partially-entered input.
+    @Published var addWalletSheetPresented: Bool = false
+
+    /// Navigation path for the Add Wallet flow. Hoisted out of `AddWalletView`
+    /// because iOS tears down the sheet's view tree when snapshotting for the
+    /// app switcher, which wipes any local NavigationStack path and kicks the
+    /// user back to the first step. Reset to empty when the sheet dismisses
+    /// for real (via `onDismiss`), not on the snapshot rebuild.
+    @Published var addWalletPath: [AddWalletDestination] = []
+
+    enum AddWalletDestination: Hashable {
+        case createWallet
+        case restorePicker
+        case restoreSeed
+        case restoreViewKey
+    }
+
     // Send prefill properties (for donation flow)
     @Published var prefillSendAddress: String?
     @Published var prefillSendAmount: String?
@@ -915,8 +936,21 @@ class WalletManager: ObservableObject {
     /// Cache balance and address into WalletInfo for switcher display
     private func cacheActiveWalletData() {
         guard var info = activeWallet else { return }
-        info.cachedBalance = balance
-        info.cachedPrimaryAddress = primaryAddress.isEmpty ? nil : primaryAddress
+        // Read from the live wallet instance rather than from this manager's
+        // mirrored @Published state. The mirrors can momentarily hold another
+        // wallet's values if a stale subscription fires during a switch, and
+        // persisting those mirrors into info.cachedBalance/cachedPrimaryAddress
+        // rots the on-disk cache for this wallet — the switcher then keeps
+        // rendering that wallet with the wrong balance/address even after the
+        // app restarts, until some later action overwrites the cache.
+        if let wallet = moneroWallet {
+            info.cachedBalance = wallet.balance
+            let addr = wallet.primaryAddress
+            info.cachedPrimaryAddress = addr.isEmpty ? nil : addr
+        } else {
+            info.cachedBalance = balance
+            info.cachedPrimaryAddress = primaryAddress.isEmpty ? nil : primaryAddress
+        }
         info.userCreatedSubaddressIndices = Array(userCreatedSubaddressIndices)
         walletStore.updateWallet(info)
         activeWallet = info
@@ -1712,11 +1746,19 @@ class WalletManager: ObservableObject {
         guard let target = wallets.first(where: { $0.id == id }) else { return nil }
         guard target.id != activeWallet?.id else { return nil }
 
-        // Snapshot previous wallet data in-memory only (no disk I/O)
+        // Snapshot previous wallet data in-memory only (no disk I/O).
+        // Read from the live wallet instance, not the manager's mirrored
+        // @Published state — see cacheActiveWalletData for why.
         var previousInfo: WalletInfo?
         if var info = activeWallet {
-            info.cachedBalance = balance
-            info.cachedPrimaryAddress = primaryAddress.isEmpty ? nil : primaryAddress
+            if let wallet = moneroWallet {
+                info.cachedBalance = wallet.balance
+                let addr = wallet.primaryAddress
+                info.cachedPrimaryAddress = addr.isEmpty ? nil : addr
+            } else {
+                info.cachedBalance = balance
+                info.cachedPrimaryAddress = primaryAddress.isEmpty ? nil : primaryAddress
+            }
             info.userCreatedSubaddressIndices = Array(userCreatedSubaddressIndices)
             previousInfo = info
             activeWallet = info

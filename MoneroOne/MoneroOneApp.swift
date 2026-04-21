@@ -69,14 +69,19 @@ struct MoneroOneApp: App {
     }
 
     private func handleScenePhaseChange(newPhase: ScenePhase) {
+        // Add-wallet sheet is a long-running user flow (typing a seed, pasting
+        // an address + view key from a password manager). Locking mid-flow
+        // unmounts MainTabView and destroys the sheet + any partially-entered
+        // input. Suppress auto-lock while the sheet is up.
+        let suppressLock = walletManager.addWalletSheetPresented
         switch newPhase {
         case .inactive:
             // Lock immediately when going inactive (before background)
-            if walletManager.isUnlocked && autoLockMinutes == 0 {
+            if walletManager.isUnlocked && autoLockMinutes == 0 && !suppressLock {
                 walletManager.lock()
             }
         case .background:
-            if walletManager.isUnlocked && autoLockMinutes == 0 {
+            if walletManager.isUnlocked && autoLockMinutes == 0 && !suppressLock {
                 // Lock immediately (backup in case inactive didn't trigger)
                 walletManager.lock()
             } else if walletManager.isUnlocked && autoLockMinutes > 0 {
@@ -109,7 +114,7 @@ struct MoneroOneApp: App {
             if walletManager.isUnlocked, let bgTime = backgroundTime, autoLockMinutes > 0 {
                 let elapsed = Date().timeIntervalSince(bgTime)
                 let lockAfterSeconds = Double(autoLockMinutes * 60)
-                if elapsed >= lockAfterSeconds {
+                if elapsed >= lockAfterSeconds && !suppressLock {
                     walletManager.lock()
                 }
             }

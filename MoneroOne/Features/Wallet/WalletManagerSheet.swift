@@ -417,7 +417,9 @@ struct WalletManagerRows: View {
             .glassButtonStyle()
             .padding(.horizontal)
         }
-        .sheet(isPresented: $showAddWallet) {
+        .fullScreenCover(isPresented: $showAddWallet, onDismiss: {
+            walletManager.addWalletPath = []
+        }) {
             AddWalletView()
         }
         .sheet(isPresented: Binding(

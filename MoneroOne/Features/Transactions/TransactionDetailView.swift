@@ -5,30 +5,31 @@ struct TransactionDetailView: View {
     @EnvironmentObject var walletManager: WalletManager
     @AppStorage("isTestnet") private var isTestnet = false
 
+    @State private var txKey: String?
+    @State private var txKeyLookedUp = false
+    @State private var copiedField: CopyField?
+
+    private enum CopyField: String { case txId, address, txKey }
+
     /// For incoming transactions, determine which subaddress received the funds
     private var receivingSubaddressLabel: String? {
         guard transaction.type == .incoming, !transaction.address.isEmpty else { return nil }
 
-        // Check if it's the main address
         if transaction.address == walletManager.primaryAddress {
             return "Main Address"
         }
 
-        // Try to find matching subaddress
         if let subaddr = walletManager.subaddresses.first(where: { $0.address == transaction.address }) {
             return "Subaddress #\(subaddr.index)"
         }
 
-        // Address found but not in our current list (might be old)
         return "Subaddress"
     }
 
     private var blockExplorerURL: URL? {
         if isTestnet {
-            // Testnet block explorer
             return URL(string: "https://testnet.xmrchain.net/tx/\(transaction.id)")
         } else {
-            // Mainnet block explorer
             return URL(string: "https://xmrchain.net/tx/\(transaction.id)")
         }
     }
@@ -36,7 +37,6 @@ struct TransactionDetailView: View {
     var body: some View {
         List {
             Section {
-                // Amount
                 HStack {
                     Text("Amount")
                     Spacer()
@@ -47,7 +47,6 @@ struct TransactionDetailView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Amount: \(transaction.type == .incoming ? "plus" : "minus") \(XMRFormatter.format(transaction.amount)) XMR")
 
-                // Fee (for outgoing)
                 if transaction.type == .outgoing {
                     HStack {
                         Text("Fee")
@@ -59,7 +58,6 @@ struct TransactionDetailView: View {
                     .accessibilityLabel("Fee: \(XMRFormatter.format(transaction.fee)) XMR")
                 }
 
-                // Status
                 HStack {
                     Text("Status")
                     Spacer()
@@ -79,7 +77,6 @@ struct TransactionDetailView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Status: \(transaction.displayStatusText)")
 
-                // Confirmations
                 HStack {
                     Text("Confirmations")
                     Spacer()
@@ -94,7 +91,6 @@ struct TransactionDetailView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Confirmations: \(transaction.confirmations ?? 0)")
 
-                // Memo
                 if let memo = transaction.memo, !memo.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Memo")
@@ -105,7 +101,6 @@ struct TransactionDetailView: View {
             }
 
             Section("Details") {
-                // Date
                 HStack {
                     Text("Date")
                     Spacer()
@@ -115,37 +110,20 @@ struct TransactionDetailView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Date: \(formattedDate)")
 
-                // Transaction ID
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Transaction ID")
-                    Text(transaction.id)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .textSelection(.enabled)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Transaction ID: \(transaction.id)")
+                copyableRow(
+                    label: "Transaction ID",
+                    value: transaction.id,
+                    field: .txId
+                )
 
-                // For incoming: show which subaddress received the funds
                 if transaction.type == .incoming && !transaction.address.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("Received on")
-                            Spacer()
-                            if let label = receivingSubaddressLabel {
-                                Text(label)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        Text(transaction.address)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .textSelection(.enabled)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Received on \(receivingSubaddressLabel ?? "address"): \(transaction.address)")
+                    copyableRow(
+                        label: "Received on",
+                        trailingLabel: receivingSubaddressLabel,
+                        value: transaction.address,
+                        field: .address
+                    )
 
-                    // Privacy note about sender
                     HStack(spacing: 8) {
                         Image(systemName: "lock.shield")
                             .foregroundColor(.green)
@@ -157,36 +135,23 @@ struct TransactionDetailView: View {
                     .accessibilityLabel("Sender address hidden by Monero privacy")
                 }
 
-                // For outgoing: show recipient if available
                 if transaction.type == .outgoing && !transaction.address.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Sent to")
-                        Text(transaction.address)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .textSelection(.enabled)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Sent to: \(transaction.address)")
+                    copyableRow(
+                        label: "Sent to",
+                        value: transaction.address,
+                        field: .address
+                    )
                 }
-            }
 
-            Section {
-                Button {
-                    UIPasteboard.general.string = transaction.id
-                } label: {
-                    HStack {
-                        Image(systemName: "doc.on.doc")
-                        Text("Copy Transaction ID")
-                    }
+                if transaction.type == .outgoing {
+                    txKeyRow
                 }
-                .accessibilityLabel("Copy transaction ID")
-                .accessibilityHint("Copies the transaction ID to clipboard")
 
                 if let url = blockExplorerURL {
                     Link(destination: url) {
                         HStack {
                             Image(systemName: "safari")
+                                .foregroundColor(.accentColor)
                             Text("View in Block Explorer")
                             Spacer()
                             Text(isTestnet ? "Testnet" : "")
@@ -204,6 +169,76 @@ struct TransactionDetailView: View {
         }
         .navigationTitle(transaction.type == .incoming ? "Received" : "Sent")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard transaction.type == .outgoing, !txKeyLookedUp else { return }
+            txKey = walletManager.getTxKey(txId: transaction.id)
+            txKeyLookedUp = true
+        }
+    }
+
+    @ViewBuilder
+    private var txKeyRow: some View {
+        if let key = txKey, !key.isEmpty {
+            copyableRow(label: "Transaction Key", value: key, field: .txKey)
+        } else if txKeyLookedUp {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Transaction Key")
+                Text("Stored only on the device that originally sent this transaction. Recipients use this key with the transaction ID and destination address to verify the payment.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Transaction key unavailable on this device")
+        }
+    }
+
+    @ViewBuilder
+    private func copyableRow(
+        label: String,
+        trailingLabel: String? = nil,
+        value: String,
+        field: CopyField
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                Spacer()
+                if let trailingLabel {
+                    Text(trailingLabel)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack(alignment: .top, spacing: 10) {
+                Text(value)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    copy(value, field: field)
+                } label: {
+                    Image(systemName: copiedField == field ? "checkmark.circle.fill" : "doc.on.doc")
+                        .font(.body)
+                        .foregroundStyle(copiedField == field ? Color.green : Color.accentColor)
+                        .symbolEffect(.bounce, value: copiedField == field)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copiedField == field ? "\(label) copied" : "Copy \(label.lowercased())")
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
+    }
+
+    private func copy(_ text: String, field: CopyField) {
+        UIPasteboard.general.string = text
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        copiedField = field
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            if copiedField == field { copiedField = nil }
+        }
     }
 
     private var formattedDate: String {

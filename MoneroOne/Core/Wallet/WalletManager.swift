@@ -1251,6 +1251,12 @@ class WalletManager: ObservableObject {
         moneroWallet?.getPolyseed()
     }
 
+    /// Per-transaction secret key for the given outgoing tx, usable by the
+    /// recipient (along with txid + destination) to prove the payment.
+    func getTxKey(txId: String) -> String? {
+        moneroWallet?.getTxKey(txId: txId)
+    }
+
     /// Detected seed type for the current wallet
     var detectedSeedType: SeedType? {
         guard let seed = currentSeed else { return nil }

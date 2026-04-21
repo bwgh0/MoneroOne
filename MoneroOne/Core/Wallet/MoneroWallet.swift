@@ -488,6 +488,12 @@ class MoneroWallet: ObservableObject {
         return seed.split(separator: " ").map(String.init)
     }
 
+    /// Per-transaction secret key, shared alongside txid + destination
+    /// address to let the recipient prove the payment.
+    func getTxKey(txId: String) -> String? {
+        kit?.getTxKey(txId: txId)
+    }
+
     // MARK: - Subaddresses
 
     /// Create a new subaddress for receiving payments

@@ -79,7 +79,6 @@ class PriceService: ObservableObject {
 
     init() {
         loadCurrency()
-        startAutoRefresh()
     }
 
     deinit {
@@ -143,6 +142,9 @@ class PriceService: ObservableObject {
     }
 
     func startAutoRefresh() {
+        // Idempotent: callable from multiple lifecycle hooks without double-firing.
+        guard refreshTimer == nil else { return }
+
         Task {
             await fetchPrice()
             // Prefetch ALL chart ranges for instant switching

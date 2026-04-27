@@ -60,7 +60,18 @@ struct MoneroOneApp: App {
                 .onAppear {
                     TrustedLocationSyncManager.shared.configure(walletManager: walletManager)
                     priceService.priceAlertService = priceAlertService
-                    schedulePriceCheck()
+                    // Defer all price network calls until a wallet exists.
+                    // Avoids IP/connection leak on first launch before seed.
+                    if walletManager.hasWallet {
+                        priceService.startAutoRefresh()
+                        schedulePriceCheck()
+                    }
+                }
+                .onChange(of: walletManager.hasWallet) { hasWallet in
+                    if hasWallet {
+                        priceService.startAutoRefresh()
+                        schedulePriceCheck()
+                    }
                 }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -107,8 +118,11 @@ struct MoneroOneApp: App {
                     }
                 }
             }
-            // Schedule next price check when going to background
-            schedulePriceCheck()
+            // Schedule next price check when going to background.
+            // Skip if no wallet exists yet to avoid IP leak before seed.
+            if walletManager.hasWallet {
+                schedulePriceCheck()
+            }
         case .active:
             // Check if we should lock based on time in background
             if walletManager.isUnlocked, let bgTime = backgroundTime, autoLockMinutes > 0 {

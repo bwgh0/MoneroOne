@@ -48,6 +48,7 @@ class WalletManager: ObservableObject {
         case restorePicker
         case restoreSeed
         case restoreViewKey
+        case pairTrezor
     }
 
     // Send prefill properties (for donation flow)
@@ -407,7 +408,9 @@ class WalletManager: ObservableObject {
         address: String,
         viewKey: String,
         pin: String,
-        restoreDate: Date? = nil
+        restoreDate: Date? = nil,
+        source: WalletSource = .viewOnly,
+        deviceWalletId: String? = nil
     ) async throws {
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedViewKey = viewKey.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -469,14 +472,15 @@ class WalletManager: ObservableObject {
             id: walletId,
             name: name,
             emoji: emoji,
-            source: .viewOnly,
+            source: source,
             createdAt: Date(),
             restoreHeight: height,
             syncResetCount: 0,
             userCreatedSubaddressIndices: [],
             cachedPrimaryAddress: trimmedAddress,
             cachedBalance: nil,
-            derivedWalletId: candidateDerivedId
+            derivedWalletId: candidateDerivedId,
+            deviceWalletId: deviceWalletId
         )
 
         try keychain.saveViewOnly(address: trimmedAddress, viewKey: trimmedViewKey, pin: pin, walletId: walletId)
@@ -486,6 +490,43 @@ class WalletManager: ObservableObject {
         wallets = walletStore.loadWallets()
         activeWallet = info
         currentPin = pin
+    }
+
+    /// Pair a Trezor and create the corresponding hardware-backed wallet
+    /// on this device. The caller has already brought the device online
+    /// over BLE/THP and pulled the watch key (address + view key) via
+    /// `MoneroGetWatchKey` — this method just wraps `restoreViewOnlyWallet`
+    /// with the `.hardware(.trezor(...))` source set and a stable
+    /// `deviceWalletId` derived from the THP device id so the future
+    /// reconnect sidecar can find its sibling cache on disk.
+    func pairTrezorWallet(
+        name: String,
+        emoji: String = "\u{1F510}",
+        address: String,
+        viewKey: String,
+        pin: String,
+        model: String,
+        deviceId: String,
+        peripheralUUID: String?,
+        restoreDate: Date? = nil
+    ) async throws {
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        let deviceWalletId = MoneroWallet.stableWalletId(for: "trezor:\(deviceId)\(networkSuffix)")
+        let binding = TrezorBinding(
+            model: model,
+            deviceId: deviceId,
+            peripheralUUID: peripheralUUID
+        )
+        try await restoreViewOnlyWallet(
+            name: name,
+            emoji: emoji,
+            address: address,
+            viewKey: viewKey,
+            pin: pin,
+            restoreDate: restoreDate,
+            source: .hardware(.trezor(binding)),
+            deviceWalletId: deviceWalletId
+        )
     }
 
     func validateMnemonic(_ mnemonic: [String]) -> Bool {

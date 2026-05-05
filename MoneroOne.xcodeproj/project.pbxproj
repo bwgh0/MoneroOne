@@ -130,6 +130,7 @@
 		THPC2500BUILD567890ABCDEF /* THPCurve25519.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPC251234567890ABCDEF0 /* THPCurve25519.swift */; };
 		THPCPA00BUILD567890ABCDEF /* THPCPace.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPCPA1234567890ABCDEF0 /* THPCPace.swift */; };
 		TRZSES00BUILD567890ABCDEF /* TrezorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZSES001234567890ABCDEF /* TrezorSession.swift */; };
+		TRZTRP00BUILD567890ABCDEF /* TrezorTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZTRP001234567890ABCDEF /* TrezorTransport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -299,6 +300,7 @@
 		THPC251234567890ABCDEF0 /* THPCurve25519.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPCurve25519.swift; sourceTree = "<group>"; };
 		THPCPA1234567890ABCDEF0 /* THPCPace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPCPace.swift; sourceTree = "<group>"; };
 		TRZSES001234567890ABCDEF /* TrezorSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorSession.swift; sourceTree = "<group>"; };
+		TRZTRP001234567890ABCDEF /* TrezorTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorTransport.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -408,6 +410,7 @@
 				THPC251234567890ABCDEF0 /* THPCurve25519.swift */,
 				THPCPA1234567890ABCDEF0 /* THPCPace.swift */,
 				TRZSES001234567890ABCDEF /* TrezorSession.swift */,
+				TRZTRP001234567890ABCDEF /* TrezorTransport.swift */,
 			);
 			path = Trezor;
 			sourceTree = "<group>";
@@ -974,6 +977,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				THPC2500BUILD567890ABCDEF /* THPCurve25519.swift in Sources */,
 				THPCPA00BUILD567890ABCDEF /* THPCPace.swift in Sources */,
 				TRZSES00BUILD567890ABCDEF /* TrezorSession.swift in Sources */,
+				TRZTRP00BUILD567890ABCDEF /* TrezorTransport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

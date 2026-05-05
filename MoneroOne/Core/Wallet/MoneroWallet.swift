@@ -513,6 +513,42 @@ class MoneroWallet: ObservableObject {
     /// The wallet's private view key, or nil if not yet loaded.
     var secretViewKey: String? { kit?.secretViewKey }
 
+    // MARK: - Cold wallet primitives (Trezor sidecar flow)
+
+    /// Forwarders to MoneroKit's cold-sign API. Used by `TrezorSession`
+    /// to drive the blob exchange between the iPhone's primary watch-only
+    /// wallet and the transient device-bound sidecar that opens during a
+    /// reconnect window.
+
+    func exportOutputsUR(maxFragmentLength: Int = 1000, all: Bool = false) async -> String? {
+        await kit?.exportOutputsUR(maxFragmentLength: maxFragmentLength, all: all)
+    }
+
+    func importOutputsUR(_ blob: String) async -> Bool {
+        await kit?.importOutputsUR(blob) ?? false
+    }
+
+    func exportKeyImagesUR(maxFragmentLength: Int = 1000, all: Bool = false) async -> String? {
+        await kit?.exportKeyImagesUR(maxFragmentLength: maxFragmentLength, all: all)
+    }
+
+    func importKeyImagesUR(_ blob: String) async -> Bool {
+        await kit?.importKeyImagesUR(blob) ?? false
+    }
+
+    func submitTransactionUR(_ blob: String) async -> Bool {
+        await kit?.submitTransactionUR(blob) ?? false
+    }
+
+    @discardableResult
+    func reconnectDevice() async -> Bool {
+        await kit?.reconnectDevice() ?? false
+    }
+
+    var deviceType: MoneroKit.Kit.DeviceType {
+        kit?.deviceType ?? .software
+    }
+
     // MARK: - Validation
 
     static func isValidAddress(_ address: String, networkType: MoneroKit.NetworkType = .mainnet) -> Bool {

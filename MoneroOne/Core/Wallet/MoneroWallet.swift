@@ -109,6 +109,44 @@ class MoneroWallet: ObservableObject {
         setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
     }
 
+    /// Open (or create on first connect) a wallet bound to a hardware
+    /// device. The on-disk cache is keyed by `walletId` rather than a
+    /// hash of credentials so the caller can pin the sidecar to a
+    /// stable identifier (typically `WalletInfo.deviceWalletId`, derived
+    /// from the THP device id). The Trezor bridge HTTP server must be
+    /// running and the device must be reachable through it before this
+    /// call — wallet2 contacts the device during `restore_from_device`.
+    func createFromDevice(
+        deviceName: String,
+        walletId: String,
+        restoreHeight: UInt64 = 0,
+        node: MoneroKit.Node? = nil,
+        networkType: MoneroKit.NetworkType = .mainnet
+    ) async throws {
+        let walletNode = node ?? defaultNode(for: networkType)
+
+        // Heavy Kit init off main thread — wallet2 contacts the device
+        // during restore_from_device which can take seconds.
+        let reachability = reachabilityManager
+        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs) = try await Task.detached {
+            let kit = try MoneroKit.Kit(
+                wallet: .trezor(deviceName: deviceName),
+                account: 0,
+                restoreHeight: restoreHeight,
+                walletId: walletId,
+                node: walletNode,
+                networkType: networkType,
+                reachabilityManager: reachability,
+                logger: nil,
+                moneroCoreLogLevel: 0
+            )
+            return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses)
+        }.value
+
+        kit = newKit
+        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
+    }
+
     /// Create watch-only wallet
     func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, networkType: MoneroKit.NetworkType = .mainnet) async throws {
         let walletNode = node ?? defaultNode(for: networkType)

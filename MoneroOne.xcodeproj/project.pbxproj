@@ -117,6 +117,18 @@
 		AA000000000000000000000C /* RestorePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000B /* RestorePickerView.swift */; };
 		AA000000000000000000000E /* SelectableOptionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000D /* SelectableOptionCard.swift */; };
 		AA0000000000000000000010 /* ExportViewKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000F /* ExportViewKeyView.swift */; };
+		TRZDEV00BUILD567890ABCDEF /* TrezorDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZDEV001234567890ABCDEF /* TrezorDevice.swift */; };
+		TRZBLE00BUILD567890ABCDEF /* TrezorBleTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZBLE001234567890ABCDEF /* TrezorBleTransport.swift */; };
+		TRZBRS00BUILD567890ABCDEF /* TrezorBridgeServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZBRS001234567890ABCDEF /* TrezorBridgeServer.swift */; };
+		TRZMGR00BUILD567890ABCDEF /* TrezorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZMGR001234567890ABCDEF /* TrezorManager.swift */; };
+		TRZLOG00BUILD567890ABCDEF /* TrezorLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZLOG001234567890ABCDEF /* TrezorLog.swift */; };
+		THPFRM00BUILD567890ABCDEF /* THPFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPFRM001234567890ABCDEF /* THPFrame.swift */; };
+		THPCPH00BUILD567890ABCDEF /* THPCipherState.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPCPH001234567890ABCDEF /* THPCipherState.swift */; };
+		THPNSE00BUILD567890ABCDEF /* THPNoiseHandshake.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPNSE001234567890ABCDEF /* THPNoiseHandshake.swift */; };
+		THPCHN00BUILD567890ABCDEF /* THPChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPCHN001234567890ABCDEF /* THPChannel.swift */; };
+		THPPAR00BUILD567890ABCDEF /* THPPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPPAR001234567890ABCDEF /* THPPairing.swift */; };
+		THPC2500BUILD567890ABCDEF /* THPCurve25519.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPC251234567890ABCDEF0 /* THPCurve25519.swift */; };
+		THPCPA00BUILD567890ABCDEF /* THPCPace.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPCPA1234567890ABCDEF0 /* THPCPace.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -273,6 +285,18 @@
 		AA000000000000000000000B /* RestorePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestorePickerView.swift; sourceTree = "<group>"; };
 		AA000000000000000000000D /* SelectableOptionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableOptionCard.swift; sourceTree = "<group>"; };
 		AA000000000000000000000F /* ExportViewKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportViewKeyView.swift; sourceTree = "<group>"; };
+		TRZDEV001234567890ABCDEF /* TrezorDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorDevice.swift; sourceTree = "<group>"; };
+		TRZBLE001234567890ABCDEF /* TrezorBleTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorBleTransport.swift; sourceTree = "<group>"; };
+		TRZBRS001234567890ABCDEF /* TrezorBridgeServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorBridgeServer.swift; sourceTree = "<group>"; };
+		TRZMGR001234567890ABCDEF /* TrezorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorManager.swift; sourceTree = "<group>"; };
+		TRZLOG001234567890ABCDEF /* TrezorLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorLog.swift; sourceTree = "<group>"; };
+		THPFRM001234567890ABCDEF /* THPFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPFrame.swift; sourceTree = "<group>"; };
+		THPCPH001234567890ABCDEF /* THPCipherState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPCipherState.swift; sourceTree = "<group>"; };
+		THPNSE001234567890ABCDEF /* THPNoiseHandshake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPNoiseHandshake.swift; sourceTree = "<group>"; };
+		THPCHN001234567890ABCDEF /* THPChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPChannel.swift; sourceTree = "<group>"; };
+		THPPAR001234567890ABCDEF /* THPPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPPairing.swift; sourceTree = "<group>"; };
+		THPC251234567890ABCDEF0 /* THPCurve25519.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPCurve25519.swift; sourceTree = "<group>"; };
+		THPCPA1234567890ABCDEF0 /* THPCPace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPCPace.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -360,9 +384,29 @@
 			children = (
 				XMRFORMATGRP1234567890AB /* Formatters */,
 				5B41E4CE7002C3EA9370D135 /* Services */,
+				TRZCOR001234567890ABCDEF /* Trezor */,
 				A009680DCA5DEAEBFFBE7D54 /* Wallet */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		TRZCOR001234567890ABCDEF /* Trezor */ = {
+			isa = PBXGroup;
+			children = (
+				TRZDEV001234567890ABCDEF /* TrezorDevice.swift */,
+				TRZBLE001234567890ABCDEF /* TrezorBleTransport.swift */,
+				TRZBRS001234567890ABCDEF /* TrezorBridgeServer.swift */,
+				TRZMGR001234567890ABCDEF /* TrezorManager.swift */,
+				TRZLOG001234567890ABCDEF /* TrezorLog.swift */,
+				THPFRM001234567890ABCDEF /* THPFrame.swift */,
+				THPCPH001234567890ABCDEF /* THPCipherState.swift */,
+				THPNSE001234567890ABCDEF /* THPNoiseHandshake.swift */,
+				THPCHN001234567890ABCDEF /* THPChannel.swift */,
+				THPPAR001234567890ABCDEF /* THPPairing.swift */,
+				THPC251234567890ABCDEF0 /* THPCurve25519.swift */,
+				THPCPA1234567890ABCDEF0 /* THPCPace.swift */,
+			);
+			path = Trezor;
 			sourceTree = "<group>";
 		};
 		XMRFORMATGRP1234567890AB /* Formatters */ = {
@@ -914,6 +958,18 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				AA000000000000000000000C /* RestorePickerView.swift in Sources */,
 				AA000000000000000000000E /* SelectableOptionCard.swift in Sources */,
 				AA0000000000000000000010 /* ExportViewKeyView.swift in Sources */,
+				TRZDEV00BUILD567890ABCDEF /* TrezorDevice.swift in Sources */,
+				TRZBLE00BUILD567890ABCDEF /* TrezorBleTransport.swift in Sources */,
+				TRZBRS00BUILD567890ABCDEF /* TrezorBridgeServer.swift in Sources */,
+				TRZMGR00BUILD567890ABCDEF /* TrezorManager.swift in Sources */,
+				TRZLOG00BUILD567890ABCDEF /* TrezorLog.swift in Sources */,
+				THPFRM00BUILD567890ABCDEF /* THPFrame.swift in Sources */,
+				THPCPH00BUILD567890ABCDEF /* THPCipherState.swift in Sources */,
+				THPNSE00BUILD567890ABCDEF /* THPNoiseHandshake.swift in Sources */,
+				THPCHN00BUILD567890ABCDEF /* THPChannel.swift in Sources */,
+				THPPAR00BUILD567890ABCDEF /* THPPairing.swift in Sources */,
+				THPC2500BUILD567890ABCDEF /* THPCurve25519.swift in Sources */,
+				THPCPA00BUILD567890ABCDEF /* THPCPace.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

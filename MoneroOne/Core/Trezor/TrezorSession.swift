@@ -104,16 +104,49 @@ final class TrezorSession: ObservableObject {
         phase = .complete
     }
 
-    /// Bring the device online, sync key images, sign + broadcast.
-    /// NOT YET IMPLEMENTED — needs wallet2 unsigned-tx blob bindings
-    /// in MoneroKit before this can be wired up. Throws so callers
-    /// fail fast rather than silently no-op.
+    /// Bring the device online, sync key images so the sidecar's view
+    /// of spent outputs matches the primary, then build, sign, and
+    /// broadcast a transaction through the sidecar.
+    ///
+    /// Signing is transparent at the wallet2 layer — a TREZOR-bound
+    /// wallet's `commit()` internally talks to the device through the
+    /// running BridgeTransport. No separate "sign" API is needed: it's
+    /// just `sidecar.send(to:, amount:, ...)`, which under the hood
+    /// hits localhost:21325 → TrezorBridgeServer → THP → device →
+    /// signed → broadcast.
+    ///
+    /// After broadcast, key images for the newly-spent outputs are
+    /// pulled back into the primary so its balance and outgoing-tx
+    /// view stay current without a second reconnect.
     func send(to address: String, amount: Decimal, priority: SendPriority = .default, memo: String? = nil) async throws -> String {
         try await runPrelude()
         try await exchangeKeyImages()
+
+        guard let sidecar = sidecarWallet else {
+            throw SessionError.signingFailed("sidecar wallet missing")
+        }
         phase = .signing
-        defer { Task { try? await tearDown() } }
-        throw SessionError.signingFailed("Cold-sign send not yet wired up — pending unsigned-tx blob bindings in MoneroKit.")
+        let txId: String
+        do {
+            txId = try await sidecar.send(to: address, amount: amount, priority: priority, memo: memo)
+        } catch {
+            phase = .failed(message: SessionError.signingFailed(String(describing: error)).localizedDescription ?? "sign failed")
+            try? await tearDown()
+            throw SessionError.signingFailed(String(describing: error))
+        }
+
+        // Round-trip key images so the primary sees the spend even if
+        // the user never re-opens a session. Best-effort — failure here
+        // doesn't invalidate the on-chain broadcast.
+        phase = .broadcasting
+        if let primary = primaryWallet,
+           let kiBlob = await sidecar.exportKeyImagesUR() {
+            _ = await primary.importKeyImagesUR(kiBlob)
+        }
+
+        try await tearDown()
+        phase = .complete
+        return txId
     }
 
     /// Cancel an in-flight session. Safe to call from any phase.

@@ -131,6 +131,7 @@
 		THPCPA00BUILD567890ABCDEF /* THPCPace.swift in Sources */ = {isa = PBXBuildFile; fileRef = THPCPA1234567890ABCDEF0 /* THPCPace.swift */; };
 		TRZSES00BUILD567890ABCDEF /* TrezorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZSES001234567890ABCDEF /* TrezorSession.swift */; };
 		TRZTRP00BUILD567890ABCDEF /* TrezorTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZTRP001234567890ABCDEF /* TrezorTransport.swift */; };
+		TRZPAR00BUILD567890ABCDEF /* PairTrezorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZPAR001234567890ABCDEF /* PairTrezorView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -301,6 +302,7 @@
 		THPCPA1234567890ABCDEF0 /* THPCPace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = THPCPace.swift; sourceTree = "<group>"; };
 		TRZSES001234567890ABCDEF /* TrezorSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorSession.swift; sourceTree = "<group>"; };
 		TRZTRP001234567890ABCDEF /* TrezorTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorTransport.swift; sourceTree = "<group>"; };
+		TRZPAR001234567890ABCDEF /* PairTrezorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairTrezorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -392,6 +394,14 @@
 				A009680DCA5DEAEBFFBE7D54 /* Wallet */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		TRZFEA001234567890ABCDEF /* Trezor */ = {
+			isa = PBXGroup;
+			children = (
+				TRZPAR001234567890ABCDEF /* PairTrezorView.swift */,
+			);
+			path = Trezor;
 			sourceTree = "<group>";
 		};
 		TRZCOR001234567890ABCDEF /* Trezor */ = {
@@ -600,6 +610,7 @@
 				BC0EDD05073CA3C3B9CEFE47 /* Send */,
 				1BE878F172F56E925E6B5E27 /* Settings */,
 				C46B3238829DF50B5087A67B /* Transactions */,
+				TRZFEA001234567890ABCDEF /* Trezor */,
 				533CA045DC4B388B4341E079 /* Wallet */,
 			);
 			path = Features;
@@ -978,6 +989,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				THPCPA00BUILD567890ABCDEF /* THPCPace.swift in Sources */,
 				TRZSES00BUILD567890ABCDEF /* TrezorSession.swift in Sources */,
 				TRZTRP00BUILD567890ABCDEF /* TrezorTransport.swift in Sources */,
+				TRZPAR00BUILD567890ABCDEF /* PairTrezorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

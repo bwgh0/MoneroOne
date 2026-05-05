@@ -10,7 +10,11 @@ enum TrezorBleUUID {
 
 /// Low-level BLE transport for communicating with Trezor Safe 7.
 /// Handles connection, chunk-based I/O, and wire protocol framing.
-class TrezorBleTransport: NSObject, ObservableObject {
+///
+/// Conforms to `TrezorTransport` so `THPChannel` and other consumers
+/// that don't care about CoreBluetooth specifics can be unit-tested
+/// against a mock conformer.
+class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
 
     enum ConnectionState: Equatable {
         case disconnected

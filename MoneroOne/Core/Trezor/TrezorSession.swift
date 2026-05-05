@@ -153,18 +153,21 @@ final class TrezorSession: ObservableObject {
     }
 
     private func openSidecar() async throws {
-        guard walletInfo.deviceWalletId != nil else {
+        guard let deviceWalletId = walletInfo.deviceWalletId else {
             throw SessionError.missingDeviceWalletId
         }
-        // Sketch only. Sidecar opening needs a MoneroKit initializer
-        // that takes (a) an explicit walletId so the cache lives at
-        // `MoneroKit/<deviceWalletId>/...` next to the primary, and
-        // (b) `MoneroWallet.trezor(deviceName:)` credentials so the
-        // wallet is born device-bound. The existing `create()` /
-        // `createWatchOnly()` pair don't support either — Phase 6 will
-        // extend MoneroWallet (the app wrapper) with `createFromDevice`
-        // that drops into `Kit(wallet: .trezor(deviceName:), ...)`.
-        throw SessionError.sidecarOpenFailed("Phase 6 work — sidecar initializer not yet wired.")
+        let wallet = MoneroWallet()
+        do {
+            try await wallet.createFromDevice(
+                deviceName: "Trezor",
+                walletId: deviceWalletId,
+                restoreHeight: walletInfo.restoreHeight,
+                networkType: networkType
+            )
+        } catch {
+            throw SessionError.sidecarOpenFailed(String(describing: error))
+        }
+        sidecarWallet = wallet
     }
 
     private func fastForwardSidecar(toPrimaryHeight target: UInt64) async throws {

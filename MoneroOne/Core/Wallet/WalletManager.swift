@@ -522,8 +522,10 @@ class WalletManager: ObservableObject {
 
         currentPin = pin
 
-        // Dispatch on the wallet's origin type. New wallet kinds (hardware)
-        // slot in as additional cases; seed and view-only are live today.
+        // Dispatch on the wallet's origin type. Hardware wallets share the
+        // view-only startup path on iPhone — the on-device wallet2 instance
+        // is always watch-only; the spend key only comes into play during
+        // a transient device session, handled out-of-band.
         switch active.source {
         case .seed:
             let seedResult = try await Task.detached {
@@ -540,7 +542,7 @@ class WalletManager: ObservableObject {
             // field existed, so future duplicate-seed checks catch them.
             populateDerivedWalletIdIfMissing(for: active.id, seedPhrase: seedPhrase)
 
-        case .viewOnly:
+        case .viewOnly, .hardware:
             let viewKeys = try await Task.detached {
                 try self.keychain.getViewOnly(pin: pin, walletId: active.id)
             }.value
@@ -1818,11 +1820,10 @@ class WalletManager: ObservableObject {
 
         guard let pin = currentPin else { throw WalletError.notUnlocked }
 
-        // Route by wallet source. View-only wallets have no seed on-device, so
-        // they can't be started via `startWalletFromSeed` — the previous
-        // unconditional `getSeed` path returned nil for them and the error was
-        // silently swallowed by the `try?` at the switcher call site, leaving
-        // the UI stuck at "connecting" with no wallet running.
+        // Route by wallet source. View-only and hardware wallets share the
+        // watch-only startup path — neither has a seed on-device, both open
+        // wallet2 from address + view key. Trying to read a seed for them
+        // returns nil and stalls the switcher.
         switch target.source {
         case .seed:
             guard let seedPhrase = try keychain.getSeed(pin: pin, walletId: target.id) else {
@@ -1832,7 +1833,7 @@ class WalletManager: ObservableObject {
             currentSeed = mnemonic
             try await startWalletFromSeed(mnemonic)
 
-        case .viewOnly:
+        case .viewOnly, .hardware:
             guard let keys = try keychain.getViewOnly(pin: pin, walletId: target.id) else {
                 throw WalletError.invalidPin
             }
@@ -1870,10 +1871,10 @@ class WalletManager: ObservableObject {
     }
 
     /// Re-encrypt every wallet's secret material when PIN changes. Walks
-    /// wallets by `source` so view-only wallets (which have no seed) are
-    /// re-encrypted through their view-key slot — the previous
-    /// seed-only loop hit `invalidPin` on view-only entries and aborted
-    /// the whole PIN change, leaving mixed installs unable to rotate.
+    /// wallets by `source` so view-only and hardware wallets (no seed) are
+    /// re-encrypted through their view-key slot — the previous seed-only
+    /// loop hit `invalidPin` on those entries and aborted the whole PIN
+    /// change, leaving mixed installs unable to rotate.
     func reencryptAllWallets(oldPin: String, newPin: String) throws {
         var seeds: [(UUID, String)] = []
         var viewOnlyKeys: [(UUID, String, String)] = []
@@ -1884,7 +1885,7 @@ class WalletManager: ObservableObject {
                     throw WalletError.invalidPin
                 }
                 seeds.append((wallet.id, seed))
-            case .viewOnly:
+            case .viewOnly, .hardware:
                 guard let keys = try keychain.getViewOnly(pin: oldPin, walletId: wallet.id) else {
                     throw WalletError.invalidPin
                 }

@@ -45,12 +45,18 @@ struct HardwareSessionSheet: View {
 
     let intent: Intent
 
+    /// Direct subscription to the long-lived TrezorManager that lives on
+    /// WalletManager. A computed `var` here would silently miss every
+    /// state change — `@EnvironmentObject` only republishes for the
+    /// outer object, not nested @Published members. Same gotcha that
+    /// bit PairTrezorView; passing the manager in via init + observing
+    /// it explicitly is the fix.
+    @ObservedObject var trezorManager: TrezorManager
+
     @State private var phase: Phase = .waitingForBridge
     @State private var pairingCodeInput: String = ""
     @State private var sessionTask: Task<Void, Never>? = nil
     @State private var hasStartedSession = false
-
-    private var trezorManager: TrezorManager { walletManager.trezorManager }
 
     var body: some View {
         NavigationStack {

@@ -496,10 +496,10 @@ class WalletManager: ObservableObject {
                 networkType: networkType
             )
         } catch {
-            validator.stop()
+            await validator.stopAsync()
             throw WalletError.invalidViewKey
         }
-        validator.stop()
+        await validator.stopAsync()
 
         // See `addWallet` — snapshot prior active so its balance doesn't
         // read as 0 in the switcher after the restore swaps active.

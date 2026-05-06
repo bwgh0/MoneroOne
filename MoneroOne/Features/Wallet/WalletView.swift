@@ -182,7 +182,7 @@ struct RecentTransactionsSection: View {
     @State private var selectedTransaction: MoneroTransaction?
 
     private var recentTransactions: [MoneroTransaction] {
-        Array(walletManager.transactions.prefix(5))
+        Array(walletManager.mergedTransactions.prefix(5))
     }
 
     private var isSyncing: Bool {

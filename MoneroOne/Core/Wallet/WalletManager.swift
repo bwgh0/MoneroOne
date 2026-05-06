@@ -87,14 +87,306 @@ class WalletManager: ObservableObject {
     }
 
     /// Stamp the active hardware wallet's last-sync time and publish it
-    /// to the UI. Called when a TrezorSession.reconnect completes
-    /// successfully (key images consumed without error).
+    /// to the UI. Called when a hardware session completes successfully.
     func markHardwareSentSyncCompleted() {
         guard let walletId = activeWallet?.id else { return }
         let now = Date()
         UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.lastHardwareSyncKeyPrefix + walletId.uuidString)
         lastHardwareSentSyncAt = now
     }
+
+    // MARK: - Hardware session state machine
+    //
+    // When a Trezor-paired wallet needs to surface outgoing transactions
+    // or sign a send, we briefly swap the running VIEW (SOFTWARE/watch_only)
+    // wallet for a FULL (TREZOR-bound) wallet that has the spend-key
+    // bound to the device. After the FULL wallet does its work
+    // (refresh + cold_key_image_sync, optionally followed by send), we
+    // snapshot its transaction list to disk and swap back to VIEW.
+
+    enum HardwareSessionState: Equatable {
+        case idle
+        case connecting
+        case openingFull
+        case syncingFull(progress: Double, blocksRemaining: Int?)
+        case syncingKeyImages
+        case signing
+        case broadcasting
+        case tearingDown
+        case complete(message: String)
+        case failed(message: String)
+    }
+
+    @Published private(set) var hardwareSessionState: HardwareSessionState = .idle
+
+    /// Run a sync-only session: open FULL → refresh → cold_key_image_sync
+    /// → snapshot tx list → swap back to VIEW.
+    func runHardwareSyncSession() async {
+        await runHardwareSession(send: nil)
+    }
+
+    /// Run a sync + send session. Returns the broadcast tx id, or nil
+    /// on failure. UI observes `hardwareSessionState` for progress.
+    @discardableResult
+    func runHardwareSendSession(to address: String, amount: Decimal, memo: String?) async -> String? {
+        var resultTxId: String?
+        await runHardwareSession(send: .single(to: address, amount: amount, memo: memo)) { txId in
+            resultTxId = txId
+        }
+        return resultTxId
+    }
+
+    @discardableResult
+    func runHardwareSendAllSession(to address: String, memo: String?) async -> String? {
+        var resultTxId: String?
+        await runHardwareSession(send: .all(to: address, memo: memo)) { txId in
+            resultTxId = txId
+        }
+        return resultTxId
+    }
+
+    /// Reset session state to idle. Called by the sheet on dismiss
+    /// once the user has seen the .complete or .failed state.
+    func resetHardwareSessionState() {
+        hardwareSessionState = .idle
+    }
+
+    private enum HardwareSendIntent {
+        case single(to: String, amount: Decimal, memo: String?)
+        case all(to: String, memo: String?)
+    }
+
+    private func runHardwareSession(
+        send: HardwareSendIntent? = nil,
+        onSent: ((String) -> Void)? = nil
+    ) async {
+        guard let active = activeWallet, isHardwareWallet else {
+            hardwareSessionState = .failed(message: "Active wallet is not hardware-backed.")
+            return
+        }
+        guard let deviceWalletId = active.deviceWalletId else {
+            hardwareSessionState = .failed(message: "Wallet missing device cache identifier — re-pair to fix.")
+            return
+        }
+        guard let pin = currentPin else {
+            hardwareSessionState = .failed(message: "Wallet is locked.")
+            return
+        }
+        guard let viewKeys = try? keychain.getViewOnly(pin: pin, walletId: active.id) else {
+            hardwareSessionState = .failed(message: "Couldn't read wallet keys.")
+            return
+        }
+
+        TrezorLog.log("[Session] starting hardware session (send=%@, deviceWalletId=%@)", send == nil ? "no" : "yes", deviceWalletId)
+
+        hardwareSessionState = .connecting
+
+        // 1. Stop VIEW so KitManager has a free slot for FULL.
+        cancellables.removeAll()
+        if let oldWallet = moneroWallet {
+            moneroWallet = nil
+            await oldWallet.stopAsync()
+        }
+        balance = 0
+        unlockedBalance = 0
+        primaryAddress = ""
+        syncState = .idle
+        transactions = []
+        subaddresses = []
+
+        // 2. Open FULL via createFromDevice (uses openWallet under
+        //    the hood since the cache exists). hwdev.connect requires
+        //    the bridge be running — the sheet brings it up before
+        //    invoking this.
+        hardwareSessionState = .openingFull
+        let fullWallet = MoneroWallet()
+        do {
+            try await fullWallet.createFromDevice(
+                deviceName: "Trezor",
+                walletId: deviceWalletId,
+                restoreHeight: active.restoreHeight,
+                networkType: networkType
+            )
+        } catch {
+            TrezorLog.log("[Session] FULL open FAILED: %@", error.localizedDescription)
+            await fullWallet.stopAsync()
+            await failSessionAndRestoreView(message: "Couldn't open device wallet: \(error.localizedDescription)", viewKeys: viewKeys)
+            return
+        }
+
+        // 3. Wait for refresh to reach .synced.
+        hardwareSessionState = .syncingFull(progress: 0, blocksRemaining: nil)
+        bindFullWalletSyncProgress(fullWallet)
+
+        do {
+            try await waitForSyncedOrThrow(fullWallet, timeout: 600)
+        } catch {
+            TrezorLog.log("[Session] FULL refresh FAILED: %@", error.localizedDescription)
+            await fullWallet.stopAsync()
+            await failSessionAndRestoreView(message: "Device wallet sync failed: \(error.localizedDescription)", viewKeys: viewKeys)
+            return
+        }
+
+        // 4. Cold key image sync.
+        hardwareSessionState = .syncingKeyImages
+        let kiOK = await fullWallet.coldKeyImageSync()
+        if !kiOK {
+            let err = fullWallet.latestErrorString
+            TrezorLog.log("[Session] coldKeyImageSync FAILED: %@", err)
+            await fullWallet.stopAsync()
+            await failSessionAndRestoreView(message: "Key image sync failed: \(err)", viewKeys: viewKeys)
+            return
+        }
+
+        // 5. Optional send.
+        var sentTxId: String?
+        switch send {
+        case .none: break
+        case .single(let to, let amount, let memo):
+            hardwareSessionState = .signing
+            do {
+                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo)
+                hardwareSessionState = .broadcasting
+                sentTxId = txId
+            } catch {
+                TrezorLog.log("[Session] send FAILED: %@", error.localizedDescription)
+                await fullWallet.stopAsync()
+                await failSessionAndRestoreView(message: "Send failed: \(error.localizedDescription)", viewKeys: viewKeys)
+                return
+            }
+        case .all(let to, let memo):
+            hardwareSessionState = .signing
+            do {
+                let txId = try await fullWallet.sendAll(to: to, memo: memo)
+                hardwareSessionState = .broadcasting
+                sentTxId = txId
+            } catch {
+                TrezorLog.log("[Session] sendAll FAILED: %@", error.localizedDescription)
+                await fullWallet.stopAsync()
+                await failSessionAndRestoreView(message: "Send failed: \(error.localizedDescription)", viewKeys: viewKeys)
+                return
+            }
+        }
+
+        // 6. Snapshot FULL's tx list before tearing it down.
+        fullWallet.fetchTransactions()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        let snapshotTxs = fullWallet.transactions
+        saveHardwareTxSnapshot(snapshotTxs, walletId: active.id)
+        TrezorLog.log("[Session] snapshot saved (%d txs)", snapshotTxs.count)
+
+        // 7. Tear down FULL.
+        hardwareSessionState = .tearingDown
+        await fullWallet.stopAsync()
+
+        // 8. Reopen VIEW.
+        do {
+            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)
+        } catch {
+            TrezorLog.log("[Session] VIEW restore FAILED: %@", error.localizedDescription)
+            hardwareSessionState = .failed(message: "Couldn't restore view-only wallet — relaunch the app.")
+            return
+        }
+
+        markHardwareSentSyncCompleted()
+
+        if let txId = sentTxId {
+            onSent?(txId)
+            hardwareSessionState = .complete(message: "Transaction broadcast.")
+        } else {
+            hardwareSessionState = .complete(message: "Sent transactions are up to date.")
+        }
+        TrezorLog.log("[Session] session complete")
+    }
+
+    private func waitForSyncedOrThrow(_ wallet: MoneroWallet, timeout: TimeInterval) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            switch wallet.syncState {
+            case .synced:
+                return
+            case .syncing(let p, let remaining):
+                hardwareSessionState = .syncingFull(progress: p, blocksRemaining: remaining)
+            case .error(let msg):
+                throw NSError(domain: "HardwareSession", code: -10, userInfo: [NSLocalizedDescriptionKey: msg])
+            case .idle, .connecting:
+                break
+            }
+            try await Task.sleep(nanoseconds: 500_000_000)
+        }
+        throw NSError(domain: "HardwareSession", code: -11, userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for device wallet to sync."])
+    }
+
+    private func bindFullWalletSyncProgress(_ wallet: MoneroWallet) {
+        wallet.$syncState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self else { return }
+                if case .syncingFull = self.hardwareSessionState {
+                    if case .syncing(let p, let remaining) = state {
+                        self.hardwareSessionState = .syncingFull(progress: p, blocksRemaining: remaining)
+                    }
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func failSessionAndRestoreView(message: String, viewKeys: (address: String, viewKey: String)) async {
+        hardwareSessionState = .tearingDown
+        do {
+            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)
+        } catch {
+            TrezorLog.log("[Session] could not restore VIEW after failure: %@", error.localizedDescription)
+        }
+        hardwareSessionState = .failed(message: message)
+    }
+
+    // MARK: - Hardware tx snapshot
+
+    private func hardwareTxSnapshotURL(for walletId: UUID) -> URL? {
+        let fm = FileManager.default
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        return appSupport
+            .appendingPathComponent("MoneroOne", isDirectory: true)
+            .appendingPathComponent("HardwareTxSnapshots", isDirectory: true)
+            .appendingPathComponent("\(walletId.uuidString).json")
+    }
+
+    private func saveHardwareTxSnapshot(_ txs: [MoneroTransaction], walletId: UUID) {
+        guard let url = hardwareTxSnapshotURL(for: walletId) else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let codable = txs.map { MoneroTransactionSnapshot(from: $0) }
+        if let data = try? JSONEncoder().encode(codable) {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    private func loadHardwareTxSnapshot(walletId: UUID) -> [MoneroTransaction] {
+        guard let url = hardwareTxSnapshotURL(for: walletId),
+              FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode([MoneroTransactionSnapshot].self, from: data) else {
+            return []
+        }
+        return decoded.map { $0.toTransaction() }
+    }
+
+    /// VIEW's live tx merged with the hardware snapshot's tx list.
+    /// Snapshot entries override VIEW entries by tx hash. Sorted
+    /// by timestamp descending. Used by transaction-list UI for
+    /// hardware wallets so outgoing tx survive between sessions.
+    var mergedTransactions: [MoneroTransaction] {
+        guard isHardwareWallet, let walletId = activeWallet?.id else {
+            return transactions
+        }
+        let snapshot = loadHardwareTxSnapshot(walletId: walletId)
+        if snapshot.isEmpty { return transactions }
+        var byHash: [String: MoneroTransaction] = [:]
+        for tx in transactions { byHash[tx.id] = tx }
+        for tx in snapshot { byHash[tx.id] = tx }
+        return byHash.values.sorted { $0.timestamp > $1.timestamp }
+    }
+
     @Published private(set) var walletSessionId = UUID()
 
     /// True while the Add Wallet sheet is presented over an unlocked session.

@@ -1,21 +1,18 @@
 import SwiftUI
 import MoneroKit
 
-/// Sheet that drives a single TrezorSession from start to finish.
+/// Sheet that drives a hardware session and renders progress.
 ///
-/// Two intents:
-///   - `.syncSentTransactions` — runs the cold-key-image sync only. Tap
-///     trigger comes from the BalanceCard pill / banner. After success
-///     stamps `WalletManager.markHardwareSentSyncCompleted()` so the
-///     "Last synced X ago" subtitle updates.
-///   - `.send(...)` — runs key-image sync + sign + broadcast. Trigger
-///     comes from the SendFlow's confirm button when the active wallet
-///     `requiresHardwareSession`.
-///
-/// Reuses the BLE / THP scaffolding from PairTrezorView via the same
-/// long-lived `WalletManager.trezorManager`. Lifetime stays bounded —
-/// once the session completes (or the user cancels), TrezorSession's
-/// own teardown disconnects BLE and stops the bridge.
+/// Lifecycle:
+/// 1. User taps Sync banner / pill / Send-Confirm → sheet presents.
+/// 2. Sheet observes `walletManager.trezorManager` for BLE state. When
+///    state hits `.bridgeRunning` (after pair / handshake / pairing-code),
+///    sheet kicks off `walletManager.runHardware{Sync,Send}Session`.
+/// 3. Sheet observes `walletManager.hardwareSessionState` for the
+///    open-FULL → refresh → coldKeyImageSync → (send) → snapshot →
+///    teardown lifecycle. Renders the right copy/spinner per phase.
+/// 4. On `.complete`/`.failed`, sheet shows result + Done button.
+///    Dismiss calls `walletManager.resetHardwareSessionState()`.
 struct HardwareSessionSheet: View {
     enum Intent: Identifiable, Equatable {
         case syncSentTransactions
@@ -31,34 +28,24 @@ struct HardwareSessionSheet: View {
         }
     }
 
-    enum Phase: Equatable {
-        case waitingForBridge      // BLE connect / THP / pairing — driven by TrezorManager state
-        case syncingKeyImages
-        case awaitingDeviceConfirm  // signing — Trezor screen showing tx
-        case broadcasting
-        case complete(message: String)
-        case failed(message: String)
-    }
-
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
 
     let intent: Intent
 
-    /// Direct subscription to the long-lived TrezorManager that lives on
-    /// WalletManager. A computed `var` here would silently miss every
-    /// state change — `@EnvironmentObject` only republishes for the
-    /// outer object, not nested @Published members. Same gotcha that
-    /// bit PairTrezorView; passing the manager in via init + observing
-    /// it explicitly is the fix.
+    /// Direct subscription to the long-lived `WalletManager.trezorManager`.
+    /// Same observation gotcha that bit PairTrezorView — a computed
+    /// property off the env object would silently miss every state
+    /// change. Inject + observe explicitly.
     @ObservedObject var trezorManager: TrezorManager
 
-    @State private var phase: Phase = .waitingForBridge
     @State private var pairingCodeInput: String = ""
-    @State private var sessionTask: Task<Void, Never>? = nil
-    @State private var hasStartedSession = false
-    @State private var pairingCodeSubmitted = false
+    @State private var pairingCodeSubmitted: Bool = false
     @FocusState private var pairingCodeFocused: Bool
+
+    /// Set once we transition the WalletManager session driver from
+    /// `.idle` to a real run, so a SwiftUI rebuild doesn't fire it twice.
+    @State private var sessionStarted: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -76,12 +63,23 @@ struct HardwareSessionSheet: View {
             .onChange(of: trezorManager.state) { _, _ in
                 evaluateBleState()
             }
+            .onChange(of: walletManager.hardwareSessionState) { _, newState in
+                handleSessionStateChange(newState)
+            }
             .onDisappear {
-                sessionTask?.cancel()
-                sessionTask = nil
+                // If the user ditched mid-session, no point keeping the
+                // BLE session alive. Real wallet2 teardown runs inside
+                // the WalletManager session driver — we just drop BLE
+                // here.
+                if isInProgress {
+                    trezorManager.disconnect()
+                }
+                walletManager.resetHardwareSessionState()
             }
         }
     }
+
+    // MARK: - Content router
 
     private var navTitle: String {
         switch intent {
@@ -91,24 +89,41 @@ struct HardwareSessionSheet: View {
     }
 
     private var isInProgress: Bool {
-        if case .complete = phase { return false }
-        if case .failed = phase { return false }
-        return true
+        switch walletManager.hardwareSessionState {
+        case .complete, .failed, .idle: return false
+        default: return true
+        }
     }
-
-    // MARK: - Content router
 
     @ViewBuilder
     private var content: some View {
-        switch phase {
-        case .waitingForBridge:
+        switch walletManager.hardwareSessionState {
+        case .idle:
+            // Pre-session: drive BLE bringup ourselves.
             bleBringupContent
+        case .connecting:
+            simpleProgress(title: "Preparing session…", subtitle: nil)
+        case .openingFull:
+            simpleProgress(
+                title: "Opening device wallet…",
+                subtitle: "Confirm prompts on your Trezor as they appear."
+            )
+        case .syncingFull(let progress, let blocksRemaining):
+            syncingProgress(progress: progress, blocksRemaining: blocksRemaining)
         case .syncingKeyImages:
-            simpleProgress(title: "Syncing key images…", subtitle: "Confirm prompts on your Trezor as they appear.")
-        case .awaitingDeviceConfirm:
-            simpleProgress(title: "Confirm on your Trezor", subtitle: "Review the transaction details on the device screen.")
+            simpleProgress(
+                title: "Reading transactions from Trezor…",
+                subtitle: "Confirm the key-image sync prompt on your device."
+            )
+        case .signing:
+            simpleProgress(
+                title: "Confirm on your Trezor",
+                subtitle: "Review the transaction details on the device screen."
+            )
         case .broadcasting:
-            simpleProgress(title: "Broadcasting…", subtitle: "Submitting the signed transaction to the network.")
+            simpleProgress(title: "Broadcasting…", subtitle: nil)
+        case .tearingDown:
+            simpleProgress(title: "Restoring wallet…", subtitle: nil)
         case .complete(let message):
             successContent(message: message)
         case .failed(let message):
@@ -119,7 +134,9 @@ struct HardwareSessionSheet: View {
     @ViewBuilder
     private var bleBringupContent: some View {
         VStack(spacing: 16) {
-            headerIcon("lock.shield.fill", color: .orange)
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.orange)
 
             switch trezorManager.state {
             case .idle, .scanning:
@@ -190,10 +207,6 @@ struct HardwareSessionSheet: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 .focused($pairingCodeFocused)
                 .onChange(of: pairingCodeInput) { _, newValue in
-                    // Auto-submit the moment the user types the 6th
-                    // digit — saves an explicit tap. Guarded by
-                    // pairingCodeSubmitted so a stray re-trigger from
-                    // SwiftUI rebuild doesn't fire submit twice.
                     let trimmed = String(newValue.prefix(6))
                     if trimmed != newValue {
                         pairingCodeInput = trimmed
@@ -210,28 +223,10 @@ struct HardwareSessionSheet: View {
             }
         }
         .onAppear {
-            // Pop the keyboard the instant the user lands on this step.
-            // Slight delay so SwiftUI's transition completes before
-            // the focus change triggers the keyboard animation.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 pairingCodeFocused = true
             }
         }
-        .onChange(of: trezorManager.state) { _, newState in
-            // Reset the submitted flag if THP throws us back out to
-            // .pairing (e.g. wrong code), so the user can retype.
-            if case .pairing = newState, !trezorManager.pairingCodeRequired {
-                // mid-verification; keep flag
-            } else if case .pairing = newState {
-                pairingCodeSubmitted = false
-            }
-        }
-    }
-
-    private func headerIcon(_ name: String, color: Color) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 48))
-            .foregroundStyle(color)
     }
 
     private func progressLabel(_ text: String) -> some View {
@@ -243,13 +238,41 @@ struct HardwareSessionSheet: View {
         }
     }
 
-    private func simpleProgress(title: String, subtitle: String) -> some View {
+    private func simpleProgress(title: String, subtitle: String?) -> some View {
         VStack(spacing: 16) {
             ProgressView().scaleEffect(1.4).padding(.bottom, 4)
             Text(title)
                 .font(.headline)
-            Text(subtitle)
-                .font(.subheadline)
+                .multilineTextAlignment(.center)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+        }
+    }
+
+    private func syncingProgress(progress: Double, blocksRemaining: Int?) -> some View {
+        VStack(spacing: 16) {
+            ProgressView(value: progress / 100)
+                .progressViewStyle(.linear)
+                .tint(.orange)
+                .padding(.horizontal, 24)
+            Text("Syncing device wallet")
+                .font(.headline)
+            if let blocksRemaining, blocksRemaining > 0 {
+                Text("\(Int(progress))% — \(blocksRemaining) blocks remaining")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("\(Int(progress))% synced")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("First-time sync can take a few minutes.")
+                .font(.caption2)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
@@ -298,13 +321,12 @@ struct HardwareSessionSheet: View {
         }
     }
 
-    // MARK: - Bottom actions
-
     @ViewBuilder
     private var bottomActions: some View {
-        switch phase {
+        switch walletManager.hardwareSessionState {
         case .complete:
             Button {
+                walletManager.resetHardwareSessionState()
                 dismiss()
             } label: {
                 Text("Done")
@@ -317,6 +339,7 @@ struct HardwareSessionSheet: View {
         case .failed:
             HStack(spacing: 12) {
                 Button {
+                    walletManager.resetHardwareSessionState()
                     dismiss()
                 } label: {
                     Text("Cancel")
@@ -325,8 +348,9 @@ struct HardwareSessionSheet: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
                 }
                 Button {
-                    phase = .waitingForBridge
-                    hasStartedSession = false
+                    walletManager.resetHardwareSessionState()
+                    sessionStarted = false
+                    pairingCodeSubmitted = false
                     startBleIfNeeded()
                 } label: {
                     Text("Try Again")
@@ -352,242 +376,53 @@ struct HardwareSessionSheet: View {
 
     // MARK: - Lifecycle
 
-    /// Kick off BLE scanning if we're not already past it. Idempotent —
-    /// TrezorManager.startScanning() guards against re-entry past
-    /// the scan stage so onAppear after sheet rebuild is safe.
     private func startBleIfNeeded() {
         if case .bridgeRunning = trezorManager.state {
-            // Bridge already up from a prior interaction — jump straight
-            // into the operation.
             evaluateBleState()
             return
         }
         trezorManager.startScanning()
     }
 
-    /// Watch TrezorManager state. Once `.bridgeRunning`, kick off the
-    /// session task that drives the actual operation.
+    /// When BLE reaches `.bridgeRunning`, kick off the WalletManager
+    /// session driver. Guarded by `sessionStarted` so a re-render
+    /// doesn't fire it twice.
     private func evaluateBleState() {
-        guard !hasStartedSession else { return }
+        guard !sessionStarted else { return }
         guard case .bridgeRunning = trezorManager.state else { return }
-        hasStartedSession = true
-        sessionTask = Task { await runSession() }
+        sessionStarted = true
+        Task { await runIntent() }
+    }
+
+    @MainActor
+    private func runIntent() async {
+        switch intent {
+        case .syncSentTransactions:
+            await walletManager.runHardwareSyncSession()
+        case .send(let to, let amount, let memo):
+            _ = await walletManager.runHardwareSendSession(to: to, amount: amount, memo: memo)
+        case .sendAll(let to, let memo):
+            _ = await walletManager.runHardwareSendAllSession(to: to, memo: memo)
+        }
+        // After the session driver returns, `hardwareSessionState`
+        // is `.complete` or `.failed`. The view re-renders via the
+        // onChange observer; nothing more to do here.
+    }
+
+    private func handleSessionStateChange(_ state: WalletManager.HardwareSessionState) {
+        // If the session ended (success or failure), drop the BLE
+        // session — the device side is no longer needed.
+        switch state {
+        case .complete, .failed:
+            trezorManager.disconnect()
+        default:
+            break
+        }
     }
 
     private func cancelAndDismiss() {
-        sessionTask?.cancel()
-        sessionTask = nil
-        // Tear down BLE / bridge so the next attempt starts clean.
+        walletManager.resetHardwareSessionState()
         trezorManager.disconnect()
         dismiss()
-    }
-
-    // MARK: - Session driver
-
-    @MainActor
-    private func runSession() async {
-        guard let info = walletManager.activeWallet else {
-            phase = .failed(message: "No active wallet.")
-            return
-        }
-        guard walletManager.isHardwareWallet else {
-            phase = .failed(message: "Active wallet is not hardware-backed.")
-            return
-        }
-
-        do {
-            switch intent {
-            case .syncSentTransactions:
-                phase = .syncingKeyImages
-                try await runReconnectSync(info: info)
-                walletManager.markHardwareSentSyncCompleted()
-                phase = .complete(message: "Sent transactions are up to date.")
-
-            case .send(let to, let amount, let memo):
-                phase = .syncingKeyImages
-                let txId = try await runSend(info: info, to: to, amount: amount, memo: memo, all: false)
-                phase = .complete(message: "Transaction broadcast.\n\(shortTx(txId))")
-
-            case .sendAll(let to, let memo):
-                phase = .syncingKeyImages
-                let txId = try await runSend(info: info, to: to, amount: 0, memo: memo, all: true)
-                phase = .complete(message: "Transaction broadcast.\n\(shortTx(txId))")
-            }
-        } catch is CancellationError {
-            phase = .failed(message: "Cancelled.")
-        } catch {
-            phase = .failed(message: error.localizedDescription)
-        }
-    }
-
-    /// Best-effort wipe of the session sidecar's on-disk cache. The
-    /// wallet2 wallet has already been closed (`stopAsync`), so the
-    /// directory is just SQLite + wallet2 keys/cache files. No-op on
-    /// missing path.
-    private func deleteSidecarCache(walletId: String) {
-        let fm = FileManager.default
-        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
-        let path = appSupport.appendingPathComponent("MoneroKit/\(walletId)")
-        try? fm.removeItem(at: path)
-    }
-
-    private func shortTx(_ id: String) -> String {
-        guard id.count > 16 else { return id }
-        return String(id.prefix(8)) + "…" + String(id.suffix(8))
-    }
-
-    // MARK: - Operation implementations
-    //
-    // Both `runReconnectSync` and `runSend` follow the same skeleton —
-    // pause primary, open a TREZOR-bound sidecar at the wallet's
-    // `deviceWalletId` path, run the wallet2 cold-sign blob exchange,
-    // optionally sign+broadcast, tear down. They are kept in this
-    // sheet for now (rather than inside `TrezorSession`) so the UI
-    // can reflect each phase transition cleanly. A later pass can
-    // extract the shared scaffolding back into the actor.
-
-    private func runReconnectSync(info: WalletInfo) async throws {
-        try await runWithSidecar(info: info) { _ in
-            // Sidecar is alive; key-image sync already happened in the
-            // setup helper. Nothing else to do for the sync intent.
-        }
-    }
-
-    private func runSend(info: WalletInfo, to: String, amount: Decimal, memo: String?, all: Bool) async throws -> String {
-        var txId: String = ""
-        try await runWithSidecar(info: info) { sidecar in
-            await MainActor.run { phase = .awaitingDeviceConfirm }
-            if all {
-                txId = try await sidecar.sendAll(to: to, memo: memo)
-            } else {
-                txId = try await sidecar.send(to: to, amount: amount, memo: memo)
-            }
-            await MainActor.run { phase = .broadcasting }
-        }
-        return txId
-    }
-
-    /// Runs the TREZOR sidecar lifecycle: suspend primary → open sidecar
-    /// → blob-exchange key images → invoke caller's body → push key
-    /// images back to primary → tear down → unlock primary.
-    private func runWithSidecar(info: WalletInfo, _ body: @escaping (MoneroWallet) async throws -> Void) async throws {
-        guard let deviceWalletId = info.deviceWalletId else {
-            throw NSError(domain: "HardwareSession", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing sidecar wallet identifier."])
-        }
-        guard let pin = walletManager.currentPin else {
-            throw NSError(domain: "HardwareSession", code: -2, userInfo: [NSLocalizedDescriptionKey: "Wallet is locked."])
-        }
-
-        // Capture the primary's outputs before tearing it down. `all:
-        // true` because the sidecar is freshly opened from device on
-        // every session — it has no record of which outputs were
-        // already shared, so we always send the full list.
-        TrezorLog.log("[Session] runWithSidecar: exportOutputsUR(all:true) on primary…")
-        let outputsBlob = await walletManager.moneroWallet?.exportOutputsUR(all: true)
-        TrezorLog.log("[Session] runWithSidecar: outputsBlob length=%d", outputsBlob?.count ?? -1)
-
-        // Suspend primary so KitManager has a free slot for the
-        // sidecar Kit. `isUnlocked` stays true so the sheet remains
-        // presented over WalletView.
-        TrezorLog.log("[Session] runWithSidecar: suspending primary…")
-        await walletManager.suspendActiveWalletForPairing()
-
-        // Use a session-specific walletId every time so wallet2 sees
-        // a fresh wallet that has never refreshed from a node. The
-        // alternative — reusing `<deviceWalletId>` — sets
-        // `m_has_ever_refreshed_from_node = true` after the first
-        // session and from then on wallet2 throws "Hot wallets cannot
-        // import outputs" when we try to push the cold wallet's
-        // outputs in. Sessions are short-lived and the cache is
-        // disposable, so a per-session walletId costs nothing.
-        let networkSuffix = walletManager.networkType == .testnet ? "_testnet" : ""
-        let sessionWalletId = MoneroWallet.stableWalletId(for: "trezor-session:\(deviceWalletId):\(UUID().uuidString)\(networkSuffix)")
-        TrezorLog.log("[Session] runWithSidecar: creating sidecar (sessionWalletId=%@)…", sessionWalletId)
-        let sidecar = MoneroWallet()
-        do {
-            try await sidecar.createSidecarFromDevice(
-                deviceName: "Trezor",
-                walletId: sessionWalletId,
-                restoreHeight: info.restoreHeight,
-                networkType: walletManager.networkType
-            )
-        } catch {
-            TrezorLog.log("[Session] runWithSidecar: createSidecarFromDevice THREW: %@", error.localizedDescription)
-            await sidecar.stopAsync()
-            try? await walletManager.unlock(pin: pin)
-            throw error
-        }
-
-        // createSidecarFromDevice already awaited prepareOnly which
-        // ran wallet2's restore_from_device synchronously (talked to
-        // device, populated address). primaryAddress should be
-        // available immediately.
-        TrezorLog.log("[Session] runWithSidecar: sidecar primaryAddress len=%d", sidecar.primaryAddress.count)
-        guard !sidecar.primaryAddress.isEmpty else {
-            TrezorLog.log("[Session] runWithSidecar: sidecar address empty after prepareOnly — aborting")
-            await sidecar.stopAsync()
-            try? await walletManager.unlock(pin: pin)
-            throw NSError(domain: "HardwareSession", code: -3, userInfo: [NSLocalizedDescriptionKey: "Trezor didn't respond. Reconnect and try again."])
-        }
-
-        // Hand outputs to sidecar so it generates key images.
-        if let outputsBlob {
-            let imported = await sidecar.importOutputsUR(outputsBlob)
-            if imported {
-                TrezorLog.log("[Session] runWithSidecar: sidecar.importOutputsUR → ok")
-            } else {
-                TrezorLog.log("[Session] runWithSidecar: sidecar.importOutputsUR FAILED — wallet2 says: %@", sidecar.latestErrorString)
-            }
-        } else {
-            TrezorLog.log("[Session] runWithSidecar: no outputsBlob to import")
-        }
-
-        // Pull key images back so the primary will see spent state.
-        // wallet2 generates them via the device on this call, so the
-        // bridge must still be alive — that's why we do this BEFORE
-        // tearing down the sidecar.
-        let kiBlob = await sidecar.exportKeyImagesUR(all: true)
-        TrezorLog.log("[Session] runWithSidecar: sidecar.exportKeyImagesUR(all:true) → length=%d", kiBlob?.count ?? -1)
-
-        do {
-            try await body(sidecar)
-        } catch {
-            TrezorLog.log("[Session] runWithSidecar: body THREW: %@", error.localizedDescription)
-            await sidecar.stopAsync()
-            try? await walletManager.unlock(pin: pin)
-            throw error
-        }
-
-        // Tear down sidecar before re-unlocking primary so the
-        // KitManager slot is free in time. Also delete the session
-        // cache from disk — it served its purpose and would otherwise
-        // hang around as an orphan that `cleanOrphanedWalletCaches`
-        // sweeps on next launch.
-        TrezorLog.log("[Session] runWithSidecar: tearing down sidecar")
-        await sidecar.stopAsync()
-        deleteSidecarCache(walletId: sessionWalletId)
-        trezorManager.disconnect()
-
-        // Bring primary back online and import the fresh key images.
-        TrezorLog.log("[Session] runWithSidecar: re-unlocking primary…")
-        try await walletManager.unlock(pin: pin)
-        if let kiBlob, !kiBlob.isEmpty {
-            let imported = await walletManager.moneroWallet?.importKeyImagesUR(kiBlob)
-            if imported == true {
-                TrezorLog.log("[Session] runWithSidecar: primary.importKeyImagesUR → ok")
-            } else {
-                let err = walletManager.moneroWallet?.latestErrorString ?? "(no error string)"
-                TrezorLog.log("[Session] runWithSidecar: primary.importKeyImagesUR FAILED — wallet2 says: %@", err)
-            }
-            // Refresh wallet so the newly-decoded outgoing transactions
-            // surface in the transaction list. wallet2's import path
-            // updates m_transfers but the app's transaction list is a
-            // GRDB mirror updated via delegate callbacks — refreshing
-            // forces wallet2 to reprocess and fire those callbacks.
-            walletManager.moneroWallet?.fetchTransactions()
-            await walletManager.refresh()
-        } else {
-            TrezorLog.log("[Session] runWithSidecar: no key images to import (blob empty)")
-        }
     }
 }

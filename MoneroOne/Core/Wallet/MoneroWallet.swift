@@ -598,44 +598,30 @@ class MoneroWallet: ObservableObject {
     /// The wallet's private view key, or nil if not yet loaded.
     var secretViewKey: String? { kit?.secretViewKey }
 
-    // MARK: - Cold wallet primitives (Trezor sidecar flow)
-
-    /// Forwarders to MoneroKit's cold-sign API. Used by `TrezorSession`
-    /// to drive the blob exchange between the iPhone's primary watch-only
-    /// wallet and the transient device-bound sidecar that opens during a
-    /// reconnect window.
-
-    func exportOutputsUR(maxFragmentLength: Int = 1000, all: Bool = false) async -> String? {
-        await kit?.exportOutputsUR(maxFragmentLength: maxFragmentLength, all: all)
-    }
-
-    func importOutputsUR(_ blob: String) async -> Bool {
-        await kit?.importOutputsUR(blob) ?? false
-    }
-
-    func exportKeyImagesUR(maxFragmentLength: Int = 1000, all: Bool = false) async -> String? {
-        await kit?.exportKeyImagesUR(maxFragmentLength: maxFragmentLength, all: all)
-    }
-
-    func importKeyImagesUR(_ blob: String) async -> Bool {
-        await kit?.importKeyImagesUR(blob) ?? false
-    }
-
-    func submitTransactionUR(_ blob: String) async -> Bool {
-        await kit?.submitTransactionUR(blob) ?? false
-    }
+    // MARK: - Hardware-wallet primitives
+    //
+    // The dual-cache architecture opens this MoneroWallet during a
+    // reconnect session against the FULL TREZOR-bound cache. After
+    // refresh has populated m_transfers, the session driver runs
+    // `coldKeyImageSync` which asks the device for signed key images
+    // and imports them into the FULL cache.
 
     @discardableResult
     func reconnectDevice() async -> Bool {
         await kit?.reconnectDevice() ?? false
     }
 
+    @discardableResult
+    func coldKeyImageSync() async -> Bool {
+        await kit?.coldKeyImageSync() ?? false
+    }
+
     var deviceType: MoneroKit.Kit.DeviceType {
         kit?.deviceType ?? .software
     }
 
-    /// Latest wallet2 error string, for diagnostics after a cold-sign
-    /// call returns false.
+    /// Latest wallet2 error string, for diagnostics after a wallet2 call
+    /// returns false.
     var latestErrorString: String {
         kit?.latestStatus.message ?? ""
     }
@@ -738,5 +724,57 @@ struct MoneroTransaction: Identifiable, Equatable, Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+}
+
+/// JSON-friendly mirror of `MoneroTransaction` for the hardware-session
+/// tx snapshot. The runtime type uses non-Codable enums; this mirror
+/// flattens them into raw strings/ints for round-tripping through disk.
+struct MoneroTransactionSnapshot: Codable {
+    let id: String
+    let typeRaw: String   // "incoming" / "outgoing"
+    let amount: Decimal
+    let fee: Decimal
+    let address: String
+    let timestamp: Date
+    let confirmations: Int?
+    let statusRaw: String  // "pending" / "confirmed" / "failed"
+    let memo: String?
+
+    init(from tx: MoneroTransaction) {
+        self.id = tx.id
+        self.typeRaw = tx.type == .incoming ? "incoming" : "outgoing"
+        self.amount = tx.amount
+        self.fee = tx.fee
+        self.address = tx.address
+        self.timestamp = tx.timestamp
+        self.confirmations = tx.confirmations
+        switch tx.status {
+        case .pending: self.statusRaw = "pending"
+        case .confirmed: self.statusRaw = "confirmed"
+        case .failed: self.statusRaw = "failed"
+        }
+        self.memo = tx.memo
+    }
+
+    func toTransaction() -> MoneroTransaction {
+        let type: MoneroTransaction.TransactionType = typeRaw == "outgoing" ? .outgoing : .incoming
+        let status: MoneroTransaction.TransactionStatus
+        switch statusRaw {
+        case "confirmed": status = .confirmed
+        case "failed": status = .failed
+        default: status = .pending
+        }
+        return MoneroTransaction(
+            id: id,
+            type: type,
+            amount: amount,
+            fee: fee,
+            address: address,
+            timestamp: timestamp,
+            confirmations: confirmations,
+            status: status,
+            memo: memo
+        )
     }
 }

@@ -50,6 +50,8 @@ struct PairTrezorView: View {
 
     @State private var step: Step = .deviceConnect
     @State private var pairingCodeInput: String = ""
+    @State private var pairingCodeSubmitted: Bool = false
+    @FocusState private var pairingCodeFocused: Bool
     @State private var extractedAddress: String = ""
     @State private var extractedViewKey: String = ""
     @State private var temporaryDeviceWalletId: String = ""
@@ -252,21 +254,25 @@ struct PairTrezorView: View {
                 .padding()
                 .background(.ultraThinMaterial)
                 .cornerRadius(12)
-
-            Button {
-                guard pairingCodeInput.count == 6 else { return }
-                trezorManager.submitPairingCode(pairingCodeInput)
-            } label: {
-                Text("Confirm")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(pairingCodeInput.count == 6 ? Color.orange : Color.gray)
-                    .cornerRadius(12)
+                .focused($pairingCodeFocused)
+                .onChange(of: pairingCodeInput) { _, newValue in
+                    let trimmed = String(newValue.prefix(6))
+                    if trimmed != newValue { pairingCodeInput = trimmed }
+                    if trimmed.count == 6, !pairingCodeSubmitted {
+                        pairingCodeSubmitted = true
+                        trezorManager.submitPairingCode(trimmed)
+                    }
+                }
+            if pairingCodeSubmitted {
+                Text("Verifying…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .disabled(pairingCodeInput.count != 6)
-            .padding(.horizontal, 40)
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                pairingCodeFocused = true
+            }
         }
     }
 

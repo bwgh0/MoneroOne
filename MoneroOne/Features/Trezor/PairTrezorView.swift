@@ -516,6 +516,7 @@ struct PairTrezorView: View {
     /// the sidecar a future `TrezorSession` reconnect will reuse.
     @MainActor
     private func extractKeys() async {
+        TrezorLog.log("[Pair] extractKeys: starting")
         // Use a synthesized device id keyed off the BLE peripheral so
         // the deviceWalletId is stable across pair attempts. After
         // we've extracted the address we recompute it from address +
@@ -525,8 +526,10 @@ struct PairTrezorView: View {
         let pairAttemptId = UUID().uuidString
         let tempWalletId = MoneroWallet.stableWalletId(for: "trezor-pair:\(pairAttemptId)\(networkSuffix)")
         temporaryDeviceWalletId = tempWalletId
+        TrezorLog.log("[Pair] extractKeys: tempWalletId=%@", tempWalletId)
 
         let restoreHeight: UInt64 = useCreationDate ? MoneroWallet.restoreHeight(for: creationDate) : 0
+        TrezorLog.log("[Pair] extractKeys: restoreHeight=%llu, calling createFromDevice…", restoreHeight)
         let wallet = MoneroWallet()
         do {
             try await wallet.createFromDevice(
@@ -535,7 +538,9 @@ struct PairTrezorView: View {
                 restoreHeight: restoreHeight,
                 networkType: walletManager.networkType
             )
+            TrezorLog.log("[Pair] extractKeys: createFromDevice returned (kit init done, wallet open queued)")
         } catch {
+            TrezorLog.log("[Pair] extractKeys: createFromDevice THREW: %@", error.localizedDescription)
             await failPair(error.localizedDescription)
             return
         }
@@ -544,22 +549,30 @@ struct PairTrezorView: View {
         // populated. wallet2 talks to the device synchronously inside
         // openWallet — typically a few seconds.
         let pollDeadline = Date().addingTimeInterval(45)
+        var pollIterations = 0
         while wallet.primaryAddress.isEmpty {
             if Date() >= pollDeadline {
+                TrezorLog.log("[Pair] extractKeys: TIMEOUT after %d polls — primaryAddress still empty", pollIterations)
                 await wallet.stopAsync()
                 await failPair("Trezor didn't respond. Reconnect and try again.")
                 return
             }
+            if pollIterations % 4 == 0 {
+                TrezorLog.log("[Pair] extractKeys: polling (iter=%d, addr=%@)", pollIterations, wallet.primaryAddress.isEmpty ? "empty" : "set")
+            }
+            pollIterations += 1
             try? await Task.sleep(nanoseconds: 250_000_000)
         }
 
         let address = wallet.primaryAddress
         let viewKey = wallet.secretViewKey ?? ""
+        TrezorLog.log("[Pair] extractKeys: read address (len=%d), viewKey (len=%d)", address.count, viewKey.count)
 
         // Stop the runtime instance — its on-disk cache stays. The
         // file-system path `MoneroKit/<tempWalletId>/` will be moved
         // to the real `<deviceWalletId>` location once we know it.
         await wallet.stopAsync()
+        TrezorLog.log("[Pair] extractKeys: stopAsync done")
 
         guard !address.isEmpty, viewKey.count == 64 else {
             await failPair("Couldn't read keys from Trezor.")
@@ -577,6 +590,7 @@ struct PairTrezorView: View {
         trezorManager.disconnect()
 
         step = .creationDate
+        TrezorLog.log("[Pair] extractKeys: → creationDate")
     }
 
     private func pair() {

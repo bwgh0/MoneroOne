@@ -542,19 +542,26 @@ class WalletManager: ObservableObject {
     /// so a second Kit's `_start()` would otherwise busy-wait on a 1s
     /// poll and the bridge would never hear from wallet2.
     ///
+    /// CRITICAL: keep `isUnlocked = true` throughout. Flipping it
+    /// false here causes ContentView to swap WalletView → UnlockView
+    /// while the AddWalletView sheet is still presented over it,
+    /// which auto-fires a Face ID prompt mid-pair, disrupts the
+    /// sheet's lifecycle, and the user never reaches the name /
+    /// confirm screens. The view tree must stay logically unlocked
+    /// for the pair flow to complete.
+    ///
     /// Idempotent: no-op if there's no active wallet running. The
     /// `WalletInfo` for the previously-active wallet stays in
-    /// `wallets`; only the runtime instance goes away. Subsequent
-    /// `unlock(pin:)` (called automatically at the end of the pair
-    /// flow) brings either the newly-paired wallet or the user's
-    /// previous selection back online.
+    /// `wallets`; only the runtime instance goes away. The end of
+    /// the pair flow calls `unlock(pin:)` to bring the newly-paired
+    /// wallet up on the freed slot.
     func suspendActiveWalletForPairing() async {
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
             moneroWallet = nil
             await oldWallet.stopAsync()
         }
-        isUnlocked = false
+        // `isUnlocked` stays true on purpose — see doc comment.
         balance = 0
         unlockedBalance = 0
         address = ""

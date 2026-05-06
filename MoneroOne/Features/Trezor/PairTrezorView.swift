@@ -48,14 +48,18 @@ struct PairTrezorView: View {
     @SceneStorage("pairTrezor.creationDateTS") private var creationDateTS: Double = Date().timeIntervalSince1970
     @SceneStorage("pairTrezor.useCreationDate") private var useCreationDate = true
 
-    @State private var step: Step = .deviceConnect
+    @SceneStorage("pairTrezor.step") private var step: Step = .deviceConnect
     @State private var pairingCodeInput: String = ""
     @State private var pairingCodeSubmitted: Bool = false
     @FocusState private var pairingCodeFocused: Bool
-    @State private var extractedAddress: String = ""
-    @State private var extractedViewKey: String = ""
-    @State private var temporaryDeviceWalletId: String = ""
-    @State private var deviceModel: String = "Trezor"
+    // Persist the extracted material across SwiftUI view rebuilds —
+    // sheet snapshots and app-switcher previews tear down @State, so
+    // a brief background→foreground would otherwise drop the keys
+    // we just pulled from the device and force the user to re-pair.
+    @SceneStorage("pairTrezor.extractedAddress") private var extractedAddress: String = ""
+    @SceneStorage("pairTrezor.extractedViewKey") private var extractedViewKey: String = ""
+    @SceneStorage("pairTrezor.temporaryDeviceWalletId") private var temporaryDeviceWalletId: String = ""
+    @SceneStorage("pairTrezor.deviceModel") private var deviceModel: String = "Trezor"
     @State private var pin: String = ""
     @State private var confirmPin: String = ""
     @State private var selectedPINLength = 6
@@ -65,7 +69,7 @@ struct PairTrezorView: View {
 
     private enum PINField { case pin, confirmPin }
 
-    private enum Step {
+    private enum Step: String {
         case deviceConnect      // scan/connect/handshake/pairing — driven by TrezorManager
         case extractingKeys     // calling createFromDevice, polling for address
         case creationDate

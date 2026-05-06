@@ -22,6 +22,8 @@
 	<string>21</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera is used to scan QR codes</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>MoneroOne uses Bluetooth to communicate with your Trezor hardware wallet for secure transaction signing.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID is used to unlock your wallet</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -37,6 +39,7 @@
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>bluetooth-central</string>
 		<string>location</string>
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>

@@ -238,7 +238,7 @@ struct PairTrezorView: View {
 
             Button {
                 guard pairingCodeInput.count == 6 else { return }
-                trezorManager.pairingCode = pairingCodeInput
+                trezorManager.submitPairingCode(pairingCodeInput)
             } label: {
                 Text("Confirm")
                     .font(.callout.weight(.semibold))

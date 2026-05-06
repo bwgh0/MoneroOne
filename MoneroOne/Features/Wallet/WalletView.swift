@@ -27,6 +27,7 @@ struct WalletView: View {
                             isHardwareWallet: walletManager.isHardwareWallet,
                             hardwareDeviceName: walletManager.hardwareDisplayName,
                             hardwareLastSentSyncAt: walletManager.lastHardwareSentSyncAt,
+                            isHardwareDeviceWarm: walletManager.isHardwareDeviceWarm,
                             isSyncBlocked: trustedLocationSync.isSyncBlocked,
                             isOutsideTrustedZone: trustedLocationSync.isOutsideTrustedZone,
                             trustedLocationName: trustedLocationSync.currentTrustedLocationName,

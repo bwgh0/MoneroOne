@@ -57,6 +57,8 @@ struct HardwareSessionSheet: View {
     @State private var pairingCodeInput: String = ""
     @State private var sessionTask: Task<Void, Never>? = nil
     @State private var hasStartedSession = false
+    @State private var pairingCodeSubmitted = false
+    @FocusState private var pairingCodeFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -186,18 +188,43 @@ struct HardwareSessionSheet: View {
                 .frame(maxWidth: 200)
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-            Button {
-                guard pairingCodeInput.count == 6 else { return }
-                trezorManager.submitPairingCode(pairingCodeInput)
-            } label: {
-                Text("Confirm")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(pairingCodeInput.count == 6 ? Color.orange : Color.gray, in: RoundedRectangle(cornerRadius: 12))
+                .focused($pairingCodeFocused)
+                .onChange(of: pairingCodeInput) { _, newValue in
+                    // Auto-submit the moment the user types the 6th
+                    // digit — saves an explicit tap. Guarded by
+                    // pairingCodeSubmitted so a stray re-trigger from
+                    // SwiftUI rebuild doesn't fire submit twice.
+                    let trimmed = String(newValue.prefix(6))
+                    if trimmed != newValue {
+                        pairingCodeInput = trimmed
+                    }
+                    if trimmed.count == 6, !pairingCodeSubmitted {
+                        pairingCodeSubmitted = true
+                        trezorManager.submitPairingCode(trimmed)
+                    }
+                }
+            if pairingCodeSubmitted {
+                Text("Verifying…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .disabled(pairingCodeInput.count != 6)
+        }
+        .onAppear {
+            // Pop the keyboard the instant the user lands on this step.
+            // Slight delay so SwiftUI's transition completes before
+            // the focus change triggers the keyboard animation.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                pairingCodeFocused = true
+            }
+        }
+        .onChange(of: trezorManager.state) { _, newState in
+            // Reset the submitted flag if THP throws us back out to
+            // .pairing (e.g. wrong code), so the user can retype.
+            if case .pairing = newState, !trezorManager.pairingCodeRequired {
+                // mid-verification; keep flag
+            } else if case .pairing = newState {
+                pairingCodeSubmitted = false
+            }
         }
     }
 

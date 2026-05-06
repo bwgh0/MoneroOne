@@ -21,9 +21,16 @@ class MoneroWallet: ObservableObject {
     /// Actual restore height as decoded by the C++ library (e.g. Polyseed birthday)
     @Published var actualRestoreHeight: UInt64?
 
-    /// Primary address (index 0) - from storage (pre-computed)
+    /// Primary address (index 0). Reads from MoneroKit's GRDB storage
+    /// when populated (the normal case after `Kit.start()` runs its
+    /// _start phase 1), and falls back to wallet2's live runtime if
+    /// storage is empty. The fallback matters for sidecar wallets
+    /// opened via `prepareOnly()`, which deliberately skips the
+    /// storage-populate step so wallet2 never enters refresh mode.
     var primaryAddress: String {
-        kit?.primaryAddress ?? ""
+        let stored = kit?.primaryAddress ?? ""
+        if !stored.isEmpty { return stored }
+        return kit?.runtimePrimaryAddress ?? ""
     }
 
     /// The actual refresh-from-block-height as set by the C++ wallet.

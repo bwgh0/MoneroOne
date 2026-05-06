@@ -535,6 +535,35 @@ class WalletManager: ObservableObject {
         currentPin = pin
     }
 
+    /// Tear down the currently-running wallet2 instance so a transient
+    /// Kit (e.g. the pair-attempt sidecar that reads watch-key from a
+    /// connected Trezor) can take the KitManager slot. wallet2's Kit
+    /// registry is a singleton — exactly one running Kit at a time —
+    /// so a second Kit's `_start()` would otherwise busy-wait on a 1s
+    /// poll and the bridge would never hear from wallet2.
+    ///
+    /// Idempotent: no-op if there's no active wallet running. The
+    /// `WalletInfo` for the previously-active wallet stays in
+    /// `wallets`; only the runtime instance goes away. Subsequent
+    /// `unlock(pin:)` (called automatically at the end of the pair
+    /// flow) brings either the newly-paired wallet or the user's
+    /// previous selection back online.
+    func suspendActiveWalletForPairing() async {
+        cancellables.removeAll()
+        if let oldWallet = moneroWallet {
+            moneroWallet = nil
+            await oldWallet.stopAsync()
+        }
+        isUnlocked = false
+        balance = 0
+        unlockedBalance = 0
+        address = ""
+        primaryAddress = ""
+        syncState = .idle
+        transactions = []
+        subaddresses = []
+    }
+
     /// Pair a Trezor and create the corresponding hardware-backed wallet
     /// on this device. The caller has already brought the device online
     /// over BLE/THP and pulled the watch key (address + view key) via

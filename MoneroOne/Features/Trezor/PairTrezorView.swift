@@ -517,6 +517,20 @@ struct PairTrezorView: View {
     @MainActor
     private func extractKeys() async {
         TrezorLog.log("[Pair] extractKeys: starting")
+
+        // Release the KitManager singleton slot before creating the
+        // transient pair-attempt Kit. KitManager allows only one
+        // running wallet2 instance; if an existing wallet is already
+        // unlocked when the user hits "Connect Trezor", the pair-
+        // attempt Kit's `_start()` would loop on a 1s `Thread.sleep`
+        // waiting for the slot and the bridge would never see a
+        // request from wallet2. After the pair flow finishes,
+        // `walletManager.unlock(pin:)` brings up the newly-paired
+        // wallet on the freed slot — the previously-active wallet
+        // stays as a `WalletInfo` entry the user can switch back to.
+        TrezorLog.log("[Pair] extractKeys: suspending active wallet to free KitManager slot")
+        await walletManager.suspendActiveWalletForPairing()
+        TrezorLog.log("[Pair] extractKeys: active wallet suspended")
         // Use a synthesized device id keyed off the BLE peripheral so
         // the deviceWalletId is stable across pair attempts. After
         // we've extracted the address we recompute it from address +

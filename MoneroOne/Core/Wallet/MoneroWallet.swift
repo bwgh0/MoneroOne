@@ -109,6 +109,46 @@ class MoneroWallet: ObservableObject {
         setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
     }
 
+    /// Open a transient hardware-backed wallet for the cold-sign blob
+    /// exchange flow. Unlike `createFromDevice`, this does NOT connect
+    /// to a daemon or start a refresh — wallet2's `import_outputs`
+    /// throws "Hot wallets cannot import outputs" once
+    /// `m_has_ever_refreshed_from_node` is true, so sidecars must be
+    /// opened, used, and torn down without ever refreshing.
+    ///
+    /// The Trezor bridge HTTP server must be running and the device
+    /// must be reachable — wallet2 hits the device during
+    /// `restore_from_device` to extract keys and again later during
+    /// `export_key_images` to compute key images.
+    func createSidecarFromDevice(
+        deviceName: String,
+        walletId: String,
+        restoreHeight: UInt64 = 0,
+        node: MoneroKit.Node? = nil,
+        networkType: MoneroKit.NetworkType = .mainnet
+    ) async throws {
+        let walletNode = node ?? defaultNode(for: networkType)
+        let reachability = reachabilityManager
+        let newKit: MoneroKit.Kit = try await Task.detached {
+            try MoneroKit.Kit(
+                wallet: .trezor(deviceName: deviceName),
+                account: 0,
+                restoreHeight: restoreHeight,
+                walletId: walletId,
+                node: walletNode,
+                networkType: networkType,
+                reachabilityManager: reachability,
+                logger: nil,
+                moneroCoreLogLevel: 0
+            )
+        }.value
+        kit = newKit
+        // No setupKit / kit.start() — sidecars never refresh. We DO
+        // call prepareOnly so wallet2 opens the wallet from device
+        // and populates primaryAddress, which the caller polls.
+        await newKit.prepareOnly()
+    }
+
     /// Open (or create on first connect) a wallet bound to a hardware
     /// device. The on-disk cache is keyed by `walletId` rather than a
     /// hash of credentials so the caller can pin the sidecar to a

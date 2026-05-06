@@ -393,6 +393,17 @@ struct HardwareSessionSheet: View {
         }
     }
 
+    /// Best-effort wipe of the session sidecar's on-disk cache. The
+    /// wallet2 wallet has already been closed (`stopAsync`), so the
+    /// directory is just SQLite + wallet2 keys/cache files. No-op on
+    /// missing path.
+    private func deleteSidecarCache(walletId: String) {
+        let fm = FileManager.default
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        let path = appSupport.appendingPathComponent("MoneroKit/\(walletId)")
+        try? fm.removeItem(at: path)
+    }
+
     private func shortTx(_ id: String) -> String {
         guard id.count > 16 else { return id }
         return String(id.prefix(8)) + "…" + String(id.suffix(8))
@@ -454,36 +465,43 @@ struct HardwareSessionSheet: View {
         TrezorLog.log("[Session] runWithSidecar: suspending primary…")
         await walletManager.suspendActiveWalletForPairing()
 
-        TrezorLog.log("[Session] runWithSidecar: creating sidecar (deviceWalletId=%@)…", deviceWalletId)
+        // Use a session-specific walletId every time so wallet2 sees
+        // a fresh wallet that has never refreshed from a node. The
+        // alternative — reusing `<deviceWalletId>` — sets
+        // `m_has_ever_refreshed_from_node = true` after the first
+        // session and from then on wallet2 throws "Hot wallets cannot
+        // import outputs" when we try to push the cold wallet's
+        // outputs in. Sessions are short-lived and the cache is
+        // disposable, so a per-session walletId costs nothing.
+        let networkSuffix = walletManager.networkType == .testnet ? "_testnet" : ""
+        let sessionWalletId = MoneroWallet.stableWalletId(for: "trezor-session:\(deviceWalletId):\(UUID().uuidString)\(networkSuffix)")
+        TrezorLog.log("[Session] runWithSidecar: creating sidecar (sessionWalletId=%@)…", sessionWalletId)
         let sidecar = MoneroWallet()
         do {
-            try await sidecar.createFromDevice(
+            try await sidecar.createSidecarFromDevice(
                 deviceName: "Trezor",
-                walletId: deviceWalletId,
+                walletId: sessionWalletId,
                 restoreHeight: info.restoreHeight,
                 networkType: walletManager.networkType
             )
         } catch {
-            TrezorLog.log("[Session] runWithSidecar: createFromDevice THREW: %@", error.localizedDescription)
+            TrezorLog.log("[Session] runWithSidecar: createSidecarFromDevice THREW: %@", error.localizedDescription)
             await sidecar.stopAsync()
             try? await walletManager.unlock(pin: pin)
             throw error
         }
 
-        // Wait until wallet2 has populated the address (signals
-        // restore_from_device finished talking to the device).
-        TrezorLog.log("[Session] runWithSidecar: waiting for sidecar primaryAddress…")
-        let deadline = Date().addingTimeInterval(60)
-        while sidecar.primaryAddress.isEmpty {
-            if Date() >= deadline {
-                TrezorLog.log("[Session] runWithSidecar: TIMEOUT waiting for sidecar address")
-                await sidecar.stopAsync()
-                try? await walletManager.unlock(pin: pin)
-                throw NSError(domain: "HardwareSession", code: -3, userInfo: [NSLocalizedDescriptionKey: "Trezor didn't respond. Reconnect and try again."])
-            }
-            try await Task.sleep(nanoseconds: 250_000_000)
+        // createSidecarFromDevice already awaited prepareOnly which
+        // ran wallet2's restore_from_device synchronously (talked to
+        // device, populated address). primaryAddress should be
+        // available immediately.
+        TrezorLog.log("[Session] runWithSidecar: sidecar primaryAddress len=%d", sidecar.primaryAddress.count)
+        guard !sidecar.primaryAddress.isEmpty else {
+            TrezorLog.log("[Session] runWithSidecar: sidecar address empty after prepareOnly — aborting")
+            await sidecar.stopAsync()
+            try? await walletManager.unlock(pin: pin)
+            throw NSError(domain: "HardwareSession", code: -3, userInfo: [NSLocalizedDescriptionKey: "Trezor didn't respond. Reconnect and try again."])
         }
-        TrezorLog.log("[Session] runWithSidecar: sidecar address ready")
 
         // Hand outputs to sidecar so it generates key images.
         if let outputsBlob {
@@ -510,9 +528,13 @@ struct HardwareSessionSheet: View {
         }
 
         // Tear down sidecar before re-unlocking primary so the
-        // KitManager slot is free in time.
+        // KitManager slot is free in time. Also delete the session
+        // cache from disk — it served its purpose and would otherwise
+        // hang around as an orphan that `cleanOrphanedWalletCaches`
+        // sweeps on next launch.
         TrezorLog.log("[Session] runWithSidecar: tearing down sidecar")
         await sidecar.stopAsync()
+        deleteSidecarCache(walletId: sessionWalletId)
         trezorManager.disconnect()
 
         // Bring primary back online and import the fresh key images.

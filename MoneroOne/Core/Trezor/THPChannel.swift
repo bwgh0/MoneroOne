@@ -69,6 +69,12 @@ class THPChannel {
     // MARK: - Channel Allocation
 
     func allocateChannel() async throws -> UInt16 {
+        // Clear any chunks left over from a prior session — without
+        // this, a half-finished previous handshake could feed stale
+        // data into the new allocation's read buffer and corrupt the
+        // CID we extract from the response.
+        transport.clearRawChunkBuffer()
+
         state = .allocated
 
         var nonce = Data(count: 8)
@@ -456,6 +462,18 @@ class THPChannel {
 
             TrezorLog.log("[THP] readTHPResponse: ctrl=%02x, cid=%04x, payload=%d bytes",
                           decoded.controlByte.rawValue, decoded.cid, decoded.payload.count)
+
+            // CID filter — drop frames addressed to a different channel
+            // than the one we're operating on. Stale data from a prior
+            // failed handshake (e.g. user retried after Noise error)
+            // can otherwise leak into the new channel's message stream
+            // and get interpreted as a malformed Noise message 2.
+            // The broadcast CID (0xffff) used by allocateChannel is OK
+            // before our own CID is assigned.
+            if cid != 0 && decoded.cid != cid && decoded.cid != THPFrame.broadcastCID {
+                TrezorLog.log("[THP] readTHPResponse: dropping stale frame (cid=%04x, expected=%04x)", decoded.cid, cid)
+                continue
+            }
 
             if decoded.controlByte.isDataMessage {
                 // ABP retransmission detection: if the sequence bit doesn't match

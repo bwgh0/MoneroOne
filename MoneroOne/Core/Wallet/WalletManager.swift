@@ -268,10 +268,15 @@ class WalletManager: ObservableObject {
             }
         }
 
-        // 6. Snapshot FULL's tx list before tearing it down.
-        fullWallet.fetchTransactions()
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        let snapshotTxs = fullWallet.transactions
+        // 6. Snapshot FULL's tx list before tearing it down. Read
+        //    directly from MoneroKit's GRDB-backed list rather than
+        //    relying on the @Published `transactions` mirror — that
+        //    mirror updates via Task.detached + main hop after a
+        //    fetch, so a freshly-broadcast tx may not have surfaced
+        //    yet on the published property when we snapshot. The
+        //    direct kit read is synchronous and includes the new
+        //    pending tx wallet2 just committed.
+        let snapshotTxs = await fullWallet.fetchTransactionsBlocking()
         saveHardwareTxSnapshot(snapshotTxs, walletId: active.id)
         TrezorLog.log("[Session] snapshot saved (%d txs)", snapshotTxs.count)
 

@@ -572,10 +572,12 @@ struct PairTrezorView: View {
         // For v0 we use the wallet address — it's unique per (device,
         // derivation path) and survives BLE peripheral rotation.
         let deviceId = extractedAddress
-        // Best-effort peripheral UUID — TrezorBleTransport tracks it
-        // internally; we don't pass it through yet. Future revision
-        // will surface it on TrezorManager so reconnect can fast-path.
-        let peripheralUUID: String? = nil
+        // Last-connected peripheral UUID lets reconnect skip the BLE
+        // scan via `retrievePeripherals(withIdentifiers:)`. Apple may
+        // rotate the identifier across app launches; treat it as a
+        // best-effort hint — `retrievePeripherals` returns empty when
+        // it's gone stale and we fall back to a fresh scan.
+        let peripheralUUID = trezorManager.bleTransport.lastConnectedPeripheralUUID
 
         step = .creating
         Task {
@@ -598,12 +600,13 @@ struct PairTrezorView: View {
 
                 try await walletManager.unlock(pin: pin)
 
-                // TODO: rename the on-disk cache from <tempWalletId>
-                // to <deviceWalletId> so TrezorSession finds the
-                // sidecar that pair just created. For now the first
-                // reconnect re-creates from device, which is correct
-                // but not optimal — second pair will be smoother once
-                // the rename pass lands.
+                // Move the transient sidecar cache from <tempWalletId>
+                // to <deviceWalletId> so TrezorSession reconnect finds
+                // the sidecar this pair just created — first reconnect
+                // skips a redundant restore_from_device.
+                let networkSuffix = walletManager.networkType == .testnet ? "_testnet" : ""
+                let stableDeviceWalletId = MoneroWallet.stableWalletId(for: "trezor:\(deviceId)\(networkSuffix)")
+                renameSidecarCache(from: temporaryDeviceWalletId, to: stableDeviceWalletId)
 
                 await MainActor.run {
                     if isAddingWallet {
@@ -623,5 +626,29 @@ struct PairTrezorView: View {
         errorMessage = message
         showErrorAlert = true
         step = .deviceConnect
+    }
+
+    /// Atomically rename the on-disk wallet2 cache directory from
+    /// the synthesized pair-attempt id to the stable device-derived
+    /// id. Best-effort — failure leaves the cache where it is and
+    /// `cleanOrphanedWalletCaches()` will sweep it next launch (since
+    /// neither id will match a WalletInfo). The next reconnect would
+    /// just rebuild the sidecar from the device, which is correct
+    /// but slower.
+    private func renameSidecarCache(from oldId: String, to newId: String) {
+        guard oldId != newId, !oldId.isEmpty, !newId.isEmpty else { return }
+        let fm = FileManager.default
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        let oldPath = appSupport.appendingPathComponent("MoneroKit/\(oldId)")
+        let newPath = appSupport.appendingPathComponent("MoneroKit/\(newId)")
+        guard fm.fileExists(atPath: oldPath.path) else { return }
+        if fm.fileExists(atPath: newPath.path) {
+            // Newer cache from a previous pair already exists — drop
+            // the transient one. Caller's WalletInfo will reuse the
+            // existing `<newId>` cache.
+            try? fm.removeItem(at: oldPath)
+            return
+        }
+        try? fm.moveItem(at: oldPath, to: newPath)
     }
 }

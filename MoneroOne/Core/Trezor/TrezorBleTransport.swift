@@ -181,6 +181,13 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
         cleanup()
     }
 
+    /// Last-connected peripheral UUID. Persisted across app launches so
+    /// reconnect can fast-path through `retrievePeripherals` without
+    /// re-scanning. Read by `TrezorManager` to surface into bindings.
+    var lastConnectedPeripheralUUID: String? {
+        UserDefaults.standard.string(forKey: "lastTrezorPeripheralUUID")
+    }
+
     /// Attempt to reconnect to the last-known Trezor peripheral by stored UUID.
     /// Uses `retrievePeripherals(withIdentifiers:)` for a fast, targeted reconnection
     /// without needing a full BLE scan.

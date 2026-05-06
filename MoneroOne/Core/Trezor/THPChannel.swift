@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import UIKit
 
 /// THP channel orchestrator.
 ///
@@ -517,8 +518,16 @@ class THPChannel {
         }
 
         // Step 1: ThpPairingRequest (1008)
-        TrezorLog.log("[THP] pairing: sending PairingRequest")
-        let pairingReqPayload = THPProto.encodePairingRequest(hostName: "MoneroOne", appName: "MoneroOne")
+        // Surface the user's device name + app display name to the
+        // Trezor screen — Trezor Suite does the same so users see
+        // "Connect to Monero One on Joe's iPhone" instead of the
+        // generic bundle name.
+        let hostName = UIDevice.current.name
+        let appName = (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+            ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String)
+            ?? "Monero One"
+        TrezorLog.log("[THP] pairing: sending PairingRequest (host=%@ app=%@)", hostName, appName)
+        let pairingReqPayload = THPProto.encodePairingRequest(hostName: hostName, appName: appName)
         try await sendEncrypted(sessionId: 0, messageType: 1008, payload: pairingReqPayload, cipher: sendCipher)
 
         // Step 2: ThpPairingRequestApproved (1009) — user confirms on Trezor

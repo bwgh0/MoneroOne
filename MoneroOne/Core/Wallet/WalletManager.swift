@@ -154,6 +154,38 @@ class WalletManager: ObservableObject {
 
     init() {
         checkForExistingWallet()
+        cleanOrphanedWalletCaches()
+    }
+
+    /// Sweep wallet2 cache directories that don't match any registered
+    /// `WalletInfo`. Two main sources of orphans:
+    ///   - Cancelled Trezor pair attempts leave a transient TREZOR-bound
+    ///     sidecar at `MoneroKit/<tempWalletId>/...` with no WalletInfo.
+    ///   - `deleteWallet(id:)` removes the WalletInfo + keychain entry
+    ///     but doesn't yet remove the on-disk cache.
+    /// Either way, the rule is the same: any subdir under
+    /// `Application Support/MoneroKit/` whose name doesn't match a
+    /// known `derivedWalletId` or `deviceWalletId` is dead weight and
+    /// gets removed at app launch.
+    private func cleanOrphanedWalletCaches() {
+        let fileManager = FileManager.default
+        guard let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        let moneroKitDir = appSupportURL.appendingPathComponent("MoneroKit")
+        guard fileManager.fileExists(atPath: moneroKitDir.path) else { return }
+
+        let knownIds: Set<String> = Set(wallets.flatMap { wallet -> [String] in
+            [wallet.derivedWalletId, wallet.deviceWalletId].compactMap { $0 }
+        })
+
+        guard let entries = try? fileManager.contentsOfDirectory(at: moneroKitDir, includingPropertiesForKeys: nil) else { return }
+        for entry in entries {
+            let name = entry.lastPathComponent
+            if knownIds.contains(name) { continue }
+            // Skip dotfiles and any non-hex-32 names so we don't nuke
+            // future format changes (e.g. shared metadata directories).
+            guard name.count == 32, name.allSatisfy({ $0.isHexDigit }) else { continue }
+            try? fileManager.removeItem(at: entry)
+        }
     }
 
     private func checkForExistingWallet() {

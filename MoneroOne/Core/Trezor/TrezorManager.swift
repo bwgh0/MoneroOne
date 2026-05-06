@@ -68,33 +68,76 @@ class TrezorManager: ObservableObject {
     }
 
     private func setupBindings() {
-        // Forward BLE state to TrezorManager state
+        // Forward BLE state to TrezorManager state.
+        //
+        // The four BLE states (disconnected/scanning/connecting/connected)
+        // can re-fire mid-flow — CoreBluetooth re-emits its current state
+        // when delegates re-subscribe, and `startScanning()` toggles to
+        // `.scanning` even when called while already past it. Without
+        // guarding, each re-emit clobbers a perfectly good
+        // `.handshaking` / `.pairing` / `.bridgeRunning` state and the UI
+        // bounces back to the scan list. So every BLE-driven transition
+        // checks current state and refuses to regress past THP setup.
         bleTransport.$connectionState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] (bleState: TrezorBleTransport.ConnectionState) in
                 guard let self else { return }
                 switch bleState {
                 case .disconnected:
-                    if case .error = self.state { break } // Don't override errors
-                    if case .bridgeRunning = self.state { break } // Don't tear down active bridge
-                    self.signingProgress = nil
-                    self.state = .idle
-                    self.stopBridge()
+                    // Treat as a real disconnect only when we weren't
+                    // mid-handshake. A `.disconnected` while THP is
+                    // running means BLE actually dropped — surface it.
+                    // Otherwise (idle / scanning / connecting / connected)
+                    // it's a re-emit and we ignore it.
+                    switch self.state {
+                    case .error, .bridgeRunning, .allocatingTHP, .handshaking, .pairing:
+                        // Real BLE drop mid-flow: tear down THP / bridge
+                        // explicitly so a retry starts clean.
+                        if case .bridgeRunning = self.state {
+                            // Active bridge — keep alive, the user may
+                            // reconnect manually.
+                            break
+                        }
+                        TrezorLog.log("[Manager] BLE disconnected mid-flow, tearing down THP")
+                        self.signingProgress = nil
+                        self.state = .error("Trezor disconnected — please reconnect.")
+                        self.stopBridge()
+                        self.thpChannel = nil
+                    default:
+                        self.signingProgress = nil
+                        self.state = .idle
+                        self.stopBridge()
+                    }
                 case .scanning:
-                    TrezorLog.log("[Manager] State → scanning")
-                    self.state = .scanning
+                    // Only honor `.scanning` when we're idle or already
+                    // scanning. Re-emits while we're connecting / past
+                    // handshake would otherwise rewind the UI.
+                    switch self.state {
+                    case .idle, .scanning:
+                        TrezorLog.log("[Manager] State → scanning")
+                        self.state = .scanning
+                    default:
+                        break
+                    }
                 case .connecting:
-                    TrezorLog.log("[Manager] State → connecting")
-                    self.state = .connecting
+                    // Likewise: BLE may re-emit `.connecting` after the
+                    // connection is established (we've seen this in
+                    // device logs). Don't unwind THP states.
+                    switch self.state {
+                    case .idle, .scanning, .connecting:
+                        TrezorLog.log("[Manager] State → connecting")
+                        self.state = .connecting
+                    default:
+                        break
+                    }
                 case .connected:
                     let name = self.bleTransport.connectedDeviceName ?? "Trezor Safe 7"
-                    // Only transition to .connected if we're not already in THP setup
                     switch self.state {
                     case .allocatingTHP, .handshaking, .pairing, .bridgeRunning:
                         break  // Don't interrupt THP setup
                     default:
+                        TrezorLog.log("[Manager] State → connected (%@)", name)
                         self.state = .connected(deviceName: name)
-                        // Auto-start THP + bridge when BLE connects
                         self.startBridge()
                     }
                 case .error(let msg):
@@ -111,8 +154,20 @@ class TrezorManager: ObservableObject {
 
     // MARK: - Public API
 
+    /// Begin a fresh BLE scan. No-op if we're already past the scan
+    /// stage — calling this mid-handshake would otherwise reset BLE
+    /// state to `.scanning` and unwind the UI. PairTrezorView's
+    /// `.onAppear` is the typical re-entrant caller; SwiftUI fires
+    /// onAppear multiple times during sheet snapshots and app-switcher
+    /// previews so the guard belongs at the manager rather than at
+    /// every call site.
     func startScanning() {
-        bleTransport.startScanning()
+        switch state {
+        case .idle, .scanning, .error:
+            bleTransport.startScanning()
+        case .connecting, .connected, .allocatingTHP, .handshaking, .pairing, .bridgeRunning:
+            TrezorLog.log("[Manager] startScanning ignored — already in state %@", "\(state)")
+        }
     }
 
     func stopScanning() {
@@ -245,6 +300,7 @@ class TrezorManager: ObservableObject {
                         Task { @MainActor in
                             self.pairingContinuation = continuation
                             self.pairingCodeRequired = true
+                            TrezorLog.log("[Manager] State → pairing — code should be on Trezor screen")
                             self.state = .pairing(deviceName: deviceName)
                         }
                     }
@@ -273,7 +329,7 @@ class TrezorManager: ObservableObject {
                 state = .allocatingTHP(deviceName: deviceName)
                 resetChecklist()
                 updateChecklistItem("channel", status: .inProgress)
-                TrezorLog.log("[Manager] Starting THP channel setup...")
+                TrezorLog.log("[Manager] State → allocatingTHP / Starting THP channel setup…")
 
                 try await channel.setup()
 

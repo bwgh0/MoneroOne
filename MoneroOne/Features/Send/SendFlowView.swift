@@ -103,8 +103,11 @@ struct SendFlowView: View {
             handlePrefill()
         }
         .sheet(item: $hardwareSheetIntent, onDismiss: handleHardwareSheetDismiss) { intent in
-            HardwareSessionSheet(intent: intent)
-                .environmentObject(walletManager)
+            HardwareSessionSheet(
+                intent: intent,
+                trezorManager: walletManager.trezorManager
+            )
+            .environmentObject(walletManager)
         }
     }
 

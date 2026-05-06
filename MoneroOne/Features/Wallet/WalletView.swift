@@ -120,8 +120,11 @@ struct WalletView: View {
                 .environmentObject(priceService)
             }
             .sheet(item: $hardwareSheetIntent) { intent in
-                HardwareSessionSheet(intent: intent)
-                    .environmentObject(walletManager)
+                HardwareSessionSheet(
+                    intent: intent,
+                    trezorManager: walletManager.trezorManager
+                )
+                .environmentObject(walletManager)
             }
         }
     }

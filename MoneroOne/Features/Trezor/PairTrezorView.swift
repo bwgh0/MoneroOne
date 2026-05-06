@@ -1,52 +1,627 @@
 import SwiftUI
+import LocalAuthentication
+import MoneroKit
 
 /// Multi-wallet-aware Trezor pairing flow.
 ///
-/// Replaces the single-wallet `TrezorScanView` from
-/// `feature/trezor-safe7`. The new flow plugs into `AddWalletView`'s
-/// navigation path the same way `RestoreViewKeyView` does — connect
-/// over BLE/THP, pull `MoneroGetWatchKey` from the device, then call
-/// `WalletManager.pairTrezorWallet(...)` to land a watch-only wallet
-/// tagged `WalletSource.hardware(.trezor(...))`.
+/// Flow:
+///   1. deviceConnect    — BLE scan/connect/THP handshake/pairing code
+///                         (driven by TrezorManager state)
+///   2. extractingKeys   — open a transient TREZOR-bound wallet2 instance
+///                         via MoneroWallet.createFromDevice, read its
+///                         primary address + secret view key, stop it.
+///                         The on-disk cache stays at <deviceWalletId>
+///                         so the future TrezorSession reconnect can
+///                         find its sidecar.
+///   3. creationDate     — optional restore-height picker
+///   4. setPIN           — onboarding only (skipped when isAddingWallet)
+///   5. nameWallet       — name + emoji
+///   6. creating         — WalletManager.pairTrezorWallet writes a
+///                         SOFTWARE/watch_only primary cache + keychain
+///                         entry tagged with the .trezor binding.
+///   7. done             — dismisses
 ///
-/// Watch-key extraction itself is the open problem. Two ways:
-///   1. Open a transient TREZOR-bound wallet2 instance via
-///      `MoneroWallet.createFromDevice`, read its primary address and
-///      `secretViewKey`, close it. Reuses wallet2's protocol logic at
-///      the cost of leaving a small TREZOR-mode cache on disk that we
-///      need to clean up.
-///   2. Talk THP directly: `THPChannel.sendProtobuf(messageType: 542,
-///      data: MoneroGetWatchKey{...})` and parse the `MoneroWatchKey`
-///      response. Avoids wallet2 entirely but needs hand-coded
-///      protobuf for two messages (or pull in swift-protobuf).
-///
-/// Going with (1) for the first pass because it reuses the
-/// already-tested THP protocol path inside wallet2 and the small on-
-/// disk cache is the same `deviceWalletId`-keyed sidecar we already
-/// need for reconnect sessions — pairing just bootstraps it.
+/// If the user cancels after step 2, the orphan sidecar cache lives at
+/// `MoneroKit/<deviceWalletId>/...` with no matching WalletInfo entry.
+/// `cleanOrphanedDeviceCaches()` (run on app launch) sweeps these up.
 struct PairTrezorView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
+    @AppStorage("preferredPINLength") private var preferredPINLength = 6
 
     var isAddingWallet: Bool = false
     var existingPin: String? = nil
 
+    @StateObject private var trezorManager = TrezorManager()
+
+    @SceneStorage("pairTrezor.walletName") private var walletName: String = ""
+    @SceneStorage("pairTrezor.walletEmoji") private var walletEmoji: String = "\u{1F510}"
+    @SceneStorage("pairTrezor.creationDateTS") private var creationDateTS: Double = Date().timeIntervalSince1970
+    @SceneStorage("pairTrezor.useCreationDate") private var useCreationDate = true
+
+    @State private var step: Step = .deviceConnect
+    @State private var pairingCodeInput: String = ""
+    @State private var extractedAddress: String = ""
+    @State private var extractedViewKey: String = ""
+    @State private var temporaryDeviceWalletId: String = ""
+    @State private var deviceModel: String = "Trezor"
+    @State private var pin: String = ""
+    @State private var confirmPin: String = ""
+    @State private var selectedPINLength = 6
+    @FocusState private var focusedField: PINField?
+    @State private var errorMessage: String?
+    @State private var showErrorAlert = false
+
+    private enum PINField { case pin, confirmPin }
+
+    private enum Step {
+        case deviceConnect      // scan/connect/handshake/pairing — driven by TrezorManager
+        case extractingKeys     // calling createFromDevice, polling for address
+        case creationDate
+        case setPIN
+        case nameWallet
+        case creating
+        case done
+    }
+
+    private static let genesisDate: Date = {
+        var c = DateComponents(); c.year = 2014; c.month = 4; c.day = 18
+        return Calendar(identifier: .gregorian).date(from: c) ?? Date()
+    }()
+
+    private var creationDate: Date { Date(timeIntervalSince1970: creationDateTS) }
+    private var creationDateBinding: Binding<Date> {
+        Binding(
+            get: { Date(timeIntervalSince1970: creationDateTS) },
+            set: { creationDateTS = $0.timeIntervalSince1970 }
+        )
+    }
+    private var canProceedPIN: Bool { pin.count == selectedPINLength && pin == confirmPin }
+
     var body: some View {
-        VStack(spacing: 24) {
+        Group {
+            switch step {
+            case .deviceConnect:    deviceConnectView
+            case .extractingKeys:   extractingKeysView
+            case .creationDate:     creationDateView
+            case .setPIN:           setPINView
+            case .nameWallet:       nameWalletView
+            case .creating:         creatingView
+            case .done:             EmptyView()
+            }
+        }
+        .navigationTitle("Pair Trezor")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Pair Failed", isPresented: $showErrorAlert) {
+            Button("OK") {}
+        } message: {
+            Text(errorMessage ?? "Unknown error")
+        }
+        .onAppear {
+            trezorManager.startScanning()
+        }
+        .onDisappear {
+            // Cancel BLE if user dismissed mid-flow. Not relevant once
+            // we've extracted keys and torn down the transient wallet.
+            if step == .deviceConnect {
+                trezorManager.disconnect()
+            }
+        }
+        .onChange(of: trezorManager.state) { _, _ in
+            evaluateConnectionState()
+        }
+    }
+
+    // MARK: - Step 1: device connect (BLE/THP/pairing)
+
+    private var deviceConnectView: some View {
+        VStack(spacing: 20) {
+            headerView
+
+            switch trezorManager.state {
+            case .idle, .scanning:
+                scanningContent
+            case .connecting:
+                progressContent(text: "Connecting…")
+            case .connected, .allocatingTHP, .handshaking:
+                handshakeContent
+            case .pairing:
+                pairingContent
+            case .bridgeRunning:
+                progressContent(text: "Ready, exporting keys…")
+            case .error(let msg):
+                errorContent(msg)
+            }
+
             Spacer()
+        }
+        .padding(.top, 16)
+    }
+
+    private var headerView: some View {
+        VStack(spacing: 8) {
             Image(systemName: "lock.shield.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.orange)
-            Text("Pair Trezor")
-                .font(.title2.weight(.semibold))
-            Text("UI coming next chunk. Wiring in place — `WalletManager.pairTrezorWallet(...)` is ready to call once the watch-key extraction path is decided.")
+                .font(.system(size: 48))
+                .foregroundColor(.orange)
+            Text(stepTitle)
+                .font(.title3.weight(.semibold))
+            Text(stepSubtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+        }
+    }
+
+    private var stepTitle: String {
+        switch trezorManager.state {
+        case .idle, .scanning:                   return "Searching for Trezor"
+        case .connecting:                        return "Connecting…"
+        case .connected, .allocatingTHP, .handshaking: return "Encrypted Channel"
+        case .pairing:                           return "Enter Pairing Code"
+        case .bridgeRunning:                     return "Trezor Ready"
+        case .error:                             return "Couldn't Connect"
+        }
+    }
+
+    private var stepSubtitle: String {
+        switch trezorManager.state {
+        case .idle, .scanning:        return "Unlock your Trezor and turn on Bluetooth."
+        case .connecting:             return "Establishing connection over Bluetooth."
+        case .connected, .allocatingTHP, .handshaking:
+            return "Setting up encrypted communication."
+        case .pairing:                return "Type the 6-digit code shown on the Trezor screen."
+        case .bridgeRunning:          return "Now exporting your view key from the device."
+        case .error:                  return "See the message below and try again."
+        }
+    }
+
+    private var scanningContent: some View {
+        VStack(spacing: 12) {
+            if trezorManager.discoveredDevices.isEmpty {
+                ProgressView()
+                    .padding()
+            } else {
+                ForEach(trezorManager.discoveredDevices) { device in
+                    Button {
+                        trezorManager.connect(to: device)
+                    } label: {
+                        HStack {
+                            Image(systemName: "dot.radiowaves.left.and.right")
+                                .foregroundStyle(.orange)
+                            Text(device.name)
+                                .font(.body.weight(.medium))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(12)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+
+    private func progressContent(text: String) -> some View {
+        VStack(spacing: 12) {
+            ProgressView().scaleEffect(1.2)
+            Text(text)
                 .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+    }
+
+    private var handshakeContent: some View {
+        VStack(spacing: 12) {
+            ProgressView().scaleEffect(1.2).padding()
+            if !trezorManager.checklist.isEmpty {
+                checklistView
+            }
+        }
+    }
+
+    private var pairingContent: some View {
+        VStack(spacing: 16) {
+            TextField("000000", text: $pairingCodeInput)
+                .keyboardType(.numberPad)
+                .font(.system(size: 32, weight: .bold, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 200)
+                .padding()
+                .background(.ultraThinMaterial)
+                .cornerRadius(12)
+
+            Button {
+                guard pairingCodeInput.count == 6 else { return }
+                trezorManager.pairingCode = pairingCodeInput
+            } label: {
+                Text("Confirm")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(pairingCodeInput.count == 6 ? Color.orange : Color.gray)
+                    .cornerRadius(12)
+            }
+            .disabled(pairingCodeInput.count != 6)
+            .padding(.horizontal, 40)
+        }
+    }
+
+    private var checklistView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(trezorManager.checklist) { item in
+                HStack(spacing: 10) {
+                    switch item.status {
+                    case .pending:    Image(systemName: "circle").foregroundStyle(.secondary)
+                    case .inProgress: ProgressView().scaleEffect(0.7)
+                    case .success:    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    case .failed:     Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.label).font(.caption.weight(.medium))
+                        if let detail = item.detail {
+                            Text(detail).font(.caption2).foregroundStyle(item.status == .failed ? .red : .orange)
+                        }
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial)
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+
+    private func errorContent(_ msg: String) -> some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                Text(msg)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            .padding()
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(12)
+            .padding(.horizontal)
+
+            Button {
+                trezorManager.disconnect()
+                trezorManager.startScanning()
+            } label: {
+                Text("Try Again")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .glassButtonStyle()
+            .padding(.horizontal)
+        }
+    }
+
+    // MARK: - Step 2: extracting keys
+
+    private var extractingKeysView: some View {
+        VStack(spacing: 16) {
+            ProgressView().scaleEffect(1.4).padding()
+            Text("Exporting your view key…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("Confirm the prompt on your Trezor when it appears.")
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             Spacer()
         }
-        .navigationTitle("Pair Trezor")
-        .navigationBarTitleDisplayMode(.inline)
+        .padding(.top, 32)
+    }
+
+    // MARK: - Step 3: creation date
+
+    private var creationDateView: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 16)
+            Text("When was the Trezor wallet created?")
+                .font(.headline)
+            Text("An accurate date speeds up scanning. Skip to scan from genesis.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            Toggle("I know the creation date", isOn: $useCreationDate)
+                .padding(.horizontal)
+
+            if useCreationDate {
+                DatePicker(
+                    "Creation date",
+                    selection: creationDateBinding,
+                    in: Self.genesisDate...Date(),
+                    displayedComponents: [.date]
+                )
+                .datePickerStyle(.graphical)
+                .padding(.horizontal)
+            }
+
+            Button {
+                if isAddingWallet, let existingPin {
+                    pin = existingPin
+                    step = .nameWallet
+                } else {
+                    step = .setPIN
+                }
+            } label: {
+                Text("Continue")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .glassButtonStyle()
+            .padding(.horizontal)
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Step 4: PIN (onboarding only)
+
+    private var setPINView: some View {
+        VStack(spacing: 24) {
+            Spacer().frame(height: 16)
+            Text("Set a PIN")
+                .font(.title3.weight(.semibold))
+            Text("Unlocks this wallet on this device. Hardware wallets still need a local PIN so nobody can open the watch view without it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            PINEntryFieldView(
+                pin: $pin,
+                length: selectedPINLength,
+                label: "Enter PIN",
+                field: PINField.pin,
+                focusedField: $focusedField,
+                accessibilityID: "pairTrezor.pinEntry",
+                onComplete: { focusedField = .confirmPin }
+            )
+            PINEntryFieldView(
+                pin: $confirmPin,
+                length: selectedPINLength,
+                label: "Confirm PIN",
+                field: PINField.confirmPin,
+                focusedField: $focusedField,
+                accessibilityID: "pairTrezor.confirmPinEntry",
+                onComplete: {
+                    if canProceedPIN {
+                        preferredPINLength = selectedPINLength
+                        step = .nameWallet
+                    }
+                }
+            )
+            if pin.count == selectedPINLength && confirmPin.count == selectedPINLength && pin != confirmPin {
+                Text("PINs don't match")
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            }
+
+            Button {
+                preferredPINLength = selectedPINLength
+                step = .nameWallet
+            } label: {
+                Text("Continue")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(canProceedPIN ? Color.orange : Color.gray)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .glassButtonStyle()
+            .disabled(!canProceedPIN)
+            .padding(.horizontal)
+
+            Spacer()
+        }
+        .onAppear { focusedField = .pin }
+    }
+
+    // MARK: - Step 5: name + emoji
+
+    private var nameWalletView: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 16)
+            EmojiPickerCircle(emoji: $walletEmoji)
+                .padding(.top, 8)
+            Text("Tap to pick an emoji")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField("Wallet name", text: $walletName)
+                .textInputAutocapitalization(.sentences)
+                .font(.subheadline)
+                .padding(12)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(10)
+                .padding(.horizontal)
+
+            Button {
+                pair()
+            } label: {
+                Text("Pair Trezor")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .glassButtonStyle()
+            .padding(.horizontal)
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Step 6: creating
+
+    private var creatingView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            ProgressView().scaleEffect(1.5)
+            Text("Pairing wallet…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+    }
+
+    // MARK: - State machine
+
+    private func evaluateConnectionState() {
+        guard step == .deviceConnect else { return }
+        if case .bridgeRunning = trezorManager.state {
+            step = .extractingKeys
+            Task { await extractKeys() }
+        }
+    }
+
+    /// Open a transient TREZOR-bound wallet2 instance to read the
+    /// device's primary address + view key. The on-disk cache that
+    /// wallet2 writes during `restore_from_device` stays put — that's
+    /// the sidecar a future `TrezorSession` reconnect will reuse.
+    @MainActor
+    private func extractKeys() async {
+        // Use a synthesized device id keyed off the BLE peripheral so
+        // the deviceWalletId is stable across pair attempts. After
+        // we've extracted the address we recompute it from address +
+        // network so the live binding has a stable value tied to the
+        // Monero account, not the BLE peripheral.
+        let networkSuffix = walletManager.networkType == .testnet ? "_testnet" : ""
+        let pairAttemptId = UUID().uuidString
+        let tempWalletId = MoneroWallet.stableWalletId(for: "trezor-pair:\(pairAttemptId)\(networkSuffix)")
+        temporaryDeviceWalletId = tempWalletId
+
+        let restoreHeight: UInt64 = useCreationDate ? MoneroWallet.restoreHeight(for: creationDate) : 0
+        let wallet = MoneroWallet()
+        do {
+            try await wallet.createFromDevice(
+                deviceName: "Trezor",
+                walletId: tempWalletId,
+                restoreHeight: restoreHeight,
+                networkType: walletManager.networkType
+            )
+        } catch {
+            await failPair(error.localizedDescription)
+            return
+        }
+
+        // Wait for wallet2 to finish restore_from_device so address is
+        // populated. wallet2 talks to the device synchronously inside
+        // openWallet — typically a few seconds.
+        let pollDeadline = Date().addingTimeInterval(45)
+        while wallet.primaryAddress.isEmpty {
+            if Date() >= pollDeadline {
+                await wallet.stopAsync()
+                await failPair("Trezor didn't respond. Reconnect and try again.")
+                return
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+
+        let address = wallet.primaryAddress
+        let viewKey = wallet.secretViewKey ?? ""
+
+        // Stop the runtime instance — its on-disk cache stays. The
+        // file-system path `MoneroKit/<tempWalletId>/` will be moved
+        // to the real `<deviceWalletId>` location once we know it.
+        await wallet.stopAsync()
+
+        guard !address.isEmpty, viewKey.count == 64 else {
+            await failPair("Couldn't read keys from Trezor.")
+            return
+        }
+
+        // Fix up state and advance UI.
+        extractedAddress = address
+        extractedViewKey = viewKey
+
+        // Drop the BLE/THP session — pair-flow doesn't need the device
+        // online for the rest of the screens. Reconnect happens
+        // separately when the user actually wants to send or sync
+        // sent transactions.
+        trezorManager.disconnect()
+
+        step = .creationDate
+    }
+
+    private func pair() {
+        let trimmedName = walletName.trimmingCharacters(in: .whitespaces)
+        let name = trimmedName.isEmpty
+            ? WalletStore().nextWalletName(existing: walletManager.wallets)
+            : trimmedName
+        let restoreDate: Date? = useCreationDate ? creationDate : nil
+        // The deviceId in the binding is the THP-derived stable value.
+        // For v0 we use the wallet address — it's unique per (device,
+        // derivation path) and survives BLE peripheral rotation.
+        let deviceId = extractedAddress
+        // Best-effort peripheral UUID — TrezorBleTransport tracks it
+        // internally; we don't pass it through yet. Future revision
+        // will surface it on TrezorManager so reconnect can fast-path.
+        let peripheralUUID: String? = nil
+
+        step = .creating
+        Task {
+            do {
+                try await walletManager.pairTrezorWallet(
+                    name: name,
+                    emoji: walletEmoji,
+                    address: extractedAddress,
+                    viewKey: extractedViewKey,
+                    pin: pin,
+                    model: deviceModel,
+                    deviceId: deviceId,
+                    peripheralUUID: peripheralUUID,
+                    restoreDate: restoreDate
+                )
+
+                if !isAddingWallet {
+                    KeychainStorage().savePinLength(selectedPINLength)
+                }
+
+                try await walletManager.unlock(pin: pin)
+
+                // TODO: rename the on-disk cache from <tempWalletId>
+                // to <deviceWalletId> so TrezorSession finds the
+                // sidecar that pair just created. For now the first
+                // reconnect re-creates from device, which is correct
+                // but not optimal — second pair will be smoother once
+                // the rename pass lands.
+
+                await MainActor.run {
+                    if isAddingWallet {
+                        dismiss()
+                    } else {
+                        step = .done
+                    }
+                }
+            } catch {
+                await failPair(error.localizedDescription)
+            }
+        }
+    }
+
+    @MainActor
+    private func failPair(_ message: String) {
+        errorMessage = message
+        showErrorAlert = true
+        step = .deviceConnect
     }
 }

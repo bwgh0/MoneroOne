@@ -8,6 +8,7 @@ struct WalletView: View {
     @State private var showSend = false
     @State private var showPortfolio = false
     @State private var showWalletManager = false
+    @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
     @Binding var selectedTab: MainTabView.Tab
 
     var body: some View {
@@ -23,6 +24,9 @@ struct WalletView: View {
                             connectionStage: walletManager.connectionStage,
                             priceService: priceService,
                             isViewOnly: walletManager.isViewOnly,
+                            isHardwareWallet: walletManager.isHardwareWallet,
+                            hardwareDeviceName: walletManager.hardwareDisplayName,
+                            hardwareLastSentSyncAt: walletManager.lastHardwareSentSyncAt,
                             isSyncBlocked: trustedLocationSync.isSyncBlocked,
                             isOutsideTrustedZone: trustedLocationSync.isOutsideTrustedZone,
                             trustedLocationName: trustedLocationSync.currentTrustedLocationName,
@@ -32,6 +36,9 @@ struct WalletView: View {
                             },
                             onCardTap: {
                                 showPortfolio = true
+                            },
+                            onHardwareSyncTap: {
+                                hardwareSheetIntent = .syncSentTransactions
                             }
                         )
                         .padding(.horizontal)
@@ -41,13 +48,13 @@ struct WalletView: View {
                                 title: "Send",
                                 icon: "arrow.up.circle.fill",
                                 color: .orange,
-                                isDisabled: walletManager.isViewOnly
+                                isDisabled: !walletManager.canSend
                             ) {
                                 showSend = true
                             }
                             .accessibilityIdentifier("wallet.sendButton")
-                            .accessibilityLabel(walletManager.isViewOnly ? "Send Monero, disabled for view-only wallet" : "Send Monero")
-                            .accessibilityHint(walletManager.isViewOnly ? "This wallet is view-only and cannot send" : "Opens the send transaction screen")
+                            .accessibilityLabel(walletManager.canSend ? "Send Monero" : "Send Monero, disabled for view-only wallet")
+                            .accessibilityHint(walletManager.canSend ? "Opens the send transaction screen" : "This wallet is view-only and cannot send")
 
                             CompactActionButton(
                                 title: "Receive",
@@ -111,6 +118,10 @@ struct WalletView: View {
                 )
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
+            }
+            .sheet(item: $hardwareSheetIntent) { intent in
+                HardwareSessionSheet(intent: intent)
+                    .environmentObject(walletManager)
             }
         }
     }

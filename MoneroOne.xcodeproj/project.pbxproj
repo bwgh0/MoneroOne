@@ -132,6 +132,7 @@
 		TRZSES00BUILD567890ABCDEF /* TrezorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZSES001234567890ABCDEF /* TrezorSession.swift */; };
 		TRZTRP00BUILD567890ABCDEF /* TrezorTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZTRP001234567890ABCDEF /* TrezorTransport.swift */; };
 		TRZPAR00BUILD567890ABCDEF /* PairTrezorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZPAR001234567890ABCDEF /* PairTrezorView.swift */; };
+		TRZHWS00BUILD567890ABCDEF /* HardwareSessionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZHWS001234567890ABCDEF /* HardwareSessionSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -303,6 +304,7 @@
 		TRZSES001234567890ABCDEF /* TrezorSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorSession.swift; sourceTree = "<group>"; };
 		TRZTRP001234567890ABCDEF /* TrezorTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorTransport.swift; sourceTree = "<group>"; };
 		TRZPAR001234567890ABCDEF /* PairTrezorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairTrezorView.swift; sourceTree = "<group>"; };
+		TRZHWS001234567890ABCDEF /* HardwareSessionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardwareSessionSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -400,6 +402,7 @@
 			isa = PBXGroup;
 			children = (
 				TRZPAR001234567890ABCDEF /* PairTrezorView.swift */,
+				TRZHWS001234567890ABCDEF /* HardwareSessionSheet.swift */,
 			);
 			path = Trezor;
 			sourceTree = "<group>";
@@ -990,6 +993,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				TRZSES00BUILD567890ABCDEF /* TrezorSession.swift in Sources */,
 				TRZTRP00BUILD567890ABCDEF /* TrezorTransport.swift in Sources */,
 				TRZPAR00BUILD567890ABCDEF /* PairTrezorView.swift in Sources */,
+				TRZHWS00BUILD567890ABCDEF /* HardwareSessionSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

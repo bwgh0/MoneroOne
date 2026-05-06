@@ -10,6 +10,7 @@ struct BalanceCard: View {
     var isHardwareWallet: Bool = false
     var hardwareDeviceName: String? = nil
     var hardwareLastSentSyncAt: Date? = nil
+    var isHardwareDeviceWarm: Bool = false
     var isSyncBlocked: Bool = false
     var isOutsideTrustedZone: Bool = false
     var trustedLocationName: String? = nil
@@ -77,11 +78,21 @@ struct BalanceCard: View {
                         onHardwareSyncTap?()
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "lock.shield.fill")
+                            // Filled lock = device connected (warm
+                            // window active); outlined = idle. Lets
+                            // the user tell at a glance whether the
+                            // next tap will be instant or whether
+                            // they'll go through the BLE handshake.
+                            Image(systemName: isHardwareDeviceWarm ? "lock.shield.fill" : "lock.shield")
                                 .font(.caption2)
                             Text(hardwareDeviceName ?? "Hardware")
                                 .font(.caption2.weight(.semibold))
                                 .lineLimit(1)
+                            if isHardwareDeviceWarm {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 6, height: 6)
+                            }
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
@@ -90,7 +101,7 @@ struct BalanceCard: View {
                         .padding(.leading, 6)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(hardwareDeviceName ?? "Hardware wallet"). Tap to sync sent transactions.")
+                    .accessibilityLabel("\(hardwareDeviceName ?? "Hardware wallet")\(isHardwareDeviceWarm ? ", connected" : ""). Tap to sync sent transactions.")
                 } else if isViewOnly {
                     HStack(spacing: 4) {
                         Image(systemName: "eye.fill")

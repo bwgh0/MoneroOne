@@ -67,12 +67,14 @@ struct HardwareSessionSheet: View {
                 handleSessionStateChange(newState)
             }
             .onDisappear {
-                // If the user ditched mid-session, no point keeping the
-                // BLE session alive. Real wallet2 teardown runs inside
-                // the WalletManager session driver — we just drop BLE
-                // here.
+                // If the user ditched mid-session, drop BLE so the
+                // session cleans up. After a successful session we
+                // keep the connection alive for the warm window so a
+                // follow-up Sync/Send can fast-path through BLE
+                // bringup — WalletManager's `scheduleWarmConnectionDisconnect`
+                // takes care of eventual teardown.
                 if isInProgress {
-                    trezorManager.disconnect()
+                    walletManager.disconnectHardwareDevice()
                 }
                 walletManager.resetHardwareSessionState()
             }
@@ -410,19 +412,18 @@ struct HardwareSessionSheet: View {
     }
 
     private func handleSessionStateChange(_ state: WalletManager.HardwareSessionState) {
-        // If the session ended (success or failure), drop the BLE
-        // session — the device side is no longer needed.
-        switch state {
-        case .complete, .failed:
-            trezorManager.disconnect()
-        default:
-            break
+        // On failure, drop the BLE session so the next attempt
+        // starts clean. On success, leave it alive — the warm-window
+        // disconnect on WalletManager will tear down later if no
+        // follow-up session runs.
+        if case .failed = state {
+            walletManager.disconnectHardwareDevice()
         }
     }
 
     private func cancelAndDismiss() {
         walletManager.resetHardwareSessionState()
-        trezorManager.disconnect()
+        walletManager.disconnectHardwareDevice()
         dismiss()
     }
 }

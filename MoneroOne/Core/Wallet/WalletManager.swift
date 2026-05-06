@@ -119,6 +119,61 @@ class WalletManager: ObservableObject {
 
     @Published private(set) var hardwareSessionState: HardwareSessionState = .idle
 
+    /// True when the Trezor bridge is up and the device is connected.
+    /// UI uses this to show a "Trezor Connected" pill so the user
+    /// knows whether the next sync/send will fast-path through BLE.
+    @Published private(set) var isHardwareDeviceWarm: Bool = false
+
+    /// How long after the most recent hardware session we keep the
+    /// BLE/THP connection alive. Within this window, a follow-up
+    /// session reuses the running bridge instead of redoing the
+    /// scan / connect / handshake / pairing-code dance — which the
+    /// device currently asks for on every fresh BLE session because
+    /// the THP credential isn't being presented across reconnects
+    /// (separate fix). Disconnect after the timeout fires to spare
+    /// the device's battery.
+    private static let warmConnectionWindow: TimeInterval = 300
+
+    private var warmConnectionTask: Task<Void, Never>?
+
+    /// Cancel any pending warm-window disconnect — called at the
+    /// start of a session so the device stays online while we work.
+    private func cancelWarmConnectionDisconnect() {
+        warmConnectionTask?.cancel()
+        warmConnectionTask = nil
+    }
+
+    /// Schedule a disconnect after `warmConnectionWindow` so the
+    /// device doesn't stay paired forever. Cancellable — if the user
+    /// kicks off another session within the window, we cancel and
+    /// reuse the existing connection.
+    private func scheduleWarmConnectionDisconnect() {
+        warmConnectionTask?.cancel()
+        warmConnectionTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: UInt64(Self.warmConnectionWindow * 1_000_000_000))
+            } catch {
+                return // cancelled
+            }
+            guard let self else { return }
+            await MainActor.run {
+                TrezorLog.log("[Session] warm window expired, disconnecting Trezor")
+                self.trezorManager.disconnect()
+                self.isHardwareDeviceWarm = false
+            }
+        }
+    }
+
+    /// Disconnect immediately. UI calls this when the user explicitly
+    /// taps "Disconnect Trezor" or when we want to drop the device
+    /// after a non-recoverable session failure.
+    func disconnectHardwareDevice() {
+        warmConnectionTask?.cancel()
+        warmConnectionTask = nil
+        trezorManager.disconnect()
+        isHardwareDeviceWarm = false
+    }
+
     /// Run a sync-only session: open FULL → refresh → cold_key_image_sync
     /// → snapshot tx list → swap back to VIEW.
     func runHardwareSyncSession() async {
@@ -178,6 +233,12 @@ class WalletManager: ObservableObject {
         }
 
         TrezorLog.log("[Session] starting hardware session (send=%@, deviceWalletId=%@)", send == nil ? "no" : "yes", deviceWalletId)
+
+        // The session might be starting from a warm connection (the
+        // device is already paired+bridge-running from a prior
+        // session within the window). Cancel any pending disconnect
+        // timer so the connection stays alive while we work.
+        cancelWarmConnectionDisconnect()
 
         hardwareSessionState = .connecting
 
@@ -295,13 +356,19 @@ class WalletManager: ObservableObject {
 
         markHardwareSentSyncCompleted()
 
+        // Keep BLE + bridge alive for the warm window so the user
+        // can run a follow-up session (e.g. tap Send right after
+        // tapping Sync) without redoing the BLE/THP handshake.
+        isHardwareDeviceWarm = true
+        scheduleWarmConnectionDisconnect()
+
         if let txId = sentTxId {
             onSent?(txId)
             hardwareSessionState = .complete(message: "Transaction broadcast.")
         } else {
             hardwareSessionState = .complete(message: "Sent transactions are up to date.")
         }
-        TrezorLog.log("[Session] session complete")
+        TrezorLog.log("[Session] session complete (warm window started)")
     }
 
     private func waitForSyncedOrThrow(_ wallet: MoneroWallet, timeout: TimeInterval) async throws {

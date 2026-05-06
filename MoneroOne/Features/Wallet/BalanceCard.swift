@@ -7,12 +7,16 @@ struct BalanceCard: View {
     let connectionStage: ConnectionStage
     @ObservedObject var priceService: PriceService
     var isViewOnly: Bool = false
+    var isHardwareWallet: Bool = false
+    var hardwareDeviceName: String? = nil
+    var hardwareLastSentSyncAt: Date? = nil
     var isSyncBlocked: Bool = false
     var isOutsideTrustedZone: Bool = false
     var trustedLocationName: String? = nil
     var isTrustedLocationEnabled: Bool = false
     var onPriceChangeTap: (() -> Void)? = nil
     var onCardTap: (() -> Void)? = nil
+    var onHardwareSyncTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
 
     /// Calculate 24h price change from 1D chart data (same as chart views)
@@ -68,7 +72,26 @@ struct BalanceCard: View {
                     )
                 }
 
-                if isViewOnly {
+                if isHardwareWallet {
+                    Button {
+                        onHardwareSyncTap?()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "lock.shield.fill")
+                                .font(.caption2)
+                            Text(hardwareDeviceName ?? "Hardware")
+                                .font(.caption2.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.orange))
+                        .padding(.leading, 6)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(hardwareDeviceName ?? "Hardware wallet"). Tap to sync sent transactions.")
+                } else if isViewOnly {
                     HStack(spacing: 4) {
                         Image(systemName: "eye.fill")
                             .font(.caption2)
@@ -178,6 +201,39 @@ struct BalanceCard: View {
                 .accessibilityLabel("Available balance: \(XMRFormatter.format(unlockedBalance)) XMR\(priceService.formatFiatValue(unlockedBalance).map { ", approximately \($0)" } ?? ""). Some funds locked until recent transactions confirm.")
             }
 
+            // Hardware-wallet "sent transactions may be out of date" banner.
+            // Block-scan only sees incoming outputs from a view key; outgoing
+            // transactions need a key-image sync against the device. This row
+            // makes the limitation visible and offers a one-tap path to fix it.
+            if isHardwareWallet {
+                Button {
+                    onHardwareSyncTap?()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.caption.weight(.medium))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Sync Sent Transactions")
+                                .font(.caption.weight(.semibold))
+                            Text(lastSentSyncSubtitle)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Sync sent transactions — \(lastSentSyncSubtitle)")
+                .accessibilityHint("Connects your hardware wallet briefly to update the list of outgoing transactions.")
+            }
+
             // Sync Progress (hidden when blocked)
             if !isSyncBlocked, case .syncing(let progress, let remaining) = syncState {
                 VStack(spacing: 4) {
@@ -249,6 +305,20 @@ struct BalanceCard: View {
         .onTapGesture {
             onCardTap?()
         }
+    }
+
+    /// Subtitle copy for the hardware-wallet sync banner — surfaces
+    /// when the user last brought their device online for a key-image
+    /// sync. Falls back to a "may be out of date" prompt if we've never
+    /// run one.
+    private var lastSentSyncSubtitle: String {
+        guard let last = hardwareLastSentSyncAt else {
+            return "Outgoing transactions may be out of date"
+        }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        let stamp = formatter.localizedString(for: last, relativeTo: Date())
+        return "Last synced \(stamp)"
     }
 
     /// Extract sync progress from syncState for the step indicator

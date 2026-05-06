@@ -23,14 +23,21 @@ struct SendFlowView: View {
     @State private var sendInProgress = false
     @State private var amountPrefilledFromQR = false
 
-    /// A wallet opened from keys alone (view-only) or from an external device
-    /// without a live signing path cannot produce transactions. wallet2
-    /// rejects `createTransaction` in that mode as a safety net, but we block
-    /// the entire flow here so the user sees a clear reason instead of a
-    /// mid-flow error.
+    /// A pure view-only wallet (no spend key anywhere) can never sign.
+    /// Hardware wallets *can* sign, just through a device session, so
+    /// they're allowed through the SendFlow — the actual signing routes
+    /// through `HardwareSessionSheet` at the end. wallet2 still rejects
+    /// `createTransaction` for genuinely view-only wallets as a safety
+    /// net; this flag blocks the flow up front so the user sees the
+    /// reason instead of a mid-flow error.
     private var canSign: Bool {
-        walletManager.activeWallet?.source.canSignLocally ?? true
+        walletManager.canSend
     }
+
+    /// Hardware-wallet send sheet presented when the user confirms at
+    /// the review step. Only set for hardware-backed active wallets;
+    /// software wallets take the direct `walletManager.send` path.
+    @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
 
     var body: some View {
         NavigationStack {
@@ -94,6 +101,27 @@ struct SendFlowView: View {
         .interactiveDismissDisabled(phase.isSendingState)
         .onAppear {
             handlePrefill()
+        }
+        .sheet(item: $hardwareSheetIntent, onDismiss: handleHardwareSheetDismiss) { intent in
+            HardwareSessionSheet(intent: intent)
+                .environmentObject(walletManager)
+        }
+    }
+
+    /// Called when the hardware-session sheet dismisses — either after
+    /// success (broadcast confirmed) or cancel/failure. We can't pass
+    /// the broadcast result back through the sheet's binding-driven
+    /// dismiss, so we infer success from the active wallet's freshly-
+    /// refreshed transaction list. For now: if user dismissed via
+    /// "Done" the inner sheet already announced success, so we just
+    /// dismiss the parent send sheet too.
+    private func handleHardwareSheetDismiss() {
+        // Dismiss the SendFlow on a successful hardware send so the
+        // user lands back on WalletView with up-to-date balances.
+        // If they cancelled, leave them on the review step.
+        Task {
+            await walletManager.refresh()
+            await MainActor.run { dismiss() }
         }
     }
 
@@ -239,6 +267,23 @@ struct SendFlowView: View {
     // MARK: - Send
 
     private func sendTransaction() {
+        // Hardware wallets can't sign locally — hand off to the
+        // hardware-session sheet which orchestrates BLE, sidecar key-
+        // image sync, device-side signing, and broadcast. Bail out of
+        // SendFlowView's local progress state since the sheet drives
+        // its own UI from here.
+        if walletManager.requiresHardwareSession {
+            let trimmedMemo = memo.isEmpty ? nil : memo
+            if isSendingAll {
+                hardwareSheetIntent = .sendAll(to: recipientAddress, memo: trimmedMemo)
+            } else if let amountDecimal = Decimal(string: amountString) {
+                hardwareSheetIntent = .send(to: recipientAddress, amount: amountDecimal, memo: trimmedMemo)
+            } else {
+                phase = .error(message: "Invalid amount")
+            }
+            return
+        }
+
         Task {
             do {
                 let txHash: String

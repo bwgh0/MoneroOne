@@ -11,7 +11,15 @@ import WidgetKit
 class WalletManager: ObservableObject {
     // MARK: - Published State
     @Published var wallets: [WalletInfo] = []
-    @Published var activeWallet: WalletInfo?
+    @Published var activeWallet: WalletInfo? {
+        didSet {
+            if let id = activeWallet?.id {
+                lastHardwareSentSyncAt = loadLastHardwareSyncAt(for: id)
+            } else {
+                lastHardwareSentSyncAt = nil
+            }
+        }
+    }
     var hasWallet: Bool { !wallets.isEmpty }
     @Published var isUnlocked: Bool = false
     @Published var balance: Decimal = 0
@@ -27,6 +35,66 @@ class WalletManager: ObservableObject {
     /// Derived from `activeWallet?.source` in the start paths; a hardware
     /// wallet variant later flips this to `false` too via the same property.
     @Published private(set) var isViewOnly: Bool = false
+
+    // MARK: - Hardware-wallet awareness
+    //
+    // `isViewOnly` stays `true` for hardware wallets — the iPhone-side
+    // wallet2 instance genuinely is a SOFTWARE/watch_only file. The
+    // hardware-specific behaviors (Send button enabled, Trezor pill,
+    // sent-tx sync banner, send routes through device session) are
+    // gated on these derived flags instead.
+
+    /// True when the active wallet's keys live on an external signer.
+    var isHardwareWallet: Bool {
+        if case .hardware = activeWallet?.source { return true }
+        return false
+    }
+
+    /// True when sending requires bringing a hardware device online.
+    /// Mirrors `WalletInfo.requiresHardwareSession` for convenience.
+    var requiresHardwareSession: Bool { isHardwareWallet }
+
+    /// Display name for the active hardware wallet ("Trezor Safe 7"),
+    /// or nil for non-hardware wallets.
+    var hardwareDisplayName: String? {
+        guard case .hardware(let hw) = activeWallet?.source else { return nil }
+        switch hw {
+        case .trezor(let binding): return binding.model
+        }
+    }
+
+    /// `WalletInfo.deviceWalletId` for the active wallet — drives the
+    /// sidecar cache path during reconnect / send sessions.
+    var activeDeviceWalletId: String? {
+        activeWallet?.deviceWalletId
+    }
+
+    /// Timestamp of the last successful hardware key-image sync for the
+    /// active wallet. Drives the "Last synced X ago" copy on the
+    /// BalanceCard sync banner. Persisted per-wallet in UserDefaults
+    /// so it survives app restarts.
+    @Published private(set) var lastHardwareSentSyncAt: Date?
+
+    private static let lastHardwareSyncKeyPrefix = "one.monero.lastHardwareSyncAt."
+
+    /// Read the persisted last-sync timestamp for `walletId` from
+    /// UserDefaults. Used by callers that need to refresh the published
+    /// `lastHardwareSentSyncAt` after a session completes or after the
+    /// active wallet changes.
+    func loadLastHardwareSyncAt(for walletId: UUID) -> Date? {
+        let raw = UserDefaults.standard.double(forKey: Self.lastHardwareSyncKeyPrefix + walletId.uuidString)
+        return raw == 0 ? nil : Date(timeIntervalSince1970: raw)
+    }
+
+    /// Stamp the active hardware wallet's last-sync time and publish it
+    /// to the UI. Called when a TrezorSession.reconnect completes
+    /// successfully (key images consumed without error).
+    func markHardwareSentSyncCompleted() {
+        guard let walletId = activeWallet?.id else { return }
+        let now = Date()
+        UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.lastHardwareSyncKeyPrefix + walletId.uuidString)
+        lastHardwareSentSyncAt = now
+    }
     @Published private(set) var walletSessionId = UUID()
 
     /// True while the Add Wallet sheet is presented over an unlocked session.
@@ -154,10 +222,18 @@ class WalletManager: ObservableObject {
     // MARK: - Private
     private let keychain = KeychainStorage()
     private let walletStore = WalletStore()
-    private var moneroWallet: MoneroWallet?
+    /// Internal access only — exposed via `internal` so the
+    /// `HardwareSessionSheet` (sibling app target) can read the running
+    /// wallet for blob export during sidecar swaps. Setters stay
+    /// privileged to this type.
+    internal private(set) var moneroWallet: MoneroWallet?
     private var cancellables = Set<AnyCancellable>()
     private var currentSeed: [String]?
-    private var currentPin: String?
+    /// Cached PIN for the active session. Internal so the hardware
+    /// session sheet can re-unlock the primary wallet after a sidecar
+    /// teardown without prompting the user again — the user already
+    /// authenticated when they unlocked the app.
+    internal private(set) var currentPin: String?
     private var isRefreshing = false
     private var widgetReloadTask: Task<Void, Never>?
 
@@ -1371,8 +1447,16 @@ class WalletManager: ObservableObject {
 
     // MARK: - Send
 
+    /// Whether sends are blocked for the active wallet. Distinguishes
+    /// pure view-only (no spend key anywhere) from hardware wallets
+    /// (spend key on device — needs a session, not blocked outright).
+    var canSend: Bool {
+        if isHardwareWallet { return true }
+        return !isViewOnly
+    }
+
     func estimateFee(to address: String, amount: Decimal) async throws -> Decimal {
-        if isViewOnly { throw WalletError.viewOnlyCannotSend }
+        if isViewOnly && !isHardwareWallet { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
@@ -1380,6 +1464,14 @@ class WalletManager: ObservableObject {
     }
 
     func send(to address: String, amount: Decimal, memo: String? = nil) async throws -> String {
+        if isHardwareWallet {
+            // Hardware sends route through a device session — Send tap
+            // in the UI presents `HardwareSessionSheet` which kicks off
+            // `runHardwareSendSession`. This direct `send()` path is
+            // for software wallets only; hitting it for a hardware
+            // wallet means a caller skipped the gating in WalletView.
+            throw WalletError.hardwareSessionRequired
+        }
         if isViewOnly { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
@@ -1388,6 +1480,9 @@ class WalletManager: ObservableObject {
     }
 
     func sendAll(to address: String, memo: String? = nil) async throws -> String {
+        if isHardwareWallet {
+            throw WalletError.hardwareSessionRequired
+        }
         if isViewOnly { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
@@ -2121,6 +2216,7 @@ enum WalletError: LocalizedError, Equatable {
     case invalidViewKey
     case walletMismatch
     case viewOnlyCannotSend
+    case hardwareSessionRequired
 
     var errorDescription: String? {
         switch self {
@@ -2134,6 +2230,7 @@ enum WalletError: LocalizedError, Equatable {
         case .invalidViewKey: return "View key doesn't match this address"
         case .walletMismatch: return "Active wallet changed — please retry"
         case .viewOnlyCannotSend: return "View-only wallets cannot send transactions"
+        case .hardwareSessionRequired: return "Connect your hardware device to sign this transaction."
         }
     }
 }

@@ -386,7 +386,7 @@ struct HardwareSessionSheet: View {
 
     @MainActor
     private func runSession() async {
-        guard let _ = walletManager.activeWallet else {
+        guard let info = walletManager.activeWallet else {
             phase = .failed(message: "No active wallet.")
             return
         }
@@ -394,40 +394,23 @@ struct HardwareSessionSheet: View {
             phase = .failed(message: "Active wallet is not hardware-backed.")
             return
         }
-        guard let wallet = walletManager.moneroWallet else {
-            phase = .failed(message: "Wallet not running.")
-            return
-        }
 
         do {
             switch intent {
             case .syncSentTransactions:
                 phase = .syncingKeyImages
-                // wallet2's cold_key_image_sync iterates the active
-                // wallet's transfers, asks the device for key images
-                // through the bridge, and internally imports them.
-                // No sidecar wallet required — the active wallet IS
-                // the TREZOR-bound wallet now.
-                let ok = await wallet.coldKeyImageSync()
-                if !ok {
-                    throw NSError(domain: "HardwareSession", code: -10, userInfo: [NSLocalizedDescriptionKey: "Key image sync failed. Check the device is unlocked and try again."])
-                }
-                wallet.fetchTransactions()
+                try await runReconnectSync(info: info)
                 walletManager.markHardwareSentSyncCompleted()
                 phase = .complete(message: "Sent transactions are up to date.")
 
             case .send(let to, let amount, let memo):
-                phase = .awaitingDeviceConfirm
-                let txId = try await wallet.send(to: to, amount: amount, memo: memo)
-                phase = .broadcasting
-                wallet.fetchTransactions()
+                phase = .syncingKeyImages
+                let txId = try await runSend(info: info, to: to, amount: amount, memo: memo, all: false)
                 phase = .complete(message: "Transaction broadcast.\n\(shortTx(txId))")
 
             case .sendAll(let to, let memo):
-                phase = .awaitingDeviceConfirm
-                let txId = try await wallet.sendAll(to: to, memo: memo)
-                phase = .broadcasting
-                wallet.fetchTransactions()
+                phase = .syncingKeyImages
+                let txId = try await runSend(info: info, to: to, amount: 0, memo: memo, all: true)
                 phase = .complete(message: "Transaction broadcast.\n\(shortTx(txId))")
             }
         } catch is CancellationError {
@@ -435,11 +418,6 @@ struct HardwareSessionSheet: View {
         } catch {
             phase = .failed(message: error.localizedDescription)
         }
-
-        // Tear down BLE/bridge after every session — the wallet stays
-        // open, just no longer talking to the device. Refresh continues
-        // via cached view key in the device interface.
-        trezorManager.disconnect()
     }
 
     /// Best-effort wipe of the session sidecar's on-disk cache. The
@@ -468,10 +446,30 @@ struct HardwareSessionSheet: View {
     // can reflect each phase transition cleanly. A later pass can
     // extract the shared scaffolding back into the actor.
 
-    /// Runs the TREZOR sidecar lifecycle. Currently unused — the
-    /// active wallet is now TREZOR-bound directly, so cold-key-image
-    /// sync and send both run on it without a sidecar. Kept as a
-    /// reference for if we ever revisit the dual-wallet architecture.
+    private func runReconnectSync(info: WalletInfo) async throws {
+        try await runWithSidecar(info: info) { _ in
+            // Sidecar is alive; key-image sync already happened in the
+            // setup helper. Nothing else to do for the sync intent.
+        }
+    }
+
+    private func runSend(info: WalletInfo, to: String, amount: Decimal, memo: String?, all: Bool) async throws -> String {
+        var txId: String = ""
+        try await runWithSidecar(info: info) { sidecar in
+            await MainActor.run { phase = .awaitingDeviceConfirm }
+            if all {
+                txId = try await sidecar.sendAll(to: to, memo: memo)
+            } else {
+                txId = try await sidecar.send(to: to, amount: amount, memo: memo)
+            }
+            await MainActor.run { phase = .broadcasting }
+        }
+        return txId
+    }
+
+    /// Runs the TREZOR sidecar lifecycle: suspend primary → open sidecar
+    /// → blob-exchange key images → invoke caller's body → push key
+    /// images back to primary → tear down → unlock primary.
     private func runWithSidecar(info: WalletInfo, _ body: @escaping (MoneroWallet) async throws -> Void) async throws {
         guard let deviceWalletId = info.deviceWalletId else {
             throw NSError(domain: "HardwareSession", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing sidecar wallet identifier."])

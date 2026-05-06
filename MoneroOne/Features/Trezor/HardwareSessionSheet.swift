@@ -533,7 +533,11 @@ struct HardwareSessionSheet: View {
         // Hand outputs to sidecar so it generates key images.
         if let outputsBlob {
             let imported = await sidecar.importOutputsUR(outputsBlob)
-            TrezorLog.log("[Session] runWithSidecar: sidecar.importOutputsUR → %@", imported ? "ok" : "FAILED")
+            if imported {
+                TrezorLog.log("[Session] runWithSidecar: sidecar.importOutputsUR → ok")
+            } else {
+                TrezorLog.log("[Session] runWithSidecar: sidecar.importOutputsUR FAILED — wallet2 says: %@", sidecar.latestErrorString)
+            }
         } else {
             TrezorLog.log("[Session] runWithSidecar: no outputsBlob to import")
         }
@@ -569,7 +573,12 @@ struct HardwareSessionSheet: View {
         try await walletManager.unlock(pin: pin)
         if let kiBlob, !kiBlob.isEmpty {
             let imported = await walletManager.moneroWallet?.importKeyImagesUR(kiBlob)
-            TrezorLog.log("[Session] runWithSidecar: primary.importKeyImagesUR → %@", imported == true ? "ok" : "FAILED")
+            if imported == true {
+                TrezorLog.log("[Session] runWithSidecar: primary.importKeyImagesUR → ok")
+            } else {
+                let err = walletManager.moneroWallet?.latestErrorString ?? "(no error string)"
+                TrezorLog.log("[Session] runWithSidecar: primary.importKeyImagesUR FAILED — wallet2 says: %@", err)
+            }
             // Refresh wallet so the newly-decoded outgoing transactions
             // surface in the transaction list. wallet2's import path
             // updates m_transfers but the app's transaction list is a

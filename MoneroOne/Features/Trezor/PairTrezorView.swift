@@ -29,15 +29,19 @@ struct PairTrezorView: View {
     @Environment(\.dismiss) var dismiss
     @AppStorage("preferredPINLength") private var preferredPINLength = 6
 
+    /// Injected from `AddWalletView` so the view observes the
+    /// long-lived `WalletManager.trezorManager` directly. A computed
+    /// `var` here looks tempting but `@EnvironmentObject` only
+    /// publishes changes to the outer object — nested @Published
+    /// properties on a non-@Published member don't trigger SwiftUI
+    /// re-renders. The view would observe scan/connect/handshake
+    /// state changes silently and the UI would stay stuck on the
+    /// initial state. This is the same pattern the original
+    /// trezor-safe7 TrezorScanView used.
+    @ObservedObject var trezorManager: TrezorManager
+
     var isAddingWallet: Bool = false
     var existingPin: String? = nil
-
-    /// Read from WalletManager rather than `@StateObject` — SwiftUI
-    /// rebuilds this view during sheet snapshots and app-switcher
-    /// previews, which would tear down a per-view TrezorManager and
-    /// leave its bridge server's NWListener holding port 21325 long
-    /// enough to break the next instantiation.
-    private var trezorManager: TrezorManager { walletManager.trezorManager }
 
     @SceneStorage("pairTrezor.walletName") private var walletName: String = ""
     @SceneStorage("pairTrezor.walletEmoji") private var walletEmoji: String = "\u{1F510}"

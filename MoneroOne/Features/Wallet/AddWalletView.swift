@@ -95,6 +95,7 @@ struct AddWalletView: View {
                     )
                 case .pairTrezor:
                     PairTrezorView(
+                        trezorManager: walletManager.trezorManager,
                         isAddingWallet: true,
                         existingPin: walletManager.currentPinForAddWallet
                     )

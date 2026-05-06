@@ -440,14 +440,21 @@ struct HardwareSessionSheet: View {
             throw NSError(domain: "HardwareSession", code: -2, userInfo: [NSLocalizedDescriptionKey: "Wallet is locked."])
         }
 
-        // Capture the primary's outputs before tearing it down.
-        let outputsBlob = await walletManager.moneroWallet?.exportOutputsUR()
+        // Capture the primary's outputs before tearing it down. `all:
+        // true` because the sidecar is freshly opened from device on
+        // every session — it has no record of which outputs were
+        // already shared, so we always send the full list.
+        TrezorLog.log("[Session] runWithSidecar: exportOutputsUR(all:true) on primary…")
+        let outputsBlob = await walletManager.moneroWallet?.exportOutputsUR(all: true)
+        TrezorLog.log("[Session] runWithSidecar: outputsBlob length=%d", outputsBlob?.count ?? -1)
 
         // Suspend primary so KitManager has a free slot for the
         // sidecar Kit. `isUnlocked` stays true so the sheet remains
         // presented over WalletView.
+        TrezorLog.log("[Session] runWithSidecar: suspending primary…")
         await walletManager.suspendActiveWalletForPairing()
 
+        TrezorLog.log("[Session] runWithSidecar: creating sidecar (deviceWalletId=%@)…", deviceWalletId)
         let sidecar = MoneroWallet()
         do {
             try await sidecar.createFromDevice(
@@ -457,6 +464,7 @@ struct HardwareSessionSheet: View {
                 networkType: walletManager.networkType
             )
         } catch {
+            TrezorLog.log("[Session] runWithSidecar: createFromDevice THREW: %@", error.localizedDescription)
             await sidecar.stopAsync()
             try? await walletManager.unlock(pin: pin)
             throw error
@@ -464,26 +472,38 @@ struct HardwareSessionSheet: View {
 
         // Wait until wallet2 has populated the address (signals
         // restore_from_device finished talking to the device).
+        TrezorLog.log("[Session] runWithSidecar: waiting for sidecar primaryAddress…")
         let deadline = Date().addingTimeInterval(60)
         while sidecar.primaryAddress.isEmpty {
             if Date() >= deadline {
+                TrezorLog.log("[Session] runWithSidecar: TIMEOUT waiting for sidecar address")
                 await sidecar.stopAsync()
                 try? await walletManager.unlock(pin: pin)
                 throw NSError(domain: "HardwareSession", code: -3, userInfo: [NSLocalizedDescriptionKey: "Trezor didn't respond. Reconnect and try again."])
             }
             try await Task.sleep(nanoseconds: 250_000_000)
         }
+        TrezorLog.log("[Session] runWithSidecar: sidecar address ready")
 
         // Hand outputs to sidecar so it generates key images.
         if let outputsBlob {
-            _ = await sidecar.importOutputsUR(outputsBlob)
+            let imported = await sidecar.importOutputsUR(outputsBlob)
+            TrezorLog.log("[Session] runWithSidecar: sidecar.importOutputsUR → %@", imported ? "ok" : "FAILED")
+        } else {
+            TrezorLog.log("[Session] runWithSidecar: no outputsBlob to import")
         }
+
         // Pull key images back so the primary will see spent state.
-        let kiBlob = await sidecar.exportKeyImagesUR()
+        // wallet2 generates them via the device on this call, so the
+        // bridge must still be alive — that's why we do this BEFORE
+        // tearing down the sidecar.
+        let kiBlob = await sidecar.exportKeyImagesUR(all: true)
+        TrezorLog.log("[Session] runWithSidecar: sidecar.exportKeyImagesUR(all:true) → length=%d", kiBlob?.count ?? -1)
 
         do {
             try await body(sidecar)
         } catch {
+            TrezorLog.log("[Session] runWithSidecar: body THREW: %@", error.localizedDescription)
             await sidecar.stopAsync()
             try? await walletManager.unlock(pin: pin)
             throw error
@@ -491,13 +511,25 @@ struct HardwareSessionSheet: View {
 
         // Tear down sidecar before re-unlocking primary so the
         // KitManager slot is free in time.
+        TrezorLog.log("[Session] runWithSidecar: tearing down sidecar")
         await sidecar.stopAsync()
         trezorManager.disconnect()
 
         // Bring primary back online and import the fresh key images.
+        TrezorLog.log("[Session] runWithSidecar: re-unlocking primary…")
         try await walletManager.unlock(pin: pin)
-        if let kiBlob {
-            _ = await walletManager.moneroWallet?.importKeyImagesUR(kiBlob)
+        if let kiBlob, !kiBlob.isEmpty {
+            let imported = await walletManager.moneroWallet?.importKeyImagesUR(kiBlob)
+            TrezorLog.log("[Session] runWithSidecar: primary.importKeyImagesUR → %@", imported == true ? "ok" : "FAILED")
+            // Refresh wallet so the newly-decoded outgoing transactions
+            // surface in the transaction list. wallet2's import path
+            // updates m_transfers but the app's transaction list is a
+            // GRDB mirror updated via delegate callbacks — refreshing
+            // forces wallet2 to reprocess and fire those callbacks.
+            walletManager.moneroWallet?.fetchTransactions()
+            await walletManager.refresh()
+        } else {
+            TrezorLog.log("[Session] runWithSidecar: no key images to import (blob empty)")
         }
     }
 }

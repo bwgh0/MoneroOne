@@ -634,6 +634,12 @@ class MoneroWallet: ObservableObject {
         kit?.deviceType ?? .software
     }
 
+    /// Latest wallet2 error string, for diagnostics after a cold-sign
+    /// call returns false.
+    var latestErrorString: String {
+        kit?.latestStatus.message ?? ""
+    }
+
     // MARK: - Validation
 
     static func isValidAddress(_ address: String, networkType: MoneroKit.NetworkType = .mainnet) -> Bool {

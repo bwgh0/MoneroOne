@@ -418,6 +418,23 @@ class MoneroWallet: ObservableObject {
         }
     }
 
+    /// Synchronous read of wallet2's transaction list, bypassing the
+    /// fire-and-forget `Task.detached` + main-hop in `fetchTransactions`.
+    /// Used by the hardware-session snapshot path where we need to
+    /// capture the just-broadcast tx without racing the publisher.
+    /// Also updates the `@Published transactions` mirror so any
+    /// observers see the same list.
+    func fetchTransactionsBlocking() async -> [MoneroTransaction] {
+        guard let kit = kit else { return [] }
+        let rate = coinRate
+        let mapped = await Task.detached { () -> [MoneroTransaction] in
+            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 100)
+            return txInfos.map { MoneroWallet.mapTransaction($0, coinRate: rate, kit: kit) }
+        }.value
+        self.transactions = mapped
+        return mapped
+    }
+
     nonisolated private static func mapTransaction(_ info: MoneroKit.TransactionInfo, coinRate: Decimal, kit: MoneroKit.Kit) -> MoneroTransaction {
         let amount = Decimal(info.amount) / coinRate
         let fee = Decimal(info.fee) / coinRate

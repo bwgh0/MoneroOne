@@ -633,6 +633,15 @@ struct PairTrezorView: View {
         step = .creating
         Task {
             do {
+                // Rename the transient pair-attempt cache to the stable
+                // deviceWalletId path BEFORE registering the wallet,
+                // because `walletManager.unlock(pin:)` opens the wallet
+                // at `WalletInfo.deviceWalletId` and the cache must
+                // already be there.
+                let networkSuffix = walletManager.networkType == .testnet ? "_testnet" : ""
+                let stableDeviceWalletId = MoneroWallet.stableWalletId(for: "trezor:\(deviceId)\(networkSuffix)")
+                renameSidecarCache(from: temporaryDeviceWalletId, to: stableDeviceWalletId)
+
                 try await walletManager.pairTrezorWallet(
                     name: name,
                     emoji: walletEmoji,
@@ -650,14 +659,6 @@ struct PairTrezorView: View {
                 }
 
                 try await walletManager.unlock(pin: pin)
-
-                // Move the transient sidecar cache from <tempWalletId>
-                // to <deviceWalletId> so TrezorSession reconnect finds
-                // the sidecar this pair just created — first reconnect
-                // skips a redundant restore_from_device.
-                let networkSuffix = walletManager.networkType == .testnet ? "_testnet" : ""
-                let stableDeviceWalletId = MoneroWallet.stableWalletId(for: "trezor:\(deviceId)\(networkSuffix)")
-                renameSidecarCache(from: temporaryDeviceWalletId, to: stableDeviceWalletId)
 
                 await MainActor.run {
                     if isAddingWallet {

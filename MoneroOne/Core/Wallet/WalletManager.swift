@@ -647,14 +647,13 @@ class WalletManager: ObservableObject {
         subaddresses = []
     }
 
-    /// Pair a Trezor and register the corresponding hardware-backed
-    /// wallet. The wallet2 cache at `deviceWalletId` was already
-    /// created by the pair flow's `extractKeys` step (which ran
-    /// `restore_from_device` and renamed the cache from a transient
-    /// pair-attempt id to this stable one). This method just persists
-    /// the `WalletInfo` and stores the address+viewKey in keychain so
-    /// future PIN unlock can validate the user before letting them
-    /// open the wallet.
+    /// Pair a Trezor and create the corresponding hardware-backed wallet
+    /// on this device. The caller has already brought the device online
+    /// over BLE/THP and pulled the watch key (address + view key) via
+    /// `MoneroGetWatchKey` — this method just wraps `restoreViewOnlyWallet`
+    /// with the `.hardware(.trezor(...))` source set and a stable
+    /// `deviceWalletId` derived from the THP device id so the future
+    /// reconnect sidecar can find its sibling cache on disk.
     func pairTrezorWallet(
         name: String,
         emoji: String = "\u{1F510}",
@@ -666,18 +665,6 @@ class WalletManager: ObservableObject {
         peripheralUUID: String?,
         restoreDate: Date? = nil
     ) async throws {
-        let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedViewKey = viewKey.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        guard MoneroWallet.isValidAddress(trimmedAddress, networkType: networkType) else {
-            throw WalletError.invalidMnemonic
-        }
-
-        // Reject if a wallet for this device address is already paired.
-        if let existing = wallets.first(where: { $0.cachedPrimaryAddress == trimmedAddress }) {
-            throw WalletError.duplicateWallet(existingName: existing.name)
-        }
-
         let networkSuffix = networkType == .testnet ? "_testnet" : ""
         let deviceWalletId = MoneroWallet.stableWalletId(for: "trezor:\(deviceId)\(networkSuffix)")
         let binding = TrezorBinding(
@@ -685,48 +672,16 @@ class WalletManager: ObservableObject {
             deviceId: deviceId,
             peripheralUUID: peripheralUUID
         )
-
-        // Snapshot the prior active wallet's balance so the switcher
-        // doesn't show 0 after we swap active to the new one.
-        cacheActiveWalletData()
-
-        var height: UInt64 = 0
-        if let date = restoreDate {
-            height = UInt64(RestoreHeight.getHeight(date: date))
-        }
-
-        let walletId = UUID()
-        let info = WalletInfo(
-            id: walletId,
+        try await restoreViewOnlyWallet(
             name: name,
             emoji: emoji,
+            address: address,
+            viewKey: viewKey,
+            pin: pin,
+            restoreDate: restoreDate,
             source: .hardware(.trezor(binding)),
-            createdAt: Date(),
-            restoreHeight: height,
-            syncResetCount: 0,
-            userCreatedSubaddressIndices: [],
-            cachedPrimaryAddress: trimmedAddress,
-            cachedBalance: nil,
-            // No `derivedWalletId` for hardware wallets — the wallet2
-            // cache is keyed by `deviceWalletId` directly. The
-            // duplicate-pair check uses `cachedPrimaryAddress` instead.
-            derivedWalletId: nil,
             deviceWalletId: deviceWalletId
         )
-
-        // Keychain entry serves two purposes:
-        //   - PIN-validation contract (the `unlock` path tries to
-        //     decrypt this and treats failure as wrong PIN)
-        //   - records the address/view-key for export later if the
-        //     user ever wants to view-only-restore the same account
-        //     elsewhere.
-        try keychain.saveViewOnly(address: trimmedAddress, viewKey: trimmedViewKey, pin: pin, walletId: walletId)
-        walletStore.addWallet(info)
-        walletStore.setActiveWalletId(walletId)
-
-        wallets = walletStore.loadWallets()
-        activeWallet = info
-        currentPin = pin
     }
 
     func validateMnemonic(_ mnemonic: [String]) -> Bool {
@@ -783,7 +738,7 @@ class WalletManager: ObservableObject {
             // field existed, so future duplicate-seed checks catch them.
             populateDerivedWalletIdIfMissing(for: active.id, seedPhrase: seedPhrase)
 
-        case .viewOnly:
+        case .viewOnly, .hardware:
             let viewKeys = try await Task.detached {
                 try self.keychain.getViewOnly(pin: pin, walletId: active.id)
             }.value
@@ -794,28 +749,6 @@ class WalletManager: ObservableObject {
             try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
 
             populateDerivedWalletIdIfMissing(for: active.id, viewOnlyAddress: keys.address, viewKey: keys.viewKey)
-
-        case .hardware(let hw):
-            // PIN gating: decrypt the keychain'd address+viewKey to
-            // verify the PIN is correct. We don't actually need the
-            // viewKey for opening the wallet (wallet2's cache has the
-            // keys file), but the keychain decrypt is the
-            // PIN-validation contract from the rest of the codebase.
-            let viewKeys = try await Task.detached {
-                try self.keychain.getViewOnly(pin: pin, walletId: active.id)
-            }.value
-            guard viewKeys != nil else {
-                throw WalletError.invalidPin
-            }
-            currentSeed = nil
-            guard let deviceWalletId = active.deviceWalletId else {
-                throw WalletError.notUnlocked
-            }
-            let deviceName: String
-            switch hw {
-            case .trezor: deviceName = "Trezor"
-            }
-            try await startWalletFromDevice(walletId: deviceWalletId, deviceName: deviceName)
         }
     }
 
@@ -900,63 +833,6 @@ class WalletManager: ObservableObject {
         startConnectionTracking()
 
         isViewOnly = false
-        isUnlocked = true
-        walletSessionId = UUID()
-    }
-
-    /// Open a hardware-bound wallet at the WalletInfo's `deviceWalletId`
-    /// path. wallet2 reads the keys file (already written during pair
-    /// via `restore_from_device`), sees `key_on_device = TREZOR`, and
-    /// sets up the device interface. The actual device handle stays
-    /// dormant until something needs the spend key (signing) — the
-    /// view key is held in the device interface's local memory after
-    /// the pair-time `MoneroGetWatchKey`, so block scanning runs
-    /// without the device being online.
-    ///
-    /// The bridge HTTP server therefore does NOT need to be running
-    /// during everyday refresh; only when the user explicitly does a
-    /// `cold_key_image_sync` or `send` flow that hits spend operations.
-    private func startWalletFromDevice(walletId: String, deviceName: String) async throws {
-        cancellables.removeAll()
-        if let oldWallet = moneroWallet {
-            moneroWallet = nil
-            await oldWallet.stopAsync()
-        }
-
-        if syncState != .connecting {
-            syncState = .connecting
-        }
-
-        let wallet = MoneroWallet()
-        let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
-
-        do {
-            try await wallet.createFromDevice(
-                deviceName: deviceName,
-                walletId: walletId,
-                restoreHeight: walletRestoreHeight,
-                networkType: networkType
-            )
-        } catch {
-            throw WalletError.saveFailed
-        }
-
-        let runtimeAddress = wallet.primaryAddress
-        self.primaryAddress = runtimeAddress
-
-        moneroWallet = wallet
-        bindToWallet(wallet)
-
-        loadUserCreatedSubaddresses()
-
-        restoreHeight = walletRestoreHeight
-        startConnectionTracking()
-
-        // Hardware wallets present as view-only in the receive-flow
-        // sense (no spend key on iPhone) — `isHardwareWallet` is the
-        // computed flag the UI uses to differentiate from pure
-        // view-only.
-        isViewOnly = true
         isUnlocked = true
         walletSessionId = UUID()
     }
@@ -1588,11 +1464,15 @@ class WalletManager: ObservableObject {
     }
 
     func send(to address: String, amount: Decimal, memo: String? = nil) async throws -> String {
-        // Hardware wallets are TREZOR-bound — wallet2's `send` path
-        // calls into the device transparently for spend operations.
-        // The caller is responsible for ensuring the bridge is alive
-        // (HardwareSessionSheet brings it up before invoking this).
-        if isViewOnly && !isHardwareWallet { throw WalletError.viewOnlyCannotSend }
+        if isHardwareWallet {
+            // Hardware sends route through a device session — Send tap
+            // in the UI presents `HardwareSessionSheet` which kicks off
+            // `runHardwareSendSession`. This direct `send()` path is
+            // for software wallets only; hitting it for a hardware
+            // wallet means a caller skipped the gating in WalletView.
+            throw WalletError.hardwareSessionRequired
+        }
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
@@ -1600,7 +1480,10 @@ class WalletManager: ObservableObject {
     }
 
     func sendAll(to address: String, memo: String? = nil) async throws -> String {
-        if isViewOnly && !isHardwareWallet { throw WalletError.viewOnlyCannotSend }
+        if isHardwareWallet {
+            throw WalletError.hardwareSessionRequired
+        }
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
@@ -2165,26 +2048,12 @@ class WalletManager: ObservableObject {
             currentSeed = mnemonic
             try await startWalletFromSeed(mnemonic)
 
-        case .viewOnly:
+        case .viewOnly, .hardware:
             guard let keys = try keychain.getViewOnly(pin: pin, walletId: target.id) else {
                 throw WalletError.invalidPin
             }
             currentSeed = nil
             try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
-
-        case .hardware(let hw):
-            guard try keychain.getViewOnly(pin: pin, walletId: target.id) != nil else {
-                throw WalletError.invalidPin
-            }
-            currentSeed = nil
-            guard let deviceWalletId = target.deviceWalletId else {
-                throw WalletError.notUnlocked
-            }
-            let deviceName: String
-            switch hw {
-            case .trezor: deviceName = "Trezor"
-            }
-            try await startWalletFromDevice(walletId: deviceWalletId, deviceName: deviceName)
         }
     }
 

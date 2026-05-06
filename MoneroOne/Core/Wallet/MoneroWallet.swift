@@ -630,11 +630,6 @@ class MoneroWallet: ObservableObject {
         await kit?.reconnectDevice() ?? false
     }
 
-    @discardableResult
-    func coldKeyImageSync() async -> Bool {
-        await kit?.coldKeyImageSync() ?? false
-    }
-
     var deviceType: MoneroKit.Kit.DeviceType {
         kit?.deviceType ?? .software
     }

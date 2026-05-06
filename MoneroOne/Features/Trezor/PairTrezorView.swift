@@ -32,7 +32,12 @@ struct PairTrezorView: View {
     var isAddingWallet: Bool = false
     var existingPin: String? = nil
 
-    @StateObject private var trezorManager = TrezorManager()
+    /// Read from WalletManager rather than `@StateObject` — SwiftUI
+    /// rebuilds this view during sheet snapshots and app-switcher
+    /// previews, which would tear down a per-view TrezorManager and
+    /// leave its bridge server's NWListener holding port 21325 long
+    /// enough to break the next instantiation.
+    private var trezorManager: TrezorManager { walletManager.trezorManager }
 
     @SceneStorage("pairTrezor.walletName") private var walletName: String = ""
     @SceneStorage("pairTrezor.walletEmoji") private var walletEmoji: String = "\u{1F510}"
@@ -126,7 +131,15 @@ struct PairTrezorView: View {
             case .connected, .allocatingTHP, .handshaking:
                 handshakeContent
             case .pairing:
-                pairingContent
+                // Once the user has submitted a code, pairingCodeRequired
+                // flips to false but the state stays `.pairing` while THP
+                // verifies. Swap the input UI for a progress indicator so
+                // the user sees something is happening.
+                if trezorManager.pairingCodeRequired {
+                    pairingContent
+                } else {
+                    progressContent(text: "Verifying pairing code…")
+                }
             case .bridgeRunning:
                 progressContent(text: "Ready, exporting keys…")
             case .error(let msg):

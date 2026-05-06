@@ -43,6 +43,17 @@ class WalletManager: ObservableObject {
     /// for real (via `onDismiss`), not on the snapshot rebuild.
     @Published var addWalletPath: [AddWalletDestination] = []
 
+    /// Persistent TrezorManager — outlives PairTrezorView and any
+    /// TrezorSession reconnect. SwiftUI rebuilds the navigation stack
+    /// during sheet snapshots / app-switcher previews; a per-view
+    /// `@StateObject` here would tear down the bridge HTTP server
+    /// every rebuild and the next instantiation would fail to bind
+    /// port 21325 because the prior `NWListener` hadn't released
+    /// the address. Hoisting it here also lets TrezorSession reuse
+    /// the same connection state for reconnect flows without a
+    /// fresh BLE scan.
+    lazy var trezorManager: TrezorManager = TrezorManager()
+
     enum AddWalletDestination: Hashable {
         case createWallet
         case restorePicker

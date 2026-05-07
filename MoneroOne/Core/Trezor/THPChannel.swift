@@ -44,6 +44,20 @@ class THPChannel {
     /// Host static key (persisted for pairing recognition)
     private let hostStaticKey: Curve25519.KeyAgreement.PrivateKey
 
+    /// Stable identifier for the connected device, derived from its
+    /// static public key. Set after the noise XX handshake reads
+    /// message 2 — used as the keychain key for the pairing
+    /// credential so a fresh CID doesn't invalidate the lookup.
+    private var currentDeviceStableId: String?
+
+    /// Build a stable, opaque keychain id from the device's static
+    /// public key (32 bytes Curve25519). Hex of the raw bytes is
+    /// fine — it's only used as a keychain account name.
+    private func trezorDeviceId(for remoteStatic: Curve25519.KeyAgreement.PublicKey) -> String {
+        let hex = remoteStatic.rawRepresentation.map { String(format: "%02x", $0) }.joined()
+        return "trezor_\(hex)"
+    }
+
     /// Device properties prologue (raw protobuf bytes from allocation response)
     private var devicePropertiesPrologue = Data()
 
@@ -139,8 +153,32 @@ class THPChannel {
         let resp2 = try await readTHPResponse()
         try handshake.readMessage2(resp2.payload)
 
-        // Message 3: Host → Device (s, se)
-        let msg3 = try handshake.writeMessage3()
+        // Look up a stored pairing credential keyed by the device's
+        // static public key (stable across BLE sessions, unlike CID
+        // which gets reallocated every connect). If we find one,
+        // present it in the message-3 payload as
+        // ThpHandshakeCompletionReqNoisePayload — the device verifies
+        // the credential against its registered hosts and, on match,
+        // skips the 6-digit pairing dance entirely on the next
+        // handshake. Without this, every fresh BLE session looks
+        // like a new host to the device and forces re-pair.
+        var credentialPayload = Data()
+        if let remoteStatic = handshake.remoteStatic {
+            let deviceId = trezorDeviceId(for: remoteStatic)
+            if let credential = THPPairing.loadCredential(deviceId: deviceId) {
+                TrezorLog.log("[THP] performHandshake: presenting stored credential (%d bytes) for %@", credential.count, deviceId)
+                credentialPayload = THPProto.encodeBytesField(fieldNumber: 1, value: credential)
+            } else {
+                TrezorLog.log("[THP] performHandshake: no stored credential for %@", deviceId)
+            }
+            // Stash for the pairing-completion path so a freshly
+            // issued credential gets stored under the same stable
+            // deviceId we'll look up next session.
+            currentDeviceStableId = deviceId
+        }
+
+        // Message 3: Host → Device (s, se, payload)
+        let msg3 = try handshake.writeMessage3(payload: credentialPayload)
         try await sendDataFrame(dataType: .handshakeCompReq, payload: msg3)
 
         // Derive cipher states
@@ -630,9 +668,14 @@ class THPChannel {
         let credential = THPProto.extractBytesField(credPayload, fieldNumber: 2)
         TrezorLog.log("[THP] pairing: received credential (%d bytes)", credential.count)
 
-        // Store credential for future auto-reconnect
+        // Store credential keyed by the device's static public key
+        // (stable across reconnects) so the next handshake can
+        // present it in the message-3 payload and skip pairing.
+        // The legacy "trezor_<cid>" key was per-session — every new
+        // BLE channel got a fresh CID and the lookup always missed.
         if !credential.isEmpty {
-            THPPairing.storeCredential(deviceId: "trezor_\(cid)", credential: credential)
+            let deviceId = currentDeviceStableId ?? "trezor_\(cid)"
+            THPPairing.storeCredential(deviceId: deviceId, credential: credential)
         }
 
         // Step 15: ThpEndRequest (1018)

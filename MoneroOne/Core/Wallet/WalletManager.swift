@@ -117,7 +117,16 @@ class WalletManager: ObservableObject {
         case failed(message: String)
     }
 
-    @Published private(set) var hardwareSessionState: HardwareSessionState = .idle
+    @Published private(set) var hardwareSessionState: HardwareSessionState = .idle {
+        didSet {
+            // DEBUG: trace every transition so we can find what's
+            // resetting state to .idle right before the phantom
+            // second runHardwareSession enters.
+            TrezorLog.log("[State] %@ → %@",
+                          String(describing: oldValue),
+                          String(describing: hardwareSessionState))
+        }
+    }
 
     /// True when the Trezor bridge is up and the device is connected.
     /// UI uses this to show a "Trezor Connected" pill so the user
@@ -203,6 +212,8 @@ class WalletManager: ObservableObject {
     /// Reset session state to idle. Called by the sheet on dismiss
     /// once the user has seen the .complete or .failed state.
     func resetHardwareSessionState() {
+        let stack = Thread.callStackSymbols.prefix(8).joined(separator: " | ")
+        TrezorLog.log("[State] resetHardwareSessionState called: %@", stack)
         hardwareSessionState = .idle
     }
 
@@ -232,6 +243,22 @@ class WalletManager: ObservableObject {
             return
         }
 
+        TrezorLog.log("[Session] runHardwareSession ENTERED, state=%@", String(describing: hardwareSessionState))
+        // Reject duplicate calls. The HardwareSessionSheet's
+        // `@State sessionStarted` guard turned out to be racy — when
+        // `evaluateBleState()` fires twice in quick succession (e.g.
+        // onAppear + onChange both seeing state == .bridgeRunning),
+        // both calls spawn a Task before the @State write becomes
+        // visible to the second read. Both Tasks then `await
+        // runHardwareSyncSession()` and the second one tears down
+        // the bridge mid-warm-window, ending the just-completed
+        // session with a "Sync failed" and forcing a re-pair.
+        // The fix is to dedupe at the source — only run if we're
+        // currently idle.
+        guard case .idle = hardwareSessionState else {
+            TrezorLog.log("[Session] rejected duplicate runHardwareSession (state=%@)", String(describing: hardwareSessionState))
+            return
+        }
         TrezorLog.log("[Session] starting hardware session (send=%@, deviceWalletId=%@)", send == nil ? "no" : "yes", deviceWalletId)
 
         // The session might be starting from a warm connection (the
@@ -310,9 +337,13 @@ class WalletManager: ObservableObject {
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {
-                TrezorLog.log("[Session] send FAILED: %@", error.localizedDescription)
+                let walletErr = fullWallet.latestErrorString
+                TrezorLog.log("[Session] send FAILED: error=%@ type=%@ wallet2Status=%@",
+                              String(describing: error),
+                              String(describing: type(of: error)),
+                              walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: "Send failed: \(error.localizedDescription)", viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)", viewKeys: viewKeys)
                 return
             }
         case .all(let to, let memo):
@@ -322,9 +353,13 @@ class WalletManager: ObservableObject {
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {
-                TrezorLog.log("[Session] sendAll FAILED: %@", error.localizedDescription)
+                let walletErr = fullWallet.latestErrorString
+                TrezorLog.log("[Session] sendAll FAILED: error=%@ type=%@ wallet2Status=%@",
+                              String(describing: error),
+                              String(describing: type(of: error)),
+                              walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: "Send failed: \(error.localizedDescription)", viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)", viewKeys: viewKeys)
                 return
             }
         }
@@ -484,7 +519,41 @@ class WalletManager: ObservableObject {
     /// the address. Hoisting it here also lets TrezorSession reuse
     /// the same connection state for reconnect flows without a
     /// fresh BLE scan.
-    lazy var trezorManager: TrezorManager = TrezorManager()
+    lazy var trezorManager: TrezorManager = {
+        let manager = TrezorManager()
+        // Drive the BalanceCard "connected" pill from raw BLE/THP
+        // state so the indicator lights up any time we have a live
+        // link to the device — including during the pair-only flow
+        // and during the active session itself, not only inside the
+        // 300s warm-window that follows a successful session.
+        manager.$state
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self else { return }
+                let warm: Bool
+                switch state {
+                case .connected, .allocatingTHP, .handshaking, .pairing, .bridgeRunning:
+                    warm = true
+                case .idle, .scanning, .connecting, .error:
+                    warm = false
+                }
+                if self.isHardwareDeviceWarm != warm {
+                    TrezorLog.log("[WM] warm pill → %@ (state=%@)",
+                                  warm ? "LIVE" : "idle",
+                                  String(describing: state))
+                }
+                self.isHardwareDeviceWarm = warm
+            }
+            .store(in: &self.trezorStateCancellables)
+        return manager
+    }()
+
+    /// Lifetime-scoped subscription bag for `trezorManager.$state`.
+    /// Kept separate from `cancellables` because that set gets
+    /// `removeAll()`'d on every wallet swap / hardware session
+    /// boundary — wiping it would silently disable the connection
+    /// indicator after the first session.
+    private var trezorStateCancellables = Set<AnyCancellable>()
 
     enum AddWalletDestination: Hashable {
         case createWallet

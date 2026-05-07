@@ -117,6 +117,19 @@ class WalletManager: ObservableObject {
         case failed(message: String)
     }
 
+    /// Outcome of the most-recent hardware session — used by send
+    /// flow's parent sheet to decide whether to auto-dismiss after
+    /// the hardware sheet closes. `success` only when broadcast
+    /// confirmed; `failure` covers both bridge errors and wallet2
+    /// rejections (insufficient funds, etc.). Cleared at session
+    /// start so a fresh run isn't biased by the prior outcome.
+    enum HardwareSessionOutcome: Equatable {
+        case sentTransaction(txId: String)
+        case syncedOnly
+        case failed
+    }
+    @Published private(set) var lastHardwareSessionOutcome: HardwareSessionOutcome?
+
     @Published private(set) var hardwareSessionState: HardwareSessionState = .idle {
         didSet {
             // DEBUG: trace every transition so we can find what's
@@ -209,6 +222,25 @@ class WalletManager: ObservableObject {
         return resultTxId
     }
 
+    /// Clear a leftover terminal state when the hardware sheet
+    /// re-presents. Without this, tapping Sync Sent right after a
+    /// previous run shows the stale `.complete` success view; user
+    /// has to dismiss it manually before the next session can fire.
+    /// Safe to call from sheet `onAppear` — only touches `.idle`
+    /// when the prior state is `.complete` or `.failed`, so an
+    /// in-flight session (`.connecting`, `.signing`, etc.) is left
+    /// alone and the duplicate-call guard in `runHardwareSession`
+    /// still does its job.
+    func clearTerminalSessionState() {
+        switch hardwareSessionState {
+        case .complete, .failed:
+            hardwareSessionState = .idle
+            lastHardwareSessionOutcome = nil
+        default:
+            break
+        }
+    }
+
     /// Reset session state to idle. Called by the sheet on dismiss
     /// once the user has seen the .complete or .failed state.
     func resetHardwareSessionState() {
@@ -269,6 +301,17 @@ class WalletManager: ObservableObject {
 
         hardwareSessionState = .connecting
 
+        // Capture VIEW's balance before we tear it down — used as
+        // the baseline for the snapshot's "new income since" delta.
+        // VIEW can keep seeing incoming deposits while the device is
+        // disconnected (no key images needed for that), so the
+        // delta between this baseline and VIEW's current value at
+        // display time is exactly "fresh incoming the device hasn't
+        // counted yet" — which we add to FULL's true spendable to
+        // keep the home screen current between hardware sessions.
+        let viewBaselineBalance = balance
+        let viewBaselineUnlocked = unlockedBalance
+
         // 1. Stop VIEW so KitManager has a free slot for FULL.
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
@@ -306,6 +349,17 @@ class WalletManager: ObservableObject {
         hardwareSessionState = .syncingFull(progress: 0, blocksRemaining: nil)
         bindFullWalletSyncProgress(fullWallet)
 
+        // Force a real chain refresh. wallet2 reports `.synced` from
+        // its cached state immediately on open — m_synchronized was
+        // set true at the previous close, walletHeight matches the
+        // last-stored height, so a naive `waitForSyncedOrThrow`
+        // returns instantly even though the daemon has advanced
+        // since. `startSync()` calls `MONERO_Wallet_startRefresh`
+        // which kicks the refresh thread to actually fetch new
+        // blocks, plus restarts the state-manager poll loop so we
+        // see the daemonHeight update.
+        fullWallet.startSync()
+
         do {
             try await waitForSyncedOrThrow(fullWallet, timeout: 600)
         } catch {
@@ -315,15 +369,31 @@ class WalletManager: ObservableObject {
             return
         }
 
-        // 4. Cold key image sync.
-        hardwareSessionState = .syncingKeyImages
-        let kiOK = await fullWallet.coldKeyImageSync()
-        if !kiOK {
-            let err = fullWallet.latestErrorString
-            TrezorLog.log("[Session] coldKeyImageSync FAILED: %@", err)
-            await fullWallet.stopAsync()
-            await failSessionAndRestoreView(message: "Key image sync failed: \(err)", viewKeys: viewKeys)
-            return
+        // 4. Cold key image sync — but skip if we did one very
+        //    recently. The cold sync is the slow part of every
+        //    Sync Sent / Send run (device round-trip per output);
+        //    if the user just synced 20 seconds ago and now wants
+        //    to send, the key images on file are still current and
+        //    the device prompts are pure friction. The 30s window
+        //    is short enough that wallet2's KI cache won't have
+        //    drifted (no new outputs decryptable in that window
+        //    that we'd be missing key images for).
+        let recentKICutoff: TimeInterval = 30
+        let lastKISync = loadHardwareBalanceSnapshot(walletId: active.id)?.savedAt
+        let skipKI = lastKISync.map { Date().timeIntervalSince($0) < recentKICutoff } ?? false
+        if skipKI {
+            TrezorLog.log("[Session] skipping coldKeyImageSync (last sync %.1fs ago)",
+                          Date().timeIntervalSince(lastKISync!))
+        } else {
+            hardwareSessionState = .syncingKeyImages
+            let kiOK = await fullWallet.coldKeyImageSync()
+            if !kiOK {
+                let err = fullWallet.latestErrorString
+                TrezorLog.log("[Session] coldKeyImageSync FAILED: %@", err)
+                await fullWallet.stopAsync()
+                await failSessionAndRestoreView(message: "Key image sync failed: \(err)", viewKeys: viewKeys)
+                return
+            }
         }
 
         // 5. Optional send.
@@ -376,6 +446,25 @@ class WalletManager: ObservableObject {
         saveHardwareTxSnapshot(snapshotTxs, walletId: active.id)
         TrezorLog.log("[Session] snapshot saved (%d txs)", snapshotTxs.count)
 
+        // Capture FULL's balance too. VIEW alone can't tell which
+        // outputs are spent (no key images), so its `balance` is
+        // the running sum of all received UTXOs and inflates
+        // monotonically — past sends never subtract. FULL with
+        // device-derived key images sees the truth. Persist that
+        // truth so the home screen shows what's actually
+        // spendable, not VIEW's lifetime-received total.
+        let fullBalance = fullWallet.balance
+        let fullUnlocked = fullWallet.unlockedBalance
+        saveHardwareBalanceSnapshot(
+            walletId: active.id,
+            balance: fullBalance,
+            unlocked: fullUnlocked,
+            viewBaseline: viewBaselineBalance,
+            viewUnlockedBaseline: viewBaselineUnlocked
+        )
+        TrezorLog.log("[Session] balance snapshot saved (full=%@ unlocked=%@ viewBaseline=%@)",
+                      "\(fullBalance)", "\(fullUnlocked)", "\(viewBaselineBalance)")
+
         // 7. Tear down FULL.
         hardwareSessionState = .tearingDown
         await fullWallet.stopAsync()
@@ -398,9 +487,11 @@ class WalletManager: ObservableObject {
         scheduleWarmConnectionDisconnect()
 
         if let txId = sentTxId {
+            lastHardwareSessionOutcome = .sentTransaction(txId: txId)
             onSent?(txId)
             hardwareSessionState = .complete(message: "Transaction broadcast.")
         } else {
+            lastHardwareSessionOutcome = .syncedOnly
             hardwareSessionState = .complete(message: "Sent transactions are up to date.")
         }
         TrezorLog.log("[Session] session complete (warm window started)")
@@ -408,11 +499,43 @@ class WalletManager: ObservableObject {
 
     private func waitForSyncedOrThrow(_ wallet: MoneroWallet, timeout: TimeInterval) async throws {
         let deadline = Date().addingTimeInterval(timeout)
+        let startedAt = Date()
+
+        // Track whether we've actually observed a fresh sync cycle.
+        // Without this, `.synced` from wallet2's stale cache state
+        // (m_synchronized=true persisted from prior close) returns
+        // immediately and FULL never scans new blocks → the send
+        // sees a stale UTXO set and reports the wrong "available"
+        // balance. We require either:
+        //   a) a `.syncing` transition during this call (proves the
+        //      refresh thread did work), OR
+        //   b) `walletHeight >= daemonHeight` confirmed via a real
+        //      daemon poll (daemonHeight > 0 AND the wallet has had
+        //      enough time to settle on a fresh poll).
+        var observedScanProgress = false
+        let minSettleTime: TimeInterval = 3.0
+
         while Date() < deadline {
+            let walletH = wallet.walletHeight
+            let daemonH = wallet.daemonHeight
+            let elapsed = Date().timeIntervalSince(startedAt)
+
             switch wallet.syncState {
             case .synced:
-                return
+                // Stale-cache trap: wallet2 says .synced but we
+                // haven't heard a single byte from the daemon yet.
+                // Hold off until either we've seen a scan happen or
+                // we've genuinely caught up to a polled daemon
+                // height past the settle window.
+                if observedScanProgress {
+                    return
+                }
+                if daemonH > 0 && walletH >= daemonH && elapsed >= minSettleTime {
+                    return
+                }
+                // else: keep waiting for a genuine poll
             case .syncing(let p, let remaining):
+                observedScanProgress = true
                 hardwareSessionState = .syncingFull(progress: p, blocksRemaining: remaining)
             case .error(let msg):
                 throw NSError(domain: "HardwareSession", code: -10, userInfo: [NSLocalizedDescriptionKey: msg])
@@ -445,6 +568,7 @@ class WalletManager: ObservableObject {
         } catch {
             TrezorLog.log("[Session] could not restore VIEW after failure: %@", error.localizedDescription)
         }
+        lastHardwareSessionOutcome = .failed
         hardwareSessionState = .failed(message: message)
     }
 
@@ -492,6 +616,84 @@ class WalletManager: ObservableObject {
         for tx in transactions { byHash[tx.id] = tx }
         for tx in snapshot { byHash[tx.id] = tx }
         return byHash.values.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    // MARK: - Hardware balance snapshot
+
+    private struct HardwareBalanceSnapshot: Codable {
+        let balance: Decimal           // FULL's true spendable at snapshot time
+        let unlocked: Decimal          // FULL's unlocked at snapshot time
+        let viewBaseline: Decimal      // VIEW's balance at session start
+        let viewUnlockedBaseline: Decimal  // VIEW's unlocked at session start
+        let savedAt: Date
+    }
+
+    private func hardwareBalanceSnapshotURL(for walletId: UUID) -> URL? {
+        let fm = FileManager.default
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        return appSupport
+            .appendingPathComponent("MoneroOne", isDirectory: true)
+            .appendingPathComponent("HardwareBalanceSnapshots", isDirectory: true)
+            .appendingPathComponent("\(walletId.uuidString).json")
+    }
+
+    private func saveHardwareBalanceSnapshot(
+        walletId: UUID,
+        balance: Decimal,
+        unlocked: Decimal,
+        viewBaseline: Decimal,
+        viewUnlockedBaseline: Decimal
+    ) {
+        guard let url = hardwareBalanceSnapshotURL(for: walletId) else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let snap = HardwareBalanceSnapshot(
+            balance: balance,
+            unlocked: unlocked,
+            viewBaseline: viewBaseline,
+            viewUnlockedBaseline: viewUnlockedBaseline,
+            savedAt: Date()
+        )
+        if let data = try? JSONEncoder().encode(snap) {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    private func loadHardwareBalanceSnapshot(walletId: UUID) -> HardwareBalanceSnapshot? {
+        guard let url = hardwareBalanceSnapshotURL(for: walletId),
+              FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(HardwareBalanceSnapshot.self, from: data)
+    }
+
+    /// Display balance for the active wallet. For hardware wallets
+    /// this prefers the FULL-cache snapshot (true spendable amount
+    /// after key-image sync) over VIEW's value (lifetime received,
+    /// monotonically inflating because watch-only can't see spends).
+    /// VIEW *can* still see new incoming UTXOs without the device
+    /// connected, so we add the delta between VIEW's current view
+    /// and VIEW's value at the snapshot's session — that picks up
+    /// fresh deposits between hardware syncs without the user
+    /// having to plug in the Trezor again to see them.
+    /// Falls back to plain VIEW until the user has run at least
+    /// one hardware session against this wallet.
+    var displayBalance: Decimal {
+        guard isHardwareWallet, let walletId = activeWallet?.id,
+              let snap = loadHardwareBalanceSnapshot(walletId: walletId) else {
+            return balance
+        }
+        let newIncoming = max(0, balance - snap.viewBaseline)
+        return snap.balance + newIncoming
+    }
+
+    var displayUnlockedBalance: Decimal {
+        guard isHardwareWallet, let walletId = activeWallet?.id,
+              let snap = loadHardwareBalanceSnapshot(walletId: walletId) else {
+            return unlockedBalance
+        }
+        let newUnlockedIncoming = max(0, unlockedBalance - snap.viewUnlockedBaseline)
+        return snap.unlocked + newUnlockedIncoming
     }
 
     @Published private(set) var walletSessionId = UUID()

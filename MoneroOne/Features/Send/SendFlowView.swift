@@ -111,20 +111,48 @@ struct SendFlowView: View {
         }
     }
 
-    /// Called when the hardware-session sheet dismisses — either after
-    /// success (broadcast confirmed) or cancel/failure. We can't pass
-    /// the broadcast result back through the sheet's binding-driven
-    /// dismiss, so we infer success from the active wallet's freshly-
-    /// refreshed transaction list. For now: if user dismissed via
-    /// "Done" the inner sheet already announced success, so we just
-    /// dismiss the parent send sheet too.
+    /// Called when the hardware-session sheet dismisses. Use the
+    /// outcome flag the WalletManager set during the run to decide
+    /// what to do with the parent SendFlow:
+    ///   - `sentTransaction`: dismiss the SendFlow and bounce the
+    ///     user back to the wallet view with refreshed balances.
+    ///   - `syncedOnly` / nil: shouldn't really happen from the
+    ///     send flow, but treat as "leave open".
+    ///   - `failed`: keep SendFlow visible so the user can adjust
+    ///     amount/address and retry without restarting from
+    ///     address-entry. Snap back to `.review` so the inputs are
+    ///     editable instead of stuck on the dead `.sending` step.
     private func handleHardwareSheetDismiss() {
-        // Dismiss the SendFlow on a successful hardware send so the
-        // user lands back on WalletView with up-to-date balances.
-        // If they cancelled, leave them on the review step.
+        let outcome = walletManager.lastHardwareSessionOutcome
         Task {
             await walletManager.refresh()
-            await MainActor.run { dismiss() }
+            await MainActor.run {
+                switch outcome {
+                case .sentTransaction(let txId):
+                    // Show the same confetti / success animation
+                    // software-wallet sends get. Phase was set to
+                    // `.sending` when the user tapped Confirm, so
+                    // SendStatusStep is already on screen — just
+                    // hand it the tx hash and it animates to the
+                    // success view + confetti. User taps Done from
+                    // there to dismiss the SendFlow.
+                    transactionHash = txId
+                    sendInProgress = false
+                    HapticFeedback.shared.transactionSuccess()
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                        phase = .success(txHash: txId)
+                    }
+                case .failed:
+                    sendInProgress = false
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        phase = .review
+                    }
+                case .syncedOnly, .none:
+                    // No send actually ran — leave the user where
+                    // they are.
+                    break
+                }
+            }
         }
     }
 
@@ -276,6 +304,11 @@ struct SendFlowView: View {
         // SendFlowView's local progress state since the sheet drives
         // its own UI from here.
         if walletManager.requiresHardwareSession {
+            // Clear any leftover .complete/.failed state from the
+            // prior run before opening the hardware sheet. See note
+            // in WalletView's `onHardwareSyncTap` for why this lives
+            // at the tap site and not in the sheet's `onAppear`.
+            walletManager.clearTerminalSessionState()
             let trimmedMemo = memo.isEmpty ? nil : memo
             if isSendingAll {
                 hardwareSheetIntent = .sendAll(to: recipientAddress, memo: trimmedMemo)

@@ -431,13 +431,16 @@ struct HardwareSessionSheet: View {
     }
 
     private func handleSessionStateChange(_ state: WalletManager.HardwareSessionState) {
-        // On failure, drop the BLE session so the next attempt
-        // starts clean. On success, leave it alive — the warm-window
-        // disconnect on WalletManager will tear down later if no
-        // follow-up session runs.
-        if case .failed = state {
-            walletManager.disconnectHardwareDevice()
-        }
+        // Don't drop BLE on failure. The previous "clean slate"
+        // behavior dropped the link on .failed and the user had to
+        // re-discover/reconnect from scratch — even when the failure
+        // was wallet-side (insufficient funds, daemon timeout, etc.)
+        // and BLE was perfectly healthy. With skip-pair working, we
+        // can safely keep the warm window alive across failures so
+        // a Try Again retry fast-paths through bringup. The
+        // warm-window timer on WalletManager handles eventual
+        // teardown either way.
+        _ = state
     }
 
     private func cancelAndDismiss() {

@@ -18,8 +18,8 @@ struct WalletView: View {
                     // Balance + actions — collapse upward
                     VStack(spacing: 16) {
                         BalanceCard(
-                            balance: walletManager.balance,
-                            unlockedBalance: walletManager.unlockedBalance,
+                            balance: walletManager.displayBalance,
+                            unlockedBalance: walletManager.displayUnlockedBalance,
                             syncState: walletManager.syncState,
                             connectionStage: walletManager.connectionStage,
                             priceService: priceService,
@@ -39,6 +39,16 @@ struct WalletView: View {
                                 showPortfolio = true
                             },
                             onHardwareSyncTap: {
+                                // Clear any leftover .complete/.failed
+                                // state from the prior run so the
+                                // sheet opens to a fresh bringup, not
+                                // to a stale success/failure view.
+                                // Done at the tap site (not in sheet
+                                // onAppear) so SwiftUI re-firing
+                                // onAppear during state transitions
+                                // doesn't sneak through the duplicate-
+                                // session guard.
+                                walletManager.clearTerminalSessionState()
                                 hardwareSheetIntent = .syncSentTransactions
                             }
                         )
@@ -114,7 +124,7 @@ struct WalletView: View {
             }
             .sheet(isPresented: $showPortfolio) {
                 PortfolioChartView(
-                    balance: walletManager.balance,
+                    balance: walletManager.displayBalance,
                     priceService: priceService
                 )
                 .environmentObject(walletManager)

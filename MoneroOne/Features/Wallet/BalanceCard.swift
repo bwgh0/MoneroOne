@@ -77,31 +77,35 @@ struct BalanceCard: View {
                     Button {
                         onHardwareSyncTap?()
                     } label: {
-                        HStack(spacing: 4) {
-                            // Filled lock = device connected (warm
-                            // window active); outlined = idle. Lets
-                            // the user tell at a glance whether the
-                            // next tap will be instant or whether
-                            // they'll go through the BLE handshake.
-                            Image(systemName: isHardwareDeviceWarm ? "lock.shield.fill" : "lock.shield")
-                                .font(.caption2)
-                            Text(hardwareDeviceName ?? "Hardware")
+                        HStack(spacing: 5) {
+                            // Two-state pill: capsule color is the
+                            // primary visual signal so connection
+                            // state is impossible to miss at a
+                            // glance. Green = device link is live
+                            // (BLE connected, THP up, bridge ready
+                            // — anything we could send to right
+                            // now). Gray = idle, next tap will go
+                            // through the full BLE/THP bringup.
+                            Image(systemName: isHardwareDeviceWarm ? "bolt.fill" : "bolt.slash.fill")
+                                .font(.caption2.weight(.bold))
+                            Text(isHardwareDeviceWarm
+                                 ? "\(hardwareDeviceName ?? "Trezor") • Live"
+                                 : (hardwareDeviceName ?? "Trezor"))
                                 .font(.caption2.weight(.semibold))
                                 .lineLimit(1)
-                            if isHardwareDeviceWarm {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 6, height: 6)
-                            }
                         }
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.orange))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(isHardwareDeviceWarm
+                                           ? Color.green
+                                           : Color.gray.opacity(0.7))
+                        )
                         .padding(.leading, 6)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(hardwareDeviceName ?? "Hardware wallet")\(isHardwareDeviceWarm ? ", connected" : ""). Tap to sync sent transactions.")
+                    .accessibilityLabel("\(hardwareDeviceName ?? "Hardware wallet")\(isHardwareDeviceWarm ? ", connected" : ", not connected"). Tap to sync sent transactions.")
                 } else if isViewOnly {
                     HStack(spacing: 4) {
                         Image(systemName: "eye.fill")

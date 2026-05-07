@@ -58,7 +58,15 @@ struct HardwareSessionSheet: View {
             .padding()
             .navigationTitle(navTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .interactiveDismissDisabled(isInProgress)
+            // Keep dismiss disabled across the whole lifecycle. When
+            // we toggled this on `.complete`, SwiftUI tore down the
+            // hosting view + represented a fresh sheet instance,
+            // which fired `onAppear` → `evaluateBleState` → spawned
+            // a duplicate session Task that ran the moment the
+            // first one set state back to `.idle`. Locking it true
+            // pins the sheet through the entire session including
+            // the success view; the user dismisses via Done/Cancel.
+            .interactiveDismissDisabled(true)
             .onAppear { startBleIfNeeded() }
             .onChange(of: trezorManager.state) { _, _ in
                 evaluateBleState()
@@ -76,7 +84,18 @@ struct HardwareSessionSheet: View {
                 if isInProgress {
                     walletManager.disconnectHardwareDevice()
                 }
-                walletManager.resetHardwareSessionState()
+                // Don't `resetHardwareSessionState()` here. SwiftUI
+                // fires `.onDisappear` not just on real user dismiss
+                // but during view-graph teardown that races with the
+                // `.complete` transition (the modal sheet auto-tears
+                // when `interactiveDismissDisabled` flips false on
+                // `.complete`). Resetting state to `.idle` from here
+                // let the duplicate `runHardwareSession` Task — the
+                // one queued behind T1 on @MainActor — pass the
+                // idle-only guard and tear down the warm window.
+                // Terminal states get cleared at the start of the
+                // next sync/send instead (see WalletManager
+                // `clearTerminalSessionState`).
             }
         }
     }

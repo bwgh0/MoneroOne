@@ -132,12 +132,11 @@ class WalletManager: ObservableObject {
 
     @Published private(set) var hardwareSessionState: HardwareSessionState = .idle {
         didSet {
-            // DEBUG: trace every transition so we can find what's
-            // resetting state to .idle right before the phantom
-            // second runHardwareSession enters.
+            #if DEBUG
             TrezorLog.log("[State] %@ → %@",
                           String(describing: oldValue),
                           String(describing: hardwareSessionState))
+            #endif
         }
     }
 
@@ -244,8 +243,6 @@ class WalletManager: ObservableObject {
     /// Reset session state to idle. Called by the sheet on dismiss
     /// once the user has seen the .complete or .failed state.
     func resetHardwareSessionState() {
-        let stack = Thread.callStackSymbols.prefix(8).joined(separator: " | ")
-        TrezorLog.log("[State] resetHardwareSessionState called: %@", stack)
         hardwareSessionState = .idle
     }
 
@@ -275,15 +272,6 @@ class WalletManager: ObservableObject {
             return
         }
 
-        TrezorLog.log("[Session] runHardwareSession ENTERED, state=%@", String(describing: hardwareSessionState))
-        // Temporary stack-trace logging so the next dup-fire (if
-        // any) is debuggable without another instrumentation
-        // round-trip. Remove once the auto-dismiss flow is proven
-        // stable across a few sends.
-        if case .idle = hardwareSessionState {
-            let stack = Thread.callStackSymbols.prefix(15).joined(separator: " | ")
-            TrezorLog.log("[Session] runHardwareSession caller: %@", stack)
-        }
         // Reject duplicate calls. The HardwareSessionSheet's
         // `@State sessionStarted` guard turned out to be racy — when
         // `evaluateBleState()` fires twice in quick succession (e.g.
@@ -773,11 +761,15 @@ class WalletManager: ObservableObject {
     var displayBalance: Decimal {
         guard isHardwareWallet else { return balance }
         guard let walletId = activeWallet?.id else {
+            #if DEBUG
             TrezorLog.log("[displayBalance] fallback (no activeWallet) → raw=%@", "\(balance)")
+            #endif
             return balance
         }
         guard let snap = loadHardwareBalanceSnapshot(walletId: walletId) else {
+            #if DEBUG
             TrezorLog.log("[displayBalance] fallback (no snapshot for %@) → raw=%@", walletId.uuidString, "\(balance)")
+            #endif
             return balance
         }
         let snapshotHashes = Set(loadHardwareTxSnapshot(walletId: walletId).map { $0.id })

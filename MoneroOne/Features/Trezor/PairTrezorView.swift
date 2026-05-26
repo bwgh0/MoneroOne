@@ -664,6 +664,7 @@ struct PairTrezorView: View {
                 renameSidecarCache(from: temporaryDeviceWalletId, to: stableDeviceWalletId)
 
                 await MainActor.run {
+                    clearExtractedKeys()
                     if isAddingWallet {
                         dismiss()
                     } else {
@@ -678,9 +679,26 @@ struct PairTrezorView: View {
 
     @MainActor
     private func failPair(_ message: String) {
+        clearExtractedKeys()
         errorMessage = message
         showErrorAlert = true
         step = .deviceConnect
+    }
+
+    /// Zero out the extracted view key + address from `@SceneStorage`
+    /// the moment we no longer need them. `@SceneStorage` is backed
+    /// by unencrypted UserDefaults plist — leaving the view key
+    /// resident there after pairing completes (or fails) would mean
+    /// the entire wallet's incoming-tx history is readable by any
+    /// process that can read the app's preferences file (jailbroken
+    /// devices, certain forensics paths). The pair flow needs them
+    /// to survive sheet snapshots / app-switcher previews mid-flow,
+    /// but the instant we're done, scrub.
+    @MainActor
+    private func clearExtractedKeys() {
+        extractedAddress = ""
+        extractedViewKey = ""
+        temporaryDeviceWalletId = ""
     }
 
     /// Atomically rename the on-disk wallet2 cache directory from

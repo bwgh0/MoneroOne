@@ -253,8 +253,10 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
 
         // Write all chunks
         for (i, chunk) in chunks.enumerated() {
+            #if DEBUG
             TrezorLog.log("[BLE] exchange: writing chunk %d/%d (%d bytes) hex=%@", i + 1, chunks.count, chunk.count,
                   chunk.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " "))
+            #endif
             peripheral.writeValue(chunk, for: rx, type: .withoutResponse)
         }
 
@@ -303,7 +305,13 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
         let respPayload = responseData.subdata(in: 6..<responseData.count)
 
         TrezorLog.log("[BLE] exchange: response msgType=%d, payloadLen=%d", respType, respPayload.count)
-        TrezorLog.log("[BLE] exchange: response hex=%@", responseData.map { String(format: "%02x", $0) }.joined(separator: " "))
+        #if DEBUG
+        // Full ciphertext dump — useful for diff against trezord
+        // captures during protocol bringup. Off in release because
+        // it bloats the log file to hundreds of MB during a normal
+        // session and isn't actionable without the THP keys.
+        TrezorLog.log("[BLE] exchange: response hex=%@", responseData.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " "))
+        #endif
         // If it's a Failure (type 3), try to decode the protobuf message string
         if respType == 3, respPayload.count > 2 {
             // Protobuf: field 2 (message) tag = 0x12, then length, then UTF-8 string
@@ -352,11 +360,20 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
             chunk = data.prefix(Self.chunkSize)
         }
 
+        #if DEBUG
         TrezorLog.log("[BLE] writeRawChunk: %d bytes, hex=%@",
                       chunk.count,
                       chunk.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " "))
+        #endif
 
-        // Write with response — await ATT-level confirmation from device
+        // Write with response — await ATT-level confirmation from device.
+        // If the timeout branch wins the race, we MUST resume + nil-out
+        // `writeContinuation` ourselves before throwing. Otherwise the
+        // ATT-write callback fires later, finds the continuation still
+        // set, calls `resume(returning:)` on it — and CheckedContinuation
+        // double-resume crashes the process. Original code only cleared
+        // the continuation on disconnect, which left a window where
+        // a slow write + a transient timeout would corrupt the channel.
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
                 try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
@@ -371,12 +388,26 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
                 try await Task.sleep(nanoseconds: 10_000_000_000)
                 throw TrezorError.timeout
             }
-            // First to complete wins — either write confirmation or timeout
-            try await group.next()
-            group.cancelAll()
+            do {
+                try await group.next()
+                group.cancelAll()
+            } catch {
+                // Drop the continuation so a late ATT-write callback
+                // can't double-resume the abandoned one.
+                self.responseQueue.sync {
+                    if let cont = self.writeContinuation {
+                        self.writeContinuation = nil
+                        cont.resume(throwing: error)
+                    }
+                }
+                group.cancelAll()
+                throw error
+            }
         }
 
+        #if DEBUG
         TrezorLog.log("[BLE] writeRawChunk: write confirmed by device")
+        #endif
     }
 
     /// Keep the BLE connection alive during idle periods.
@@ -439,9 +470,11 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
     /// Called from the BLE notification handler when useTHPMode is true.
     private func processRawChunk(_ data: Data) {
         responseQueue.sync {
+            #if DEBUG
             TrezorLog.log("[BLE] processRawChunk: %d bytes, hex=%@",
                           data.count,
                           data.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " "))
+            #endif
 
             if let continuation = rawChunkContinuation {
                 rawChunkContinuation = nil

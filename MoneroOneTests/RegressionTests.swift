@@ -814,17 +814,17 @@ final class TransactionModelRegressionTests: XCTestCase {
         let tx1 = MoneroTransaction(
             id: "abc123", type: .incoming, amount: 1.5, fee: 0.001,
             address: "44AFF...", timestamp: Date(), confirmations: 10,
-            status: .confirmed, memo: nil
+            status: .confirmed, memo: nil, blockHeight: nil
         )
         let tx2 = MoneroTransaction(
             id: "abc123", type: .outgoing, amount: 2.0, fee: 0.002,
             address: "888tN...", timestamp: Date(), confirmations: 5,
-            status: .pending, memo: "test"
+            status: .pending, memo: "test", blockHeight: nil
         )
         let tx3 = MoneroTransaction(
             id: "def456", type: .incoming, amount: 1.5, fee: 0.001,
             address: "44AFF...", timestamp: Date(), confirmations: 10,
-            status: .confirmed, memo: nil
+            status: .confirmed, memo: nil, blockHeight: nil
         )
 
         // Same ID = equal
@@ -837,12 +837,12 @@ final class TransactionModelRegressionTests: XCTestCase {
         let tx1 = MoneroTransaction(
             id: "abc123", type: .incoming, amount: 1.5, fee: 0.001,
             address: "", timestamp: Date(), confirmations: 10,
-            status: .confirmed, memo: nil
+            status: .confirmed, memo: nil, blockHeight: nil
         )
         let tx2 = MoneroTransaction(
             id: "abc123", type: .outgoing, amount: 99, fee: 0,
             address: "", timestamp: Date(), confirmations: 0,
-            status: .pending, memo: nil
+            status: .pending, memo: nil, blockHeight: nil
         )
 
         // Same ID should produce same hash

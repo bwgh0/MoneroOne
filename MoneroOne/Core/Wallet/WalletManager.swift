@@ -276,6 +276,14 @@ class WalletManager: ObservableObject {
         }
 
         TrezorLog.log("[Session] runHardwareSession ENTERED, state=%@", String(describing: hardwareSessionState))
+        // Temporary stack-trace logging so the next dup-fire (if
+        // any) is debuggable without another instrumentation
+        // round-trip. Remove once the auto-dismiss flow is proven
+        // stable across a few sends.
+        if case .idle = hardwareSessionState {
+            let stack = Thread.callStackSymbols.prefix(15).joined(separator: " | ")
+            TrezorLog.log("[Session] runHardwareSession caller: %@", stack)
+        }
         // Reject duplicate calls. The HardwareSessionSheet's
         // `@State sessionStarted` guard turned out to be racy — when
         // `evaluateBleState()` fires twice in quick succession (e.g.
@@ -372,13 +380,18 @@ class WalletManager: ObservableObject {
         // 4. Cold key image sync — but skip if we did one very
         //    recently. The cold sync is the slow part of every
         //    Sync Sent / Send run (device round-trip per output);
-        //    if the user just synced 20 seconds ago and now wants
-        //    to send, the key images on file are still current and
-        //    the device prompts are pure friction. The 30s window
-        //    is short enough that wallet2's KI cache won't have
-        //    drifted (no new outputs decryptable in that window
-        //    that we'd be missing key images for).
-        let recentKICutoff: TimeInterval = 30
+        //    if the user just synced minutes ago and now wants
+        //    to send, the key images on file are still current —
+        //    we're the only signer for this wallet, so nothing
+        //    can have spent our outputs in the meantime. New
+        //    incoming UTXOs that haven't been KI'd yet just get
+        //    skipped by wallet2 when picking inputs (they're not
+        //    usable without key images anyway), so the user just
+        //    loses access to *unconfirmed-since-last-sync* funds
+        //    on this send, not a correctness problem.
+        //    The 300s window matches the BLE warm-window — same
+        //    "recent enough to skip the slow path" semantics.
+        let recentKICutoff: TimeInterval = 300
         let lastKISync = loadHardwareBalanceSnapshot(walletId: active.id)?.savedAt
         let skipKI = lastKISync.map { Date().timeIntervalSince($0) < recentKICutoff } ?? false
         if skipKI {
@@ -606,15 +619,81 @@ class WalletManager: ObservableObject {
     /// Snapshot entries override VIEW entries by tx hash. Sorted
     /// by timestamp descending. Used by transaction-list UI for
     /// hardware wallets so outgoing tx survive between sessions.
+    ///
+    /// Self-send wrinkle: wallet2 returns *both* the outgoing and
+    /// the incoming (change UTXO) records for the same tx hash —
+    /// a self-send shows up twice in `get_transfers`. A naive
+    /// last-write-wins by hash silently kept whichever record
+    /// happened to come last in the source array, so the change
+    /// UTXO would mask the actual send and the row rendered as
+    /// "Received +0.0001" instead of "Sent -0.001". Prefer
+    /// outgoing on collision so the user sees the send.
     var mergedTransactions: [MoneroTransaction] {
         guard isHardwareWallet, let walletId = activeWallet?.id else {
             return transactions
         }
         let snapshot = loadHardwareTxSnapshot(walletId: walletId)
         if snapshot.isEmpty { return transactions }
+
+        // Build a quick lookup of VIEW's view of each hash so we
+        // can rescue a blockHeight that's missing on the snapshot
+        // side. When a send is broadcast, its snapshot row is
+        // captured before the tx confirms — `info.blockHeight` is
+        // 0 / nil at that moment, so the snapshot can't compute
+        // live confirmations and the row stays at 0 forever (until
+        // the next hardware session re-snapshots with the
+        // now-confirmed block height). But VIEW *can* see the
+        // change UTXO from the same tx with a real blockHeight
+        // once it's mined, and that's the same on-chain block.
+        // Borrow it.
+        var viewBlockHeightByHash: [String: UInt64] = [:]
+        for tx in transactions {
+            if let height = tx.blockHeight, height > 0 {
+                viewBlockHeightByHash[tx.id] = height
+            }
+        }
+
+        // Recompute confirmations against the live daemon height
+        // for any snapshot row that has (or can borrow) a
+        // `blockHeight`. VIEW's incoming rows are already kept
+        // current by the live `transactions` publisher, so they
+        // don't need this treatment.
+        let liveDaemonHeight = daemonHeight
+        let refreshedSnapshot: [MoneroTransaction] = snapshot.map { tx in
+            let effectiveHeight = tx.blockHeight ?? viewBlockHeightByHash[tx.id]
+            guard let blockHeight = effectiveHeight,
+                  liveDaemonHeight >= blockHeight else {
+                return tx
+            }
+            let confirmations = Int(liveDaemonHeight - blockHeight) + 1
+            return MoneroTransaction(
+                id: tx.id,
+                type: tx.type,
+                amount: tx.amount,
+                fee: tx.fee,
+                address: tx.address,
+                timestamp: tx.timestamp,
+                confirmations: confirmations,
+                status: tx.status,
+                memo: tx.memo,
+                blockHeight: blockHeight
+            )
+        }
+
         var byHash: [String: MoneroTransaction] = [:]
-        for tx in transactions { byHash[tx.id] = tx }
-        for tx in snapshot { byHash[tx.id] = tx }
+        let merge: (MoneroTransaction) -> Void = { tx in
+            if let existing = byHash[tx.id] {
+                // Outgoing wins over incoming for the same hash —
+                // it's the same on-chain transaction, and the
+                // outgoing entry is the one that reflects what
+                // the user actually did.
+                if existing.type == .outgoing { return }
+                if tx.type == .outgoing { byHash[tx.id] = tx; return }
+            }
+            byHash[tx.id] = tx
+        }
+        for tx in transactions { merge(tx) }
+        for tx in refreshedSnapshot { merge(tx) }
         return byHash.values.sorted { $0.timestamp > $1.timestamp }
     }
 
@@ -623,8 +702,13 @@ class WalletManager: ObservableObject {
     private struct HardwareBalanceSnapshot: Codable {
         let balance: Decimal           // FULL's true spendable at snapshot time
         let unlocked: Decimal          // FULL's unlocked at snapshot time
-        let viewBaseline: Decimal      // VIEW's balance at session start
-        let viewUnlockedBaseline: Decimal  // VIEW's unlocked at session start
+        // Optional so snapshots saved before these fields existed
+        // still decode — without optional, a missing field would
+        // throw at decode and `loadHardwareBalanceSnapshot` would
+        // return nil, which is what was flipping the balance back
+        // to VIEW's inflated raw value.
+        let viewBaseline: Decimal?     // VIEW's balance at session start
+        let viewUnlockedBaseline: Decimal?  // VIEW's unlocked at session start
         let savedAt: Date
     }
 
@@ -679,20 +763,37 @@ class WalletManager: ObservableObject {
     /// Falls back to plain VIEW until the user has run at least
     /// one hardware session against this wallet.
     var displayBalance: Decimal {
-        guard isHardwareWallet, let walletId = activeWallet?.id,
-              let snap = loadHardwareBalanceSnapshot(walletId: walletId) else {
+        guard isHardwareWallet else { return balance }
+        guard let walletId = activeWallet?.id else {
+            TrezorLog.log("[displayBalance] fallback (no activeWallet) → raw=%@", "\(balance)")
             return balance
         }
-        let newIncoming = max(0, balance - snap.viewBaseline)
+        guard let snap = loadHardwareBalanceSnapshot(walletId: walletId) else {
+            TrezorLog.log("[displayBalance] fallback (no snapshot for %@) → raw=%@", walletId.uuidString, "\(balance)")
+            return balance
+        }
+        // Old snapshots lack viewBaseline. Without a baseline we
+        // can't compute the new-incoming delta safely (we'd be
+        // subtracting from zero, treating VIEW's whole inflated
+        // balance as "new income" since session). Skip the delta
+        // when baseline is missing — show FULL's truth directly.
+        guard let baseline = snap.viewBaseline else {
+            return snap.balance
+        }
+        let newIncoming = max(0, balance - baseline)
         return snap.balance + newIncoming
     }
 
     var displayUnlockedBalance: Decimal {
-        guard isHardwareWallet, let walletId = activeWallet?.id,
+        guard isHardwareWallet else { return unlockedBalance }
+        guard let walletId = activeWallet?.id,
               let snap = loadHardwareBalanceSnapshot(walletId: walletId) else {
             return unlockedBalance
         }
-        let newUnlockedIncoming = max(0, unlockedBalance - snap.viewUnlockedBaseline)
+        guard let baseline = snap.viewUnlockedBaseline else {
+            return snap.unlocked
+        }
+        let newUnlockedIncoming = max(0, unlockedBalance - baseline)
         return snap.unlocked + newUnlockedIncoming
     }
 

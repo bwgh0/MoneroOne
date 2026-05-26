@@ -471,7 +471,8 @@ class MoneroWallet: ObservableObject {
             timestamp: Date(timeIntervalSince1970: Double(info.timestamp)),
             confirmations: confirmations,
             status: status,
-            memo: info.memo
+            memo: info.memo,
+            blockHeight: info.blockHeight == 0 ? nil : info.blockHeight
         )
     }
 
@@ -723,6 +724,13 @@ struct MoneroTransaction: Identifiable, Equatable, Hashable {
     let confirmations: Int?
     let status: TransactionStatus
     let memo: String?
+    /// The block height the tx was included in (0 / nil for pending).
+    /// Needed to recompute confirmations on the fly for entries that
+    /// were captured in a hardware-session snapshot — without it the
+    /// snapshot's confirmation count is frozen at write time and the
+    /// All Transactions row stays stuck at "1 confirmation" even
+    /// after the chain has moved hundreds of blocks past it.
+    let blockHeight: UInt64?
 
     enum TransactionType: Hashable {
         case incoming
@@ -757,6 +765,10 @@ struct MoneroTransactionSnapshot: Codable {
     let confirmations: Int?
     let statusRaw: String  // "pending" / "confirmed" / "failed"
     let memo: String?
+    /// Optional — old snapshots written before this field was added
+    /// decode it as `nil`, in which case the consumer falls back to
+    /// the frozen `confirmations` value.
+    let blockHeight: UInt64?
 
     init(from tx: MoneroTransaction) {
         self.id = tx.id
@@ -772,6 +784,7 @@ struct MoneroTransactionSnapshot: Codable {
         case .failed: self.statusRaw = "failed"
         }
         self.memo = tx.memo
+        self.blockHeight = tx.blockHeight
     }
 
     func toTransaction() -> MoneroTransaction {
@@ -791,7 +804,8 @@ struct MoneroTransactionSnapshot: Codable {
             timestamp: timestamp,
             confirmations: confirmations,
             status: status,
-            memo: memo
+            memo: memo,
+            blockHeight: blockHeight
         )
     }
 }

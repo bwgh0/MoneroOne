@@ -132,15 +132,21 @@ struct SendFlowView: View {
                     // Show the same confetti / success animation
                     // software-wallet sends get. Phase was set to
                     // `.sending` when the user tapped Confirm, so
-                    // SendStatusStep is already on screen — just
-                    // hand it the tx hash and it animates to the
-                    // success view + confetti. User taps Done from
-                    // there to dismiss the SendFlow.
+                    // SendStatusStep is already on screen behind
+                    // the just-dismissed HW sheet — let the sending
+                    // animation breathe for a beat so the user
+                    // perceives the broadcast step before we slam
+                    // straight to confetti, then flip to .success.
                     transactionHash = txId
                     sendInProgress = false
-                    HapticFeedback.shared.transactionSuccess()
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                        phase = .success(txHash: txId)
+                    Task {
+                        try? await Task.sleep(nanoseconds: 900_000_000)
+                        await MainActor.run {
+                            HapticFeedback.shared.transactionSuccess()
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                                phase = .success(txHash: txId)
+                            }
+                        }
                     }
                 case .failed:
                     sendInProgress = false
@@ -179,7 +185,7 @@ struct SendFlowView: View {
                 memo: $memo,
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
-                unlockedBalance: walletManager.unlockedBalance,
+                unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefilledFromQR: amountPrefilledFromQR,
                 onContinue: {

@@ -193,7 +193,7 @@ struct WalletSwitcherButton: View {
                     .font(.subheadline.weight(.semibold))
 
                 HStack(spacing: 0) {
-                    Text(XMRFormatter.format(walletManager.balance))
+                    Text(XMRFormatter.format(walletManager.displayBalance))
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .layoutPriority(0)

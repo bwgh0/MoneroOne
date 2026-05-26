@@ -470,6 +470,8 @@ class THPChannel {
 
     private func readTHPResponse(timeout: TimeInterval = 60) async throws -> THPFrame.DecodedFrame {
         // Outer loop: retries when a retransmission is detected
+        var crcRetryCount = 0
+        let maxCRCRetries = 5
         while true {
             var chunks: [Data] = []
             var expectedTotalSize: Int?
@@ -511,8 +513,35 @@ class THPChannel {
                 }
             }
 
-            let assembled = try THPFrame.reassemble(chunks: chunks)
-            let decoded = try THPFrame.decode(data: assembled)
+            // Decode with CRC tolerance. When BLE delivers a corrupted
+            // chunk, `THPFrame.decode` throws `crcMismatch`. Throwing
+            // here used to propagate all the way out to the bridge,
+            // which surfaced a 500 to wallet2 mid-cold-key-image-sync
+            // — wallet2's C++ side doesn't handle that gracefully and
+            // calls `abort()` (observed via crash log
+            // `MONERO_Wallet_coldKeyImageSync + 372 -> abort`). THP's
+            // ABP layer guarantees the device retransmits any frame
+            // we don't ACK, so swallow the bad frame, refrain from
+            // ACK'ing it, and wait for the resend. Bounded retries
+            // so a persistently broken link still fails out cleanly
+            // instead of looping forever.
+            let assembled: Data
+            let decoded: THPFrame.DecodedFrame
+            do {
+                assembled = try THPFrame.reassemble(chunks: chunks)
+                decoded = try THPFrame.decode(data: assembled)
+            } catch let err as THPFrameError {
+                if case .crcMismatch = err {
+                    crcRetryCount += 1
+                    TrezorLog.log("[THP] readTHPResponse: CRC mismatch (retry %d/%d), waiting for device retransmit",
+                                  crcRetryCount, maxCRCRetries)
+                    if crcRetryCount >= maxCRCRetries {
+                        throw err
+                    }
+                    continue
+                }
+                throw err
+            }
 
             TrezorLog.log("[THP] readTHPResponse: ctrl=%02x, cid=%04x, payload=%d bytes",
                           decoded.controlByte.rawValue, decoded.cid, decoded.payload.count)

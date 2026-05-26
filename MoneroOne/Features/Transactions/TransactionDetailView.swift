@@ -1,4 +1,5 @@
 import SwiftUI
+import SafariServices
 
 struct TransactionDetailView: View {
     let transaction: MoneroTransaction
@@ -8,6 +9,7 @@ struct TransactionDetailView: View {
     @State private var txKey: String?
     @State private var txKeyLookedUp = false
     @State private var copiedField: CopyField?
+    @State private var explorerURL: URL?
 
     private enum CopyField: String { case txId, address, txKey }
 
@@ -148,19 +150,31 @@ struct TransactionDetailView: View {
                 }
 
                 if let url = blockExplorerURL {
-                    Link(destination: url) {
+                    Button {
+                        explorerURL = url
+                    } label: {
                         HStack {
                             Image(systemName: "safari")
                                 .foregroundColor(.accentColor)
                             Text("View in Block Explorer")
+                                .foregroundColor(.primary)
                             Spacer()
                             Text(isTestnet ? "Testnet" : "")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
+                        // Without an explicit shape, taps on the
+                        // empty space the `Spacer()` occupies pass
+                        // through instead of firing the button.
+                        // Make the whole row clickable.
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("View in block explorer\(isTestnet ? ", testnet" : "")")
-                    .accessibilityHint("Opens the transaction in a web browser")
+                    .accessibilityHint("Opens the transaction in an in-app browser")
                 }
             }
         }
@@ -173,6 +187,10 @@ struct TransactionDetailView: View {
             guard transaction.type == .outgoing, !txKeyLookedUp else { return }
             txKey = walletManager.getTxKey(txId: transaction.id)
             txKeyLookedUp = true
+        }
+        .sheet(item: $explorerURL) { url in
+            SafariView(url: url)
+                .ignoresSafeArea()
         }
     }
 
@@ -260,8 +278,33 @@ struct TransactionDetailView: View {
             timestamp: Date(),
             confirmations: 10,
             status: .confirmed,
-            memo: nil
+            memo: nil,
+            blockHeight: nil
         ))
         .environmentObject(WalletManager())
     }
+}
+
+/// `SFSafariViewController` wrapper that keeps the block-explorer
+/// link inside MoneroOne instead of bouncing the user out to
+/// Safari. Reader mode disabled — block-explorer pages aren't
+/// articles and the reader-extraction heuristics tend to garble
+/// the tx data we actually want to show.
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = false
+        return SFSafariViewController(url: url, configuration: config)
+    }
+
+    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
+}
+
+/// `.sheet(item:)` requires Identifiable. URL doesn't conform by
+/// default; using `absoluteString` as the id is safe since the
+/// presented URL only changes when the user taps the row.
+extension URL: Identifiable {
+    public var id: String { absoluteString }
 }

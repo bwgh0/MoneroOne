@@ -66,7 +66,7 @@ struct SendReviewStep: View {
                                 Text("All Funds")
                                     .font(.title.weight(.bold))
                                 if let fee = estimatedFee {
-                                    let sendAmount = walletManager.unlockedBalance - fee
+                                    let sendAmount = walletManager.displayUnlockedBalance - fee
                                     Text("\(XMRFormatter.format(sendAmount)) XMR")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
@@ -201,7 +201,7 @@ struct SendReviewStep: View {
                 estimatedFee = try await walletManager.estimateFee(to: recipientAddress, amount: amount)
 
                 // If amount + fee exceeds balance, auto-upgrade to send all
-                if let fee = estimatedFee, amount + fee > walletManager.unlockedBalance, !isSendingAll {
+                if let fee = estimatedFee, amount + fee > walletManager.displayUnlockedBalance, !isSendingAll {
                     upgradedToSendAll = true
                     onUpgradeToSendAll?()
                 }

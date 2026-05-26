@@ -440,7 +440,35 @@ struct HardwareSessionSheet: View {
         // a Try Again retry fast-paths through bringup. The
         // warm-window timer on WalletManager handles eventual
         // teardown either way.
-        _ = state
+
+        // Auto-dismiss on a successful broadcast so the parent
+        // SendFlow's `.success` view (with the confetti animation
+        // every other send gets) becomes visible — the HW sheet's
+        // own "Sent" view would otherwise sit on top of it. For a
+        // pure Sync Sent run (no broadcast) keep the sheet up with
+        // its Done button so the user has explicit confirmation
+        // the sync ran.
+        //
+        // Important: defer to the next runloop. Running the
+        // dismiss action synchronously from inside an `.onChange`
+        // closure puts SwiftUI mid-update, and the surrounding
+        // state writes (state→.idle) end up firing the BLE-state
+        // onChange + onAppear sequence on what looks like a fresh
+        // sheet instance — which spawns a duplicate
+        // `runHardwareSession`. Pushing the dismiss to a fresh
+        // tick lets SwiftUI finish processing the .complete
+        // transition before the view-graph teardown begins.
+        // Also: don't touch hardwareSessionState here. The state
+        // gets cleared at the next user-initiated session start
+        // (via `clearTerminalSessionState` at the tap site), and
+        // resetting it from inside an onChange closure was part
+        // of what was tripping the dup-fire.
+        if case .complete = state,
+           case .sentTransaction = walletManager.lastHardwareSessionOutcome {
+            DispatchQueue.main.async {
+                dismiss()
+            }
+        }
     }
 
     private func cancelAndDismiss() {

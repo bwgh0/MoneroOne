@@ -24,6 +24,11 @@ jobs:
         with:
           repository: bwgh0/MoneroKit.Swift
           path: MoneroKit.Swift
+          # Required so `Monero.xcframework/**/*.a` is fetched as
+          # the real binary instead of left as an LFS pointer.
+          # Without this the linker fails with
+          # `ld: unknown file type in libMoneroCombined.a`.
+          lfs: true
 
       - name: Fix MoneroKit path for CI
         run: |

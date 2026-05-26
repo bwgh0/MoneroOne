@@ -388,7 +388,14 @@ class TrezorBridgeServer {
         default: statusText = "Error"
         }
 
-        let response = "HTTP/1.1 \(statusCode) \(statusText)\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n\(body)"
+        // No `Access-Control-Allow-Origin` header — the bridge only
+        // serves wallet2 (native client) over loopback, never a web
+        // origin. Adding `*` would let any Safari tab POST to the
+        // bridge while it's warm and proxy Trezor messages through
+        // an unlocked device. Trezord ships a strict origin allow-
+        // list for the same reason; the safest match is to send no
+        // CORS header at all and let the browser block the request.
+        let response = "HTTP/1.1 \(statusCode) \(statusText)\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
 
         connection.send(content: response.data(using: .utf8), completion: .contentProcessed { error in
             if let error {

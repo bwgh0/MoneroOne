@@ -752,16 +752,24 @@ class WalletManager: ObservableObject {
     }
 
     /// Display balance for the active wallet. For hardware wallets
-    /// this prefers the FULL-cache snapshot (true spendable amount
-    /// after key-image sync) over VIEW's value (lifetime received,
+    /// this prefers the FULL-cache snapshot (true spendable after
+    /// key-image sync) over VIEW's value (lifetime received,
     /// monotonically inflating because watch-only can't see spends).
-    /// VIEW *can* still see new incoming UTXOs without the device
-    /// connected, so we add the delta between VIEW's current view
-    /// and VIEW's value at the snapshot's session — that picks up
-    /// fresh deposits between hardware syncs without the user
-    /// having to plug in the Trezor again to see them.
-    /// Falls back to plain VIEW until the user has run at least
-    /// one hardware session against this wallet.
+    ///
+    /// To show fresh deposits between hardware sessions, we add the
+    /// amount of any VIEW-detected incoming tx whose hash is NOT in
+    /// the snapshot's tx list. The hash filter is critical for
+    /// self-sends: the change UTXO from an outgoing tx is the same
+    /// on-chain transaction as the send (same hash), so VIEW
+    /// reports it as type=incoming with the snapshot's outgoing
+    /// hash — filtering by hash naturally excludes it (it's
+    /// already accounted for in snap.balance, which FULL computed
+    /// after the send). Only truly new incoming from an external
+    /// sender shows up with a hash not in the snapshot.
+    ///
+    /// The previous baseline-delta approach (`current - baseline`)
+    /// double-counted the change UTXO and produced VIEW-inflated
+    /// numbers after a self-send.
     var displayBalance: Decimal {
         guard isHardwareWallet else { return balance }
         guard let walletId = activeWallet?.id else {
@@ -772,15 +780,10 @@ class WalletManager: ObservableObject {
             TrezorLog.log("[displayBalance] fallback (no snapshot for %@) → raw=%@", walletId.uuidString, "\(balance)")
             return balance
         }
-        // Old snapshots lack viewBaseline. Without a baseline we
-        // can't compute the new-incoming delta safely (we'd be
-        // subtracting from zero, treating VIEW's whole inflated
-        // balance as "new income" since session). Skip the delta
-        // when baseline is missing — show FULL's truth directly.
-        guard let baseline = snap.viewBaseline else {
-            return snap.balance
-        }
-        let newIncoming = max(0, balance - baseline)
+        let snapshotHashes = Set(loadHardwareTxSnapshot(walletId: walletId).map { $0.id })
+        let newIncoming = transactions
+            .filter { $0.type == .incoming && !snapshotHashes.contains($0.id) }
+            .reduce(Decimal(0)) { $0 + $1.amount }
         return snap.balance + newIncoming
     }
 
@@ -790,11 +793,21 @@ class WalletManager: ObservableObject {
               let snap = loadHardwareBalanceSnapshot(walletId: walletId) else {
             return unlockedBalance
         }
-        guard let baseline = snap.viewUnlockedBaseline else {
-            return snap.unlocked
-        }
-        let newUnlockedIncoming = max(0, unlockedBalance - baseline)
-        return snap.unlocked + newUnlockedIncoming
+        let snapshotHashes = Set(loadHardwareTxSnapshot(walletId: walletId).map { $0.id })
+        // For unlocked, only count new-incoming txs that are
+        // confirmed enough to be spendable. Conservative cutoff:
+        // 10 confirmations (wallet2's default unlock window for
+        // recent outputs). Anything fewer stays in "locked" until
+        // the chain confirms it.
+        let liveHeight = daemonHeight
+        let confirmedNewIncoming = transactions
+            .filter { tx in
+                guard tx.type == .incoming, !snapshotHashes.contains(tx.id) else { return false }
+                guard let blockHeight = tx.blockHeight, blockHeight > 0, liveHeight >= blockHeight else { return false }
+                return Int(liveHeight - blockHeight) >= 9  // 10 confirmations including the block
+            }
+            .reduce(Decimal(0)) { $0 + $1.amount }
+        return snap.unlocked + confirmedNewIncoming
     }
 
     @Published private(set) var walletSessionId = UUID()

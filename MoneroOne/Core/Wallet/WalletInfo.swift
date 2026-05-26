@@ -23,10 +23,31 @@ struct WalletInfo: Identifiable, Codable, Equatable {
     /// field existed have `nil` and get populated lazily on first unlock.
     var derivedWalletId: String?
 
+    /// Sidecar wallet2 cache identifier for hardware-backed wallets.
+    /// `derivedWalletId` opens the primary view-only wallet; this opens
+    /// the device-bound sidecar that gets created on demand during a
+    /// reconnect session. Hashed from the THP device identifier so it
+    /// stays stable across re-pairings of the same physical device.
+    /// `nil` for non-hardware wallets.
+    var deviceWalletId: String?
+
     var keychainPrefix: String { "one.monero.MoneroOne.wallet.\(id.uuidString)" }
 
-    /// Convenience — true when the wallet was opened from address + view key.
-    var isViewOnly: Bool { source == .viewOnly }
+    /// Convenience — true when the wallet has no on-device spend key.
+    /// View-only and hardware wallets both qualify; the receive flow
+    /// behaves the same for both.
+    var isViewOnly: Bool {
+        switch source {
+        case .viewOnly, .hardware: return true
+        case .seed: return false
+        }
+    }
+
+    /// True when sending requires bringing a hardware device online.
+    var requiresHardwareSession: Bool {
+        if case .hardware = source { return true }
+        return false
+    }
 
     enum CodingKeys: String, CodingKey {
         // Persisted as "seedType" for backwards compatibility with multi-wallet
@@ -37,9 +58,10 @@ struct WalletInfo: Identifiable, Codable, Equatable {
         case syncResetCount, userCreatedSubaddressIndices
         case cachedPrimaryAddress, cachedBalance
         case derivedWalletId
+        case deviceWalletId
     }
 
-    init(id: UUID, name: String, emoji: String = "\u{1F4B0}", source: WalletSource, createdAt: Date, restoreHeight: UInt64, syncResetCount: Int, userCreatedSubaddressIndices: [Int], cachedPrimaryAddress: String?, cachedBalance: Decimal?, derivedWalletId: String? = nil) {
+    init(id: UUID, name: String, emoji: String = "\u{1F4B0}", source: WalletSource, createdAt: Date, restoreHeight: UInt64, syncResetCount: Int, userCreatedSubaddressIndices: [Int], cachedPrimaryAddress: String?, cachedBalance: Decimal?, derivedWalletId: String? = nil, deviceWalletId: String? = nil) {
         self.id = id
         self.name = name
         self.emoji = emoji
@@ -51,6 +73,7 @@ struct WalletInfo: Identifiable, Codable, Equatable {
         self.cachedPrimaryAddress = cachedPrimaryAddress
         self.cachedBalance = cachedBalance
         self.derivedWalletId = derivedWalletId
+        self.deviceWalletId = deviceWalletId
     }
 
     init(from decoder: Decoder) throws {
@@ -66,5 +89,6 @@ struct WalletInfo: Identifiable, Codable, Equatable {
         cachedPrimaryAddress = try container.decodeIfPresent(String.self, forKey: .cachedPrimaryAddress)
         cachedBalance = try container.decodeIfPresent(Decimal.self, forKey: .cachedBalance)
         derivedWalletId = try container.decodeIfPresent(String.self, forKey: .derivedWalletId)
+        deviceWalletId = try container.decodeIfPresent(String.self, forKey: .deviceWalletId)
     }
 }

@@ -55,8 +55,8 @@ struct CommandCenterView: View {
                 }
 
                 BalanceCard(
-                    balance: walletManager.balance,
-                    unlockedBalance: walletManager.unlockedBalance,
+                    balance: walletManager.displayBalance,
+                    unlockedBalance: walletManager.displayUnlockedBalance,
                     syncState: walletManager.syncState,
                     connectionStage: walletManager.connectionStage,
                     priceService: priceService,
@@ -77,7 +77,7 @@ struct CommandCenterView: View {
 
             // Column 2: Chart Switcher (Portfolio / Price)
             VStack(spacing: 16) {
-                ChartSwitcherCard(balance: walletManager.balance)
+                ChartSwitcherCard(balance: walletManager.displayBalance)
                 Spacer()
             }
             .frame(minWidth: 320, idealWidth: 400)
@@ -103,8 +103,8 @@ struct CommandCenterView: View {
                 }
 
                 BalanceCard(
-                    balance: walletManager.balance,
-                    unlockedBalance: walletManager.unlockedBalance,
+                    balance: walletManager.displayBalance,
+                    unlockedBalance: walletManager.displayUnlockedBalance,
                     syncState: walletManager.syncState,
                     connectionStage: walletManager.connectionStage,
                     priceService: priceService,
@@ -119,7 +119,7 @@ struct CommandCenterView: View {
                     isSendDisabled: walletManager.isViewOnly
                 )
 
-                ChartSwitcherCard(balance: walletManager.balance)
+                ChartSwitcherCard(balance: walletManager.displayBalance)
 
                 Spacer()
             }

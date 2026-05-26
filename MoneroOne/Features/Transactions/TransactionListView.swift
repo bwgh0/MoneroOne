@@ -13,7 +13,15 @@ struct TransactionListView: View {
     }
 
     private var filteredTransactions: [MoneroTransaction] {
-        var result = walletManager.transactions
+        // For hardware-backed wallets, raw `transactions` is just
+        // VIEW's read of incoming UTXOs — outgoing sends are
+        // invisible to a watch-only key. Use `mergedTransactions`
+        // which folds in the snapshot the hardware session writes
+        // out (FULL wallet's tx list captured at the end of each
+        // sync/send), so the All Transactions screen matches the
+        // Recent list on the home view instead of mis-tagging
+        // outgoing sends as Received.
+        var result = walletManager.mergedTransactions
 
         // Apply type filter
         switch filterType {

@@ -21,9 +21,16 @@ class MoneroWallet: ObservableObject {
     /// Actual restore height as decoded by the C++ library (e.g. Polyseed birthday)
     @Published var actualRestoreHeight: UInt64?
 
-    /// Primary address (index 0) - from storage (pre-computed)
+    /// Primary address (index 0). Reads from MoneroKit's GRDB storage
+    /// when populated (the normal case after `Kit.start()` runs its
+    /// _start phase 1), and falls back to wallet2's live runtime if
+    /// storage is empty. The fallback matters for sidecar wallets
+    /// opened via `prepareOnly()`, which deliberately skips the
+    /// storage-populate step so wallet2 never enters refresh mode.
     var primaryAddress: String {
-        kit?.primaryAddress ?? ""
+        let stored = kit?.primaryAddress ?? ""
+        if !stored.isEmpty { return stored }
+        return kit?.runtimePrimaryAddress ?? ""
     }
 
     /// The actual refresh-from-block-height as set by the C++ wallet.
@@ -103,6 +110,44 @@ class MoneroWallet: ObservableObject {
             let state = kit.walletState
             let subaddrs = kit.usedAddresses
             return (kit, balance, address, state, subaddrs)
+        }.value
+
+        kit = newKit
+        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
+    }
+
+    /// Open (or create on first connect) a wallet bound to a hardware
+    /// device. The on-disk cache is keyed by `walletId` rather than a
+    /// hash of credentials so the caller can pin the sidecar to a
+    /// stable identifier (typically `WalletInfo.deviceWalletId`, derived
+    /// from the THP device id). The Trezor bridge HTTP server must be
+    /// running and the device must be reachable through it before this
+    /// call — wallet2 contacts the device during `restore_from_device`.
+    func createFromDevice(
+        deviceName: String,
+        walletId: String,
+        restoreHeight: UInt64 = 0,
+        node: MoneroKit.Node? = nil,
+        networkType: MoneroKit.NetworkType = .mainnet
+    ) async throws {
+        let walletNode = node ?? defaultNode(for: networkType)
+
+        // Heavy Kit init off main thread — wallet2 contacts the device
+        // during restore_from_device which can take seconds.
+        let reachability = reachabilityManager
+        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs) = try await Task.detached {
+            let kit = try MoneroKit.Kit(
+                wallet: .trezor(deviceName: deviceName),
+                account: 0,
+                restoreHeight: restoreHeight,
+                walletId: walletId,
+                node: walletNode,
+                networkType: networkType,
+                reachabilityManager: reachability,
+                logger: nil,
+                moneroCoreLogLevel: 0
+            )
+            return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses)
         }.value
 
         kit = newKit
@@ -333,6 +378,23 @@ class MoneroWallet: ObservableObject {
         }
     }
 
+    /// Synchronous read of wallet2's transaction list, bypassing the
+    /// fire-and-forget `Task.detached` + main-hop in `fetchTransactions`.
+    /// Used by the hardware-session snapshot path where we need to
+    /// capture the just-broadcast tx without racing the publisher.
+    /// Also updates the `@Published transactions` mirror so any
+    /// observers see the same list.
+    func fetchTransactionsBlocking() async -> [MoneroTransaction] {
+        guard let kit = kit else { return [] }
+        let rate = coinRate
+        let mapped = await Task.detached { () -> [MoneroTransaction] in
+            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 100)
+            return txInfos.map { MoneroWallet.mapTransaction($0, coinRate: rate, kit: kit) }
+        }.value
+        self.transactions = mapped
+        return mapped
+    }
+
     nonisolated private static func mapTransaction(_ info: MoneroKit.TransactionInfo, coinRate: Decimal, kit: MoneroKit.Kit) -> MoneroTransaction {
         let amount = Decimal(info.amount) / coinRate
         let fee = Decimal(info.fee) / coinRate
@@ -369,7 +431,8 @@ class MoneroWallet: ObservableObject {
             timestamp: Date(timeIntervalSince1970: Double(info.timestamp)),
             confirmations: confirmations,
             status: status,
-            memo: info.memo
+            memo: info.memo,
+            blockHeight: info.blockHeight == 0 ? nil : info.blockHeight
         )
     }
 
@@ -513,6 +576,34 @@ class MoneroWallet: ObservableObject {
     /// The wallet's private view key, or nil if not yet loaded.
     var secretViewKey: String? { kit?.secretViewKey }
 
+    // MARK: - Hardware-wallet primitives
+    //
+    // The dual-cache architecture opens this MoneroWallet during a
+    // reconnect session against the FULL TREZOR-bound cache. After
+    // refresh has populated m_transfers, the session driver runs
+    // `coldKeyImageSync` which asks the device for signed key images
+    // and imports them into the FULL cache.
+
+    @discardableResult
+    func reconnectDevice() async -> Bool {
+        await kit?.reconnectDevice() ?? false
+    }
+
+    @discardableResult
+    func coldKeyImageSync() async -> Bool {
+        await kit?.coldKeyImageSync() ?? false
+    }
+
+    var deviceType: MoneroKit.Kit.DeviceType {
+        kit?.deviceType ?? .software
+    }
+
+    /// Latest wallet2 error string, for diagnostics after a wallet2 call
+    /// returns false.
+    var latestErrorString: String {
+        kit?.latestStatus.message ?? ""
+    }
+
     // MARK: - Validation
 
     static func isValidAddress(_ address: String, networkType: MoneroKit.NetworkType = .mainnet) -> Bool {
@@ -593,6 +684,13 @@ struct MoneroTransaction: Identifiable, Equatable, Hashable {
     let confirmations: Int?
     let status: TransactionStatus
     let memo: String?
+    /// The block height the tx was included in (0 / nil for pending).
+    /// Needed to recompute confirmations on the fly for entries that
+    /// were captured in a hardware-session snapshot — without it the
+    /// snapshot's confirmation count is frozen at write time and the
+    /// All Transactions row stays stuck at "1 confirmation" even
+    /// after the chain has moved hundreds of blocks past it.
+    let blockHeight: UInt64?
 
     enum TransactionType: Hashable {
         case incoming
@@ -611,5 +709,63 @@ struct MoneroTransaction: Identifiable, Equatable, Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+}
+
+/// JSON-friendly mirror of `MoneroTransaction` for the hardware-session
+/// tx snapshot. The runtime type uses non-Codable enums; this mirror
+/// flattens them into raw strings/ints for round-tripping through disk.
+struct MoneroTransactionSnapshot: Codable {
+    let id: String
+    let typeRaw: String   // "incoming" / "outgoing"
+    let amount: Decimal
+    let fee: Decimal
+    let address: String
+    let timestamp: Date
+    let confirmations: Int?
+    let statusRaw: String  // "pending" / "confirmed" / "failed"
+    let memo: String?
+    /// Optional — old snapshots written before this field was added
+    /// decode it as `nil`, in which case the consumer falls back to
+    /// the frozen `confirmations` value.
+    let blockHeight: UInt64?
+
+    init(from tx: MoneroTransaction) {
+        self.id = tx.id
+        self.typeRaw = tx.type == .incoming ? "incoming" : "outgoing"
+        self.amount = tx.amount
+        self.fee = tx.fee
+        self.address = tx.address
+        self.timestamp = tx.timestamp
+        self.confirmations = tx.confirmations
+        switch tx.status {
+        case .pending: self.statusRaw = "pending"
+        case .confirmed: self.statusRaw = "confirmed"
+        case .failed: self.statusRaw = "failed"
+        }
+        self.memo = tx.memo
+        self.blockHeight = tx.blockHeight
+    }
+
+    func toTransaction() -> MoneroTransaction {
+        let type: MoneroTransaction.TransactionType = typeRaw == "outgoing" ? .outgoing : .incoming
+        let status: MoneroTransaction.TransactionStatus
+        switch statusRaw {
+        case "confirmed": status = .confirmed
+        case "failed": status = .failed
+        default: status = .pending
+        }
+        return MoneroTransaction(
+            id: id,
+            type: type,
+            amount: amount,
+            fee: fee,
+            address: address,
+            timestamp: timestamp,
+            confirmations: confirmations,
+            status: status,
+            memo: memo,
+            blockHeight: blockHeight
+        )
     }
 }

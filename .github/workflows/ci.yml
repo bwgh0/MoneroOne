@@ -19,6 +19,8 @@ jobs:
         with:
           repository: bwgh0/MoneroKit.Swift
           path: MoneroKit.Swift
+          # Need real `.a` content from LFS, not the pointer files.
+          lfs: true
 
       - name: Fix MoneroKit path for CI
         run: |

@@ -8,6 +8,7 @@ struct WalletView: View {
     @State private var showSend = false
     @State private var showPortfolio = false
     @State private var showWalletManager = false
+    @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
     @Binding var selectedTab: MainTabView.Tab
 
     var body: some View {
@@ -17,12 +18,16 @@ struct WalletView: View {
                     // Balance + actions — collapse upward
                     VStack(spacing: 16) {
                         BalanceCard(
-                            balance: walletManager.balance,
-                            unlockedBalance: walletManager.unlockedBalance,
+                            balance: walletManager.displayBalance,
+                            unlockedBalance: walletManager.displayUnlockedBalance,
                             syncState: walletManager.syncState,
                             connectionStage: walletManager.connectionStage,
                             priceService: priceService,
                             isViewOnly: walletManager.isViewOnly,
+                            isHardwareWallet: walletManager.isHardwareWallet,
+                            hardwareDeviceName: walletManager.hardwareDisplayName,
+                            hardwareLastSentSyncAt: walletManager.lastHardwareSentSyncAt,
+                            isHardwareDeviceWarm: walletManager.isHardwareDeviceWarm,
                             isSyncBlocked: trustedLocationSync.isSyncBlocked,
                             isOutsideTrustedZone: trustedLocationSync.isOutsideTrustedZone,
                             trustedLocationName: trustedLocationSync.currentTrustedLocationName,
@@ -32,6 +37,19 @@ struct WalletView: View {
                             },
                             onCardTap: {
                                 showPortfolio = true
+                            },
+                            onHardwareSyncTap: {
+                                // Clear any leftover .complete/.failed
+                                // state from the prior run so the
+                                // sheet opens to a fresh bringup, not
+                                // to a stale success/failure view.
+                                // Done at the tap site (not in sheet
+                                // onAppear) so SwiftUI re-firing
+                                // onAppear during state transitions
+                                // doesn't sneak through the duplicate-
+                                // session guard.
+                                walletManager.clearTerminalSessionState()
+                                hardwareSheetIntent = .syncSentTransactions
                             }
                         )
                         .padding(.horizontal)
@@ -41,13 +59,13 @@ struct WalletView: View {
                                 title: "Send",
                                 icon: "arrow.up.circle.fill",
                                 color: .orange,
-                                isDisabled: walletManager.isViewOnly
+                                isDisabled: !walletManager.canSend
                             ) {
                                 showSend = true
                             }
                             .accessibilityIdentifier("wallet.sendButton")
-                            .accessibilityLabel(walletManager.isViewOnly ? "Send Monero, disabled for view-only wallet" : "Send Monero")
-                            .accessibilityHint(walletManager.isViewOnly ? "This wallet is view-only and cannot send" : "Opens the send transaction screen")
+                            .accessibilityLabel(walletManager.canSend ? "Send Monero" : "Send Monero, disabled for view-only wallet")
+                            .accessibilityHint(walletManager.canSend ? "Opens the send transaction screen" : "This wallet is view-only and cannot send")
 
                             CompactActionButton(
                                 title: "Receive",
@@ -106,11 +124,18 @@ struct WalletView: View {
             }
             .sheet(isPresented: $showPortfolio) {
                 PortfolioChartView(
-                    balance: walletManager.balance,
+                    balance: walletManager.displayBalance,
                     priceService: priceService
                 )
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
+            }
+            .sheet(item: $hardwareSheetIntent) { intent in
+                HardwareSessionSheet(
+                    intent: intent,
+                    trezorManager: walletManager.trezorManager
+                )
+                .environmentObject(walletManager)
             }
         }
     }
@@ -168,7 +193,7 @@ struct RecentTransactionsSection: View {
     @State private var selectedTransaction: MoneroTransaction?
 
     private var recentTransactions: [MoneroTransaction] {
-        Array(walletManager.transactions.prefix(5))
+        Array(walletManager.mergedTransactions.prefix(5))
     }
 
     private var isSyncing: Bool {

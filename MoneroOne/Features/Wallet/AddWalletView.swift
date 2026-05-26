@@ -48,6 +48,19 @@ struct AddWalletView: View {
                         .padding(.vertical, 16)
                     }
                     .glassButtonStyle()
+
+                    NavigationLink(value: WalletManager.AddWalletDestination.pairTrezor) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.shield.fill")
+                                .font(.callout.weight(.semibold))
+                            Text("Connect Trezor")
+                                .font(.callout.weight(.semibold))
+                        }
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                    }
+                    .glassButtonStyle()
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)
@@ -77,6 +90,12 @@ struct AddWalletView: View {
                     )
                 case .restoreViewKey:
                     RestoreViewKeyView(
+                        isAddingWallet: true,
+                        existingPin: walletManager.currentPinForAddWallet
+                    )
+                case .pairTrezor:
+                    PairTrezorView(
+                        trezorManager: walletManager.trezorManager,
                         isAddingWallet: true,
                         existingPin: walletManager.currentPinForAddWallet
                     )

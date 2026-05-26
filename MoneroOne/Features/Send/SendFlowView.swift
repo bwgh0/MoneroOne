@@ -23,14 +23,21 @@ struct SendFlowView: View {
     @State private var sendInProgress = false
     @State private var amountPrefilledFromQR = false
 
-    /// A wallet opened from keys alone (view-only) or from an external device
-    /// without a live signing path cannot produce transactions. wallet2
-    /// rejects `createTransaction` in that mode as a safety net, but we block
-    /// the entire flow here so the user sees a clear reason instead of a
-    /// mid-flow error.
+    /// A pure view-only wallet (no spend key anywhere) can never sign.
+    /// Hardware wallets *can* sign, just through a device session, so
+    /// they're allowed through the SendFlow — the actual signing routes
+    /// through `HardwareSessionSheet` at the end. wallet2 still rejects
+    /// `createTransaction` for genuinely view-only wallets as a safety
+    /// net; this flag blocks the flow up front so the user sees the
+    /// reason instead of a mid-flow error.
     private var canSign: Bool {
-        walletManager.activeWallet?.source.canSignLocally ?? true
+        walletManager.canSend
     }
+
+    /// Hardware-wallet send sheet presented when the user confirms at
+    /// the review step. Only set for hardware-backed active wallets;
+    /// software wallets take the direct `walletManager.send` path.
+    @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
 
     var body: some View {
         NavigationStack {
@@ -95,6 +102,64 @@ struct SendFlowView: View {
         .onAppear {
             handlePrefill()
         }
+        .sheet(item: $hardwareSheetIntent, onDismiss: handleHardwareSheetDismiss) { intent in
+            HardwareSessionSheet(
+                intent: intent,
+                trezorManager: walletManager.trezorManager
+            )
+            .environmentObject(walletManager)
+        }
+    }
+
+    /// Called when the hardware-session sheet dismisses. Use the
+    /// outcome flag the WalletManager set during the run to decide
+    /// what to do with the parent SendFlow:
+    ///   - `sentTransaction`: dismiss the SendFlow and bounce the
+    ///     user back to the wallet view with refreshed balances.
+    ///   - `syncedOnly` / nil: shouldn't really happen from the
+    ///     send flow, but treat as "leave open".
+    ///   - `failed`: keep SendFlow visible so the user can adjust
+    ///     amount/address and retry without restarting from
+    ///     address-entry. Snap back to `.review` so the inputs are
+    ///     editable instead of stuck on the dead `.sending` step.
+    private func handleHardwareSheetDismiss() {
+        let outcome = walletManager.lastHardwareSessionOutcome
+        Task {
+            await walletManager.refresh()
+            await MainActor.run {
+                switch outcome {
+                case .sentTransaction(let txId):
+                    // Show the same confetti / success animation
+                    // software-wallet sends get. Phase was set to
+                    // `.sending` when the user tapped Confirm, so
+                    // SendStatusStep is already on screen behind
+                    // the just-dismissed HW sheet — let the sending
+                    // animation breathe for a beat so the user
+                    // perceives the broadcast step before we slam
+                    // straight to confetti, then flip to .success.
+                    transactionHash = txId
+                    sendInProgress = false
+                    Task {
+                        try? await Task.sleep(nanoseconds: 900_000_000)
+                        await MainActor.run {
+                            HapticFeedback.shared.transactionSuccess()
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                                phase = .success(txHash: txId)
+                            }
+                        }
+                    }
+                case .failed:
+                    sendInProgress = false
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        phase = .review
+                    }
+                case .syncedOnly, .none:
+                    // No send actually ran — leave the user where
+                    // they are.
+                    break
+                }
+            }
+        }
     }
 
     // MARK: - Phase Content
@@ -120,7 +185,7 @@ struct SendFlowView: View {
                 memo: $memo,
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
-                unlockedBalance: walletManager.unlockedBalance,
+                unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefilledFromQR: amountPrefilledFromQR,
                 onContinue: {
@@ -239,6 +304,28 @@ struct SendFlowView: View {
     // MARK: - Send
 
     private func sendTransaction() {
+        // Hardware wallets can't sign locally — hand off to the
+        // hardware-session sheet which orchestrates BLE, sidecar key-
+        // image sync, device-side signing, and broadcast. Bail out of
+        // SendFlowView's local progress state since the sheet drives
+        // its own UI from here.
+        if walletManager.requiresHardwareSession {
+            // Clear any leftover .complete/.failed state from the
+            // prior run before opening the hardware sheet. See note
+            // in WalletView's `onHardwareSyncTap` for why this lives
+            // at the tap site and not in the sheet's `onAppear`.
+            walletManager.clearTerminalSessionState()
+            let trimmedMemo = memo.isEmpty ? nil : memo
+            if isSendingAll {
+                hardwareSheetIntent = .sendAll(to: recipientAddress, memo: trimmedMemo)
+            } else if let amountDecimal = Decimal(string: amountString) {
+                hardwareSheetIntent = .send(to: recipientAddress, amount: amountDecimal, memo: trimmedMemo)
+            } else {
+                phase = .error(message: "Invalid amount")
+            }
+            return
+        }
+
         Task {
             do {
                 let txHash: String

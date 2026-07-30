@@ -1004,15 +1004,36 @@ class WalletManager: ObservableObject {
         let knownIds: Set<String> = Set(wallets.flatMap { wallet -> [String] in
             [wallet.derivedWalletId, wallet.deviceWalletId].compactMap { $0 }
         })
+        let allIdsKnown = wallets.allSatisfy { $0.derivedWalletId != nil || $0.deviceWalletId != nil }
 
         guard let entries = try? fileManager.contentsOfDirectory(at: moneroKitDir, includingPropertiesForKeys: nil) else { return }
-        for entry in entries {
-            let name = entry.lastPathComponent
-            if knownIds.contains(name) { continue }
-            // Skip dotfiles and any non-hex-32 names so we don't nuke
-            // future format changes (e.g. shared metadata directories).
-            guard name.count == 32, name.allSatisfy({ $0.isHexDigit }) else { continue }
-            try? fileManager.removeItem(at: entry)
+        let doomed = Self.orphanedCacheDirNames(
+            entries: entries.map(\.lastPathComponent),
+            knownIds: knownIds,
+            allWalletIdsKnown: allIdsKnown
+        )
+        for name in doomed {
+            try? fileManager.removeItem(at: moneroKitDir.appendingPathComponent(name))
+        }
+    }
+
+    /// Pure decision core of the launch-time cache sweep, extracted so unit
+    /// tests can pin its behavior. Returns directory names safe to delete.
+    ///
+    /// Rules, each protecting a real failure mode:
+    /// - `allWalletIdsKnown == false` → sweep nothing. A legacy WalletInfo
+    ///   without ids (populated lazily at first unlock, AFTER this sweep)
+    ///   has a live cache dir we can't recognize; deleting it forces a full
+    ///   re-sync and permanently destroys its wallet2-cached tx keys.
+    /// - Names in `knownIds` are live wallets — keep.
+    /// - Only 32-char hex names are candidates: dotfiles and future format
+    ///   changes (e.g. shared metadata dirs) must survive.
+    nonisolated static func orphanedCacheDirNames(entries: [String], knownIds: Set<String>, allWalletIdsKnown: Bool) -> [String] {
+        guard allWalletIdsKnown else { return [] }
+        return entries.filter { name in
+            guard !knownIds.contains(name) else { return false }
+            guard name.count == 32, name.allSatisfy({ $0.isHexDigit }) else { return false }
+            return true
         }
     }
 
@@ -1147,8 +1168,7 @@ class WalletManager: ObservableObject {
         // must reject before save to prevent two WalletInfo entries from
         // both pointing at the same on-disk wallet (which would corrupt
         // restore-height, sync state, and make delete-one nuke-both).
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        let candidateDerivedId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
+        let candidateDerivedId = derivedWalletId(seedPhrase: seedPhrase, syncResetCount: 0)
         try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: candidateDerivedId, pin: pin)
 
         // Persist the currently-active wallet's in-memory balance/address
@@ -1212,8 +1232,7 @@ class WalletManager: ObservableObject {
 
         let seedPhrase = mnemonic.joined(separator: " ")
 
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        let candidateDerivedId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
+        let candidateDerivedId = derivedWalletId(seedPhrase: seedPhrase, syncResetCount: 0)
         try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: candidateDerivedId, pin: pin)
 
         // See `addWallet` — snapshot prior active so its balance doesn't
@@ -1290,8 +1309,7 @@ class WalletManager: ObservableObject {
             throw WalletError.duplicateWallet(existingName: existing.name)
         }
 
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        let candidateDerivedId = MoneroWallet.stableWalletId(for: trimmedAddress + trimmedViewKey + networkSuffix)
+        let candidateDerivedId = MoneroWallet.viewOnlyCacheId(address: trimmedAddress, viewKey: trimmedViewKey, networkType: networkType)
         // Belt-and-braces collision check against a previously restored
         // view-only wallet that didn't have `cachedPrimaryAddress` populated.
         if let existing = wallets.first(where: { $0.derivedWalletId == candidateDerivedId }) {
@@ -1493,12 +1511,25 @@ class WalletManager: ObservableObject {
         }
     }
 
+    /// The on-disk wallet2 cache id `MoneroWallet.create` derives for a
+    /// seeded wallet in its current state. Must stay in lockstep with the
+    /// walletId derivation inside `MoneroWallet.create` — the launch-time
+    /// orphan sweep trusts the value persisted from here, and a mismatch
+    /// makes the sweep delete the live cache on every launch (full re-sync,
+    /// tx keys gone).
+    private func derivedWalletId(seedPhrase: String, syncResetCount: Int) -> String {
+        MoneroWallet.walletCacheId(
+            seedPhrase: seedPhrase,
+            resetSuffix: syncResetCount > 0 ? "\(syncResetCount)" : nil,
+            networkType: networkType
+        )
+    }
+
     /// Fill in `derivedWalletId` on a legacy WalletInfo once we've unlocked
     /// its secret material. Idempotent — a no-op if already populated.
     private func populateDerivedWalletIdIfMissing(for walletId: UUID, seedPhrase: String) {
         guard var info = wallets.first(where: { $0.id == walletId }), info.derivedWalletId == nil else { return }
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        info.derivedWalletId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
+        info.derivedWalletId = derivedWalletId(seedPhrase: seedPhrase, syncResetCount: info.syncResetCount)
         walletStore.updateWallet(info)
         if let idx = wallets.firstIndex(where: { $0.id == walletId }) {
             wallets[idx] = info
@@ -1508,8 +1539,7 @@ class WalletManager: ObservableObject {
 
     private func populateDerivedWalletIdIfMissing(for walletId: UUID, viewOnlyAddress: String, viewKey: String) {
         guard var info = wallets.first(where: { $0.id == walletId }), info.derivedWalletId == nil else { return }
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        info.derivedWalletId = MoneroWallet.stableWalletId(for: viewOnlyAddress + viewKey + networkSuffix)
+        info.derivedWalletId = MoneroWallet.viewOnlyCacheId(address: viewOnlyAddress, viewKey: viewKey, networkType: networkType)
         walletStore.updateWallet(info)
         if let idx = wallets.firstIndex(where: { $0.id == walletId }) {
             wallets[idx] = info
@@ -2575,11 +2605,20 @@ class WalletManager: ObservableObject {
         moneroWallet = nil
         Task.detached { [oldWallet] in let _ = oldWallet }
 
-        // Clear MoneroKit wallet data directory
-        clearWalletCache()
+        // Clear only THIS wallet's cache directory. Removing the whole
+        // MoneroKit dir here would also destroy every other wallet's
+        // wallet2 cache — and with it their stored per-transaction keys,
+        // which no rescan can rebuild.
+        let seedPhrase = seed.joined(separator: " ")
+        clearWalletCache(walletCacheId: info.derivedWalletId
+            ?? derivedWalletId(seedPhrase: seedPhrase, syncResetCount: info.syncResetCount))
 
-        // Increment reset counter via WalletStore
+        // Increment reset counter and re-derive the on-disk wallet id the
+        // next create() will use. Persisting the new id is what keeps the
+        // launch-time orphan sweep from treating the freshly-synced cache
+        // as unknown and deleting it on every launch.
         info.syncResetCount += 1
+        info.derivedWalletId = derivedWalletId(seedPhrase: seedPhrase, syncResetCount: info.syncResetCount)
         walletStore.updateWallet(info)
         activeWallet = info
         if let idx = wallets.firstIndex(where: { $0.id == info.id }) {
@@ -2603,16 +2642,20 @@ class WalletManager: ObservableObject {
         }
     }
 
-    private func clearWalletCache() {
+    private func clearWalletCache(walletCacheId: String) {
         let fileManager = FileManager.default
 
-        // Clear Library/Application Support/MoneroKit (where MoneroKit actually stores data)
+        // Clear Library/Application Support/MoneroKit/<id> — this wallet's
+        // cache only. Other wallets' caches (and their tx keys) stay.
         if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let moneroKitDir = appSupportURL.appendingPathComponent("MoneroKit")
-            try? fileManager.removeItem(at: moneroKitDir)
+            let walletCacheDir = appSupportURL
+                .appendingPathComponent("MoneroKit")
+                .appendingPathComponent(walletCacheId)
+            try? fileManager.removeItem(at: walletCacheDir)
         }
 
-        // Also try lowercase variants just in case
+        // Legacy junk locations from old builds — never held per-wallet
+        // data in the current layout, safe to remove wholesale.
         if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
             try? fileManager.removeItem(at: documentsURL.appendingPathComponent("MoneroKit"))
             try? fileManager.removeItem(at: documentsURL.appendingPathComponent("monero-kit"))
@@ -2862,8 +2905,7 @@ class WalletManager: ObservableObject {
     /// Convenience that derives the ID internally — use when the caller
     /// only has the seed string on hand (e.g. pre-restore UI checks).
     func checkForDuplicateSeed(seedPhrase: String, pin: String) throws {
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        let derivedId = MoneroWallet.stableWalletId(for: seedPhrase + networkSuffix)
+        let derivedId = derivedWalletId(seedPhrase: seedPhrase, syncResetCount: 0)
         try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: derivedId, pin: pin)
     }
 

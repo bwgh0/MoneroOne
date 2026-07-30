@@ -63,15 +63,11 @@ class MoneroWallet: ObservableObject {
     ///   - networkType: Mainnet or testnet
     func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) async throws {
         let walletNode = node ?? defaultNode(for: networkType)
-        var walletId = Self.stableWalletId(for: seed)
-
-        // Append reset suffix and network to force new wallet identity
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        if let suffix = resetSuffix {
-            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + suffix + networkSuffix)
-        } else if networkType == .testnet {
-            walletId = Self.stableWalletId(for: seed.joined(separator: " ") + networkSuffix)
-        }
+        let walletId = Self.walletCacheId(
+            seedPhrase: seed.joined(separator: " "),
+            resetSuffix: resetSuffix,
+            networkType: networkType
+        )
 
         // Detect seed type and create appropriate credentials
         // 16 words = polyseed, 24 words = bip39, 25 words = legacy
@@ -157,8 +153,7 @@ class MoneroWallet: ObservableObject {
     /// Create watch-only wallet
     func createWatchOnly(address: String, viewKey: String, restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, networkType: MoneroKit.NetworkType = .mainnet) async throws {
         let walletNode = node ?? defaultNode(for: networkType)
-        let networkSuffix = networkType == .testnet ? "_testnet" : ""
-        let walletId = Self.stableWalletId(for: address + viewKey + networkSuffix)
+        let walletId = Self.viewOnlyCacheId(address: address, viewKey: viewKey, networkType: networkType)
 
         // Heavy Kit init (SQLite + C++ + crypto) off main thread
         let reachability = reachabilityManager
@@ -619,12 +614,34 @@ class MoneroWallet: ObservableObject {
     // MARK: - Wallet ID
 
     /// Generate a stable wallet ID from seed words - ensures sync data persists across app restarts
-    static func stableWalletId(for seed: [String]) -> String {
+    nonisolated static func stableWalletId(for seed: [String]) -> String {
         stableWalletId(for: seed.joined(separator: " "))
     }
 
+    /// The on-disk wallet2 cache id for a seeded wallet. This is the single
+    /// source of truth shared by `create()` and by WalletManager's persisted
+    /// `derivedWalletId` — the launch-time orphan sweep deletes any cache dir
+    /// whose name it doesn't recognize, so the two derivations diverging
+    /// means the sweep destroys the live cache (full re-sync, and the tx
+    /// keys stored only in that cache are gone for good).
+    ///
+    /// Also a compatibility surface: existing installs have caches at these
+    /// exact ids. Changing the formula orphans every user's synced state.
+    /// The golden-value tests in WalletCacheIdTests pin it.
+    nonisolated static func walletCacheId(seedPhrase: String, resetSuffix: String?, networkType: MoneroKit.NetworkType) -> String {
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        return stableWalletId(for: seedPhrase + (resetSuffix ?? "") + networkSuffix)
+    }
+
+    /// View-only / hardware-wallet counterpart of `walletCacheId` — same
+    /// lockstep and compatibility rules apply.
+    nonisolated static func viewOnlyCacheId(address: String, viewKey: String, networkType: MoneroKit.NetworkType) -> String {
+        let networkSuffix = networkType == .testnet ? "_testnet" : ""
+        return stableWalletId(for: address + viewKey + networkSuffix)
+    }
+
     /// Generate a stable wallet ID from any string (seed phrase or address+viewKey)
-    static func stableWalletId(for identifier: String) -> String {
+    nonisolated static func stableWalletId(for identifier: String) -> String {
         let data = Data(identifier.utf8)
         let hash = SHA256.hash(data: data)
         // Use first 16 bytes as a UUID-like identifier

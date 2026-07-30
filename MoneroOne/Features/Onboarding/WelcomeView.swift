@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct WelcomeView: View {
+    @EnvironmentObject var walletManager: WalletManager
     @State private var showCreate = false
     @State private var showRestore = false
+    @State private var showTrezor = false
 
     var body: some View {
         NavigationStack {
@@ -63,6 +65,24 @@ struct WelcomeView: View {
                     .accessibilityLabel("Restore Wallet")
                     .accessibilityHint("Double tap to restore an existing wallet from a seed phrase or view key")
                     .accessibilityIdentifier("welcome.restoreButton")
+
+                    Button {
+                        showTrezor = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.shield.fill")
+                                .font(.callout.weight(.semibold))
+                            Text("Connect Trezor")
+                                .font(.callout.weight(.semibold))
+                        }
+                        .foregroundStyle(Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    .glassButtonStyle()
+                    .accessibilityLabel("Connect Trezor")
+                    .accessibilityHint("Double tap to pair a Trezor hardware wallet over Bluetooth")
+                    .accessibilityIdentifier("welcome.trezorButton")
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 32)
@@ -73,10 +93,14 @@ struct WelcomeView: View {
             .navigationDestination(isPresented: $showRestore) {
                 RestorePickerView()
             }
+            .navigationDestination(isPresented: $showTrezor) {
+                PairTrezorView(trezorManager: walletManager.trezorManager)
+            }
         }
     }
 }
 
 #Preview {
     WelcomeView()
+        .environmentObject(WalletManager())
 }

@@ -135,6 +135,27 @@ jobs:
             DEVELOPMENT_TEAM="$TEAM_ID" \
             archive
 
+      - name: Verify binary runs on the deployment target
+        run: |
+          BIN="build/MoneroOne.xcarchive/Products/Applications/MoneroOne.app/MoneroOne"
+
+          # Regression guard for the 1.0.7 iOS 17 launch crash: an object
+          # compiled without -miphoneos-version-min references libc++
+          # symbols that only exist in newer iOS, and dyld then kills the
+          # app at launch on every older device. Catch it before upload.
+          if nm -u "$BIN" | grep -q '__ZNSt13exception_ptr31__from_native_exception_pointerEPv'; then
+            echo "::error::Binary references std::exception_ptr::__from_native_exception_pointer (iOS 18.4+ only)."
+            echo "::error::The app will crash at launch on iOS 17.x. Rebuild libMoneroCombined.a with build_ios_trezor.sh (it pins -miphoneos-version-min)."
+            exit 1
+          fi
+
+          MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/{f=1} f && /minos/{print $2; exit}')
+          echo "Binary minos: $MINOS"
+          if [ "${MINOS%%.*}" -gt 17 ]; then
+            echo "::error::App binary minos is $MINOS — deployment target regressed above iOS 17."
+            exit 1
+          fi
+
       - name: Export IPA for sideloading
         env:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}

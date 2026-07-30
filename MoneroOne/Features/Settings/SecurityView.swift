@@ -5,6 +5,7 @@ struct SecurityView: View {
     @EnvironmentObject var walletManager: WalletManager
     @AppStorage("autoLockMinutes") private var autoLockMinutes = 5
     @AppStorage("preferredPINLength") private var preferredPINLength = 6
+    @AppStorage("requireAuthForSend") private var requireAuthForSend = true
     @State private var biometricsAvailable = false
     @State private var biometricType: LABiometryType = .none
     @State private var useBiometrics = false
@@ -42,6 +43,18 @@ struct SecurityView: View {
                         Text("Change PIN")
                     }
                 }
+            }
+
+            Section {
+                Toggle(isOn: $requireAuthForSend) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "paperplane.fill")
+                            .foregroundColor(.orange)
+                        Text("Confirm Sends")
+                    }
+                }
+            } footer: {
+                Text("Require Face ID, Touch ID, or your device passcode before each transaction is broadcast. Hardware wallets always confirm on the device itself.")
             }
 
             Section("Auto-Lock") {

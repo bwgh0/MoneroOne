@@ -1,8 +1,26 @@
+# ============================================================================
+# WARNING: project.pbxproj is HAND-MAINTAINED. Do not run `xcodegen generate`.
+#
+# The committed pbxproj carries hand edits this file cannot reproduce:
+#   - the Icon Composer app icon (`monero-one.icon`, APPICON_NAME
+#     "monero-one") — xcodegen doesn't understand .icon bundles and regen
+#     breaks the installed app icon
+#   - manually registered test files (grep CAC4E1D0 / REGR3SS10N)
+# To add a file: copy an existing PBXBuildFile + PBXFileReference pair in
+# the pbxproj, mint a unique 24-hex UUID, add it to the group children and
+# the target's Sources phase.
+# The deploymentTarget/plist settings below were re-synced to the shipped
+# pbxproj on 2026-07-29 to limit damage IF someone regens anyway.
+# ============================================================================
 name: MoneroOne
 options:
   bundleIdPrefix: one.monero
+  # 17.0 is load-bearing: raising this drops every user below that iOS
+  # version (and the App Store build's minos must stay 17.0 — CI verifies
+  # it post-archive). Keep in sync with the -miphoneos-version-min guard
+  # in monero_c_build/build_ios_trezor.sh.
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "17.0"
   xcodeVersion: "16.0"
   createIntermediateGroups: true
 
@@ -30,30 +48,11 @@ targets:
       - package: HdWalletKit
       - target: MoneroOneWidgets
         embed: true
-    info:
-      path: MoneroOne/Info.plist
-      properties:
-        UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
-        UILaunchScreen: {}
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        CFBundleDisplayName: "Monero One"
-        UIBackgroundModes:
-          - location
-        NSSupportsLiveActivities: true
-        NSLocationAlwaysAndWhenInUseUsageDescription: "Trusted Locations creates security zones around places you choose, like home or work. Your wallet only stays updated within these safe zones. Location data never leaves your device."
-        NSLocationWhenInUseUsageDescription: "Choose trusted locations like home or work to define security zones for your wallet. Location data stays on your device."
-        NSCameraUsageDescription: "Camera is used to scan QR codes"
-        NSFaceIDUsageDescription: "Face ID is used to unlock your wallet"
+    # No `info:` block on purpose: xcodegen would rewrite the plist from the
+    # (stale) properties listed here on every generate, silently dropping
+    # hand-maintained keys — it already ate NSBluetoothAlwaysUsageDescription
+    # and the bluetooth-central background mode once (Trezor BLE crashes
+    # without them). The committed Info.plist is the source of truth.
     settings:
       base:
         GENERATE_INFOPLIST_FILE: false
@@ -61,7 +60,7 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_EMIT_LOC_STRINGS: true
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: monero-one
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
@@ -71,13 +70,8 @@ targets:
     sources:
       - MoneroOneWidgets
       - Shared
-    info:
-      path: MoneroOneWidgets/Info.plist
-      properties:
-        CFBundleDisplayName: "Monero Sync"
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.widgetkit-extension
-        NSSupportsLiveActivities: true
+    # See MoneroOne target: committed Info.plist is source of truth, no
+    # `info:` generation.
     settings:
       base:
         GENERATE_INFOPLIST_FILE: false

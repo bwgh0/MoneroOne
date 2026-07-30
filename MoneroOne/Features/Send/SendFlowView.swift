@@ -23,6 +23,10 @@ struct SendFlowView: View {
     @State private var sendInProgress = false
     @State private var amountPrefilledFromQR = false
 
+    @StateObject private var biometricAuth = BiometricAuthManager()
+    /// Re-authenticate before broadcasting. On by default: every unlocked
+    /// session is otherwise a standing authorization to drain the wallet.
+    @AppStorage("requireAuthForSend") private var requireAuthForSend = true
 
     /// A pure view-only wallet (no spend key anywhere) can never sign.
     /// Hardware wallets *can* sign, just through a device session, so
@@ -215,9 +219,23 @@ struct SendFlowView: View {
                 onConfirm: {
                     guard !sendInProgress else { return }
                     sendInProgress = true
-                    HapticFeedback.shared.sendInitiated()
-                    goForward(to: .sending)
-                    sendTransaction()
+                    Task {
+                        // Hardware wallets are already re-authenticated
+                        // out-of-band — the user has to confirm on the device
+                        // before it will sign — so only gate software wallets.
+                        if requireAuthForSend, !walletManager.requiresHardwareSession {
+                            let approved = await biometricAuth.authenticateForTransaction(
+                                reason: "Confirm sending \(amountString) XMR"
+                            )
+                            guard approved else {
+                                sendInProgress = false
+                                return
+                            }
+                        }
+                        HapticFeedback.shared.sendInitiated()
+                        goForward(to: .sending)
+                        sendTransaction()
+                    }
                 },
                 onUpgradeToSendAll: {
                     isSendingAll = true
@@ -233,8 +251,19 @@ struct SendFlowView: View {
                 onRetry: {
                     guard !sendInProgress else { return }
                     sendInProgress = true
-                    goForward(to: .sending)
-                    sendTransaction()
+                    Task {
+                        if requireAuthForSend, !walletManager.requiresHardwareSession {
+                            let approved = await biometricAuth.authenticateForTransaction(
+                                reason: "Confirm sending \(amountString) XMR"
+                            )
+                            guard approved else {
+                                sendInProgress = false
+                                return
+                            }
+                        }
+                        goForward(to: .sending)
+                        sendTransaction()
+                    }
                 },
                 onClose: { dismiss() }
             )

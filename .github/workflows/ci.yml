@@ -52,3 +52,10 @@ jobs:
             -scheme MoneroOne \
             -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
             -only-testing:MoneroOneTests
+
+      - name: Run MoneroKit tests
+        working-directory: MoneroKit.Swift
+        run: |
+          xcodebuild test \
+            -scheme "MoneroKit.swift" \
+            -destination "platform=iOS Simulator,name=iPhone 16 Pro"

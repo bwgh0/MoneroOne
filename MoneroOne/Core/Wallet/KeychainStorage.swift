@@ -232,7 +232,7 @@ class KeychainStorage {
 
     func saveSeed(_ seed: String, pin: String) throws {
         // Generate random salt for this wallet
-        let salt = generateSalt()
+        guard let salt = generateSalt() else { throw KeychainError.encryptionFailed }
 
         // Hash the PIN with salt for verification
         let pinHash = hashPin(pin, salt: salt)
@@ -495,7 +495,7 @@ class KeychainStorage {
     /// Save seed encrypted with PIN for a specific wallet
     func saveSeed(_ seed: String, pin: String, walletId: UUID) throws {
         let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
-        let salt = generateSalt()
+        guard let salt = generateSalt() else { throw KeychainError.encryptionFailed }
         let pinHash = hashPin(pin, salt: salt)
 
         guard let encryptedSeed = encrypt(seed, with: pin, salt: salt) else {
@@ -565,7 +565,7 @@ class KeychainStorage {
     /// flow is identical regardless of wallet source.
     func saveViewOnly(address: String, viewKey: String, pin: String, walletId: UUID) throws {
         let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
-        let salt = generateSalt()
+        guard let salt = generateSalt() else { throw KeychainError.encryptionFailed }
         let pinHash = hashPin(pin, salt: salt)
 
         let payload = ViewOnlyKeys(address: address, viewKey: viewKey)
@@ -694,17 +694,23 @@ class KeychainStorage {
     /// Verify PIN against a specific pinHash/salt account pair
     private func verifyPin(_ pin: String, pinHashAccount: String, saltAccount: String) -> Bool {
         guard let storedHash = getKeychainData(account: pinHashAccount) else { return false }
+        let salt = getKeychainData(account: saltAccount).flatMap { $0.isEmpty ? nil : $0 }
 
-        if let salt = getKeychainData(account: saltAccount) {
-            let inputHash = hashPin(pin, salt: salt)
-            if storedHash == inputHash { return true }
+        guard let match = pinMatch(pin, storedHash: storedHash, salt: salt) else { return false }
+        upgradeStoredPinHashIfNeeded(match, pin: pin, salt: salt, pinHashAccount: pinHashAccount)
+        return true
+    }
 
-            let legacyIterHash = deriveKey(from: pin, salt: salt, keyLength: 32, iterations: Self.legacyIterations)
-            if storedHash == legacyIterHash { return true }
-        }
-
-        let legacyHash = hashPinLegacy(pin)
-        return storedHash == legacyHash
+    /// Replace a pre-HKDF stored hash with the current verifier format, now
+    /// that a correct PIN has proven we can recompute it. Keeps the AES key
+    /// derivation untouched, so existing ciphertext still decrypts.
+    private func upgradeStoredPinHashIfNeeded(_ match: PinMatch, pin: String, salt: Data?, pinHashAccount: String) {
+        // `.unsaltedLegacy` wallets have no salt yet; the legacy-seed migration
+        // path re-saves them wholesale, which writes a fresh salt + verifier.
+        guard match == .masterKey, let salt else { return }
+        let verifier = hashPin(pin, salt: salt)
+        deleteKeychainItem(account: pinHashAccount)
+        try? saveKeychainItem(account: pinHashAccount, data: verifier)
     }
 
     /// Delete all keychain items (used by UI tests for clean state)
@@ -776,40 +782,33 @@ class KeychainStorage {
             return false
         }
 
-        // Try with salt first (new format, current iterations)
-        if let salt = getSalt() {
-            let inputHash = hashPin(pin, salt: salt)
-            if storedHash == inputHash {
-                return true
-            }
-
-            // Fall back to old iteration count (migration from 100k → 600k)
-            let legacyIterHash = deriveKey(from: pin, salt: salt, keyLength: 32, iterations: Self.legacyIterations)
-            if storedHash == legacyIterHash {
-                return true
-            }
-        }
-
-        // Fall back to legacy hash without salt (very old wallets)
-        let legacyHash = hashPinLegacy(pin)
-        if storedHash == legacyHash {
-            return true
-        }
-
-        return false
+        let salt = getSalt()
+        guard let match = pinMatch(pin, storedHash: storedHash, salt: salt) else { return false }
+        upgradeStoredPinHashIfNeeded(match, pin: pin, salt: salt, pinHashAccount: pinHashKey)
+        return true
     }
 
     // MARK: - Salt Management
 
-    private func generateSalt() -> Data {
+    /// 16 random bytes, or nil if the system CSPRNG fails.
+    ///
+    /// Returning a zero-filled salt on failure (the previous behavior, since
+    /// `Data(count:)` is zero-initialized and the result was discarded) would
+    /// silently save a wallet under a known salt — the same fail-open pattern
+    /// that made the old PBKDF2 SHA-256 fallback dangerous. Fail closed and let
+    /// the caller surface a save error instead.
+    private func generateSalt() -> Data? {
         var salt = Data(count: 16)
-        salt.withUnsafeMutableBytes { buffer in
-            guard let baseAddress = buffer.baseAddress else { return }
-            _ = SecRandomCopyBytes(kSecRandomDefault, 16, baseAddress)
+        let ok = salt.withUnsafeMutableBytes { buffer -> Bool in
+            guard let baseAddress = buffer.baseAddress else { return false }
+            return SecRandomCopyBytes(kSecRandomDefault, 16, baseAddress) == errSecSuccess
         }
-        return salt
+        return ok ? salt : nil
     }
 
+    /// Stored salt, treating a zero-length item as absent. An empty salt would
+    /// make `CCKeyDerivationPBKDF` return `kCCParamError`, which `deriveKey`
+    /// turns into a `fatalError` — i.e. an unrecoverable crash on every unlock.
     private func getSalt() -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -821,7 +820,8 @@ class KeychainStorage {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         guard status == errSecSuccess,
-              let salt = result as? Data else {
+              let salt = result as? Data,
+              !salt.isEmpty else {
             return nil
         }
 
@@ -833,8 +833,60 @@ class KeychainStorage {
     private static let currentIterations: UInt32 = 600_000
     private static let legacyIterations: UInt32 = 100_000
 
+    /// Info string separating the stored PIN verifier from the seed-encryption
+    /// key. Changing it invalidates every stored verifier (users would have to
+    /// re-enter nothing — `pinMatch` upgrades them — but old verifiers stop
+    /// matching, so treat it as a format version).
+    private static let pinVerifierInfo = Data("MoneroOne.pin-verification.v2".utf8)
+
+    /// The PIN verifier written to the keychain.
+    ///
+    /// This is deliberately NOT the seed-encryption key. Both used to be the
+    /// same 32 bytes of PBKDF2 output, which meant the verifier sitting next to
+    /// the ciphertext *was* the AES key: one keychain read yielded the seed
+    /// outright and the 600k-iteration work factor protected nothing. HKDF
+    /// makes the verifier a one-way function of the master key instead.
     private func hashPin(_ pin: String, salt: Data) -> Data {
-        return deriveKey(from: pin, salt: salt, keyLength: 32)
+        let masterKey = deriveKey(from: pin, salt: salt, keyLength: 32)
+        return Self.pinVerifier(fromMasterKey: masterKey, salt: salt)
+    }
+
+    private static func pinVerifier(fromMasterKey masterKey: Data, salt: Data) -> Data {
+        let derived = HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: masterKey),
+            salt: salt,
+            info: pinVerifierInfo,
+            outputByteCount: 32
+        )
+        return derived.withUnsafeBytes { Data($0) }
+    }
+
+    /// How a supplied PIN matched the stored verifier. Anything other than
+    /// `.verifier` means the keychain still holds a pre-HKDF artifact that
+    /// should be upgraded in place.
+    private enum PinMatch {
+        /// Current format: HKDF-separated verifier.
+        case verifier
+        /// Legacy: the stored hash is the raw PBKDF2 master key (== AES key).
+        case masterKey
+        /// Very old wallets: unsalted SHA-256(PIN), no salt item present.
+        case unsaltedLegacy
+    }
+
+    /// Single place that decides whether a PIN is correct, across all stored
+    /// formats. Returns nil when the PIN is wrong.
+    private func pinMatch(_ pin: String, storedHash: Data, salt: Data?) -> PinMatch? {
+        if let salt, !salt.isEmpty {
+            let masterKey = deriveKey(from: pin, salt: salt, keyLength: 32)
+            if storedHash == Self.pinVerifier(fromMasterKey: masterKey, salt: salt) { return .verifier }
+            if storedHash == masterKey { return .masterKey }
+
+            let legacyIterMaster = deriveKey(from: pin, salt: salt, keyLength: 32, iterations: Self.legacyIterations)
+            if storedHash == legacyIterMaster { return .masterKey }
+        }
+
+        if storedHash == hashPinLegacy(pin) { return .unsaltedLegacy }
+        return nil
     }
 
     private func deriveKey(from pin: String, salt: Data, keyLength: Int, iterations: UInt32 = currentIterations) -> Data {
@@ -903,6 +955,29 @@ class KeychainStorage {
             return nil
         }
     }
+
+#if DEBUG
+    // MARK: - Test hooks
+    //
+    // Debug-only so they can't be reached from a shipped build. They exist to
+    // let the test suite assert the H6 invariant — that the stored PIN verifier
+    // is never the seed-encryption key — which is otherwise unobservable from
+    // outside this type.
+
+    func debugStoredPinHash() -> Data? {
+        getKeychainData(account: pinHashKey)
+    }
+
+    func debugEncryptionKey(pin: String) -> Data? {
+        guard let salt = getSalt() else { return nil }
+        return deriveKey(from: pin, salt: salt, keyLength: 32)
+    }
+
+    func debugOverwriteStoredPinHash(_ data: Data) {
+        deleteKeychainItem(account: pinHashKey)
+        try? saveKeychainItem(account: pinHashKey, data: data)
+    }
+#endif
 
     // MARK: - Legacy Encryption (for migration from old wallets)
 

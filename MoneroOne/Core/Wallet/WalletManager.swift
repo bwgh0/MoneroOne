@@ -235,6 +235,15 @@ class WalletManager: ObservableObject {
         case .complete, .failed:
             hardwareSessionState = .idle
             lastHardwareSessionOutcome = nil
+        case .idle:
+            // State was already reset (e.g. by `resetHardwareSessionState`
+            // when the user dismissed the previous run) but the outcome may
+            // still be set. It describes the PREVIOUS session, so a new run
+            // must not be able to read it — otherwise cancelling this session
+            // makes the send flow report the earlier session's txid as a fresh
+            // success, showing a real-looking hash for a transaction that was
+            // never broadcast.
+            lastHardwareSessionOutcome = nil
         default:
             break
         }
@@ -242,6 +251,13 @@ class WalletManager: ObservableObject {
 
     /// Reset session state to idle. Called by the sheet on dismiss
     /// once the user has seen the .complete or .failed state.
+    ///
+    /// Deliberately does NOT clear `lastHardwareSessionOutcome`: the sheet
+    /// calls this immediately before `dismiss()`, and the send flow reads the
+    /// outcome afterwards in `handleHardwareSheetDismiss()` to decide between
+    /// success and retry. Clearing here would strand a successful send on the
+    /// `.sending` step. The outcome is cleared when the NEXT session starts
+    /// (`clearTerminalSessionState`).
     func resetHardwareSessionState() {
         hardwareSessionState = .idle
     }
@@ -1120,6 +1136,14 @@ class WalletManager: ObservableObject {
             return []
         }
         let seedString = String(cString: seedPtr)
+        // The C shim hands back a heap buffer holding the freshly generated
+        // seed phrase in plaintext. It was never freed, so every new wallet
+        // left a permanent copy of its own seed in the process heap for a
+        // debugger or memory-dump to find. Zero it, then free it.
+        let mutableSeedPtr = UnsafeMutablePointer(mutating: seedPtr)
+        mutableSeedPtr.update(repeating: 0, count: strlen(seedPtr))
+        MONERO_free(mutableSeedPtr)
+
         let words = seedString.split(separator: " ").map(String.init)
 
         // Polyseed should always be 16 words
@@ -1886,6 +1910,20 @@ class WalletManager: ObservableObject {
         unlockedBalance = 0
         address = ""
         primaryAddress = ""
+
+        // Drop any queued send prefill. It survived lock/unlock before, and
+        // `handlePrefill` jumps straight to the review step — so a prefill left
+        // over from an earlier session (e.g. the donation flow, which sets one
+        // and is a no-op on iPad's layout) put the user one tap from sending to
+        // an address they hadn't just chosen.
+        prefillSendAddress = nil
+        prefillSendAmount = nil
+        shouldShowSendView = false
+
+        // Widget data lives in the shared App Group container as plaintext
+        // JSON. Locking is the point at which balance/tx history should stop
+        // being readable there.
+        WidgetDataManager.shared.clear()
         syncState = .idle
         transactions = []
         subaddresses = []

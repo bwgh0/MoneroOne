@@ -18,7 +18,8 @@ struct ExportViewKeyView: View {
     @State private var snapshot: ExportSnapshot?
     @State private var boundWalletId: UUID?
 
-    private let clipboardClearDelay: TimeInterval = 300
+    /// See BackupView — the private view key gets the same short lifetime.
+    private let clipboardClearDelay: TimeInterval = SecureClipboard.secretLifetime
 
     fileprivate struct ExportSnapshot: Equatable {
         let walletId: UUID
@@ -291,7 +292,7 @@ fileprivate struct ViewKeyExportCard: View {
 
     private func copy(_ text: String, flag: @escaping (Bool) -> Void) {
         clipboardClearTask?.cancel()
-        UIPasteboard.general.string = text
+        SecureClipboard.copySecret(text, lifetime: clipboardClearDelay)
 
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 
@@ -299,9 +300,7 @@ fileprivate struct ViewKeyExportCard: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { flag(false) }
 
         let clearTask = DispatchWorkItem {
-            if UIPasteboard.general.string == text {
-                UIPasteboard.general.string = ""
-            }
+            SecureClipboard.clearIfHolding(text)
         }
         clipboardClearTask = clearTask
         DispatchQueue.main.asyncAfter(deadline: .now() + clipboardClearDelay, execute: clearTask)

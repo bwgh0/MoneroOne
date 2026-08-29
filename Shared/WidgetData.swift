@@ -163,7 +163,16 @@ public class WidgetDataManager {
         do {
             let encoded = try JSONEncoder().encode(data)
             try encoded.write(to: url, options: .atomic)
+            // Balance and recent-transaction amounts shouldn't ride along in a
+            // device backup. Re-applied after every write because an atomic
+            // write replaces the file, and the flag lives on the file.
+            var mutableURL = url
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try? mutableURL.setResourceValues(values)
+            #if DEBUG
             os_log("✅ Saved data to %{public}@ (enabled=%d, balance=%{public}@)", log: widgetLog, type: .info, url.lastPathComponent, data.isEnabled ? 1 : 0, data.balanceFormatted)
+            #endif
         } catch {
             os_log("❌ Save failed: %{public}@", log: widgetLog, type: .error, error.localizedDescription)
         }

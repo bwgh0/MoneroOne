@@ -24,11 +24,23 @@ enum TrezorLog {
         }
     }
 
+    /// Above this the log is restarted rather than grown forever. Trezor
+    /// sessions are chatty (196 call sites) and this file used to have no
+    /// bound at all.
+    private static let maxFileSize: Int = 512 * 1024
+
     /// Append a log line (supports format strings like NSLog)
+    ///
+    /// Kept in release builds on purpose — it is the primary diagnostic for
+    /// hardware-wallet pairing problems in the field. It is, however, kept out
+    /// of device backups and size-capped, and the console mirror is
+    /// debug-only: some call sites log balances, and the unified log is
+    /// readable via sysdiagnose or a tethered Mac.
     static func log(_ format: String, _ args: CVarArg...) {
         let message = String(format: format, arguments: args)
-        // Also NSLog for when we can get console
+        #if DEBUG
         NSLog("[Trezor] %@", message)
+        #endif
 
         queue.async {
             guard let url = logFile else { return }
@@ -36,7 +48,16 @@ enum TrezorLog {
             let line = "[\(timestamp)] \(message)\n"
             guard let data = line.data(using: .utf8) else { return }
 
-            if FileManager.default.fileExists(atPath: url.path) {
+            let fm = FileManager.default
+            if fm.fileExists(atPath: url.path) {
+                let size = (try? fm.attributesOfItem(atPath: url.path))
+                    .flatMap { $0[.size] as? Int } ?? 0
+                if size > maxFileSize {
+                    try? fm.removeItem(at: url)
+                    try? data.write(to: url)
+                    excludeFromBackup(url)
+                    return
+                }
                 if let handle = try? FileHandle(forWritingTo: url) {
                     handle.seekToEndOfFile()
                     handle.write(data)
@@ -44,7 +65,15 @@ enum TrezorLog {
                 }
             } else {
                 try? data.write(to: url)
+                excludeFromBackup(url)
             }
         }
+    }
+
+    private static func excludeFromBackup(_ url: URL) {
+        var mutableURL = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? mutableURL.setResourceValues(values)
     }
 }

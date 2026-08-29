@@ -23,6 +23,7 @@ struct SendFlowView: View {
     @State private var sendInProgress = false
     @State private var amountPrefilledFromQR = false
 
+
     /// A pure view-only wallet (no spend key anywhere) can never sign.
     /// Hardware wallets *can* sign, just through a device session, so
     /// they're allowed through the SendFlow — the actual signing routes
@@ -154,9 +155,16 @@ struct SendFlowView: View {
                         phase = .review
                     }
                 case .syncedOnly, .none:
-                    // No send actually ran — leave the user where
-                    // they are.
-                    break
+                    // No send ran — the user cancelled or dismissed the sheet
+                    // mid-session. Phase is still `.sending`, which has no
+                    // toolbar button, no action area, and disables interactive
+                    // dismissal, so leaving it there strands the user with no
+                    // way out but force-quitting. Return to `.review` so the
+                    // inputs are editable and Send is tappable again.
+                    sendInProgress = false
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        phase = .review
+                    }
                 }
             }
         }
@@ -321,6 +329,9 @@ struct SendFlowView: View {
             } else if let amountDecimal = Decimal(string: amountString) {
                 hardwareSheetIntent = .send(to: recipientAddress, amount: amountDecimal, memo: trimmedMemo)
             } else {
+                // Release the guard before showing the error, or Retry on the
+                // error screen is swallowed by `guard !sendInProgress`.
+                sendInProgress = false
                 phase = .error(message: "Invalid amount")
             }
             return
@@ -336,6 +347,7 @@ struct SendFlowView: View {
                     )
                 } else {
                     guard let amountDecimal = Decimal(string: amountString) else {
+                        sendInProgress = false
                         phase = .error(message: "Invalid amount")
                         return
                     }

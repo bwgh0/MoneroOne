@@ -321,7 +321,11 @@ struct ReceiveView: View {
     }
 
     private func syncReceiveXMRFromFiat() {
-        guard let price = priceService.xmrPrice, price > 0,
+        // Same guard as the send side: a bad price here makes the payment
+        // request ask for the wrong amount of XMR (under-collecting if the
+        // price is inflated), and the QR encodes it.
+        guard let price = priceService.xmrPrice,
+              PriceService.isPlausiblePrice(price),
               let fiat = Double(requestFiatAmount), fiat > 0 else {
             requestAmount = ""
             return

@@ -19,7 +19,10 @@ struct BackupView: View {
     /// wallet — if the active wallet ID diverges from this, dismiss.
     @State private var boundWalletId: UUID?
 
-    private let clipboardClearDelay: TimeInterval = 300 // Clear clipboard after 5 minutes
+    /// Seed stays on the clipboard only long enough to paste into a password
+    /// manager. Five minutes was ample time for any app with pasteboard access
+    /// (or a keyboard extension with full access) to harvest it.
+    private let clipboardClearDelay: TimeInterval = SecureClipboard.secretLifetime
 
     private var alternateFormats: [(label: String, words: [String])] {
         var formats: [(String, [String])] = []
@@ -180,8 +183,9 @@ struct BackupView: View {
         // Cancel any existing clear task
         clipboardClearTask?.cancel()
 
-        // Copy to clipboard
-        UIPasteboard.general.string = fullPhrase
+        // Copy to clipboard with an OS-enforced expiry (the in-app clear task
+        // below dies if the process does) and no Universal Clipboard sync.
+        SecureClipboard.copySecret(fullPhrase, lifetime: clipboardClearDelay)
 
         // Haptic feedback
         let generator = UINotificationFeedbackGenerator()
@@ -196,9 +200,7 @@ struct BackupView: View {
 
         // Schedule clipboard clear after delay
         let clearTask = DispatchWorkItem { [fullPhrase] in
-            if UIPasteboard.general.string == fullPhrase {
-                UIPasteboard.general.string = ""
-            }
+            SecureClipboard.clearIfHolding(fullPhrase)
         }
         clipboardClearTask = clearTask
         DispatchQueue.main.asyncAfter(deadline: .now() + clipboardClearDelay, execute: clearTask)

@@ -354,7 +354,11 @@ struct CreateWalletView: View {
                 .padding()
 
             Button {
-                UIPasteboard.general.string = mnemonic.joined(separator: " ")
+                // Expiring, device-local copy: this screen had no clear task
+                // at all, so the seed used to sit on the clipboard until
+                // something else overwrote it — and synced to every device on
+                // the same Apple ID.
+                SecureClipboard.copySecret(mnemonic.joined(separator: " "))
                 HapticFeedback.shared.softTick()
                 copiedSeed = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {

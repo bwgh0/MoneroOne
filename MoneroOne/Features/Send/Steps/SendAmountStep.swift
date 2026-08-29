@@ -323,7 +323,11 @@ struct SendAmountStep: View {
     }
 
     private func syncXMRFromFiat() {
-        guard let price = priceService.xmrPrice, price > 0,
+        // This division decides how much XMR actually leaves the wallet, so the
+        // price it uses has to be sane — `> 0` let through NaN and absurd
+        // values that would silently scale the amount up.
+        guard let price = priceService.xmrPrice,
+              PriceService.isPlausiblePrice(price),
               let fiat = Double(fiatString), fiat > 0 else {
             amountString = ""
             return

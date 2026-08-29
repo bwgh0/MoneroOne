@@ -17,6 +17,21 @@ enum ChartSmoothingMode: String, CaseIterable {
 
 @MainActor
 class PriceService: ObservableObject {
+    /// Outer bounds for a believable XMR price in any supported fiat currency.
+    /// Deliberately wide — this rejects garbage (0, negative, NaN, $0.01,
+    /// $10M), not unusual-but-real market moves.
+    nonisolated private static let minPlausiblePrice: Double = 0.5
+    nonisolated private static let maxPlausiblePrice: Double = 1_000_000
+    /// Maximum accepted move between consecutive updates (refresh is every 5
+    /// minutes).
+    nonisolated private static let maxPriceDeviation: Double = 0.5
+    /// Maximum age of a server-stamped response.
+    nonisolated private static let maxResponseAge: TimeInterval = 3600
+
+    nonisolated static func isPlausiblePrice(_ price: Double) -> Bool {
+        price.isFinite && price >= minPlausiblePrice && price <= maxPlausiblePrice
+    }
+
     @Published var xmrPrice: Double?
     @Published var priceChange24h: Double?
     @Published var lastUpdated: Date?
@@ -200,6 +215,32 @@ class PriceService: ObservableObject {
 
         guard let quote = result.quotes[selectedCurrency] else {
             throw URLError(.cannotParseResponse)
+        }
+
+        // Sanity-check before this value is allowed anywhere near money math.
+        // The fiat entry mode divides a fiat amount by this price to produce
+        // the XMR that actually gets sent, so a bogus price silently inflates
+        // (or deflates) the amount. Certificate pinning stops a network
+        // attacker, but a compromised or malfunctioning backend is still on the
+        // other side of it, and nothing else downstream validates this.
+        guard Self.isPlausiblePrice(quote.price) else {
+            throw PriceError.implausiblePrice(quote.price)
+        }
+        // Reject a big jump against the last known-good price rather than
+        // acting on it. Legitimate XMR moves are nowhere near this in the
+        // 5-minute refresh window; anything larger is more likely bad data.
+        if let previous = xmrPrice, previous > 0 {
+            let ratio = quote.price / previous
+            guard ratio > (1 - Self.maxPriceDeviation), ratio < (1 + Self.maxPriceDeviation) else {
+                throw PriceError.implausibleDeviation(previous: previous, new: quote.price)
+            }
+        }
+        // A replayed or badly cached response would otherwise be
+        // indistinguishable from a fresh one. `timestamp` was already decoded
+        // and thrown away.
+        let responseAge = Date().timeIntervalSince1970 - result.timestamp
+        guard responseAge < Self.maxResponseAge else {
+            throw PriceError.staleResponse(age: responseAge)
         }
 
         xmrPrice = quote.price
@@ -540,6 +581,26 @@ class PriceService: ObservableObject {
 struct PriceResponse: Codable {
     let quotes: [String: PriceQuote]
     let timestamp: Double
+}
+
+/// Reasons a price response was rejected. Surfaced instead of being applied —
+/// the previous value (and the "last updated" stamp the UI shows) stays put, so
+/// a bad response can't quietly change what a send is worth.
+enum PriceError: LocalizedError {
+    case implausiblePrice(Double)
+    case implausibleDeviation(previous: Double, new: Double)
+    case staleResponse(age: TimeInterval)
+
+    var errorDescription: String? {
+        switch self {
+        case .implausiblePrice:
+            return "Received an implausible XMR price. Keeping the last known value."
+        case .implausibleDeviation:
+            return "XMR price moved implausibly far in one update. Keeping the last known value."
+        case .staleResponse:
+            return "Received an out-of-date price response. Keeping the last known value."
+        }
+    }
 }
 
 struct PriceQuote: Codable {

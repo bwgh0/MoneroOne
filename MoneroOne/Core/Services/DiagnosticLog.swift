@@ -60,6 +60,7 @@ final class DiagnosticLog {
 
     func log(_ message: String) {
         let now = Date()
+        let message = Self.redactingCredentials(in: message)
         logger.info("\(message)")
         queue.async { [weak self] in
             guard let self else { return }
@@ -79,6 +80,11 @@ final class DiagnosticLog {
         lines.append("Exported: \(ISO8601DateFormatter().string(from: Date()))")
         lines.append("Device: \(deviceInfo())")
         lines.append("App Version: \(appVersion())")
+        // Say plainly what is in here. This file gets emailed to support, and
+        // the user should be able to see the scope of what they're sending
+        // rather than infer it from 500 lines of log.
+        lines.append("Contains: device model, iOS/app version, the node URLs this app connected to, sync progress, and wallet-engine error messages.")
+        lines.append("Never contains: your seed phrase, private keys, PIN, or node passwords.")
         lines.append(String(repeating: "-", count: 60))
 
         queue.sync {
@@ -98,6 +104,24 @@ final class DiagnosticLog {
         queue.sync {
             entries.removeAll()
         }
+    }
+
+    /// Strip `user:password@` out of any URL in a log line.
+    ///
+    /// Node URLs themselves are kept — they're the most useful thing in a
+    /// sync-problem report — but this log gets emailed to support, so
+    /// credentials embedded in a custom node URL must not ride along. Applied
+    /// at the single logging choke point rather than per call site.
+    static func redactingCredentials(in message: String) -> String {
+        guard message.contains("://") else { return message }
+        guard let regex = try? NSRegularExpression(pattern: "(?<=://)[^/@\\s]+:[^/@\\s]+@") else {
+            return message
+        }
+        return regex.stringByReplacingMatches(
+            in: message,
+            range: NSRange(message.startIndex..., in: message),
+            withTemplate: "***@"
+        )
     }
 
     private func deviceInfo() -> String {

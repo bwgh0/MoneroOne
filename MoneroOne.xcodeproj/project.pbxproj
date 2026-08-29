@@ -50,6 +50,7 @@
 		9B8891204A64866A6A3404D2 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
 		9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8C8A112B161D2A874330F /* TransactionListView.swift */; };
 		A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000001 /* HapticFeedback.swift */; };
+		CAC4E1D0000000000000C10P /* SecureClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000C20P /* SecureClipboard.swift */; };
 		A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000002 /* NumericKeypad.swift */; };
 		A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */; };
 		A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000004 /* GradientSpinner.swift */; };
@@ -79,6 +80,7 @@
 		D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67F51494AC5434F206AED5C /* ReceiveView.swift */; };
 		D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */; };
 		CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */; };
+		CAC4E1D0000000000000D10T /* AuditRemediationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */; };
 		D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */; };
 		DA18F80BA8998B9D71869B82 /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A281E883F5B6D0C620D37A9C /* DonationView.swift */; };
 		DA2B7E30A2D8DB0A8AEEEB09 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
@@ -183,6 +185,7 @@
 		09AA838F4EF37023CE4794A9 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceServiceTests.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000001 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
+		CAC4E1D0000000000000C20P /* SecureClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureClipboard.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000002 /* NumericKeypad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericKeypad.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessCheckmarkView.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000004 /* GradientSpinner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradientSpinner.swift; sourceTree = "<group>"; };
@@ -242,6 +245,7 @@
 		AC83A18E25A660B8C7DFC5EA /* PriceChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceChartView.swift; sourceTree = "<group>"; };
 		B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmountFormattingTests.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCacheIdTests.swift; sourceTree = "<group>"; };
+		CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRemediationTests.swift; sourceTree = "<group>"; };
 		B03E2005118D429FE332C194 /* NodeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeSettingsView.swift; sourceTree = "<group>"; };
 		B21A52926BAFEF95AC6BB226 /* SyncSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSettingsView.swift; sourceTree = "<group>"; };
 		B332C777DDD3D470FA081B35 /* WidgetData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetData.swift; sourceTree = "<group>"; };
@@ -345,6 +349,7 @@
 				9698D5ECB87A0302392684C6 /* WalletIntegrationTests.swift */,
 				84E684EE43DA20220CE2D58B /* WalletManagerTests.swift */,
 				CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */,
+				CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */,
 			);
 			path = MoneroOneTests;
 			sourceTree = "<group>";
@@ -688,6 +693,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D400000002A0000001 /* HapticFeedback.swift */,
+				CAC4E1D0000000000000C20P /* SecureClipboard.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -860,6 +866,7 @@
 			files = (
 D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */,
+				CAC4E1D0000000000000D10T /* AuditRemediationTests.swift in Sources */,
 				0078BD68A0F42B7F096CC5B0 /* BiometricAuthManagerTests.swift in Sources */,
 				CEF72F50673F6D89DA08FB52 /* NetworkMonitorTests.swift in Sources */,
 				6B3AD2E53A2A967DFDB3A407 /* NodeManagerTests.swift in Sources */,
@@ -961,6 +968,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				EDA400DA20EDD8E52EA9CC2C /* TransactionDetailView.swift in Sources */,
 				9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */,
 				A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */,
+				CAC4E1D0000000000000C10P /* SecureClipboard.swift in Sources */,
 				A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */,
 				A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */,
 				A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */,

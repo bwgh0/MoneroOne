@@ -2583,7 +2583,12 @@ class WalletManager: ObservableObject {
         guard let active = activeWallet, active.id == expectedWalletId else { return nil }
         guard let wallet = moneroWallet else { return nil }
         let snapshotAddress = primaryAddress
-        guard let snapshotViewKey = wallet.secretViewKey, !snapshotViewKey.isEmpty else { return nil }
+        // A null-key address or all-zero view key means the wallet's keys
+        // never loaded (MoneroKit also filters these; this is the app-side
+        // belt). Exporting them would hand out a broken watch-only pairing.
+        guard !snapshotAddress.isEmpty, !NullKeyAddress.isNullKey(snapshotAddress) else { return nil }
+        guard let snapshotViewKey = wallet.secretViewKey, !snapshotViewKey.isEmpty,
+              snapshotViewKey != NullKeyAddress.zeroSecretKey else { return nil }
         let snapshotHeight = restoreHeight
         // Re-verify after the reads: if `activeWallet` moved between the
         // first guard and the last field read, we must discard the tuple.

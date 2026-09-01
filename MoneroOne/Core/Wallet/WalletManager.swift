@@ -337,48 +337,74 @@ class WalletManager: ObservableObject {
         transactions = []
         subaddresses = []
 
-        // 2. Open FULL via createFromDevice (uses openWallet under
-        //    the hood since the cache exists). hwdev.connect requires
+        // 2/3. Open FULL via createFromDevice (uses openWallet under
+        //    the hood when the cache exists) and wait for its refresh,
+        //    healing a poisoned cache at most once. hwdev.connect requires
         //    the bridge be running — the sheet brings it up before
         //    invoking this.
-        hardwareSessionState = .openingFull
-        let fullWallet = MoneroWallet()
-        do {
-            try await fullWallet.createFromDevice(
-                deviceName: "Trezor",
-                walletId: deviceWalletId,
-                restoreHeight: active.restoreHeight,
-                networkType: networkType
-            )
-        } catch {
-            TrezorLog.log("[Session] FULL open FAILED: %@", error.localizedDescription)
-            await fullWallet.stopAsync()
-            await failSessionAndRestoreView(message: "Couldn't open device wallet: \(error.localizedDescription)", viewKeys: viewKeys)
-            return
-        }
+        //
+        //    The heal exists because a FULL cache can carry a corrupt
+        //    hashchain (seen in the field: a cache whose short chain
+        //    history didn't terminate at genesis, so the daemon answered
+        //    every /gethashes.bin with status "Failed" and refresh died
+        //    with wallet2's "failed to get hashes" — the session never
+        //    reached key-image sync and past sends rendered as received
+        //    change, forever). While the device is connected the cache is
+        //    rebuildable: wipe it, restore_from_device recreates it, and
+        //    this session's cold key-image sync re-imports spent status.
+        //    Cost: a rescan from the wallet's restore height, and the
+        //    per-tx keys of past device sends stored only in that cache.
+        var fullWallet = MoneroWallet()
+        var healedFullCache = false
+        while true {
+            hardwareSessionState = .openingFull
+            do {
+                try await fullWallet.createFromDevice(
+                    deviceName: "Trezor",
+                    walletId: deviceWalletId,
+                    restoreHeight: active.restoreHeight,
+                    networkType: networkType
+                )
+            } catch {
+                TrezorLog.log("[Session] FULL open FAILED: %@", error.localizedDescription)
+                await fullWallet.stopAsync()
+                await failSessionAndRestoreView(message: "Couldn't open device wallet: \(error.localizedDescription)", viewKeys: viewKeys)
+                return
+            }
 
-        // 3. Wait for refresh to reach .synced.
-        hardwareSessionState = .syncingFull(progress: 0, blocksRemaining: nil)
-        bindFullWalletSyncProgress(fullWallet)
+            hardwareSessionState = .syncingFull(progress: 0, blocksRemaining: nil)
+            bindFullWalletSyncProgress(fullWallet)
 
-        // Force a real chain refresh. wallet2 reports `.synced` from
-        // its cached state immediately on open — m_synchronized was
-        // set true at the previous close, walletHeight matches the
-        // last-stored height, so a naive `waitForSyncedOrThrow`
-        // returns instantly even though the daemon has advanced
-        // since. `startSync()` calls `MONERO_Wallet_startRefresh`
-        // which kicks the refresh thread to actually fetch new
-        // blocks, plus restarts the state-manager poll loop so we
-        // see the daemonHeight update.
-        fullWallet.startSync()
+            // Force a real chain refresh. wallet2 reports `.synced` from
+            // its cached state immediately on open — m_synchronized was
+            // set true at the previous close, walletHeight matches the
+            // last-stored height, so a naive `waitForSyncedOrThrow`
+            // returns instantly even though the daemon has advanced
+            // since. `startSync()` calls `MONERO_Wallet_startRefresh`
+            // which kicks the refresh thread to actually fetch new
+            // blocks, plus restarts the state-manager poll loop so we
+            // see the daemonHeight update.
+            fullWallet.startSync()
 
-        do {
-            try await waitForSyncedOrThrow(fullWallet, timeout: 600)
-        } catch {
-            TrezorLog.log("[Session] FULL refresh FAILED: %@", error.localizedDescription)
-            await fullWallet.stopAsync()
-            await failSessionAndRestoreView(message: "Device wallet sync failed: \(error.localizedDescription)", viewKeys: viewKeys)
-            return
+            do {
+                try await waitForSyncedOrThrow(fullWallet, timeout: 600)
+                break
+            } catch {
+                TrezorLog.log("[Session] FULL refresh FAILED: %@ | wallet2: %@",
+                              error.localizedDescription, fullWallet.latestErrorString)
+                await fullWallet.stopAsync()
+
+                if !healedFullCache {
+                    healedFullCache = true
+                    TrezorLog.log("[Session] wiping FULL cache %@ and re-restoring from device", deviceWalletId)
+                    wipeWalletCache(walletId: deviceWalletId)
+                    fullWallet = MoneroWallet()
+                    continue
+                }
+
+                await failSessionAndRestoreView(message: "Device wallet sync failed: \(error.localizedDescription)", viewKeys: viewKeys)
+                return
+            }
         }
 
         // 4. Cold key image sync — but skip if we did one very
@@ -1011,6 +1037,17 @@ class WalletManager: ObservableObject {
     /// `Application Support/MoneroKit/` whose name doesn't match a
     /// known `derivedWalletId` or `deviceWalletId` is dead weight and
     /// gets removed at app launch.
+    /// Delete the on-disk MoneroKit cache directory for one wallet id.
+    /// Only for caches that are rebuildable at the call site (a device-bound
+    /// FULL cache with the device connected) — for seeded wallets this
+    /// destroys per-tx keys that a rescan cannot recover.
+    private func wipeWalletCache(walletId: String) {
+        let fm = FileManager.default
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        let dir = appSupport.appendingPathComponent("MoneroKit").appendingPathComponent(walletId)
+        try? fm.removeItem(at: dir)
+    }
+
     private func cleanOrphanedWalletCaches() {
         let fileManager = FileManager.default
         guard let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }

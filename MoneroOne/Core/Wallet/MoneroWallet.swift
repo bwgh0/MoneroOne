@@ -313,6 +313,12 @@ class MoneroWallet: ObservableObject {
             #if DEBUG
             NSLog("[MoneroWallet] notSynced raw error: %@", String(describing: error))
             #endif
+            // The friendly message discards the wallet2 error string, which
+            // is the only thing that identifies a sync regression in the
+            // field. Keep the raw error in the pullable trezor log — it's
+            // the primary diagnostic for hardware-session sync failures.
+            TrezorLog.log("[MoneroWallet] notSynced raw error: %@ | wallet2: %@",
+                          String(describing: error), latestErrorString)
             syncState = .error(friendlyErrorMessage(for: error))
         case .idle:
             syncState = .idle

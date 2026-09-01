@@ -26,6 +26,13 @@ jobs:
         run: |
           sed -i '' 's|\.\./MoneroKit\.Swift|MoneroKit.Swift|g' MoneroOne.xcodeproj/project.pbxproj
 
+      # A wallet2 library rebuild that drops a symbol the wallet-creation
+      # paths need must fail here — never get stubbed past the linker
+      # (that's how the May 2026 BIP39 null-key burn bug shipped).
+      - name: Verify wallet library ABI
+        run: |
+          bash MoneroKit.Swift/scripts/check_wallet_abi.sh
+
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -51,7 +58,8 @@ jobs:
             -project MoneroOne.xcodeproj \
             -scheme MoneroOne \
             -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
-            -only-testing:MoneroOneTests
+            -only-testing:MoneroOneTests \
+            -skip-testing:MoneroOneTests/GethashesDeviceDiagTests
 
       - name: Run MoneroKit tests
         working-directory: MoneroKit.Swift

@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout MoneroKit.Swift
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: bwgh0/MoneroKit.Swift
           path: MoneroKit.Swift

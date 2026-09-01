@@ -1,3 +1,4 @@
+import MoneroKit
 import SwiftUI
 
 struct ReceiveView: View {
@@ -24,11 +25,23 @@ struct ReceiveView: View {
         }
     }
 
+    /// True when the wallet's keys did not load — the address the runtime
+    /// would render is the null-key burn address (no private key exists for
+    /// it). The screen must show an error instead of anything QR-shaped.
+    private var keysUnavailable: Bool {
+        if NullKeyAddress.isNullKey(walletManager.primaryAddress) { return true }
+        if case .error = walletManager.syncState, walletManager.primaryAddress.isEmpty { return true }
+        return false
+    }
+
     private var currentAddress: String {
+        // Never render the null-key address, whatever path produced it.
+        guard !keysUnavailable else { return "" }
         if effectiveAddressIndex == 0 {
             return walletManager.primaryAddress.isEmpty ? "Loading..." : walletManager.primaryAddress
         } else {
-            if let subaddr = walletManager.subaddresses.first(where: { $0.index == effectiveAddressIndex }) {
+            if let subaddr = walletManager.subaddresses.first(where: { $0.index == effectiveAddressIndex }),
+               !NullKeyAddress.isNullKey(subaddr.address) {
                 return subaddr.address
             }
             return walletManager.primaryAddress.isEmpty ? "Loading..." : walletManager.primaryAddress
@@ -87,7 +100,25 @@ struct ReceiveView: View {
                         .fontWeight(.bold)
 
                     // QR Code
-                    if !currentAddress.isEmpty && currentAddress != "Loading..." {
+                    if keysUnavailable {
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.octagon.fill")
+                                .font(.largeTitle)
+                                .foregroundColor(.red)
+                            Text("Wallet keys unavailable")
+                                .font(.headline)
+                            Text("The wallet couldn't load its keys, so no receive address can be shown. Do not send funds to any address from this app until this is resolved. Force-quit and reopen the app; if this persists, restore the wallet from its seed.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 8)
+                        }
+                        .frame(width: 280, height: 280)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(20)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Wallet keys unavailable. No receive address can be shown.")
+                    } else if !currentAddress.isEmpty && currentAddress != "Loading..." {
                         QRCodeView(content: qrContent)
                             .frame(width: 280, height: 280)
                             .shadow(color: .black.opacity(0.1), radius: 10)
@@ -274,7 +305,7 @@ struct ReceiveView: View {
                         .accessibilityHint("Opens share sheet with QR code and address")
                     }
                     .padding(.horizontal)
-                    .disabled(currentAddress == "Loading...")
+                    .disabled(currentAddress.isEmpty || currentAddress == "Loading..." || keysUnavailable)
 
                     Spacer(minLength: 40)
                 }
@@ -340,6 +371,7 @@ struct ReceiveView: View {
     }
 
     private func copyAddress() {
+        guard !currentAddress.isEmpty, currentAddress != "Loading...", !keysUnavailable else { return }
         UIPasteboard.general.string = currentAddress
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()

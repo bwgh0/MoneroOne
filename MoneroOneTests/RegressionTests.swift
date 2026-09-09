@@ -944,3 +944,67 @@ final class SeedTypeRegressionTests: XCTestCase {
         XCTAssertTrue(types.contains(.legacy))
     }
 }
+
+// MARK: - Diagnostic Log Persistence
+//
+// The diagnostic log used to live only in memory, so any restart or
+// background kill wiped exactly the history support needed. These tests
+// pin the disk-backed behavior: lines land in a file, exports include the
+// rotated previous generation, and clear() removes what was persisted.
+final class DiagnosticLogPersistenceTests: XCTestCase {
+
+    private var logDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("DiagnosticLog", isDirectory: true)
+    }
+
+    /// export() runs queue.sync on the same serial queue log() appends on,
+    /// so calling it flushes all pending writes.
+    private func flush() {
+        _ = DiagnosticLog.shared.export()
+    }
+
+    func testLogLineIsWrittenToDiskNotJustMemory() throws {
+        let marker = "persistence-marker-\(UUID().uuidString)"
+        DiagnosticLog.shared.log(marker)
+        flush()
+
+        let fileURL = logDirectory.appendingPathComponent("diagnostic.log")
+        let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertTrue(onDisk.contains(marker),
+                      "Log line must be persisted to disk so it survives an app restart")
+    }
+
+    func testExportIncludesPreviousGeneration() throws {
+        // A line planted in the rotated previous-generation file stands in
+        // for history written before a restart or rotation.
+        let marker = "previous-generation-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(at: logDirectory, withIntermediateDirectories: true)
+        let previousURL = logDirectory.appendingPathComponent("diagnostic.previous.log")
+        let existing = (try? String(contentsOf: previousURL, encoding: .utf8)) ?? ""
+        try (existing + marker + "\n").write(to: previousURL, atomically: true, encoding: .utf8)
+
+        XCTAssertTrue(DiagnosticLog.shared.export().contains(marker),
+                      "Export must include the previous log generation, not just the current session")
+    }
+
+    func testClearRemovesPersistedHistory() throws {
+        let marker = "cleared-marker-\(UUID().uuidString)"
+        DiagnosticLog.shared.log(marker)
+        flush()
+        DiagnosticLog.shared.clear()
+
+        XCTAssertFalse(DiagnosticLog.shared.export().contains(marker))
+        let fileURL = logDirectory.appendingPathComponent("diagnostic.log")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    func testTimestampsCarryTheDate() throws {
+        // Cross-session logs span days; a bare time is ambiguous in a report.
+        DiagnosticLog.shared.log("date-format-probe")
+        let export = DiagnosticLog.shared.export()
+        let pattern = #"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] "#
+        XCTAssertNotNil(export.range(of: pattern, options: .regularExpression),
+                        "Persisted log lines must carry a full date, not just a time of day")
+    }
+}

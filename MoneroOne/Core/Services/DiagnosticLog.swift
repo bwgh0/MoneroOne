@@ -24,17 +24,50 @@ private let crashLogPath: String = {
     return docs.appendingPathComponent("crash_report.txt").path
 }()
 
-/// In-memory diagnostic log buffer for troubleshooting sync/network issues.
+/// Disk-backed diagnostic log for troubleshooting sync/network issues.
 /// Captures connection and sync events so users can share them with support.
+///
+/// Lines are appended to a file as they arrive, so the log survives app
+/// restarts and background kills — the events leading up to a problem are
+/// usually in the session *before* the user thinks to export. One rotated
+/// previous-generation file is kept, so an export has history even right
+/// after a rotation.
 final class DiagnosticLog {
     static let shared = DiagnosticLog()
 
-    private var entries: [(Date, String)] = []
-    private let maxEntries = 500
     private let queue = DispatchQueue(label: "one.monero.diagnosticlog")
     private let logger = Logger(subsystem: "one.monero.MoneroOne", category: "Diagnostic")
 
+    /// Rotate when the current file grows past this. The previous file is
+    /// kept, so total retention is at most twice this — small enough to
+    /// email, big enough for several sessions of sync events.
+    private let maxFileSize = 256 * 1024
+
+    private let currentFileURL: URL
+    private let previousFileURL: URL
+
+    /// Only touched on `queue` (DateFormatter is not thread-safe). Includes
+    /// the date: entries now span multiple days, not one session.
+    private let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        return formatter
+    }()
+
     private init() {
+        let fm = FileManager.default
+        let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = support.appendingPathComponent("DiagnosticLog", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        Self.excludeFromBackup(dir)
+        currentFileURL = dir.appendingPathComponent("diagnostic.log")
+        previousFileURL = dir.appendingPathComponent("diagnostic.previous.log")
+
+        let sessionHeader = "=== Session start — v\(appVersion()), \(deviceInfo()) ==="
+        queue.async { [self] in
+            appendLine(sessionHeader, at: Date())
+        }
         loadPreviousCrash()
     }
 
@@ -45,13 +78,13 @@ final class DiagnosticLog {
               let report = String(data: data, encoding: .utf8),
               !report.isEmpty else { return }
 
-        // Prepend to log so it shows at the top of the export
-        queue.sync {
-            entries.insert((Date(), "--- PREVIOUS CRASH ---"), at: 0)
+        queue.async { [self] in
+            let now = Date()
+            appendLine("--- PREVIOUS CRASH ---", at: now)
             for line in report.components(separatedBy: "\n") where !line.isEmpty {
-                entries.insert((Date(), line), at: entries.count > 0 ? 1 : 0)
+                appendLine(line, at: now)
             }
-            entries.insert((Date(), "--- END CRASH ---"), at: entries.count > 1 ? 2 : 0)
+            appendLine("--- END CRASH ---", at: now)
         }
 
         // Delete the crash file so we don't show it again
@@ -63,18 +96,11 @@ final class DiagnosticLog {
         let message = Self.redactingCredentials(in: message)
         logger.info("\(message)")
         queue.async { [weak self] in
-            guard let self else { return }
-            self.entries.append((now, message))
-            if self.entries.count > self.maxEntries {
-                self.entries.removeFirst(self.entries.count - self.maxEntries)
-            }
+            self?.appendLine(message, at: now)
         }
     }
 
     func export() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss.SSS"
-
         var lines: [String] = []
         lines.append("MoneroOne Diagnostic Log")
         lines.append("Exported: \(ISO8601DateFormatter().string(from: Date()))")
@@ -87,22 +113,26 @@ final class DiagnosticLog {
         lines.append("Never contains: your seed phrase, private keys, PIN, or node passwords.")
         lines.append(String(repeating: "-", count: 60))
 
+        var body = ""
         queue.sync {
-            for (date, message) in entries {
-                lines.append("[\(formatter.string(from: date))] \(message)")
+            for url in [previousFileURL, currentFileURL] {
+                if let text = try? String(contentsOf: url, encoding: .utf8) {
+                    body += text
+                }
             }
         }
 
-        if lines.count <= 5 {
-            lines.append("(no log entries)")
+        if body.isEmpty {
+            body = "(no log entries)\n"
         }
 
-        return lines.joined(separator: "\n")
+        return lines.joined(separator: "\n") + "\n" + body
     }
 
     func clear() {
         queue.sync {
-            entries.removeAll()
+            try? FileManager.default.removeItem(at: currentFileURL)
+            try? FileManager.default.removeItem(at: previousFileURL)
         }
     }
 
@@ -122,6 +152,41 @@ final class DiagnosticLog {
             range: NSRange(message.startIndex..., in: message),
             withTemplate: "***@"
         )
+    }
+
+    /// Must be called on `queue`.
+    private func appendLine(_ message: String, at date: Date) {
+        guard let data = "[\(timestampFormatter.string(from: date))] \(message)\n".data(using: .utf8) else { return }
+
+        rotateIfNeeded()
+
+        if let handle = try? FileHandle(forWritingTo: currentFileURL) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: currentFileURL, options: .atomic)
+        }
+    }
+
+    /// Must be called on `queue`.
+    private func rotateIfNeeded() {
+        let fm = FileManager.default
+        let size = (try? fm.attributesOfItem(atPath: currentFileURL.path))
+            .flatMap { $0[.size] as? Int } ?? 0
+        guard size > maxFileSize else { return }
+        try? fm.removeItem(at: previousFileURL)
+        try? fm.moveItem(at: currentFileURL, to: previousFileURL)
+    }
+
+    /// The log records node URLs and sync history — useful to support, but
+    /// nothing that should ride along into iCloud/local device backups.
+    /// Excluding the directory covers every file created inside it.
+    private static func excludeFromBackup(_ url: URL) {
+        var url = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
     }
 
     private func deviceInfo() -> String {

@@ -527,6 +527,7 @@ struct PairTrezorView: View {
     @MainActor
     private func extractKeys() async {
         TrezorLog.log("[Pair] extractKeys: starting")
+        DiagnosticLog.shared.log("Trezor pairing: device connected, exporting view key")
 
         // Release the KitManager singleton slot before creating the
         // transient pair-attempt Kit. KitManager allows only one
@@ -666,6 +667,7 @@ struct PairTrezorView: View {
                 // build a correctly-keyed FULL cache from the device.
                 removeSidecarCache(id: temporaryDeviceWalletId)
 
+                DiagnosticLog.shared.log("Trezor pairing complete")
                 await MainActor.run {
                     clearExtractedKeys()
                     if isAddingWallet {
@@ -682,6 +684,7 @@ struct PairTrezorView: View {
 
     @MainActor
     private func failPair(_ message: String) {
+        DiagnosticLog.shared.log("Trezor pairing failed: \(message)")
         clearExtractedKeys()
         errorMessage = message
         showErrorAlert = true

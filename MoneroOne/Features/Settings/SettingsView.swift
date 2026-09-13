@@ -183,8 +183,11 @@ struct SettingsView: View {
                         )
                     }
                     .sheet(isPresented: $showDiagnosticShare) {
-                        let logText = DiagnosticLog.shared.export()
-                        ShareSheet(items: [logText])
+                        // Prefer a .txt attachment; fall back to inline text
+                        // if the temp file can't be written.
+                        let items: [Any] = DiagnosticLog.shared.exportFile().map { [$0] }
+                            ?? [DiagnosticLog.shared.export()]
+                        ShareSheet(items: items)
                     }
                 }
 

@@ -109,8 +109,8 @@ final class DiagnosticLog {
         // Say plainly what is in here. This file gets emailed to support, and
         // the user should be able to see the scope of what they're sending
         // rather than infer it from 500 lines of log.
-        lines.append("Contains: device model, iOS/app version, the node URLs this app connected to, sync progress, and wallet-engine error messages.")
-        lines.append("Never contains: your seed phrase, private keys, PIN, or node passwords.")
+        lines.append("Contains: device model, iOS/app version, the node URLs this app connected to, sync progress, wallet-engine error messages, and (if you use a Trezor) the Bluetooth pairing and hardware-session steps with their outcomes.")
+        lines.append("Never contains: your seed phrase, private keys, PIN, node passwords, wallet addresses, balances, or the names of nearby Bluetooth devices.")
         lines.append(String(repeating: "-", count: 60))
 
         var body = ""
@@ -126,7 +126,35 @@ final class DiagnosticLog {
             body = "(no log entries)\n"
         }
 
-        return lines.joined(separator: "\n") + "\n" + body
+        // The Trezor log is where every hardware-wallet failure so far has
+        // actually been diagnosable (BLE/THP step outcomes, bridge message
+        // types, session errors). Until it shipped in the export, that
+        // needed a development build on the user's phone.
+        var trezorSection = ""
+        if let trezor = TrezorLog.exportSanitized() {
+            trezorSection = "\n" + String(repeating: "-", count: 60) + "\n"
+                + "Trezor log — Bluetooth pairing and hardware-session protocol events (message types, step outcomes, errors). Raw payloads, nearby device names, addresses and balances are stripped.\n"
+                + String(repeating: "-", count: 60) + "\n"
+                + trezor + "\n"
+        }
+
+        return lines.joined(separator: "\n") + "\n" + body + trezorSection
+    }
+
+    /// Same content as `export()`, written to a temp file so the share
+    /// sheet offers a `.txt` attachment instead of a wall of pasted text
+    /// (the export can run to several hundred KB once a Trezor log is in).
+    func exportFile() -> URL? {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MoneroOne-diagnostic-\(stamp).txt")
+        do {
+            try export().write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
     }
 
     func clear() {

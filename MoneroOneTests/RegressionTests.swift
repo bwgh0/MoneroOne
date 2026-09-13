@@ -1008,3 +1008,62 @@ final class DiagnosticLogPersistenceTests: XCTestCase {
                         "Persisted log lines must carry a full date, not just a time of day")
     }
 }
+
+
+// MARK: - Diagnostic export sanitizer
+
+/// The Settings diagnostic export now carries the on-device Trezor log.
+/// These pin the two promises the export header makes: wire chatter and
+/// nearby-device names are gone, and nothing that looks like an address
+/// or a 64-hex key/hash survives.
+final class DiagnosticExportSanitizerTests: XCTestCase {
+    func testDropsWireChatterAndNearbyDevices() {
+        let raw = """
+        [2026-09-12T22:53:27.426Z] [BLE] Connected to Trezor Safe 7 (7A8A3BC4-1960-3FCC-C081-C1C4D9D109C8)
+        [2026-09-12T22:53:31.033Z] [BLE] writeRawChunk: 244 bytes, hex=1c 7b 63 00 17 52 75 bd
+        [2026-09-12T22:53:31.289Z] [BLE] Received 244 bytes from device
+        [2026-09-12T22:53:31.290Z] [BLE] processRawChunk: 244 bytes, hex=28 7b 63 00 04 c6
+        [2026-09-12T22:53:31.291Z] [THP] readTHPResponse: ACK (ctrl=20), continuing
+        [2026-09-12T22:53:41.591Z] [BLE] Other device: name=[LG] webOS TV OLED77G5WUA, RSSI=-95, services=FEB9
+        [2026-09-12T22:53:50.225Z] [Bridge] /call hex body length: 12 chars
+        [2026-09-12T22:53:50.226Z] [Bridge] /call hex body: 000000000000
+        [2026-09-12T22:55:10.380Z] [Session] FULL refresh FAILED: Sync failed. | wallet2: failed to get hashes
+        [2026-09-12T23:17:24.370Z] [displayBalance] fallback (no snapshot) → raw=0.5
+        """
+        let out = TrezorLog.sanitize(raw)
+        XCTAssertTrue(out.contains("Connected to Trezor Safe 7"))
+        XCTAssertTrue(out.contains("FULL refresh FAILED"))
+        XCTAssertFalse(out.contains("writeRawChunk"))
+        XCTAssertFalse(out.contains("processRawChunk"))
+        XCTAssertFalse(out.contains("Received 244 bytes"))
+        XCTAssertFalse(out.contains("ACK (ctrl=20)"))
+        XCTAssertFalse(out.contains("webOS"))
+        XCTAssertFalse(out.contains("/call hex body"))
+        XCTAssertFalse(out.contains("displayBalance"))
+        XCTAssertEqual(out.split(separator: "\n").count, 2)
+    }
+
+    func testMasksAddressesAndHexKeys() {
+        let standard = "4" + String(repeating: "A", count: 94)
+        let sub = "8" + String(repeating: "B", count: 94)
+        let integrated = "4" + String(repeating: "C", count: 105)
+        let hex = String(repeating: "ab", count: 32)
+        let raw = "[Pair] read address \(standard) and \(sub) and \(integrated) tx <\(hex)> id=7A8A3BC4-1960-3FCC-C081-C1C4D9D109C8"
+        let out = TrezorLog.sanitize(raw)
+        XCTAssertFalse(out.contains(standard))
+        XCTAssertFalse(out.contains(sub))
+        XCTAssertFalse(out.contains(integrated))
+        XCTAssertFalse(out.contains(hex))
+        XCTAssertEqual(out.components(separatedBy: "<address>").count - 1, 3)
+        XCTAssertTrue(out.contains("<hex64>"))
+        // Short identifiers (peripheral UUIDs, 32-hex wallet ids) are kept.
+        XCTAssertTrue(out.contains("7A8A3BC4-1960-3FCC-C081-C1C4D9D109C8"))
+        XCTAssertTrue(TrezorLog.sanitize("tempWalletId=43574c74b0a32d3ea9a10fbe0e95ae6d").contains("43574c74b0a32d3ea9a10fbe0e95ae6d"))
+    }
+
+    func testExportHeaderStatesTrezorScope() {
+        let text = DiagnosticLog.shared.export()
+        XCTAssertTrue(text.contains("Never contains:"))
+        XCTAssertTrue(text.contains("wallet addresses, balances"))
+    }
+}

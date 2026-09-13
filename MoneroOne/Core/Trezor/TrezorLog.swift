@@ -70,6 +70,63 @@ enum TrezorLog {
         }
     }
 
+    // MARK: - Export
+
+    /// Lines that are pure wire chatter or carry data support never needs.
+    private static let droppedLineMarkers = [
+        "writeRawChunk:",          // raw BLE chunk hex
+        "processRawChunk:",        // raw BLE chunk hex
+        "Received 244 bytes",      // per-chunk receive notice
+        "readTHPResponse: ACK",    // ABP acks
+        "/call hex body",          // protobuf payload prefix
+        "[BLE] Other device:",     // nearby BLE devices
+        "[displayBalance]",        // debug-only balance traces
+    ]
+
+    /// Belt and braces on top of the call-site hygiene: anything that
+    /// looks like a Monero address (standard, subaddress, integrated) or
+    /// a 64-hex key/hash is masked before the text leaves the device.
+    private static let addressRegex = try! NSRegularExpression(
+        pattern: "\\b[48][1-9A-HJ-NP-Za-km-z]{94}(?:[1-9A-HJ-NP-Za-km-z]{11})?\\b")
+    private static let hex64Regex = try! NSRegularExpression(pattern: "\\b[0-9a-fA-F]{64}\\b")
+
+    /// Reduce a raw Trezor log to what a support engineer needs: BLE and
+    /// THP step outcomes, bridge message types, session milestones and
+    /// error strings. Pure function so it can be unit-tested.
+    static func sanitize(_ text: String) -> String {
+        var out: [String] = []
+        out.reserveCapacity(1024)
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            let s = String(line)
+            if droppedLineMarkers.contains(where: { s.contains($0) }) { continue }
+            var masked = s
+            for (regex, token) in [(addressRegex, "<address>"), (hex64Regex, "<hex64>")] {
+                masked = regex.stringByReplacingMatches(
+                    in: masked, range: NSRange(masked.startIndex..., in: masked), withTemplate: token)
+            }
+            out.append(masked)
+        }
+        return out.joined(separator: "\n")
+    }
+
+    /// The on-device log, sanitized and trimmed to its newest `maxBytes`
+    /// (the most recent pairing/session is what matters). Nil when the
+    /// user has never used a Trezor.
+    static func exportSanitized(maxBytes: Int = 300 * 1024) -> String? {
+        guard let url = logFile else { return nil }
+        let raw: String? = queue.sync { try? String(contentsOf: url, encoding: .utf8) }
+        guard let raw, !raw.isEmpty else { return nil }
+        let sanitized = sanitize(raw)
+        guard sanitized.utf8.count > maxBytes else { return sanitized }
+        // Trim at a line boundary from the front.
+        let dropCount = sanitized.utf8.count - maxBytes
+        let tail = sanitized.dropFirst(dropCount)
+        if let firstBreak = tail.firstIndex(of: "\n") {
+            return "(older lines trimmed)\n" + tail[tail.index(after: firstBreak)...]
+        }
+        return String(tail)
+    }
+
     private static func excludeFromBackup(_ url: URL) {
         var mutableURL = url
         var values = URLResourceValues()

@@ -734,8 +734,12 @@ extension TrezorBleTransport: CBCentralManagerDelegate {
         } else {
             discoveryLogCount += 1
             if discoveryLogCount <= 20 {
-                TrezorLog.log("[BLE] Other device: name=%@, RSSI=%@, services=%@",
-                      name ?? "(nil)", RSSI,
+                // No names: the log is exported to support, and the names of
+                // the TVs, locks and speakers around the user are nobody's
+                // business. RSSI + service UUIDs are enough to see the scan
+                // is alive.
+                TrezorLog.log("[BLE] Other device: RSSI=%@, services=%@",
+                      RSSI,
                       serviceUUIDs.map { $0.uuidString }.joined(separator: ","))
             } else if discoveryLogCount == 21 {
                 TrezorLog.log("[BLE] (suppressing further non-Trezor device logs...)")

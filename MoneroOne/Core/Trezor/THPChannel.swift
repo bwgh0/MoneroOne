@@ -369,8 +369,12 @@ class THPChannel {
             }
 
             do {
-                // Read response (60s timeout for user confirmation on Trezor screen)
-                let (_, respType, respPayload) = try await readEncrypted(cipher: recvCipher)
+                // After a ButtonAck (27) the device is waiting on the
+                // user, not on us — a key-image sync or signing prompt
+                // can sit unanswered for minutes. Every other exchange
+                // keeps the short timeout so a dead link fails fast.
+                let responseTimeout = messageType == 27 ? Self.userConfirmationTimeout : Self.responseTimeout
+                let (_, respType, respPayload) = try await readEncrypted(cipher: recvCipher, timeout: responseTimeout)
 
                 // SUCCESS — toggle seq bit now
                 sendSeqBit.toggle()
@@ -411,8 +415,16 @@ class THPChannel {
     }
 
     /// Read and decrypt a message, returning (session_id, message_type, protobuf_data).
-    private func readEncrypted(cipher: THPCipherState) async throws -> (UInt8, UInt16, Data) {
-        let response = try await readTHPResponse()
+    /// Plain device round-trip budget.
+    static let responseTimeout: TimeInterval = 60
+    /// Budget for a response that depends on the user pressing a button
+    /// on the Trezor. 60 s cost a session on 2026-09-12: the key-image
+    /// export confirmation was answered at 2 min, 3 ms after the bridge
+    /// gave up, and the resulting wallet2 exception took the app down.
+    static let userConfirmationTimeout: TimeInterval = 600
+
+    private func readEncrypted(cipher: THPCipherState, timeout: TimeInterval = THPChannel.responseTimeout) async throws -> (UInt8, UInt16, Data) {
+        let response = try await readTHPResponse(timeout: timeout)
         let decrypted = try cipher.decrypt(ciphertext: response.payload)
 
         guard decrypted.count >= 3 else {
@@ -436,7 +448,15 @@ class THPChannel {
             if msgType == 26 { // ButtonRequest
                 TrezorLog.log("[THP] readEncrypted: ButtonRequest received, sending ButtonAck and waiting...")
                 try await sendEncrypted(sessionId: sid, messageType: 27, payload: Data(), cipher: sendCipher)
-                continue
+                // The device now blocks on the user — give them time.
+                let (sid2, type2, payload2) = try await readEncrypted(cipher: recvCipher, timeout: Self.userConfirmationTimeout)
+                if type2 == 26 {
+                    // Another prompt (multi-step confirmations) — loop
+                    // through the same ack path.
+                    try await sendEncrypted(sessionId: sid2, messageType: 27, payload: Data(), cipher: sendCipher)
+                    continue
+                }
+                return (sid2, type2, payload2)
             }
             return (sid, msgType, payload)
         }
@@ -556,6 +576,18 @@ class THPChannel {
             if cid != 0 && decoded.cid != cid && decoded.cid != THPFrame.broadcastCID {
                 TrezorLog.log("[THP] readTHPResponse: dropping stale frame (cid=%04x, expected=%04x)", decoded.cid, cid)
                 continue
+            }
+
+            // A THP error frame is a terminal answer, not a message to
+            // parse. Feeding its 1-byte payload onward used to surface as
+            // "Noise handshake message too short" when the device
+            // answered message 1 with TRANSPORT_BUSY because it was still
+            // tearing down the session a crashed app process left open.
+            if decoded.controlByte.isError {
+                let code = decoded.payload.first ?? 0
+                TrezorLog.log("[THP] readTHPResponse: device sent THP error frame, code=%d (%@)",
+                              code, THPChannelError.describeDeviceError(code))
+                throw THPChannelError.deviceError(code: code)
             }
 
             if decoded.controlByte.isDataMessage {
@@ -901,6 +933,27 @@ enum THPChannelError: LocalizedError {
     case pairingRequired
     case pairingFailed(String)
     case sessionCreationFailed(String)
+    /// The device answered with a THP error frame carrying this
+    /// `ThpErrorType` code.
+    case deviceError(code: UInt8)
+
+    /// Codes from trezor-firmware `trezor/wire/thp/__init__.py`.
+    static func describeDeviceError(_ code: UInt8) -> String {
+        switch code {
+        case 1: return "transport busy — the Trezor is still finishing a previous session"
+        case 2: return "unallocated channel"
+        case 3: return "decryption failed"
+        case 4: return "invalid data"
+        case 5: return "device locked"
+        default: return "unknown THP error"
+        }
+    }
+
+    /// Errors worth one automatic retry on a fresh channel.
+    var isTransientDeviceError: Bool {
+        if case .deviceError(let code) = self { return code == 1 || code == 2 }
+        return false
+    }
 
     var errorDescription: String? {
         switch self {
@@ -920,6 +973,8 @@ enum THPChannelError: LocalizedError {
             return "THP pairing failed: \(msg)"
         case .sessionCreationFailed(let msg):
             return "THP session creation failed: \(msg)"
+        case .deviceError(let code):
+            return "Trezor reported: \(THPChannelError.describeDeviceError(code))"
         }
     }
 }

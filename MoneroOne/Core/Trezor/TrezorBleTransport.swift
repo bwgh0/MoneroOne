@@ -28,6 +28,20 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
     @Published var discoveredDevices: [TrezorDevice] = []
     @Published var connectedDeviceName: String?
 
+    /// How long a pending `CBCentralManager.connect` may sit without
+    /// completing before we give up. CoreBluetooth never times out a
+    /// pending connection on its own: a peripheral that advertised but
+    /// won't accept the link (locked Trezor, stale advertisement, out of
+    /// range) leaves the app on "Connecting…" forever. Seen on 1.0.8(2):
+    /// 88 s stuck on the first advertisement until the user backed out.
+    static let connectTimeout: TimeInterval = 20
+    private var connectTimeoutWork: DispatchWorkItem?
+    /// Bumped on every `startScanning()` so the 60 s scan-timeout closure
+    /// armed by an earlier scan can't stop a newer one. Seen in a device
+    /// log: scan #1's timer fired 14 s into scan #2 (state was `.scanning`
+    /// again, so the stale closure passed its guard) and killed it.
+    private var scanGeneration = 0
+
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
     private var rxCharacteristic: CBCharacteristic?
@@ -149,9 +163,12 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
             CBCentralManagerScanOptionAllowDuplicatesKey: false
         ])
 
-        // Stop scanning after 60 seconds
+        // Stop scanning after 60 seconds — but only this scan, not a
+        // later one started after this timer was armed.
+        scanGeneration += 1
+        let generation = scanGeneration
         DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
-            guard let self, self.connectionState == .scanning else { return }
+            guard let self, self.scanGeneration == generation, self.connectionState == .scanning else { return }
             TrezorLog.log("[BLE] Scan timeout (60s) - found %d other devices, no Trezor", self.discoveryLogCount)
             self.stopScanning()
         }
@@ -166,12 +183,42 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
 
     func connect(to device: TrezorDevice) {
         stopScanning()
+        TrezorLog.log("[BLE] connect: %@ (%@)", device.name, device.peripheral.identifier.uuidString)
         updateOnMain { self.connectionState = .connecting }
         connectedPeripheral = device.peripheral
         device.peripheral.delegate = self
         // Persist peripheral UUID for reconnection after app relaunch
         UserDefaults.standard.set(device.peripheral.identifier.uuidString, forKey: "lastTrezorPeripheralUUID")
         centralManager.connect(device.peripheral, options: nil)
+        armConnectTimeout(for: device.peripheral)
+    }
+
+    /// Give up on a connection that hasn't reached "fully connected"
+    /// (link up + service/characteristic discovery done) within
+    /// `connectTimeout`. Cancels the pending link and surfaces an error
+    /// so the UI offers Try Again instead of spinning forever.
+    private func armConnectTimeout(for peripheral: CBPeripheral) {
+        connectTimeoutWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // Only for the connection we armed, and only while still pending.
+            guard self.connectionState == .connecting,
+                  let pending = self.connectedPeripheral,
+                  pending.identifier == peripheral.identifier else { return }
+            TrezorLog.log("[BLE] Connect timeout (%.0fs) for %@ (%@, peripheralState=%d) — cancelling",
+                          Self.connectTimeout, pending.name ?? "(nil)",
+                          pending.identifier.uuidString, pending.state.rawValue)
+            self.connectedPeripheral = nil
+            self.centralManager.cancelPeripheralConnection(pending)
+            self.connectionState = .error("Trezor didn't respond. Make sure it's unlocked and nearby, then try again.")
+        }
+        connectTimeoutWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.connectTimeout, execute: work)
+    }
+
+    private func cancelConnectTimeout() {
+        connectTimeoutWork?.cancel()
+        connectTimeoutWork = nil
     }
 
     func disconnect() {
@@ -216,6 +263,7 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
         connectedPeripheral = peripheral
         peripheral.delegate = self
         centralManager.connect(peripheral, options: nil)
+        armConnectTimeout(for: peripheral)
         return true
     }
 
@@ -612,6 +660,7 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
     }
 
     private func cleanup() {
+        cancelConnectTimeout()
         connectedPeripheral = nil
         rxCharacteristic = nil
         txCharacteristic = nil
@@ -678,8 +727,8 @@ extension TrezorBleTransport: CBCentralManagerDelegate {
 
         // Log first 20 discovered devices for debugging, and always log Trezor matches
         if isTrezorByUUID || isTrezorByName {
-            TrezorLog.log("[BLE] *** TREZOR FOUND: name=%@, RSSI=%@, serviceUUIDs=%@, advKeys=%@",
-                  name ?? "(nil)", RSSI,
+            TrezorLog.log("[BLE] *** TREZOR FOUND: name=%@, id=%@, RSSI=%@, serviceUUIDs=%@, advKeys=%@",
+                  name ?? "(nil)", peripheral.identifier.uuidString, RSSI,
                   serviceUUIDs.map { $0.uuidString }.joined(separator: ","),
                   (advertisementData.keys.map { $0 }).joined(separator: ","))
         } else {
@@ -704,17 +753,27 @@ extension TrezorBleTransport: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        TrezorLog.log("[BLE] Connected to %@", peripheral.name ?? "unknown")
+        TrezorLog.log("[BLE] Connected to %@ (%@)", peripheral.name ?? "unknown", peripheral.identifier.uuidString)
         updateOnMain { self.connectedDeviceName = peripheral.name ?? "Trezor Safe 7" }
         peripheral.discoverServices([TrezorBleUUID.service])
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        cancelConnectTimeout()
         TrezorLog.log("[BLE] Failed to connect: %@", error?.localizedDescription ?? "unknown")
         updateOnMain { self.connectionState = .error("Failed to connect: \(error?.localizedDescription ?? "unknown")") }
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        // A disconnect for a peripheral we already gave up on (connect
+        // timeout, explicit `disconnect()`) must not clobber the state
+        // of whatever we're doing now — e.g. flip a fresh `.error` back
+        // to `.disconnected`, or tear down a newer connection.
+        guard let current = connectedPeripheral, current.identifier == peripheral.identifier else {
+            TrezorLog.log("[BLE] Ignoring disconnect for stale peripheral %@ (%@)",
+                          peripheral.name ?? "unknown", peripheral.identifier.uuidString)
+            return
+        }
         TrezorLog.log("[BLE] Disconnected from %@", peripheral.name ?? "unknown")
         cleanup()
     }
@@ -769,6 +828,7 @@ extension TrezorBleTransport: CBPeripheralDelegate {
         }
 
         if rxCharacteristic != nil && txCharacteristic != nil {
+            cancelConnectTimeout()
             updateOnMain { self.connectionState = .connected }
             TrezorLog.log("[BLE] Fully connected and ready")
         }

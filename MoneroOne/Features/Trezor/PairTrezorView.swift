@@ -10,9 +10,9 @@ import MoneroKit
 ///   2. extractingKeys   — open a transient TREZOR-bound wallet2 instance
 ///                         via MoneroWallet.createFromDevice, read its
 ///                         primary address + secret view key, stop it.
-///                         The on-disk cache stays at <deviceWalletId>
-///                         so the future TrezorSession reconnect can
-///                         find its sidecar.
+///                         Its on-disk cache is throwaway (see `pair()`);
+///                         the first hardware session builds the real
+///                         FULL cache at <deviceWalletId>.
 ///   3. creationDate     — optional restore-height picker
 ///   4. setPIN           — onboarding only (skipped when isAddingWallet)
 ///   5. nameWallet       — name + emoji
@@ -21,9 +21,9 @@ import MoneroKit
 ///                         entry tagged with the .trezor binding.
 ///   7. done             — dismisses
 ///
-/// If the user cancels after step 2, the orphan sidecar cache lives at
-/// `MoneroKit/<deviceWalletId>/...` with no matching WalletInfo entry.
-/// `cleanOrphanedDeviceCaches()` (run on app launch) sweeps these up.
+/// If the user cancels after step 2, the orphan pair-attempt cache lives
+/// at `MoneroKit/<tempWalletId>/...` with no matching WalletInfo entry.
+/// `cleanOrphanedWalletCaches()` (run on app launch) sweeps these up.
 struct PairTrezorView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
@@ -521,9 +521,9 @@ struct PairTrezorView: View {
     }
 
     /// Open a transient TREZOR-bound wallet2 instance to read the
-    /// device's primary address + view key. The on-disk cache that
-    /// wallet2 writes during `restore_from_device` stays put — that's
-    /// the sidecar a future `TrezorSession` reconnect will reuse.
+    /// device's primary address + view key. The on-disk cache wallet2
+    /// writes during `restore_from_device` is discarded once the pair
+    /// completes — see `pair()` for why it can't be reused.
     @MainActor
     private func extractKeys() async {
         TrezorLog.log("[Pair] extractKeys: starting")
@@ -541,10 +541,9 @@ struct PairTrezorView: View {
         TrezorLog.log("[Pair] extractKeys: suspending active wallet to free KitManager slot")
         await walletManager.suspendActiveWalletForPairing()
         TrezorLog.log("[Pair] extractKeys: active wallet suspended")
-        // Use a synthesized device id keyed off the BLE peripheral so
-        // the deviceWalletId is stable across pair attempts. After
-        // we've extracted the address we recompute it from address +
-        // network so the live binding has a stable value tied to the
+        // The transient wallet gets a throwaway id per attempt. The
+        // real deviceWalletId is derived from address + network once
+        // we've extracted the address, so the binding is tied to the
         // Monero account, not the BLE peripheral.
         let networkSuffix = walletManager.networkType == .testnet ? "_testnet" : ""
         let pairAttemptId = UUID().uuidString
@@ -592,9 +591,8 @@ struct PairTrezorView: View {
         let viewKey = wallet.secretViewKey ?? ""
         TrezorLog.log("[Pair] extractKeys: read address (len=%d), viewKey (len=%d)", address.count, viewKey.count)
 
-        // Stop the runtime instance — its on-disk cache stays. The
-        // file-system path `MoneroKit/<tempWalletId>/` will be moved
-        // to the real `<deviceWalletId>` location once we know it.
+        // Stop the runtime instance. Its cache at
+        // `MoneroKit/<tempWalletId>/` is deleted in `pair()`.
         await wallet.stopAsync()
         TrezorLog.log("[Pair] extractKeys: stopAsync done")
 
@@ -655,13 +653,18 @@ struct PairTrezorView: View {
 
                 try await walletManager.unlock(pin: pin)
 
-                // Move the transient sidecar cache from <tempWalletId>
-                // to <deviceWalletId> so TrezorSession reconnect finds
-                // the sidecar this pair just created — first reconnect
-                // skips a redundant restore_from_device.
-                let networkSuffix = walletManager.networkType == .testnet ? "_testnet" : ""
-                let stableDeviceWalletId = MoneroWallet.stableWalletId(for: "trezor:\(deviceId)\(networkSuffix)")
-                renameSidecarCache(from: temporaryDeviceWalletId, to: stableDeviceWalletId)
+                // Discard the transient pair-attempt cache. It used to be
+                // renamed to <deviceWalletId> so the first hardware
+                // session could skip a restore_from_device, but MoneroKit
+                // encrypts every wallet2 cache with its own walletId as
+                // the password, so a cache written under the temp id can
+                // never be opened under the stable id. The session then
+                // held a keyless wallet2 object with an empty hashchain
+                // (null genesis), every /gethashes.bin came back "Failed",
+                // and the first sync died with "failed to get hashes"
+                // (1.0.8(2) field log). Let the session's createFromDevice
+                // build a correctly-keyed FULL cache from the device.
+                removeSidecarCache(id: temporaryDeviceWalletId)
 
                 await MainActor.run {
                     clearExtractedKeys()
@@ -701,27 +704,16 @@ struct PairTrezorView: View {
         temporaryDeviceWalletId = ""
     }
 
-    /// Atomically rename the on-disk wallet2 cache directory from
-    /// the synthesized pair-attempt id to the stable device-derived
-    /// id. Best-effort — failure leaves the cache where it is and
-    /// `cleanOrphanedWalletCaches()` will sweep it next launch (since
-    /// neither id will match a WalletInfo). The next reconnect would
-    /// just rebuild the sidecar from the device, which is correct
-    /// but slower.
-    private func renameSidecarCache(from oldId: String, to newId: String) {
-        guard oldId != newId, !oldId.isEmpty, !newId.isEmpty else { return }
+    /// Delete the on-disk wallet2 cache directory of the transient
+    /// pair-attempt wallet. Best-effort — if it survives,
+    /// `cleanOrphanedWalletCaches()` sweeps it next launch since no
+    /// WalletInfo carries the temp id.
+    private func removeSidecarCache(id: String) {
+        guard !id.isEmpty else { return }
         let fm = FileManager.default
         guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
-        let oldPath = appSupport.appendingPathComponent("MoneroKit/\(oldId)")
-        let newPath = appSupport.appendingPathComponent("MoneroKit/\(newId)")
-        guard fm.fileExists(atPath: oldPath.path) else { return }
-        if fm.fileExists(atPath: newPath.path) {
-            // Newer cache from a previous pair already exists — drop
-            // the transient one. Caller's WalletInfo will reuse the
-            // existing `<newId>` cache.
-            try? fm.removeItem(at: oldPath)
-            return
-        }
-        try? fm.moveItem(at: oldPath, to: newPath)
+        let path = appSupport.appendingPathComponent("MoneroKit/\(id)")
+        guard fm.fileExists(atPath: path.path) else { return }
+        try? fm.removeItem(at: path)
     }
 }

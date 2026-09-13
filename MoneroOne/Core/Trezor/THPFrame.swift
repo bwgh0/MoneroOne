@@ -26,6 +26,10 @@ struct THPControlByte {
     /// Fixed control byte values (no bit fields)
     static let channelAllocReq: UInt8  = 0x40
     static let channelAllocResp: UInt8 = 0x41
+    /// Device → host error frame. Payload is a single `ThpErrorType`
+    /// byte (1 transport busy, 2 unallocated channel, 3 decryption
+    /// failed, 4 invalid data, 5 device locked).
+    static let error: UInt8            = 0x42
     static let continuation: UInt8     = 0x80
 
     let rawValue: UInt8
@@ -35,6 +39,9 @@ struct THPControlByte {
 
     /// Is this an ACK message? Pattern: 0010X000
     var isACK: Bool { (rawValue & 0xF7) == 0x20 }
+
+    /// True for a THP error frame (see `error`).
+    var isError: Bool { rawValue == THPControlByte.error }
 
     /// Is this a data message (handshake or encrypted)? Top 3 bits = 000
     var isDataMessage: Bool { (rawValue & 0xE0) == 0x00 }

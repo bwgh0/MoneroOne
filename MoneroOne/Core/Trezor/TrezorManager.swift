@@ -291,6 +291,9 @@ class TrezorManager: ObservableObject {
                 state = .allocatingTHP(deviceName: deviceName)
 
                 let hostKey = THPPairing.loadOrCreateHostStaticKey()
+                // Built by a closure so a retry gets a pristine channel
+                // (sequence bits and ciphers are per-instance state).
+                let makeChannel: () -> THPChannel = { [weak self, bleTransport] in
                 let channel = THPChannel(transport: bleTransport, hostStaticKey: hostKey)
 
                 // Set up pairing callback
@@ -323,7 +326,10 @@ class TrezorManager: ObservableObject {
                         }
                     }
                 }
+                return channel
+                }
 
+                var channel = makeChannel()
                 self.thpChannel = channel
 
                 state = .allocatingTHP(deviceName: deviceName)
@@ -331,7 +337,21 @@ class TrezorManager: ObservableObject {
                 updateChecklistItem("channel", status: .inProgress)
                 TrezorLog.log("[Manager] State → allocatingTHP / Starting THP channel setup…")
 
-                try await channel.setup()
+                do {
+                    try await channel.setup()
+                } catch let err as THPChannelError where err.isTransientDeviceError {
+                    // The device is still tearing down a session a previous
+                    // app process left open (seen right after a crash: it
+                    // answered Noise message 1 with TRANSPORT_BUSY). A manual
+                    // retry 5 s later succeeded, so do one automatically.
+                    TrezorLog.log("[Manager] THP setup failed with %@ — retrying once on a fresh channel", err.localizedDescription)
+                    try await Task.sleep(nanoseconds: 2_000_000_000)
+                    channel = makeChannel()
+                    self.thpChannel = channel
+                    resetChecklist()
+                    updateChecklistItem("channel", status: .inProgress)
+                    try await channel.setup()
+                }
 
                 TrezorLog.log("[Manager] THP channel ready, starting bridge server")
 

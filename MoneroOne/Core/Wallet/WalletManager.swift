@@ -431,7 +431,11 @@ class WalletManager: ObservableObject {
             hardwareSessionState = .syncingKeyImages
             let kiOK = await fullWallet.coldKeyImageSync()
             if !kiOK {
-                let err = fullWallet.latestErrorString
+                // wallet2 throws (no status set) when the device doesn't
+                // finish the export — most often the confirmation on the
+                // Trezor wasn't given in time — so the string is empty.
+                let raw = fullWallet.latestErrorString
+                let err = raw.isEmpty ? "Trezor didn't complete the key-image export. Confirm the prompt on the device and try again." : raw
                 TrezorLog.log("[Session] coldKeyImageSync FAILED: %@", err)
                 await fullWallet.stopAsync()
                 await failSessionAndRestoreView(message: "Key image sync failed: \(err)", viewKeys: viewKeys)
@@ -558,6 +562,17 @@ class WalletManager: ObservableObject {
         var observedScanProgress = false
         let minSettleTime: TimeInterval = 3.0
 
+        // A single failed status poll must not end a multi-minute FULL
+        // scan. MoneroKit flips to `.error` on the first poll whose
+        // wallet2 status is non-zero — one get_info failure surfaces as
+        // "daemon error" (seen mid-scan on 2026-09-12) — and recovers by
+        // itself on the next clean poll while wallet2's refresh thread
+        // keeps scanning. Only give up when the error persists past
+        // `errorGrace` with no wallet-height progress.
+        let errorGrace: TimeInterval = 45.0
+        var errorSince: Date?
+        var heightAtError: UInt64 = 0
+
         while Date() < deadline {
             let walletH = wallet.walletHeight
             let daemonH = wallet.daemonHeight
@@ -565,6 +580,7 @@ class WalletManager: ObservableObject {
 
             switch wallet.syncState {
             case .synced:
+                errorSince = nil
                 // Stale-cache trap: wallet2 says .synced but we
                 // haven't heard a single byte from the daemon yet.
                 // Hold off until either we've seen a scan happen or
@@ -578,10 +594,25 @@ class WalletManager: ObservableObject {
                 }
                 // else: keep waiting for a genuine poll
             case .syncing(let p, let remaining):
+                errorSince = nil
                 observedScanProgress = true
                 hardwareSessionState = .syncingFull(progress: p, blocksRemaining: remaining)
             case .error(let msg):
-                throw NSError(domain: "HardwareSession", code: -10, userInfo: [NSLocalizedDescriptionKey: msg])
+                if let since = errorSince {
+                    if walletH > heightAtError {
+                        // Still scanning — the error was transient.
+                        // Restart the clock so a later real stall
+                        // still times out.
+                        errorSince = Date()
+                        heightAtError = walletH
+                    } else if Date().timeIntervalSince(since) > errorGrace {
+                        throw NSError(domain: "HardwareSession", code: -10, userInfo: [NSLocalizedDescriptionKey: msg])
+                    }
+                } else {
+                    errorSince = Date()
+                    heightAtError = walletH
+                    TrezorLog.log("[Session] FULL sync reported '%@' at height %llu — holding %.0fs for recovery", msg, walletH, errorGrace)
+                }
             case .idle, .connecting:
                 break
             }
@@ -1377,34 +1408,45 @@ class WalletManager: ObservableObject {
             throw WalletError.duplicateWallet(existingName: existing.name)
         }
 
+        var height: UInt64 = 0
+        if let date = restoreDate {
+            height = UInt64(RestoreHeight.getHeight(date: date))
+        }
+
         // Pre-flight validation — open a throwaway wallet2 instance to prove
         // the view key matches the address. wallet2 throws here instead of
         // silently producing an empty wallet, which would mislead the user
-        // into thinking their funds are gone. The files wallet2 writes are
-        // keyed by the same stable ID the real unlock path will reuse, so
-        // there's no garbage left on disk.
+        // into thinking their funds are gone.
+        //
+        // The validator writes its cache under the same stable id the real
+        // unlock path uses, and MoneroKit reopens an existing cache as-is:
+        // wallet2's stored refresh height wins over the one passed in. This
+        // used to validate with `restoreHeight: 0`, so every view-only and
+        // Trezor wallet restored with a creation date silently rescanned
+        // from genesis (a Trezor view wallet paired with height 3759455 sat
+        // at 634k blocks after seven minutes, showing "Connecting…" — the
+        // kit reports `.connecting` until walletHeight reaches the height
+        // it was told). Give the validator the real height, and wipe its
+        // cache anyway so unlock starts from a clean, correctly-keyed one.
         let validator = MoneroWallet()
         do {
             try await validator.createWatchOnly(
                 address: trimmedAddress,
                 viewKey: trimmedViewKey,
-                restoreHeight: 0,
+                restoreHeight: height,
                 networkType: networkType
             )
         } catch {
             await validator.stopAsync()
+            wipeWalletCache(walletId: candidateDerivedId)
             throw WalletError.invalidViewKey
         }
         await validator.stopAsync()
+        wipeWalletCache(walletId: candidateDerivedId)
 
         // See `addWallet` — snapshot prior active so its balance doesn't
         // read as 0 in the switcher after the restore swaps active.
         cacheActiveWalletData()
-
-        var height: UInt64 = 0
-        if let date = restoreDate {
-            height = UInt64(RestoreHeight.getHeight(date: date))
-        }
 
         let walletId = UUID()
         let info = WalletInfo(

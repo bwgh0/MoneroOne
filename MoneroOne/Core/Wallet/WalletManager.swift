@@ -304,6 +304,7 @@ class WalletManager: ObservableObject {
             return
         }
         TrezorLog.log("[Session] starting hardware session (send=%@, deviceWalletId=%@)", send == nil ? "no" : "yes", deviceWalletId)
+        DiagnosticLog.shared.log("Trezor session started (send=\(send == nil ? "no" : "yes"))")
 
         // The session might be starting from a warm connection (the
         // device is already paired+bridge-running from a prior
@@ -509,8 +510,7 @@ class WalletManager: ObservableObject {
             viewBaseline: viewBaselineBalance,
             viewUnlockedBaseline: viewBaselineUnlocked
         )
-        TrezorLog.log("[Session] balance snapshot saved (full=%@ unlocked=%@ viewBaseline=%@)",
-                      "\(fullBalance)", "\(fullUnlocked)", "\(viewBaselineBalance)")
+        TrezorLog.log("[Session] balance snapshot saved")
 
         // 7. Tear down FULL.
         hardwareSessionState = .tearingDown
@@ -542,6 +542,7 @@ class WalletManager: ObservableObject {
             hardwareSessionState = .complete(message: "Sent transactions are up to date.")
         }
         TrezorLog.log("[Session] session complete (warm window started)")
+        DiagnosticLog.shared.log("Trezor session complete")
     }
 
     private func waitForSyncedOrThrow(_ wallet: MoneroWallet, timeout: TimeInterval) async throws {
@@ -636,6 +637,7 @@ class WalletManager: ObservableObject {
     }
 
     private func failSessionAndRestoreView(message: String, viewKeys: (address: String, viewKey: String)) async {
+        DiagnosticLog.shared.log("Trezor session failed: \(message)")
         hardwareSessionState = .tearingDown
         do {
             try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)

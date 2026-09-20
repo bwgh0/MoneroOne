@@ -96,24 +96,131 @@ struct EmojiPickerCircle: View {
     var size: CGFloat = 80
     var fontSize: CGFloat = 44
 
+    /// Keyboard fallback (hidden emoji text field).
     @State private var isActive = false
+    @State private var showPicker = false
 
     var body: some View {
         ZStack {
-            Text(emoji)
-                .font(.system(size: fontSize))
-                .frame(width: size, height: size)
-                .background(Circle().fill(.ultraThinMaterial))
-                .clipShape(Circle())
-                .overlay(
-                    Circle().strokeBorder(isActive ? Color.orange : Color.clear, lineWidth: 2)
-                )
-                .onTapGesture { isActive = true }
+            Button {
+                showPicker = true
+            } label: {
+                Text(emoji)
+                    .font(.system(size: fontSize))
+                    .frame(width: size, height: size)
+                    // A material over a plain sheet background is invisible in
+                    // light mode; use the field fill so the circle always reads.
+                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle().strokeBorder(isActive ? Color.orange : Color.clear, lineWidth: 2)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("emojiPicker.circle")
+            .accessibilityLabel("Icon, \(EmojiPickerSheet.spokenName(for: emoji))")
+            .accessibilityHint("Double tap to choose a different icon")
 
             EmojiTextFieldRepresentable(emoji: $emoji, isActive: $isActive)
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
+                .accessibilityHidden(true)
         }
+        .sheet(isPresented: $showPicker) {
+            EmojiPickerSheet(emoji: $emoji) {
+                isActive = true
+            }
+        }
+    }
+}
+
+/// Accessible icon picker: a curated grid of emoji as real buttons, each
+/// spoken by VoiceOver with its Unicode name, plus a keyboard fallback for
+/// anything else. The hidden text-field trick alone could not be activated
+/// with VoiceOver and shows nothing on a simulator with a hardware keyboard.
+struct EmojiPickerSheet: View {
+    @Binding var emoji: String
+    var onUseKeyboard: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    static let choices: [String] = [
+        "💰", "💵", "💶", "💷", "💴", "💳", "🪙", "💎", "🏦", "🧾", "📈", "📊",
+        "🔐", "🔑", "🗝️", "🛡️", "🔒", "🧰", "🎁", "📦", "🏠", "🏢", "🏝️", "⛺️",
+        "🚀", "✈️", "🚗", "⛵️", "🎯", "🎲", "🧩", "🎮", "📱", "💻", "⌚️", "📷",
+        "🎧", "🎸", "🎨", "🌍", "🌕", "⭐️", "🔥", "💧", "🌈", "🍀", "🌵", "🌲",
+        "🍕", "☕️", "🐱", "🐶", "🦊", "🐻", "🐼", "🦁", "🐸", "🐢", "🦋", "🐝",
+        "🟠", "🟢", "🔵", "🟣", "🔴", "⚫️", "⚪️", "🟤"
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 56), spacing: 10)], spacing: 10) {
+                        ForEach(Self.choices, id: \.self) { choice in
+                            Button {
+                                emoji = choice
+                                HapticFeedback.shared.softTick()
+                                dismiss()
+                            } label: {
+                                Text(choice)
+                                    .font(.system(size: 30))
+                                    .frame(width: 56, height: 56)
+                                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                                    .overlay(
+                                        Circle().strokeBorder(choice == emoji ? Color.orange : Color.clear, lineWidth: 2)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(Self.spokenName(for: choice))
+                            .accessibilityAddTraits(choice == emoji ? [.isSelected] : [])
+                        }
+                    }
+
+                    Button {
+                        dismiss()
+                        onUseKeyboard()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "keyboard")
+                                .font(.callout.weight(.semibold))
+                            Text("More on the emoji keyboard")
+                                .font(.callout.weight(.semibold))
+                        }
+                        .foregroundStyle(Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    .glassButtonStyle()
+                    .accessibilityHint("Opens the emoji keyboard to type any emoji")
+                }
+                .padding()
+            }
+            .navigationTitle("Choose Icon")
+            .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationBackground(Color(.systemBackground))
+    }
+
+    /// "💰" → "money bag", from the Unicode character name, so VoiceOver has
+    /// something to say for an emoji-only control.
+    static func spokenName(for emoji: String) -> String {
+        guard let raw = emoji.applyingTransform(.toUnicodeName, reverse: false) else { return "icon" }
+        let names = raw
+            .components(separatedBy: "\\N{")
+            .compactMap { part -> String? in
+                guard let close = part.firstIndex(of: "}") else { return nil }
+                let name = String(part[..<close]).lowercased()
+                return name.hasPrefix("variation selector") ? nil : name
+            }
+        return names.isEmpty ? "icon" : names.joined(separator: " ")
     }
 }
 
@@ -137,6 +244,7 @@ struct WalletSwitcherButton: View {
             }
         }
         .glassButtonStyle()
+        .accessibilityIdentifier("wallet.switcher")
         .sheet(isPresented: $showRenameActive) {
             RenameWalletSheet(
                 name: $renameText,
@@ -169,12 +277,6 @@ struct WalletSwitcherButton: View {
 
     // MARK: - Expanded (current wallet card)
 
-    private var truncatedAddress: String {
-        let addr = walletManager.primaryAddress
-        guard addr.count > 16 else { return addr }
-        return "\(addr.prefix(8))...\(addr.suffix(8))"
-    }
-
     private var expandedLabel: some View {
         HStack(spacing: 14) {
             Text(walletManager.activeWallet?.emoji ?? "\u{1F4B0}")
@@ -203,10 +305,14 @@ struct WalletSwitcherButton: View {
                 .font(.callout.weight(.medium))
                 .foregroundStyle(.orange)
 
-                Text(truncatedAddress)
+                // Full address, truncated in the middle to whatever width is
+                // left: never wraps, shows more characters on wider rows.
+                Text(walletManager.primaryAddress)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .monospaced()
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             Spacer()
@@ -220,6 +326,9 @@ struct WalletSwitcherButton: View {
                     renameEmoji = walletManager.activeWallet?.emoji ?? "\u{1F4B0}"
                     showRenameActive = true
                 }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Rename wallet")
+                .accessibilityIdentifier("wallet.switcher.rename")
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.title3)
@@ -238,12 +347,6 @@ struct WalletRow: View {
     let onDelete: () -> Void
 
     @State private var showDeleteZone = false
-
-    private var truncated: String {
-        let addr = wallet.cachedPrimaryAddress ?? ""
-        guard addr.count > 16 else { return addr }
-        return "\(addr.prefix(8))...\(addr.suffix(8))"
-    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -298,9 +401,11 @@ struct WalletRow: View {
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.orange)
 
-                        if !truncated.isEmpty {
-                            Text(truncated)
+                        if let address = wallet.cachedPrimaryAddress, !address.isEmpty {
+                            Text(address)
                                 .font(.caption2)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
                                 .foregroundStyle(.secondary)
                                 .monospaced()
                         }
@@ -313,6 +418,8 @@ struct WalletRow: View {
                         .font(.title3)
                         .foregroundStyle(.secondary.opacity(0.5))
                         .onTapGesture { onRename() }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("Rename \\(wallet.name)")
 
                     Circle()
                         .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
@@ -323,6 +430,11 @@ struct WalletRow: View {
             }
             .glassButtonStyle()
             .opacity(0.85)
+            // VoiceOver cannot swipe the delete zone open or find the pencil
+            // inside the row; expose both as rotor actions on the row itself.
+            .accessibilityHint("Double tap to switch to this wallet")
+            .accessibilityAction(named: "Rename") { onRename() }
+            .accessibilityAction(named: "Delete") { onDelete() }
             .offset(x: showDeleteZone ? -88 : 0)
         }
         .padding(.horizontal)
@@ -475,7 +587,7 @@ struct RenameWalletSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 EmojiPickerCircle(emoji: $emoji)
                     .padding(.top, 8)
 
@@ -483,17 +595,25 @@ struct RenameWalletSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                TextField("Wallet Name", text: $name)
-                    .font(.subheadline)
-                    .padding(12)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10)
-                    .padding(.horizontal, 32)
+                // Same field recipe as the Send sheet: label above, 16pt
+                // padding, 12pt radius, secondary fill, 16pt screen margins.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Wallet Name")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    TextField("Wallet Name", text: $name)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                        .accessibilityLabel("Wallet name")
+                }
+                .padding(.horizontal)
 
                 Spacer()
             }
             .navigationTitle("Rename Wallet")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -507,6 +627,7 @@ struct RenameWalletSheet: View {
                 }
             }
         }
+        .presentationBackground(Color(.systemBackground))
     }
 }
 

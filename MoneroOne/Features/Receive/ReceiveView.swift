@@ -73,6 +73,18 @@ struct ReceiveView: View {
         return addr
     }
 
+    /// Writes the QR to the photo library (add-only permission, prompted on
+    /// first use). Success and failure are both announced for VoiceOver.
+    private func saveQRToPhotos() {
+        guard let image = QRCodeRenderer.renderToImage(content: qrContent) else { return }
+        UIImageWriteToSavedPhotosAlbum(
+            image,
+            PhotoSaveResponder.shared,
+            #selector(PhotoSaveResponder.image(_:didFinishSavingWithError:contextInfo:)),
+            nil
+        )
+    }
+
     private var shareItems: [Any] {
         var items: [Any] = []
 
@@ -122,8 +134,29 @@ struct ReceiveView: View {
                         QRCodeView(content: qrContent)
                             .frame(width: 280, height: 280)
                             .shadow(color: .black.opacity(0.1), radius: 10)
+                            .contextMenu {
+                                Button {
+                                    saveQRToPhotos()
+                                } label: {
+                                    Label("Save to Photos", systemImage: "square.and.arrow.down")
+                                }
+                                if let image = QRCodeRenderer.renderToImage(content: qrContent) {
+                                    ShareLink(
+                                        item: Image(uiImage: image),
+                                        preview: SharePreview("Monero receive QR code", image: Image(uiImage: image))
+                                    ) {
+                                        Label("Share QR Code", systemImage: "square.and.arrow.up")
+                                    }
+                                }
+                            }
                             .accessibilityIdentifier("receive.qrCode")
+                            .accessibilityElement(children: .ignore)
                             .accessibilityLabel("QR code for receiving Monero")
+                            .accessibilityAddTraits(.isImage)
+                            .accessibilityHint("Actions available: save to Photos, or share")
+                            .accessibilityAction(named: "Save to Photos") {
+                                saveQRToPhotos()
+                            }
                     } else {
                         Rectangle()
                             .fill(Color(.secondarySystemBackground))
@@ -311,6 +344,7 @@ struct ReceiveView: View {
                 }
                 .padding(.top, 24)
             }
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -525,6 +559,7 @@ struct AddressPickerView: View {
         }
         .navigationTitle("Select Address")
         .navigationBarTitleDisplayMode(.inline)
+        .horizontalBarsOnDuo()
         .alert("Couldn't Create Address", isPresented: $showCreateError) {
             Button("OK") {}
         } message: {
@@ -696,32 +731,35 @@ struct RenameSubaddressSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 EmojiPickerCircle(emoji: $emoji)
                     .padding(.top, 8)
 
-                Text("Tap to pick an emoji")
+                Text("Tap to change icon")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                TextField("Label", text: $name)
-                    .textInputAutocapitalization(.sentences)
-                    .font(.subheadline)
-                    .padding(12)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10)
-                    .padding(.horizontal, 32)
-
-                Text("Labels stay on this device and aren't backed up with your seed.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Label")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    TextField("Label", text: $name)
+                        .textInputAutocapitalization(.sentences)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                        .accessibilityLabel("Subaddress label")
+                    Text("Labels stay on this device and aren't backed up with your seed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal)
 
                 Spacer()
             }
             .navigationTitle("Rename Subaddress")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -744,4 +782,21 @@ struct RenameSubaddressSheet: View {
     ReceiveView()
         .environmentObject(WalletManager())
         .environmentObject(PriceService())
+}
+
+
+/// Completion target for `UIImageWriteToSavedPhotosAlbum`: the C-style
+/// callback needs an Objective-C selector on a long-lived object.
+final class PhotoSaveResponder: NSObject {
+    static let shared = PhotoSaveResponder()
+
+    @objc func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer?) {
+        if error == nil {
+            HapticFeedback.shared.softTick()
+            UIAccessibility.post(notification: .announcement, argument: "QR code saved to Photos")
+        } else {
+            HapticFeedback.shared.error()
+            UIAccessibility.post(notification: .announcement, argument: "Couldn't save the QR code. Allow Photos access in Settings.")
+        }
+    }
 }

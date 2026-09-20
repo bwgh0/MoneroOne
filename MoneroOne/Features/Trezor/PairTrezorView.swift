@@ -105,6 +105,7 @@ struct PairTrezorView: View {
             case .done:             EmptyView()
             }
         }
+        .readableColumn()
         .navigationTitle("Pair Trezor")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Pair Failed", isPresented: $showErrorAlert) {

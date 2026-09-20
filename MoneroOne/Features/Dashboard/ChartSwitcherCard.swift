@@ -123,14 +123,15 @@ struct ChartSwitcherCard: View {
             }
 
             chartView
-                .frame(height: 140)
+                // Grows with the card so a tall column shows a tall chart
+                // instead of a strip with empty space under it.
+                .frame(minHeight: 100, maxHeight: .infinity)
                 .clipped()
                 .accessibilityLabel("\(chartMode.rawValue) chart for \(selectedTimeRange.rawValue)")
                 .accessibilityHint("Shows \(chartMode == .price ? "XMR price" : "portfolio value") trend")
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(16)
+        .dashboardCard()
         .task {
             // Set loading synchronously before async work to avoid blank state
             if priceService.chartDataCache[selectedTimeRange.apiRange] == nil {

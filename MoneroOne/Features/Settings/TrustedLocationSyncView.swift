@@ -229,6 +229,7 @@ struct TrustedLocationsExplanationView: View {
             }
             .navigationTitle("Trusted Locations")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {

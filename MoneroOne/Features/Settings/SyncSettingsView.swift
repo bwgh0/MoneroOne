@@ -349,6 +349,7 @@ struct RestoreHeightSheet: View {
             }
             .navigationTitle("Restore Height")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

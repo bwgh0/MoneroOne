@@ -14,13 +14,15 @@ struct UnlockView: View {
     @State private var showForgotPINConfirmation = false
     @State private var lockoutTimer: Timer?
     @State private var lockoutEndDate: Date?
+    /// Short screens (iPhone Duo cover, SE, landscape): smaller logo, tighter stack.
+    @State private var isSquat = false
 
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: isSquat ? 20 : 32) {
             Spacer()
 
             // App Logo
-            AnimatedMoneroLogo(size: 120)
+            AnimatedMoneroLogo(size: isSquat ? 88 : 120)
                 .accessibilityHidden(true)
 
             Text("Monero One")
@@ -114,6 +116,8 @@ struct UnlockView: View {
             Spacer()
         }
         .padding()
+        .readableColumn()
+        .detectSquatScreen($isSquat)
         .alert("Forgot Your PIN?", isPresented: $showForgotPINConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Reset App", role: .destructive) {

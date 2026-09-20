@@ -221,6 +221,7 @@ struct SendAmountStep: View {
         }
         .navigationTitle("Send to \(formatAddress(recipientAddress))")
         .navigationBarTitleDisplayMode(.inline)
+        .horizontalBarsOnDuo()
         .onChange(of: amountString) { newValue in
             // Clear send-all when user edits amount
             if isSendingAll {

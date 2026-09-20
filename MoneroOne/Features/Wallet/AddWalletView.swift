@@ -66,6 +66,7 @@ struct AddWalletView: View {
                 .padding(.bottom, 32)
             }
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

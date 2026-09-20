@@ -66,6 +66,7 @@ struct TransactionListView: View {
         .listStyle(.plain)
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
+        .horizontalBarsOnDuo()
         .searchable(text: $searchText, prompt: "Search by ID, address, or memo")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

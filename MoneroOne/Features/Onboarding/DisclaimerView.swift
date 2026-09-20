@@ -10,25 +10,50 @@ struct DisclaimerView: View {
         checkboxes.allSatisfy { $0 }
     }
 
+    @State private var isSquat = false
+
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "exclamationmark.shield.fill")
-                    .font(.system(size: 48))
-                    .foregroundColor(.orange)
+            // Header: one-line row on short screens (iPhone Duo cover, SE,
+            // landscape) so the scrollable items keep most of the height.
+            if isSquat {
+                HStack(spacing: 14) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Important Information")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .accessibilityIdentifier("disclaimer.title")
+                        Text("Please read and acknowledge before continuing")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+                .readableColumn()
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.orange)
 
-                Text("Important Information")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .accessibilityIdentifier("disclaimer.title")
+                    Text("Important Information")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .accessibilityIdentifier("disclaimer.title")
 
-                Text("Please read and acknowledge before continuing")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    Text("Please read and acknowledge before continuing")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 40)
+                .padding(.bottom, 24)
             }
-            .padding(.top, 40)
-            .padding(.bottom, 24)
 
             // Scrollable content
             ScrollView {
@@ -80,6 +105,7 @@ struct DisclaimerView: View {
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 100)
+                .readableColumn()
             }
 
             // Bottom button
@@ -101,12 +127,14 @@ struct DisclaimerView: View {
                         .cornerRadius(12)
                 }
                 .disabled(!allChecked)
-                .accessibilityIdentifier("disclaimer.acceptButton")
                 .padding(.horizontal)
                 .padding(.bottom)
+                .readableColumn()
+                .accessibilityIdentifier("disclaimer.acceptButton")
             }
             .background(Color(.systemBackground))
         }
+        .detectSquatScreen($isSquat)
     }
 }
 

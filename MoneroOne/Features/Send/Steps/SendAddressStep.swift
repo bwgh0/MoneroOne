@@ -123,6 +123,7 @@ struct SendAddressStep: View {
         }
         .navigationTitle("Send XMR")
         .navigationBarTitleDisplayMode(.inline)
+        .horizontalBarsOnDuo()
         .onAppear {
             withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
                 showContent = true

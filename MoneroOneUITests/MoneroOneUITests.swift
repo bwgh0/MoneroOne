@@ -320,3 +320,156 @@ final class SettingsFlowTests: XCTestCase {
         XCTAssertTrue(backButton.waitForExistence(timeout: 3), "Should navigate to security view")
     }
 }
+
+// MARK: - Screenshot walkthrough (iPhone Duo / regular width review)
+
+/// Walks disclaimer → create wallet (PIN 123456) → dashboard → settings →
+/// receive → send and attaches a screenshot of every screen. Run once per
+/// fold posture (see the /duo skill) and export with
+/// `xcrun xcresulttool export attachments --path <xcresult> --output-path <dir>`.
+final class DuoWalkthroughTests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUpWithError() throws {
+        continueAfterFailure = true
+    }
+
+    private func shot(_ name: String) {
+        // app.screenshot(), not XCUIScreen.main: on the unfolded iPhone Duo the
+        // main screen is the dark cover display, the app lives on the inner one.
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        // Hold each screen so an external `simctl io screenshot` loop can
+        // grab it too; XCTest captures are black on the unfolded Duo.
+        sleep(2)
+    }
+
+    @discardableResult
+    private func tapIfExists(_ element: XCUIElement, timeout: TimeInterval = 3) -> Bool {
+        guard element.waitForExistence(timeout: timeout) else { return false }
+        element.tap()
+        return true
+    }
+
+    /// First button matching any of the given identifiers or labels.
+    private func button(_ names: [String]) -> XCUIElement {
+        let predicate = NSPredicate(format: "identifier IN %@ OR label IN %@", names, names)
+        return app.buttons.matching(predicate).firstMatch
+    }
+
+    private func dismissSheet() {
+        if tapIfExists(button(["Done", "Close", "Cancel"]), timeout: 2) { return }
+        app.swipeDown(velocity: .fast)
+    }
+
+    func testCreateWalletWalkthrough() throws {
+        app = UITestHelpers.launchCleanApp()
+        // Some long-lived simulators come up with the disclaimer already
+        // accepted; treat that step as optional.
+        let accept = button(["disclaimer.acceptButton", "I Understand, Continue"])
+        if accept.waitForExistence(timeout: 10) {
+            shot("01-disclaimer")
+            for i in 0..<5 {
+                tapIfExists(app.buttons["disclaimer.checkbox.\(i)"], timeout: 2)
+            }
+            accept.tap()
+        }
+
+        XCTAssertTrue(app.buttons["welcome.createButton"].waitForExistence(timeout: 5))
+        shot("02-welcome")
+        app.buttons["welcome.createButton"].tap()
+
+        XCTAssertTrue(app.buttons["create.seedType.continueButton"].waitForExistence(timeout: 5))
+        shot("03-create-seed-type")
+        app.buttons["create.seedType.continueButton"].tap()
+
+        XCTAssertTrue(app.textFields["create.pinEntry"].waitForExistence(timeout: 5))
+        shot("04-create-pin-empty")
+        UITestHelpers.enterPIN(app: app, identifier: "create.pinEntry", pin: "123456")
+        UITestHelpers.enterPIN(app: app, identifier: "create.confirmPinEntry", pin: "123456")
+        shot("05-create-pin-filled")
+        tapIfExists(app.buttons["create.pin.continueButton"])
+
+        // Biometric step only appears when the device offers biometrics.
+        if app.buttons["Skip for Now"].waitForExistence(timeout: 2) {
+            shot("06-create-biometrics")
+            app.buttons["Skip for Now"].tap()
+        }
+
+        let confirmToggle = app.switches["create.confirmToggle"]
+        XCTAssertTrue(confirmToggle.waitForExistence(timeout: 10))
+        shot("07-create-seed")
+        confirmToggle.tap()
+        let seedContinue = app.buttons["create.seed.continueButton"]
+        if !seedContinue.isEnabled {
+            confirmToggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        }
+        tapIfExists(seedContinue)
+
+        XCTAssertTrue(app.textFields.firstMatch.waitForExistence(timeout: 5))
+        shot("08-create-name")
+        tapIfExists(button(["Continue"]))
+
+        // Dashboard: compact width has wallet.sendButton, regular width the "Send" quick action.
+        let send = button(["wallet.sendButton", "Send", "Send Monero"])
+        XCTAssertTrue(send.waitForExistence(timeout: 90), "wallet should be created and unlocked")
+        sleep(2)
+        shot("09-dashboard")
+
+        if tapIfExists(app.buttons["wallet.switcher"], timeout: 3) {
+            sleep(2)
+            shot("09b-wallet-switcher-open")
+            if tapIfExists(app.buttons["wallet.switcher.rename"], timeout: 3) {
+                sleep(2)
+                shot("09c-rename-wallet")
+                if tapIfExists(app.buttons["emojiPicker.circle"], timeout: 3) {
+                    sleep(2)
+                    shot("09d-emoji-picker")
+                    tapIfExists(button(["Cancel"]), timeout: 3)
+                    sleep(1)
+                }
+                tapIfExists(button(["Cancel"]), timeout: 3)
+                sleep(1)
+            }
+            tapIfExists(app.buttons["wallet.switcher"], timeout: 3)
+            sleep(1)
+        }
+
+        let settingsTab = app.tabBars.buttons["Settings"].exists
+            ? app.tabBars.buttons["Settings"]
+            : button(["Settings", "tab.settings"])
+        if tapIfExists(settingsTab, timeout: 3) {
+            sleep(2)
+            shot("10-settings")
+            let backTab = app.tabBars.buttons.firstMatch.exists
+                ? app.tabBars.buttons.firstMatch
+                : button(["Wallet", "Dashboard", "tab.wallet"])
+            tapIfExists(backTab, timeout: 3)
+            sleep(1)
+        }
+
+        if tapIfExists(button(["Chart", "tab.chart"]), timeout: 2) {
+            sleep(1)
+            shot("11-chart")
+            tapIfExists(button(["Wallet", "tab.wallet"]), timeout: 3)
+        }
+
+        if tapIfExists(button(["wallet.receiveButton", "Receive", "Receive Monero"]), timeout: 3) {
+            sleep(2)
+            shot("12-receive")
+            dismissSheet()
+        }
+
+        // Send stays disabled until the first sync finishes; give it a minute.
+        let sendButton = button(["wallet.sendButton", "Send", "Send Monero"])
+        let sendDeadline = Date().addingTimeInterval(60)
+        while sendButton.exists && !sendButton.isEnabled && Date() < sendDeadline { sleep(2) }
+        if tapIfExists(sendButton, timeout: 3) {
+            sleep(2)
+            shot("13-send")
+            dismissSheet()
+        }
+    }
+}

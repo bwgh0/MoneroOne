@@ -196,6 +196,7 @@ struct SendReviewStep: View {
         }
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
+        .horizontalBarsOnDuo()
         .task {
             do {
                 estimatedFee = try await walletManager.estimateFee(to: recipientAddress, amount: amount)

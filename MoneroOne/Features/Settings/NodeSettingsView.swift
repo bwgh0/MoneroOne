@@ -476,6 +476,7 @@ struct AddCustomNodeView: View {
             }
             .navigationTitle("Add Node")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -546,6 +547,7 @@ struct EditCustomNodeView: View {
             }
             .navigationTitle("Edit Node")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -611,6 +613,7 @@ struct EditCustomProxyView: View {
             }
             .navigationTitle("Edit Proxy")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -668,6 +671,7 @@ struct AddCustomProxyView: View {
             }
             .navigationTitle("Add Proxy")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

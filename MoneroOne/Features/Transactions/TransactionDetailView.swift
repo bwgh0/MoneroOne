@@ -183,6 +183,7 @@ struct TransactionDetailView: View {
         }
         .navigationTitle(transaction.type == .incoming ? "Received" : "Sent")
         .navigationBarTitleDisplayMode(.inline)
+        .horizontalBarsOnDuo()
         .task {
             guard transaction.type == .outgoing, !txKeyLookedUp else { return }
             txKey = walletManager.getTxKey(txId: transaction.id)

@@ -5,7 +5,11 @@ import XCTest
 /// Run on a physical device to exercise the DEVICE slice of the wallet2
 /// library against the production node:
 ///
-///   xcodebuild test -only-testing:MoneroOneTests/GethashesDeviceDiagTests
+///   MONEROONE_DEVICE_DIAG=1 xcodebuild test -only-testing:MoneroOneTests/GethashesDeviceDiagTests
+///
+/// It skips itself on the simulator and unless MONEROONE_DEVICE_DIAG is set,
+/// so a plain run of the MoneroOneTests target stays green without the CI
+/// skip flag.
 ///
 /// Purpose: the Trezor FULL-cache session fails with wallet2's
 /// "failed to get hashes" on device, while the identical fast-refresh path
@@ -16,6 +20,13 @@ import XCTest
 final class GethashesDeviceDiagTests: XCTestCase {
 
     func testFastRefreshFromOldHeightAgainstProductionNode() throws {
+        #if targetEnvironment(simulator)
+        throw XCTSkip("Device diagnostic: exercises the device slice of wallet2; run on a physical iPhone.")
+        #endif
+        guard ProcessInfo.processInfo.environment["MONEROONE_DEVICE_DIAG"] == "1" else {
+            throw XCTSkip("Device diagnostic: set MONEROONE_DEVICE_DIAG=1 to run it (needs network, ~2 min).")
+        }
+
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("GethashesDiag-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)

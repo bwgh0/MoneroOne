@@ -17,11 +17,13 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.2</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>21</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera is used to scan QR codes</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Monero One saves your receive QR code to your photo library only when you ask it to.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>MoneroOne uses Bluetooth to communicate with your Trezor hardware wallet for secure transaction signing.</string>
 	<key>NSFaceIDUsageDescription</key>

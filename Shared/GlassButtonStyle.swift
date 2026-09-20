@@ -88,13 +88,20 @@ extension View {
     /// Keeps a sheet's navigation bar horizontal on iPhone Duo instead of the
     /// trailing vertical bar, so its title stays centered. Apple reserves this
     /// for control-light sheets with a single Cancel/Done button.
+    /// `toolbarVerticalBehavior` exists only in the iOS 27.1 SDK (Xcode 27.1,
+    /// Swift 6.4). CI still builds with Xcode 26.x, where the symbol does not
+    /// exist at all, so the call is gated on the toolchain, not just at runtime.
     @ViewBuilder
     func horizontalBarsOnDuo() -> some View {
+        #if compiler(>=6.4)
         if #available(iOS 27.1, *) {
             self.toolbarVerticalBehavior(.disabled)
         } else {
             self
         }
+        #else
+        self
+        #endif
     }
 
     /// Adds top/leading breathing room on displays whose system safe area

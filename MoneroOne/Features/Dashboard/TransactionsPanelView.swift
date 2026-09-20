@@ -39,6 +39,7 @@ struct TransactionsPanelView: View {
             if walletManager.transactions.isEmpty {
                 emptyState
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.bottom, 16)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {

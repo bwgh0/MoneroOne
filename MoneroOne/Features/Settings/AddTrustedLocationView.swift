@@ -258,6 +258,7 @@ struct AddTrustedLocationView: View {
             }
             .navigationTitle(isEditing ? "Edit Location" : "Add Location")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

@@ -82,6 +82,7 @@ struct CreateWalletView: View {
             }
         }
         .padding()
+        .readableColumn()
         .navigationTitle("Create Wallet")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Error Creating Wallet", isPresented: $showErrorAlert) {

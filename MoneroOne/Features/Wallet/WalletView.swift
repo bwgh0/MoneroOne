@@ -10,6 +10,47 @@ struct WalletView: View {
     @State private var showWalletManager = false
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
     @Binding var selectedTab: MainTabView.Tab
+    /// Viewport and above-activity heights, so the empty activity card can
+    /// fill the leftover height on short screens (iPhone Duo cover).
+    @State private var viewportHeight: CGFloat = 0
+    @State private var aboveRecentHeight: CGFloat = 0
+
+    /// Height the empty activity card needs to reach the bottom of the
+    /// viewport, so short screens don't end in a blank third. Nil when there
+    /// is no meaningful space to fill.
+    private var recentFillHeight: CGFloat? {
+        guard viewportHeight > 0, aboveRecentHeight > 0 else { return nil }
+        // top padding 16 + stack spacing 8 + section header 24 + spacing 12 + bottom 16
+        let remaining = viewportHeight - aboveRecentHeight - 76
+        return remaining > 160 ? remaining : nil
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 16) {
+            CompactActionButton(
+                title: "Send",
+                icon: "arrow.up.circle.fill",
+                color: .orange,
+                isDisabled: !walletManager.canSend
+            ) {
+                showSend = true
+            }
+            .accessibilityIdentifier("wallet.sendButton")
+            .accessibilityLabel(walletManager.canSend ? "Send Monero" : "Send Monero, disabled for view-only wallet")
+            .accessibilityHint(walletManager.canSend ? "Opens the send transaction screen" : "This wallet is view-only and cannot send")
+
+            CompactActionButton(
+                title: "Receive",
+                icon: "arrow.down.circle.fill",
+                color: .green
+            ) {
+                showReceive = true
+            }
+            .accessibilityIdentifier("wallet.receiveButton")
+            .accessibilityLabel("Receive Monero")
+            .accessibilityHint("Opens the receive screen with your address and QR code")
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -54,32 +95,10 @@ struct WalletView: View {
                         )
                         .padding(.horizontal)
 
-                        HStack(spacing: 16) {
-                            CompactActionButton(
-                                title: "Send",
-                                icon: "arrow.up.circle.fill",
-                                color: .orange,
-                                isDisabled: !walletManager.canSend
-                            ) {
-                                showSend = true
-                            }
-                            .accessibilityIdentifier("wallet.sendButton")
-                            .accessibilityLabel(walletManager.canSend ? "Send Monero" : "Send Monero, disabled for view-only wallet")
-                            .accessibilityHint(walletManager.canSend ? "Opens the send transaction screen" : "This wallet is view-only and cannot send")
-
-                            CompactActionButton(
-                                title: "Receive",
-                                icon: "arrow.down.circle.fill",
-                                color: .green
-                            ) {
-                                showReceive = true
-                            }
-                            .accessibilityIdentifier("wallet.receiveButton")
-                            .accessibilityLabel("Receive Monero")
-                            .accessibilityHint("Opens the receive screen with your address and QR code")
-                        }
-                        .padding(.horizontal)
+                        actionButtons
+                            .padding(.horizontal)
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { aboveRecentHeight = $0 }
                     .frame(height: showWalletManager ? 0 : nil)
                     .scaleEffect(y: showWalletManager ? 0.01 : 1, anchor: .top)
                     .opacity(showWalletManager ? 0 : 1)
@@ -87,7 +106,7 @@ struct WalletView: View {
 
                     // Recent transactions — hide instantly, no animation
                     if !showWalletManager {
-                        RecentTransactionsSection()
+                        RecentTransactionsSection(emptyStateMinHeight: recentFillHeight)
                             .padding(.horizontal)
                             .padding(.top, 16)
                             .transaction { $0.animation = nil }
@@ -101,6 +120,11 @@ struct WalletView: View {
                 }
             }
             .animation(.snappy(duration: 0.4), value: showWalletManager)
+            // Viewport below the header bar and above the tab bar (background
+            // content respects safe areas), used to size the activity card.
+            .background {
+                Color.clear.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
+            }
             .walletHeader(showWalletManager: $showWalletManager)
             .refreshable {
                 await walletManager.refresh()
@@ -191,6 +215,9 @@ struct CompactActionButton: View {
 struct RecentTransactionsSection: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var selectedTransaction: MoneroTransaction?
+    /// Stretches the empty-state card to this height so it reaches the
+    /// bottom of the screen instead of leaving a blank block under it.
+    var emptyStateMinHeight: CGFloat? = nil
 
     private var recentTransactions: [MoneroTransaction] {
         Array(walletManager.mergedTransactions.prefix(5))
@@ -223,8 +250,10 @@ struct RecentTransactionsSection: View {
             }
 
             if recentTransactions.isEmpty {
-                Button(action: {}) {
-                    VStack(spacing: 12) {
+                // A card, not a button: it can stretch to fill the screen on
+                // short displays and a glass capsule would turn into an egg.
+                VStack(spacing: 12) {
+                    Group {
                         if isSyncing {
                             ProgressView()
                                 .tint(.orange)
@@ -248,11 +277,11 @@ struct RecentTransactionsSection: View {
                                 .foregroundStyle(.primary)
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
                 }
-                .glassButtonStyle()
-                .disabled(true)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
+                .frame(minHeight: emptyStateMinHeight)
+                .dashboardCard()
             } else {
                 VStack(spacing: 8) {
                     ForEach(recentTransactions) { transaction in
@@ -388,8 +417,16 @@ private struct WalletHeaderContent: View {
                 }
             }
             .padding(.horizontal)
+
+            if walletManager.showsEmptyRestoreHint {
+                RestoreHeightHintBanner(restoreHeight: walletManager.activeWallet?.restoreHeight ?? 0) {
+                    walletManager.dismissEmptyRestoreHint()
+                }
+                .padding(.horizontal)
+            }
         }
         .animation(.easeInOut, value: walletManager.syncState)
+        .animation(.easeInOut, value: walletManager.showsEmptyRestoreHint)
     }
 }
 

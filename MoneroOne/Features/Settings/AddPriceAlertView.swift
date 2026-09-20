@@ -79,6 +79,7 @@ struct AddPriceAlertView: View {
             }
             .navigationTitle("New Alert")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

@@ -58,6 +58,7 @@ struct HardwareSessionSheet: View {
             .padding()
             .navigationTitle(navTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             // Keep dismiss disabled across the whole lifecycle. When
             // we toggled this on `.complete`, SwiftUI tore down the
             // hosting view + represented a fresh sheet instance,

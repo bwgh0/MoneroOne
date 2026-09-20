@@ -99,6 +99,7 @@ struct RestoreViewKeyView: View {
             case .restoring: restoringView
             }
         }
+        .readableColumn()
         .navigationTitle("Restore View-Only")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Restore Failed", isPresented: $showErrorAlert) {

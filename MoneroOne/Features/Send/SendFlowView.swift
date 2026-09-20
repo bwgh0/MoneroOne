@@ -59,6 +59,7 @@ struct SendFlowView: View {
                 }
             }
             .clipped()
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     if !canSign {

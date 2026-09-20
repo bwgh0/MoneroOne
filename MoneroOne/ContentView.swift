@@ -17,6 +17,7 @@ struct ContentView: View {
                     .id(walletManager.walletSessionId)
             }
         }
+        .edgeBreathingRoom()
         .accessibilityIdentifier("contentView.root")
         .animation(.easeInOut, value: hasAcceptedDisclaimer)
         .animation(.easeInOut, value: walletManager.hasWallet)

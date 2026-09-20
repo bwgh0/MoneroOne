@@ -70,6 +70,7 @@ struct PortfolioChartView: View {
             }
             .navigationTitle("Portfolio")
             .navigationBarTitleDisplayMode(.inline)
+            .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {

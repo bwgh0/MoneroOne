@@ -154,6 +154,19 @@ public class WidgetDataManager {
         containerURL?.appendingPathComponent(fileName)
     }
 
+    private let queue = DispatchQueue(label: "one.monero.MoneroOne.widgetData")
+
+    /// Serialized load-modify-save. The wallet writer (utility queue) and the
+    /// price writer (main) used to race each other's unsynchronized
+    /// load-modify-save and could publish stale or zeroed fields.
+    public func update(_ mutate: (inout WidgetData) -> Void) {
+        queue.sync {
+            var data = load() ?? WidgetDataManager.placeholder
+            mutate(&data)
+            save(data)
+        }
+    }
+
     public func save(_ data: WidgetData) {
         guard let url = fileURL else {
             os_log("❌ Save failed: No App Group container available", log: widgetLog, type: .error)

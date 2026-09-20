@@ -28,6 +28,9 @@ class WalletManager: ObservableObject {
     @Published var primaryAddress: String = ""
     @Published var syncState: SyncState = .idle
     @Published var transactions: [MoneroTransaction] = []
+    /// A seed restore that synced with zero transactions almost always has a
+    /// restore height that is too recent. Drives a banner on the dashboard.
+    @Published var showsEmptyRestoreHint = false
     @Published var subaddresses: [MoneroKit.SubAddress] = []
     @Published var userCreatedSubaddressIndices: Set<Int> = []
     /// True when the active wallet was opened from an address + view key and
@@ -337,6 +340,7 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
+        showsEmptyRestoreHint = false
 
         // 2/3. Open FULL via createFromDevice (uses openWallet under
         //    the hood when the cache exists) and wait for its refresh,
@@ -1509,6 +1513,7 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
+        showsEmptyRestoreHint = false
     }
 
     /// Pair a Trezor and create the corresponding hardware-backed wallet
@@ -1702,6 +1707,9 @@ class WalletManager: ObservableObject {
 
         moneroWallet = wallet
         bindToWallet(wallet)
+        // Publish the cached balance right away instead of waiting for the
+        // first full sync; the widget otherwise shows 0 after every relaunch.
+        saveWidgetDataIfEnabled()
 
         loadUserCreatedSubaddresses()
 
@@ -1754,6 +1762,9 @@ class WalletManager: ObservableObject {
 
         moneroWallet = wallet
         bindToWallet(wallet)
+        // Publish the cached balance right away instead of waiting for the
+        // first full sync; the widget otherwise shows 0 after every relaunch.
+        saveWidgetDataIfEnabled()
 
         loadUserCreatedSubaddresses()
 
@@ -1772,9 +1783,7 @@ class WalletManager: ObservableObject {
             .sink { [weak self] newBalance in
                 guard let self = self else { return }
                 self.balance = newBalance
-                if case .synced = self.syncState {
-                    self.saveWidgetDataIfEnabled()
-                }
+                self.saveWidgetDataIfEnabled()
             }
             .store(in: &cancellables)
 
@@ -1842,6 +1851,7 @@ class WalletManager: ObservableObject {
                         NSLog("[WalletManager] Error persisted 3s, surfacing: %@", msg)
                         #endif
                         self.syncState = newState
+                        self.evaluateEmptyRestoreHint()
                         self.updateConnectionStage()
                     }
                     return
@@ -1857,6 +1867,7 @@ class WalletManager: ObservableObject {
                 self.errorDebounceTask = nil
 
                 self.syncState = newState
+                self.evaluateEmptyRestoreHint()
 
                 // wallet2 C++ is connecting — cancel HTTP reachability checks
                 // since wallet2 handles TLS/connection independently
@@ -1911,9 +1922,8 @@ class WalletManager: ObservableObject {
             .sink { [weak self] newTransactions in
                 guard let self = self else { return }
                 self.transactions = newTransactions
-                if case .synced = self.syncState {
-                    self.saveWidgetDataIfEnabled()
-                }
+                self.evaluateEmptyRestoreHint()
+                self.saveWidgetDataIfEnabled()
             }
             .store(in: &cancellables)
 
@@ -2001,13 +2011,17 @@ class WalletManager: ObservableObject {
         prefillSendAmount = nil
         shouldShowSendView = false
 
-        // Widget data lives in the shared App Group container as plaintext
-        // JSON. Locking is the point at which balance/tx history should stop
-        // being readable there.
-        WidgetDataManager.shared.clear()
+        // Keep the last known balance in the widget while locked (deleting the
+        // file here left the price refresher rebuilding it from a zeroed
+        // placeholder, so the widget read "0.0000 XMR" until the next unlock
+        // and full sync). Only stop a pending write so a late save cannot
+        // publish the zeroed post-lock state.
+        widgetReloadTask?.cancel()
+        widgetReloadTask = nil
         syncState = .idle
         transactions = []
         subaddresses = []
+        showsEmptyRestoreHint = false
 
         // Reset connection progress tracking
         connectionStage = .noNetwork
@@ -2266,11 +2280,52 @@ class WalletManager: ObservableObject {
         }
     }
 
+    // MARK: - Empty restore hint
+
+    private func emptyRestoreHintDismissedKey(_ id: UUID) -> String {
+        "emptyRestoreHintDismissed.\(id.uuidString)"
+    }
+
+    /// Shows the hint once a legacy/BIP39 seed restore (polyseed carries its
+    /// own birthday) reaches `.synced` with no transactions and a non-genesis
+    /// restore height. Cleared when transactions arrive, on lock, or when the
+    /// user dismisses it for this wallet.
+    private func evaluateEmptyRestoreHint() {
+        // Polyseed carries its own birthday, so only BIP39/legacy restores
+        // can land on a wrong height.
+        guard let wallet = activeWallet,
+              case .seed(let seedType) = wallet.source,
+              seedType != .polyseed else {
+            showsEmptyRestoreHint = false
+            return
+        }
+        if !transactions.isEmpty {
+            showsEmptyRestoreHint = false
+            return
+        }
+        guard case .synced = syncState,
+              wallet.restoreHeight > 0,
+              !UserDefaults.standard.bool(forKey: emptyRestoreHintDismissedKey(wallet.id)) else {
+            return
+        }
+        if !showsEmptyRestoreHint {
+            showsEmptyRestoreHint = true
+            DiagnosticLog.shared.log("Empty restore hint shown: restoreHeight=\(wallet.restoreHeight) seedType=\(seedType)")
+        }
+    }
+
+    func dismissEmptyRestoreHint() {
+        if let id = activeWallet?.id {
+            UserDefaults.standard.set(true, forKey: emptyRestoreHintDismissedKey(id))
+        }
+        showsEmptyRestoreHint = false
+    }
+
     // MARK: - Widget Data
 
     /// Save current wallet data for home screen widget.
     /// Captures state on main, then does all formatting/IO on a background queue.
-    func saveWidgetData(enabled: Bool? = nil) {
+    func saveWidgetData(enabled: Bool? = nil, completion: (() -> Void)? = nil) {
         // Snapshot only — fast reads, then immediately hand off
         let isEnabled = enabled ?? UserDefaults.standard.bool(forKey: "widgetEnabled")
         let snapBalance = balance
@@ -2305,16 +2360,18 @@ class WalletManager: ObservableObject {
                 )
             }
 
-            var widgetData = WidgetDataManager.shared.load() ?? WidgetDataManager.placeholder
-            widgetData.balance = snapBalance
-            widgetData.balanceFormatted = balanceFormatted
-            widgetData.syncStatus = widgetSyncStatus
-            widgetData.lastUpdated = Date()
-            widgetData.recentTransactions = recentTransactions
-            widgetData.isTestnet = snapIsTestnet
-            widgetData.isEnabled = isEnabled
-
-            WidgetDataManager.shared.save(widgetData)
+            WidgetDataManager.shared.update { widgetData in
+                widgetData.balance = snapBalance
+                widgetData.balanceFormatted = balanceFormatted
+                widgetData.syncStatus = widgetSyncStatus
+                widgetData.lastUpdated = Date()
+                widgetData.recentTransactions = recentTransactions
+                widgetData.isTestnet = snapIsTestnet
+                widgetData.isEnabled = isEnabled
+            }
+            if let completion {
+                DispatchQueue.main.async(execute: completion)
+            }
         }
     }
 
@@ -2329,9 +2386,14 @@ class WalletManager: ObservableObject {
         widgetReloadTask?.cancel()
         widgetReloadTask = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-            guard !Task.isCancelled else { return }
-            self.saveWidgetData()
-            WidgetCenter.shared.reloadAllTimelines()
+            // A lock during the debounce window zeroes `balance`; never let
+            // that state reach the widget.
+            guard !Task.isCancelled, self.isUnlocked else { return }
+            // Reload only after the file is written; reloading first let the
+            // widget read the previous (often zeroed) contents.
+            self.saveWidgetData {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
         }
     }
 

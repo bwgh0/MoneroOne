@@ -5,13 +5,23 @@ import XCTest
 final class PriceServiceTests: XCTestCase {
 
     var priceService: PriceService!
+    /// Unit tests run inside the app process on the simulator, so
+    /// `setCurrency` writes the real `selectedCurrency` preference. Snapshot
+    /// it and put it back, otherwise a test run leaves the sim app on GBP/JPY.
+    private var savedCurrency: String?
 
     override func setUp() async throws {
+        savedCurrency = UserDefaults.standard.string(forKey: "selectedCurrency")
         priceService = PriceService()
     }
 
     override func tearDown() async throws {
         priceService = nil
+        if let savedCurrency {
+            UserDefaults.standard.set(savedCurrency, forKey: "selectedCurrency")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "selectedCurrency")
+        }
     }
 
     // MARK: - Initial State Tests

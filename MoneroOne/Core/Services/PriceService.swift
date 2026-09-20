@@ -533,9 +533,9 @@ class PriceService: ObservableObject {
 
     /// Save price data to widget data store
     func savePriceWidgetData() {
-        // Load existing widget data or create new
-        var widgetData = WidgetDataManager.shared.load() ?? WidgetDataManager.placeholder
-
+        // Serialized read-modify-write: only the price fields change here, the
+        // wallet fields written by WalletManager are left untouched.
+        WidgetDataManager.shared.update { widgetData in
         // Update with current price data
         widgetData.currentPrice = xmrPrice
         widgetData.priceChange24h = priceChange24h
@@ -568,8 +568,7 @@ class PriceService: ObservableObject {
             widgetData.priceLow24h = prices.min()
         }
 
-        // Save to widget data store
-        WidgetDataManager.shared.save(widgetData)
+        }
 
         // Reload widget timelines
         WidgetCenter.shared.reloadTimelines(ofKind: "PriceWidget")

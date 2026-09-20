@@ -17,19 +17,17 @@ struct WidgetSettingsView: View {
                     }
                 }
                 .onChange(of: widgetEnabled) { enabled in
-                    // Save synchronously before reloading
-                    walletManager.saveWidgetData(enabled: enabled)
-
-                    // Small delay to ensure file system sync before widget reads
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    // Reload once the file is written.
+                    walletManager.saveWidgetData(enabled: enabled) {
                         WidgetCenter.shared.reloadAllTimelines()
                     }
                 }
                 .onAppear {
                     // Ensure widget data exists if widget is already enabled
                     if widgetEnabled {
-                        walletManager.saveWidgetData(enabled: true)
-                        WidgetCenter.shared.reloadAllTimelines()
+                        walletManager.saveWidgetData(enabled: true) {
+                            WidgetCenter.shared.reloadAllTimelines()
+                        }
                     }
                 }
             } footer: {

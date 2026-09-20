@@ -75,6 +75,44 @@ struct OfflineBanner: View {
     }
 }
 
+/// Shown after a seed restore that synced with no history: the restore
+/// height was probably too recent. Points at Settings › Sync Settings.
+struct RestoreHeightHintBanner: View {
+    let restoreHeight: UInt64
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No transactions found since block \(restoreHeight.formatted())")
+                    .font(.subheadline.weight(.semibold))
+                Text("If this wallet is older, lower the restore height in Settings › Sync Settings and reset the sync data.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("Dismiss")
+        }
+        .padding()
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(12)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}
+
 struct SyncErrorBanner: View {
     let syncState: WalletManager.SyncState
     var retryAction: (() -> Void)?

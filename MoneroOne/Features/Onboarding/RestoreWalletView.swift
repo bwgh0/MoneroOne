@@ -21,7 +21,15 @@ struct RestoreWalletView: View {
     @State private var showErrorAlert = false
     @State private var isRestoring = false
     @State private var walletCreationDate: Date = Date()
-    @State private var useCreationDate = true
+    /// `.unset` until the user chooses. The step used to pre-select today and
+    /// accept it, which put the restore height ~1,440 blocks below the tip:
+    /// sync "finished" in seconds with an empty history.
+    @State private var creationDateChoice: CreationDateChoice = .unset
+    @State private var showRecentDateConfirm = false
+
+    enum CreationDateChoice { case unset, knowDate, unknown }
+
+    private var useCreationDate: Bool { creationDateChoice == .knowDate }
     @State private var selectedPINLength = 6
     @FocusState private var focusedField: PINField?
 
@@ -83,6 +91,7 @@ struct RestoreWalletView: View {
             }
         }
         .padding()
+        .readableColumn()
         .navigationTitle("Restore Wallet")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Error Restoring Wallet", isPresented: $showErrorAlert) {
@@ -515,53 +524,89 @@ struct RestoreWalletView: View {
             Text("When did you create this wallet?")
                 .font(.headline)
 
-            Text("This helps speed up transaction scanning by skipping blocks before your wallet existed.")
+            Text("Scanning starts a little before this date, so choose a date from before your first transaction. Not sure? Pick an earlier date or scan everything.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Toggle("Use wallet creation date", isOn: $useCreationDate)
-                .accessibilityLabel("Use wallet creation date")
-                .accessibilityHint("Toggle to specify when the wallet was created for faster scanning")
-                .padding(.horizontal)
+            VStack(spacing: 12) {
+                SelectableOptionCard(
+                    id: CreationDateChoice.knowDate,
+                    selection: $creationDateChoice,
+                    title: "I know roughly when",
+                    badge: "Faster",
+                    subtitle: "Skips blocks from before the wallet existed"
+                )
+                .accessibilityIdentifier("restore.date.knowDate")
+                SelectableOptionCard(
+                    id: CreationDateChoice.unknown,
+                    selection: $creationDateChoice,
+                    title: "I'm not sure",
+                    subtitle: "Scans the whole chain. Finds everything, takes hours."
+                )
+                .accessibilityIdentifier("restore.date.unknown")
+            }
+            .padding(.horizontal, 4)
 
-            if useCreationDate {
+            if creationDateChoice == .knowDate {
                 DatePicker(
                     "Creation date",
                     selection: $walletCreationDate,
                     in: Self.genesisDate...Date(),
                     displayedComponents: [.date]
                 )
-                .datePickerStyle(.graphical)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .accessibilityLabel("Wallet creation date")
                 .padding(.horizontal)
-            } else {
-                Text("Will scan from the beginning (slower)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             Button {
-                if isAddingWallet, let existingPin = existingPin {
-                    pin = existingPin
-                    step = .nameWallet
-                } else {
-                    step = .setPIN
-                }
+                proceedFromCreationDate()
             } label: {
                 Text("Continue")
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.orange)
+                    .background(creationDateChoice == .unset ? Color.gray : Color.orange)
                     .foregroundColor(.white)
                     .cornerRadius(14)
             }
+            .disabled(creationDateChoice == .unset)
             .accessibilityLabel("Continue")
-            .accessibilityHint("Double tap to proceed to PIN setup")
+            .accessibilityHint(creationDateChoice == .unset ? "Choose whether you know when the wallet was created" : "Double tap to proceed to PIN setup")
+            .accessibilityIdentifier("restore.date.continueButton")
             .padding(.horizontal)
+            .alert("Restore from \(walletCreationDate.formatted(date: .abbreviated, time: .omitted))?", isPresented: $showRecentDateConfirm) {
+                Button("Choose another date", role: .cancel) { }
+                Button("Continue") { advanceFromCreationDate() }
+            } message: {
+                Text("Only transactions after this date will be found. If the wallet is older, pick an earlier date.")
+            }
 
             Spacer()
+        }
+        .animation(.snappy(duration: 0.3), value: creationDateChoice)
+    }
+
+    /// A date inside the last 30 days is the classic mistake (the picker used
+    /// to default to today), so confirm it before moving on.
+    private func proceedFromCreationDate() {
+        if useCreationDate, walletCreationDate > Date().addingTimeInterval(-30 * 86_400) {
+            showRecentDateConfirm = true
+        } else {
+            advanceFromCreationDate()
+        }
+    }
+
+    private func advanceFromCreationDate() {
+        if isAddingWallet, let existingPin = existingPin {
+            pin = existingPin
+            step = .nameWallet
+        } else {
+            step = .setPIN
         }
     }
 

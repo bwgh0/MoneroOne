@@ -732,7 +732,7 @@ struct WalletManagerRows: View {
     // MARK: - Switching
 
     private func switchTo(_ wallet: WalletInfo) {
-        guard !isSwitching else { return }
+        guard !isSwitching, !walletManager.isSwitchingWallet else { return }
         isSwitching = true
 
         // Phase 1: batch all @Published changes with the collapse animation

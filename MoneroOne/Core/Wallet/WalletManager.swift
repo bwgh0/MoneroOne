@@ -890,6 +890,22 @@ class WalletManager: ObservableObject {
     @Published private(set) var walletSessionId = UUID() {
         didSet { addWalletPath = [] }
     }
+    /// True from phase 1 of a wallet switch until phase 2 finishes. The
+    /// switcher ignores row taps meanwhile: a second switch on top of one
+    /// still starting rebuilt the tree again and the list flickered open
+    /// and shut.
+    @Published private(set) var isSwitchingWallet = false
+    /// Phase 1 of a switch already rebuilt the tree for the target wallet;
+    /// the start path that follows must not rebuild it a second time.
+    private var sessionBumpedForSwitch = false
+
+    private func bumpSessionUnlessSwitching() {
+        if sessionBumpedForSwitch {
+            sessionBumpedForSwitch = false
+        } else {
+            walletSessionId = UUID()
+        }
+    }
 
     /// True while the Add Wallet sheet is presented over an unlocked session.
     /// The scenePhase handler consults this to skip auto-lock when the user
@@ -1729,7 +1745,7 @@ class WalletManager: ObservableObject {
 
         isViewOnly = false
         isUnlocked = true
-        walletSessionId = UUID()
+        bumpSessionUnlessSwitching()
     }
 
     /// Open a view-only wallet from a primary address + private view key.
@@ -1784,7 +1800,7 @@ class WalletManager: ObservableObject {
 
         isViewOnly = true
         isUnlocked = true
-        walletSessionId = UUID()
+        bumpSessionUnlessSwitching()
     }
 
     private func bindToWallet(_ wallet: MoneroWallet) {
@@ -3163,6 +3179,8 @@ class WalletManager: ObservableObject {
         walletHeight = 0
         restoreHeight = target.restoreHeight
         walletSessionId = UUID()
+        sessionBumpedForSwitch = true
+        isSwitchingWallet = true
         transactions = []
         subaddresses = []
         userCreatedSubaddressIndices = []
@@ -3172,6 +3190,10 @@ class WalletManager: ObservableObject {
 
     /// Phase 2: Heavy work (async, runs in background after UI has updated).
     func completeSwitchToWallet(target: WalletInfo, persistPrevious: WalletInfo? = nil) async throws {
+        defer {
+            isSwitchingWallet = false
+            sessionBumpedForSwitch = false
+        }
         // Persist previous wallet's cached data to disk (off the animation hot path)
         if let previous = persistPrevious {
             walletStore.updateWallet(previous)

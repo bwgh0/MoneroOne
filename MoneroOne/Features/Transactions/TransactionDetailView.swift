@@ -13,21 +13,49 @@ struct TransactionDetailView: View {
     @State private var copiedField: CopyField?
     @State private var explorerURL: URL?
 
-    private enum CopyField: String { case txId, address, txKey }
+    private enum CopyField: Hashable {
+        case txId
+        case address
+        case destination(Int)
+        case txKey
+        case all
+    }
 
-    /// For incoming transactions, determine which subaddress received the funds
+    private var subaddressSummaries: [SubaddressSummary] {
+        walletManager.subaddresses.map(SubaddressSummary.init)
+    }
+
+    /// For incoming transactions, the name of the subaddress that
+    /// received the funds ("Main Address", the user's label, or
+    /// "Subaddress #n").
     private var receivingSubaddressLabel: String? {
-        guard transaction.type == .incoming, !transaction.address.isEmpty else { return nil }
+        guard transaction.type == .incoming else { return nil }
+        return TransactionDetailLogic.receivedOnLabel(
+            subaddressIndex: transaction.subaddressIndex,
+            address: transaction.address,
+            primaryAddress: walletManager.primaryAddress,
+            subaddresses: subaddressSummaries
+        )
+    }
 
-        if transaction.address == walletManager.primaryAddress {
-            return "Main Address"
-        }
+    /// The receiving address to show. Falls back to the wallet's
+    /// address book when the transaction row carries only the index.
+    private var receivingAddress: String? {
+        guard transaction.type == .incoming else { return nil }
+        return TransactionDetailLogic.receivedOnAddress(
+            subaddressIndex: transaction.subaddressIndex,
+            address: transaction.address,
+            primaryAddress: walletManager.primaryAddress,
+            subaddresses: subaddressSummaries
+        )
+    }
 
-        if let subaddr = walletManager.subaddresses.first(where: { $0.address == transaction.address }) {
-            return "Subaddress #\(subaddr.index)"
-        }
-
-        return "Subaddress"
+    private var sentToRows: [SentToRow] {
+        guard transaction.type == .outgoing else { return [] }
+        return TransactionDetailLogic.sentToRows(
+            destinations: transaction.destinations,
+            fallbackAddress: transaction.address
+        )
     }
 
     private var blockExplorerURL: URL? {
@@ -147,11 +175,11 @@ struct TransactionDetailView: View {
                     field: .txId
                 )
 
-                if transaction.type == .incoming && !transaction.address.isEmpty {
+                if transaction.type == .incoming, let receivingAddress {
                     copyableRow(
                         label: "Received on",
                         trailingLabel: receivingSubaddressLabel,
-                        value: transaction.address,
+                        value: receivingAddress,
                         field: .address
                     )
 
@@ -166,15 +194,20 @@ struct TransactionDetailView: View {
                     .accessibilityLabel("Sender address hidden by Monero privacy")
                 }
 
-                if transaction.type == .outgoing && !transaction.address.isEmpty {
-                    copyableRow(
-                        label: "Sent to",
-                        value: transaction.address,
-                        field: .address
-                    )
-                }
-
                 if transaction.type == .outgoing {
+                    if sentToRows.isEmpty {
+                        recipientUnavailableRow
+                    } else {
+                        ForEach(Array(sentToRows.enumerated()), id: \.offset) { position, row in
+                            copyableRow(
+                                label: row.label,
+                                trailingLabel: row.amountLabel,
+                                value: row.address,
+                                field: .destination(position)
+                            )
+                        }
+                    }
+
                     txKeyRow
                 }
 
@@ -205,6 +238,8 @@ struct TransactionDetailView: View {
                     .accessibilityLabel("View in block explorer\(isTestnet ? ", testnet" : "")")
                     .accessibilityHint("Opens the transaction in an in-app browser")
                 }
+
+                copyAllRow
             }
         }
         .refreshable {
@@ -224,6 +259,19 @@ struct TransactionDetailView: View {
         }
     }
 
+    /// Monero does not put recipients on chain; wallet2 keeps them
+    /// only for sends it built itself, so a restored wallet has none.
+    private var recipientUnavailableRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Recipient")
+            Text("Not available for transactions sent before this wallet was restored")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Recipient not available for transactions sent before this wallet was restored")
+    }
+
     @ViewBuilder
     private var txKeyRow: some View {
         if let key = txKey, !key.isEmpty {
@@ -238,6 +286,29 @@ struct TransactionDetailView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Transaction key unavailable on this device")
         }
+    }
+
+    /// Copies every row above as one text block. Sits at the end of
+    /// the section, next to the explorer link, in the same row style.
+    private var copyAllRow: some View {
+        let copied = copiedField == .all
+        return Button {
+            copyAllDetails()
+        } label: {
+            HStack {
+                Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                    .foregroundStyle(copied ? Color.green : Color.accentColor)
+                    .contentTransition(.symbolEffect(.replace))
+                Text(copied ? "Copied" : "Copy All Details")
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("transaction.copyAllButton")
+        .accessibilityLabel(copied ? "All details copied" : "Copy all details")
+        .accessibilityHint("Copies every field of this transaction as text")
     }
 
     @ViewBuilder
@@ -280,12 +351,41 @@ struct TransactionDetailView: View {
         .accessibilityLabel("\(label): \(value)")
     }
 
-    private func copy(_ text: String, field: CopyField) {
-        UIPasteboard.general.string = text
+    private func copyAllDetails() {
+        let lines = TransactionDetailLogic.detailLines(
+            transaction: transaction,
+            dateText: formattedDate,
+            receivedOnLabel: receivingSubaddressLabel,
+            receivedOnAddress: receivingAddress,
+            sentTo: sentToRows,
+            txKey: txKey,
+            explorerURL: blockExplorerURL
+        )
+        copy(
+            TransactionDetailLogic.copyAllText(lines),
+            field: .all,
+            secret: lines.contains(where: \.isSecret)
+        )
+    }
+
+    /// `secret` routes the text through `SecureClipboard`: local
+    /// only and expiring, for blocks that carry the transaction key.
+    private func copy(_ text: String, field: CopyField, secret: Bool = false) {
+        if secret {
+            SecureClipboard.copySecret(text)
+        } else {
+            UIPasteboard.general.string = text
+        }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        copiedField = field
+        withAnimation(.snappy(duration: 0.25)) {
+            copiedField = field
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            if copiedField == field { copiedField = nil }
+            if copiedField == field {
+                withAnimation(.snappy(duration: 0.25)) {
+                    copiedField = nil
+                }
+            }
         }
     }
 
@@ -294,6 +394,145 @@ struct TransactionDetailView: View {
         formatter.dateStyle = .long
         formatter.timeStyle = .medium
         return formatter.string(from: transaction.timestamp)
+    }
+}
+
+// MARK: - Detail logic (pure, covered by TransactionScreenLogicTests)
+
+/// One "Sent to" row of the Details section.
+struct SentToRow: Equatable {
+    /// "Sent to", or "Sent to (1 of 2)" when there are several.
+    let label: String
+    /// The destination's amount, shown only when there are several.
+    let amountLabel: String?
+    let address: String
+}
+
+/// One line of the Copy All block.
+struct TransactionDetailLine: Equatable {
+    let label: String
+    let value: String
+    /// Spend-linkability material (the transaction key). A block that
+    /// holds one goes through `SecureClipboard`.
+    var isSecret = false
+}
+
+enum TransactionDetailLogic {
+    /// Name of the receiving subaddress. `subaddressIndex` is the
+    /// source of truth; the address reverse-match only covers rows
+    /// captured before the index existed.
+    static func receivedOnLabel(
+        subaddressIndex: Int?,
+        address: String,
+        primaryAddress: String,
+        subaddresses: [SubaddressSummary]
+    ) -> String? {
+        if let subaddressIndex {
+            let label = subaddresses.first { $0.index == subaddressIndex }?.label ?? ""
+            return SubaddressName.display(index: subaddressIndex, label: label)
+        }
+
+        guard !address.isEmpty else { return nil }
+        if address == primaryAddress {
+            return SubaddressName.display(index: 0, label: "")
+        }
+        if let match = subaddresses.first(where: { $0.address == address }) {
+            return SubaddressName.display(index: match.index, label: match.label)
+        }
+        return "Subaddress"
+    }
+
+    /// The address to show for "Received on": the row's own address,
+    /// else the wallet's address at `subaddressIndex`.
+    static func receivedOnAddress(
+        subaddressIndex: Int?,
+        address: String,
+        primaryAddress: String,
+        subaddresses: [SubaddressSummary]
+    ) -> String? {
+        if !address.isEmpty { return address }
+        guard let subaddressIndex else { return nil }
+        if subaddressIndex == 0, !primaryAddress.isEmpty { return primaryAddress }
+        let match = subaddresses.first { $0.index == subaddressIndex }?.address
+        return (match?.isEmpty == false) ? match : nil
+    }
+
+    /// One row per destination. An outgoing row that has no
+    /// destinations but still an address (older hardware snapshots)
+    /// gets a single plain row; no destinations and no address gives
+    /// an empty list, which the view shows as "Recipient: not available".
+    static func sentToRows(
+        destinations: [MoneroTransactionDestination],
+        fallbackAddress: String
+    ) -> [SentToRow] {
+        if destinations.isEmpty {
+            guard !fallbackAddress.isEmpty else { return [] }
+            return [SentToRow(label: "Sent to", amountLabel: nil, address: fallbackAddress)]
+        }
+        if destinations.count == 1 {
+            return [SentToRow(label: "Sent to", amountLabel: nil, address: destinations[0].address)]
+        }
+        return destinations.enumerated().map { position, destination in
+            SentToRow(
+                label: "Sent to (\(position + 1) of \(destinations.count))",
+                amountLabel: "\(XMRFormatter.format(destination.amount)) XMR",
+                address: destination.address
+            )
+        }
+    }
+
+    /// Every field the detail screen shows, in screen order. Missing
+    /// fields (no memo, key not loaded, status still loading) are left
+    /// out. To add a row, append one `add(...)` where it belongs.
+    static func detailLines(
+        transaction: MoneroTransaction,
+        dateText: String,
+        receivedOnLabel: String?,
+        receivedOnAddress: String?,
+        sentTo: [SentToRow],
+        txKey: String?,
+        explorerURL: URL?
+    ) -> [TransactionDetailLine] {
+        var lines: [TransactionDetailLine] = []
+        func add(_ label: String, _ value: String?, secret: Bool = false) {
+            guard let value, !value.isEmpty else { return }
+            lines.append(TransactionDetailLine(label: label, value: value, isSecret: secret))
+        }
+
+        let incoming = transaction.type == .incoming
+        add("Type", incoming ? "Received" : "Sent")
+        add("Amount", "\(incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount)) XMR")
+        if !incoming {
+            add("Fee", "\(XMRFormatter.format(transaction.fee)) XMR")
+        }
+        add("Status", transaction.displayStatusText)
+        if let confirmations = transaction.confirmations {
+            add("Confirmations", "\(confirmations)")
+        }
+        add("Date", dateText)
+        add("Memo", transaction.memo)
+        add("Transaction ID", transaction.id)
+
+        if incoming {
+            let label = receivedOnLabel.map { "Received on (\($0))" } ?? "Received on"
+            add(label, receivedOnAddress)
+        } else if sentTo.isEmpty {
+            add("Recipient", "Not available for transactions sent before this wallet was restored")
+        } else {
+            for row in sentTo {
+                let label = row.amountLabel.map { "\(row.label), \($0)" } ?? row.label
+                add(label, row.address)
+            }
+        }
+
+        add("Transaction Key", txKey, secret: true)
+        add("Block Explorer", explorerURL?.absoluteString)
+
+        return lines
+    }
+
+    static func copyAllText(_ lines: [TransactionDetailLine]) -> String {
+        lines.map { "\($0.label): \($0.value)" }.joined(separator: "\n")
     }
 }
 
@@ -311,7 +550,17 @@ struct TransactionDetailView: View {
             confirmations: 10,
             status: .confirmed,
             memo: nil,
-            blockHeight: nil
+            blockHeight: nil,
+            destinations: [
+                MoneroTransactionDestination(
+                    address: "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H",
+                    amount: 1.0
+                ),
+                MoneroTransactionDestination(
+                    address: "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A",
+                    amount: 0.5
+                )
+            ]
         ))
         .environmentObject(WalletManager())
         .environmentObject(priceService)

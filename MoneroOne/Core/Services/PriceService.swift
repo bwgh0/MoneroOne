@@ -22,6 +22,13 @@ class PriceService: ObservableObject {
     /// Maximum age of a server-stamped response.
     nonisolated private static let maxResponseAge: TimeInterval = 3600
 
+    /// The price API stamps responses with JavaScript `Date.now()`, i.e.
+    /// milliseconds, while everything here works in seconds. Without this the
+    /// age came out hugely negative and the staleness guard never tripped.
+    nonisolated static func responseTimestampSeconds(_ raw: Double) -> TimeInterval {
+        raw > 1e11 ? raw / 1000 : raw
+    }
+
     nonisolated static func isPlausiblePrice(_ price: Double) -> Bool {
         price.isFinite && price >= minPlausiblePrice && price <= maxPlausiblePrice
     }
@@ -263,7 +270,7 @@ class PriceService: ObservableObject {
         // A replayed or badly cached response would otherwise be
         // indistinguishable from a fresh one. `timestamp` was already decoded
         // and thrown away.
-        let responseAge = Date().timeIntervalSince1970 - result.timestamp
+        let responseAge = Date().timeIntervalSince1970 - Self.responseTimestampSeconds(result.timestamp)
         guard responseAge < Self.maxResponseAge else {
             throw PriceError.staleResponse(age: responseAge)
         }

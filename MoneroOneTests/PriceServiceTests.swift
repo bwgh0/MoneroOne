@@ -172,6 +172,36 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertNotNil(priceService.lastUpdated)
     }
 
+    func testMillisecondTimestampIsAcceptedWhenFresh() throws {
+        priceService.selectedCurrency = "usd"
+        let fresh = PriceResponse(
+            quotes: ["usd": PriceQuote(price: 500, change24h: 0)],
+            timestamp: Date().timeIntervalSince1970 * 1000
+        )
+        try priceService.applyPriceResponse(fresh)
+        XCTAssertEqual(priceService.xmrPrice, 500)
+    }
+
+    func testStaleMillisecondTimestampIsRejected() {
+        priceService.selectedCurrency = "usd"
+        let stale = PriceResponse(
+            quotes: ["usd": PriceQuote(price: 500, change24h: 0)],
+            timestamp: (Date().timeIntervalSince1970 - 2 * 3600) * 1000
+        )
+        XCTAssertThrowsError(try priceService.applyPriceResponse(stale)) { error in
+            guard case PriceError.staleResponse(let age) = error else {
+                return XCTFail("expected staleResponse, got \(error)")
+            }
+            XCTAssertGreaterThan(age, 3600)
+        }
+        XCTAssertNil(priceService.xmrPrice)
+    }
+
+    func testResponseTimestampNormalisation() {
+        XCTAssertEqual(PriceService.responseTimestampSeconds(1_789_951_621_013), 1_789_951_621.013, accuracy: 1e-6)
+        XCTAssertEqual(PriceService.responseTimestampSeconds(1_789_951_621), 1_789_951_621)
+    }
+
     func testMissingQuoteIsNotRetried() async {
         var attempts = 0
         do {

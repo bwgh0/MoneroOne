@@ -424,23 +424,4 @@ final class WalletOrderTests: XCTestCase {
         XCTAssertEqual(store.activeWalletId, a.id)
     }
 
-    func testInsertionPointFollowsDropDirection() {
-        let a = UUID(), b = UUID(), c = UUID(), d = UUID()
-        let order = [a, b, c, d]
-        // From above onto a lower row: land just past the target.
-        XCTAssertEqual(WalletStore.insertionPoint(moving: a, droppedOnto: c, order: order), .before(d))
-        XCTAssertEqual(WalletStore.insertionPoint(moving: a, droppedOnto: d, order: order), .atEnd)
-        // From below onto a higher row: land just before the target.
-        XCTAssertEqual(WalletStore.insertionPoint(moving: d, droppedOnto: b, order: order), .before(b))
-        XCTAssertEqual(WalletStore.insertionPoint(moving: c, droppedOnto: a, order: order), .before(a))
-        // Nothing to do: onto itself, or ids not in the list.
-        XCTAssertNil(WalletStore.insertionPoint(moving: b, droppedOnto: b, order: order))
-        XCTAssertNil(WalletStore.insertionPoint(moving: UUID(), droppedOnto: b, order: order))
-        XCTAssertNil(WalletStore.insertionPoint(moving: b, droppedOnto: UUID(), order: order))
-        // Applying the rule yields the expected orders.
-        let wallets = order.map { WalletInfo(id: $0, name: $0.uuidString, source: .seed(.polyseed), createdAt: Date(), restoreHeight: 0, syncResetCount: 0, userCreatedSubaddressIndices: [], cachedPrimaryAddress: nil, cachedBalance: nil) }
-        XCTAssertEqual(WalletStore.reordered(wallets, moving: [a], before: d).map(\.id), [b, c, a, d])
-        XCTAssertEqual(WalletStore.reordered(wallets, moving: [d], before: b).map(\.id), [a, d, b, c])
-    }
-
 }

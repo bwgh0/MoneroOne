@@ -8,11 +8,8 @@ struct ChartSwitcherCard: View {
 
     @State private var chartMode: ChartMode = .portfolio
     @State private var selectedTimeRange: TimeRange = .week
-    @State private var selectedDate: Date?
     @State private var selectedPricePoint: PriceDataPoint?
-    @State private var portfolioData: [PortfolioPoint] = []
     @State private var selectedPortfolioPoint: PortfolioPoint?
-    @State private var cachedYDomain: ClosedRange<Double> = 0...100
 
     enum ChartMode: String, CaseIterable {
         case portfolio = "Portfolio"
@@ -42,6 +39,19 @@ struct ChartSwitcherCard: View {
     private var currentPortfolioValue: Double? {
         guard let price = priceService.xmrPrice else { return nil }
         return balanceDouble * price
+    }
+
+    /// Price samples in the selected currency (the API serves USD), so the
+    /// scrubbed value matches the header's currency.
+    private var priceData: [PriceDataPoint] {
+        let rate = priceService.usdToSelectedRate
+        return priceService.chartData.map { PriceDataPoint(timestamp: $0.timestamp, price: $0.price * rate) }
+    }
+
+    /// Portfolio value at every real price sample, in the selected currency.
+    private var portfolioData: [PortfolioPoint] {
+        let scale = balanceDouble * priceService.usdToSelectedRate
+        return priceService.chartData.map { PortfolioPoint(timestamp: $0.timestamp, value: $0.price * scale) }
     }
 
     /// Calculate percentage change based on chart data for selected time range
@@ -87,8 +97,10 @@ struct ChartSwitcherCard: View {
 
                 Spacer()
 
-                // Change badge for selected time range (works for both modes)
-                if selectedDate == nil {
+                // Change badge for selected time range (works for both modes).
+                // Hidden, not removed, while scrubbing so the row keeps its height.
+                let scrubbing = selectedPricePoint != nil || selectedPortfolioPoint != nil
+                Group {
                     let change = chartMode == .price ? chartPriceChange : portfolioValueChange
                     HStack(spacing: 8) {
                         if let change = change {
@@ -115,6 +127,8 @@ struct ChartSwitcherCard: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                .opacity(scrubbing ? 0 : 1)
+                .accessibilityHidden(scrubbing)
             }
 
             // Time range selector
@@ -133,57 +147,16 @@ struct ChartSwitcherCard: View {
         .padding(16)
         .dashboardCard()
         .task {
-            // Set loading synchronously before async work to avoid blank state
-            if priceService.chartDataCache[selectedTimeRange.apiRange] == nil {
-                priceService.isLoadingChart = true
-            }
-            await priceService.fetchChartData(range: selectedTimeRange.apiRange)
-            // Calculate domain after initial load (onChange doesn't fire on initial value)
-            updateCachedYDomain()
-        }
-        .onAppear {
-            portfolioData = priceService.chartData.map { point in
-                PortfolioPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
-            }
+            priceService.selectChartRange(selectedTimeRange.apiRange)
         }
         .onChange(of: selectedTimeRange) { newValue in
-            selectedDate = nil
             selectedPricePoint = nil
             selectedPortfolioPoint = nil
-            priceService.currentChartRange = newValue.apiRange
-            // Only show loading if not cached
-            if priceService.chartDataCache[newValue.apiRange] == nil {
-                priceService.isLoadingChart = true
-            }
-            Task {
-                await priceService.fetchChartData(range: newValue.apiRange)
-            }
+            priceService.selectChartRange(newValue.apiRange)
         }
         .onChange(of: chartMode) { _ in
-            selectedDate = nil
             selectedPricePoint = nil
             selectedPortfolioPoint = nil
-            updateCachedYDomain()
-        }
-        .onChange(of: priceService.chartData.count) { _ in
-            portfolioData = priceService.chartData.map { point in
-                PortfolioPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
-            }
-            updateCachedYDomain()
-        }
-        .onChange(of: priceService.currentChartRange) { _ in
-            // Recalculate domain when range changes (even if count is same)
-            updateCachedYDomain()
-        }
-        .onChange(of: selectedDate) { newDate in
-            guard let date = newDate else {
-                selectedPricePoint = nil
-                selectedPortfolioPoint = nil
-                return
-            }
-            // O(log n) binary search instead of O(n) linear search
-            selectedPricePoint = priceService.chartData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
-            selectedPortfolioPoint = portfolioData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
         }
     }
 
@@ -233,38 +206,10 @@ struct ChartSwitcherCard: View {
 
     // MARK: - Chart View
 
-    private var chartPriceRange: (min: Double, max: Double) {
-        let prices = priceService.chartData.map { $0.price }
-        guard let minPrice = prices.min(), let maxPrice = prices.max() else {
-            return (0, 100)
-        }
-        return (minPrice, maxPrice)
-    }
-
-    private var chartPortfolioRange: (min: Double, max: Double) {
-        let values = portfolioData.map { $0.value }
-        guard let minVal = values.min(), let maxVal = values.max() else {
-            return (0, 100)
-        }
-        return (minVal, maxVal)
-    }
-
     private var chartYDomain: ClosedRange<Double> {
-        cachedYDomain
-    }
-
-    private func updateCachedYDomain() {
-        let range = chartMode == .price ? chartPriceRange : chartPortfolioRange
-        guard range.min.isFinite && range.max.isFinite else {
-            cachedYDomain = 0...100
-            return
-        }
-        let span = range.max - range.min
-        if span > 0 {
-            let padding = span * 0.05
-            cachedYDomain = (range.min - padding)...(range.max + padding)
-        } else {
-            cachedYDomain = (range.min * 0.95)...(range.max * 1.05)
+        switch chartMode {
+        case .price: return PriceService.chartYDomain(for: priceData.map { $0.price })
+        case .portfolio: return PriceService.chartYDomain(for: portfolioData.map { $0.value })
         }
     }
 
@@ -289,87 +234,29 @@ struct ChartSwitcherCard: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            Chart {
+            Group {
                 if chartMode == .price {
-                    ForEach(priceService.chartData) { point in
-                        AreaMark(
-                            x: .value("Time", point.timestamp),
-                            yStart: .value("Min", chartYDomain.lowerBound),
-                            yEnd: .value("Price", point.price)
-                        )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.0)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .interpolationMethod(.monotone)
-
-                        LineMark(
-                            x: .value("Time", point.timestamp),
-                            y: .value("Price", point.price)
-                        )
-                        .foregroundStyle(Color.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.monotone)
-                    }
-
-                    if let selectedPoint = selectedPricePoint {
-                        RuleMark(x: .value("Selected", selectedPoint.timestamp))
-                            .foregroundStyle(Color.secondary.opacity(0.5))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 2]))
-
-                        PointMark(
-                            x: .value("Time", selectedPoint.timestamp),
-                            y: .value("Price", selectedPoint.price)
-                        )
-                        .foregroundStyle(Color.orange)
-                        .symbolSize(80)
-                    }
+                    SampledLineChart(
+                        points: priceData,
+                        domain: chartYDomain,
+                        timestamp: \.timestamp,
+                        value: \.price,
+                        axes: nil,
+                        onSelect: { selectedPricePoint = $0 }
+                    )
+                    .equatable()
                 } else {
-                    ForEach(portfolioData) { point in
-                        AreaMark(
-                            x: .value("Time", point.timestamp),
-                            yStart: .value("Min", chartYDomain.lowerBound),
-                            yEnd: .value("Value", point.value)
-                        )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.0)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .interpolationMethod(.monotone)
-
-                        LineMark(
-                            x: .value("Time", point.timestamp),
-                            y: .value("Value", point.value)
-                        )
-                        .foregroundStyle(Color.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.monotone)
-                    }
-
-                    if let selectedPoint = selectedPortfolioPoint {
-                        RuleMark(x: .value("Selected", selectedPoint.timestamp))
-                            .foregroundStyle(Color.secondary.opacity(0.5))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 2]))
-
-                        PointMark(
-                            x: .value("Time", selectedPoint.timestamp),
-                            y: .value("Value", selectedPoint.value)
-                        )
-                        .foregroundStyle(Color.orange)
-                        .symbolSize(80)
-                    }
+                    SampledLineChart(
+                        points: portfolioData,
+                        domain: chartYDomain,
+                        timestamp: \.timestamp,
+                        value: \.value,
+                        axes: nil,
+                        onSelect: { selectedPortfolioPoint = $0 }
+                    )
+                    .equatable()
                 }
             }
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .chartYScale(domain: chartYDomain)
-            .chartXSelectionIfAvailable(value: $selectedDate)
         }
     }
 

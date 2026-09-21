@@ -323,7 +323,7 @@ struct PriceWidgetView: View {
                 startPoint: .top,
                 endPoint: .bottom
             ))
-            .interpolationMethod(.catmullRom)
+            .interpolationMethod(.monotone)
 
             LineMark(
                 x: .value("", index),
@@ -331,7 +331,7 @@ struct PriceWidgetView: View {
             )
             .foregroundStyle(chartColor)
             .lineStyle(StrokeStyle(lineWidth: 1.5))
-            .interpolationMethod(.catmullRom)
+            .interpolationMethod(.monotone)
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
@@ -366,7 +366,7 @@ struct PriceWidgetView: View {
                 startPoint: .top,
                 endPoint: .bottom
             ))
-            .interpolationMethod(.catmullRom)
+            .interpolationMethod(.monotone)
 
             LineMark(
                 x: .value("", index),
@@ -374,7 +374,7 @@ struct PriceWidgetView: View {
             )
             .foregroundStyle(chartColor)
             .lineStyle(StrokeStyle(lineWidth: 2))
-            .interpolationMethod(.catmullRom)
+            .interpolationMethod(.monotone)
         }
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { value in

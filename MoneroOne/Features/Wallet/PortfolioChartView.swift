@@ -12,10 +12,7 @@ struct PortfolioChartView: View {
     @ObservedObject var priceService: PriceService
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTimeRange: TimeRange = .week
-    @State private var selectedDate: Date?
-    @State private var portfolioData: [PortfolioDataPoint] = []
     @State private var selectedPoint: PortfolioDataPoint?
-    @State private var cachedYDomain: ClosedRange<Double> = 0...100
 
     enum TimeRange: String, CaseIterable {
         case day = "24H"
@@ -42,6 +39,14 @@ struct PortfolioChartView: View {
     private var currentPortfolioValue: Double? {
         guard let price = priceService.xmrPrice else { return nil }
         return balanceDouble * price
+    }
+
+    /// Portfolio value at every real price sample, in the selected currency
+    /// (the API serves USD). Derived on read so it cannot drift from the
+    /// price series or the header.
+    private var portfolioData: [PortfolioDataPoint] {
+        let scale = balanceDouble * priceService.usdToSelectedRate
+        return priceService.chartData.map { PortfolioDataPoint(timestamp: $0.timestamp, value: $0.price * scale) }
     }
 
     private var portfolioRange: (min: Double, max: Double)? {
@@ -80,51 +85,11 @@ struct PortfolioChartView: View {
                 }
             }
             .task {
-                // Set loading synchronously before async work to avoid blank state
-                if priceService.chartDataCache[selectedTimeRange.apiRange] == nil {
-                    priceService.isLoadingChart = true
-                }
-                await priceService.fetchChartData(range: selectedTimeRange.apiRange)
-                // Calculate domain after initial load (onChange doesn't fire on initial value)
-                portfolioData = priceService.chartData.map { point in
-                    PortfolioDataPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
-                }
-                updateCachedYDomain()
-            }
-            .onAppear {
-                portfolioData = priceService.chartData.map { point in
-                    PortfolioDataPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
-                }
+                priceService.selectChartRange(selectedTimeRange.apiRange)
             }
             .onChange(of: selectedTimeRange) { newValue in
-                selectedDate = nil
                 selectedPoint = nil
-                priceService.currentChartRange = newValue.apiRange
-                // Only show loading if not cached
-                if priceService.chartDataCache[newValue.apiRange] == nil {
-                    priceService.isLoadingChart = true
-                }
-                Task {
-                    await priceService.fetchChartData(range: newValue.apiRange)
-                }
-            }
-            .onChange(of: priceService.chartData.count) { _ in
-                portfolioData = priceService.chartData.map { point in
-                    PortfolioDataPoint(timestamp: point.timestamp, value: balanceDouble * point.price)
-                }
-                updateCachedYDomain()
-            }
-            .onChange(of: priceService.currentChartRange) { _ in
-                // Recalculate domain when range changes (even if count is same)
-                updateCachedYDomain()
-            }
-            .onChange(of: selectedDate) { newDate in
-                guard let date = newDate else {
-                    selectedPoint = nil
-                    return
-                }
-                // O(log n) binary search instead of O(n) linear search
-                selectedPoint = portfolioData.nearestByTimestamp(to: date, timestampKeyPath: \.timestamp)
+                priceService.selectChartRange(newValue.apiRange)
             }
         }
     }
@@ -163,11 +128,8 @@ struct PortfolioChartView: View {
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.1), value: value)
 
-                if let selectedPoint = selectedPoint {
-                    Text(formatSelectedDate(selectedPoint.timestamp))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                } else {
+                // One slot for both states so the chart never moves on scrub.
+                ZStack {
                     // Show portfolio change for selected time range
                     HStack(spacing: 12) {
                         Text(XMRFormatter.format(balance) + " XMR")
@@ -194,7 +156,16 @@ struct PortfolioChartView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    .opacity(selectedPoint == nil ? 1 : 0)
+                    .accessibilityHidden(selectedPoint != nil)
+
+                    if let selectedPoint = selectedPoint {
+                        Text(timeAxis.scrubLabel(for: selectedPoint.timestamp))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                 }
+                .animation(.easeInOut(duration: 0.15), value: selectedPoint == nil)
             } else {
                 ProgressView()
                     .scaleEffect(1.2)
@@ -203,19 +174,8 @@ struct PortfolioChartView: View {
         .padding(.vertical, 8)
     }
 
-    private func formatSelectedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        switch selectedTimeRange {
-        case .day:
-            formatter.dateFormat = "h:mm a"
-        case .week:
-            formatter.dateFormat = "EEEE, h:mm a"
-        case .month:
-            formatter.dateFormat = "MMM d, h:mm a"
-        case .year, .all:
-            formatter.dateFormat = "MMM d, yyyy"
-        }
-        return formatter.string(from: date)
+    private var timeAxis: ChartTimeAxis {
+        ChartTimeAxis(rawValue: selectedTimeRange.apiRange) ?? .week
     }
 
     // MARK: - Time Range Selector
@@ -249,16 +209,7 @@ struct PortfolioChartView: View {
     // MARK: - Chart Section
 
     private var chartYDomain: ClosedRange<Double> {
-        cachedYDomain
-    }
-
-    private func updateCachedYDomain() {
-        guard let range = portfolioRange else {
-            cachedYDomain = 0...100
-            return
-        }
-        let padding = (range.max - range.min) * 0.05
-        cachedYDomain = (range.min - padding)...(range.max + padding)
+        PriceService.chartYDomain(for: portfolioData.map { $0.value })
     }
 
     private var chartSection: some View {
@@ -268,63 +219,15 @@ struct PortfolioChartView: View {
             } else if portfolioData.isEmpty || balanceDouble == 0 {
                 emptyChartState
             } else {
-                Chart {
-                    ForEach(portfolioData) { point in
-                        AreaMark(
-                            x: .value("Time", point.timestamp),
-                            yStart: .value("Min", chartYDomain.lowerBound),
-                            yEnd: .value("Value", point.value)
-                        )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.0)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .interpolationMethod(.monotone)
-
-                        LineMark(
-                            x: .value("Time", point.timestamp),
-                            y: .value("Value", point.value)
-                        )
-                        .foregroundStyle(Color.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.monotone)
-                    }
-
-                    if let selectedPoint = selectedPoint {
-                        RuleMark(x: .value("Selected", selectedPoint.timestamp))
-                            .foregroundStyle(Color.secondary.opacity(0.5))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 2]))
-
-                        PointMark(
-                            x: .value("Time", selectedPoint.timestamp),
-                            y: .value("Value", selectedPoint.value)
-                        )
-                        .foregroundStyle(Color.orange)
-                        .symbolSize(100)
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 3)) { _ in
-                        AxisGridLine()
-                        AxisValueLabel(format: xAxisFormat)
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
-                        AxisGridLine()
-                        AxisValueLabel {
-                            if let price = value.as(Double.self) {
-                                Text(formatCompactCurrency(price))
-                                    .font(.caption2)
-                            }
-                        }
-                    }
-                }
-                .chartYScale(domain: chartYDomain)
-                .chartXSelectionIfAvailable(value: $selectedDate)
+                SampledLineChart(
+                    points: portfolioData,
+                    domain: chartYDomain,
+                    timestamp: \.timestamp,
+                    value: \.value,
+                    axes: .init(time: timeAxis, currencyCode: priceService.selectedCurrency.uppercased()),
+                    onSelect: { selectedPoint = $0 }
+                )
+                .equatable()
                 .frame(height: 240)
             }
         }
@@ -332,21 +235,6 @@ struct PortfolioChartView: View {
         .padding()
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
-    }
-
-    private var xAxisFormat: Date.FormatStyle {
-        switch selectedTimeRange {
-        case .day:
-            return .dateTime.hour(.defaultDigits(amPM: .omitted))  // 24-hour: "5", "17"
-        case .week:
-            return .dateTime.weekday(.abbreviated)
-        case .month:
-            return .dateTime.day()  // Just day number: "15", "22"
-        case .year:
-            return .dateTime.month(.abbreviated)  // Just month: "Jan", "Feb"
-        case .all:
-            return .dateTime.year()
-        }
     }
 
     private var chartPlaceholder: some View {
@@ -425,14 +313,6 @@ struct PortfolioChartView: View {
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
-    }
-
-    private func formatCompactCurrency(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = priceService.selectedCurrency.uppercased()
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value))"
     }
 
 }

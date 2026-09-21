@@ -28,6 +28,7 @@ struct SettingsView: View {
     @EnvironmentObject var priceAlertService: PriceAlertService
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
     @AppStorage("sendSoundEnabled") private var sendSoundEnabled: Bool = true
+    @AppStorage(WalletManager.rotateReceiveAddressKey) private var rotateReceiveAddress: Bool = true
     @State private var showBackup = false
     @State private var showSecurity = false
     @State private var showDeleteConfirmation = false
@@ -48,7 +49,7 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 // Wallet Section
-                Section("Wallet") {
+                Section {
                     if !walletManager.isViewOnly {
                         NavigationLink {
                             BackupView()
@@ -83,6 +84,22 @@ struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.securityRow")
+
+                    Toggle(isOn: $rotateReceiveAddress) {
+                        SettingsRow(
+                            icon: "qrcode",
+                            title: "Fresh Receive Address",
+                            color: .green
+                        )
+                    }
+                    .accessibilityIdentifier("settings.rotateReceiveAddressToggle")
+                    .onChange(of: rotateReceiveAddress) {
+                        walletManager.reconcileReceiveAddress()
+                    }
+                } header: {
+                    Text("Wallet")
+                } footer: {
+                    Text("After an address receives a payment, Receive shows a new unused address. Old addresses keep working.")
                 }
 
                 // Display Section

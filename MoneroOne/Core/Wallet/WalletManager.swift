@@ -1058,6 +1058,9 @@ class WalletManager: ObservableObject {
     internal private(set) var currentPin: String?
     private var isRefreshing = false
     private var widgetReloadTask: Task<Void, Never>?
+    /// Index of the subaddress that receive-address rotation just derived
+    /// and selected; cleared once the kit lists it. See `reconcileReceiveAddress`.
+    private var pendingRotatedIndex: Int?
 
     // MARK: - Init
 
@@ -1779,6 +1782,8 @@ class WalletManager: ObservableObject {
     }
 
     private func bindToWallet(_ wallet: MoneroWallet) {
+        pendingRotatedIndex = nil
+
         // Bind wallet state to manager state with widget updates
         wallet.$balance
             .receive(on: DispatchQueue.main)
@@ -1926,6 +1931,7 @@ class WalletManager: ObservableObject {
                 self.transactions = newTransactions
                 self.evaluateEmptyRestoreHint()
                 self.saveWidgetDataIfEnabled()
+                self.reconcileReceiveAddress()
             }
             .store(in: &cancellables)
 
@@ -1947,6 +1953,7 @@ class WalletManager: ObservableObject {
                         self.primaryAddress = primary.address
                     }
                 }
+                self.reconcileReceiveAddress()
             }
             .store(in: &cancellables)
 
@@ -2502,6 +2509,185 @@ class WalletManager: ObservableObject {
     private func loadUserCreatedSubaddresses() {
         let saved = activeWallet?.userCreatedSubaddressIndices ?? []
         userCreatedSubaddressIndices = Set(saved)
+    }
+
+    // MARK: - Receive Address Rotation
+
+    /// UserDefaults key of the subaddress index the Receive screen shows.
+    /// One global value, not per wallet, so `reconcileReceiveAddress`
+    /// repairs an index that the active wallet does not have.
+    nonisolated static let selectedSubaddressIndexKey = "selectedSubaddressIndex"
+    /// UserDefaults key of the "Fresh Receive Address" setting. Default on.
+    nonisolated static let rotateReceiveAddressKey = "rotateReceiveAddress"
+    private nonisolated static let receiveSelectionBaselineKey = "receiveSelectionBaseline"
+
+    /// One address the way the rotation rule sees it.
+    struct ReceiveAddressSlot: Equatable {
+        let index: Int
+        let transactionsCount: Int
+        let isLabeled: Bool
+    }
+
+    /// A pick made in the address picker. Honored until that address
+    /// receives a payment, and only in the wallet it was picked in.
+    private struct ReceiveSelectionBaseline: Codable {
+        let walletId: UUID?
+        let index: Int
+        let transactionsCount: Int
+    }
+
+    /// The "Fresh Receive Address" setting; on unless the user turned it off.
+    var rotateReceiveAddress: Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: Self.rotateReceiveAddressKey) != nil else { return true }
+        return defaults.bool(forKey: Self.rotateReceiveAddressKey)
+    }
+
+    /// Decides which subaddress index the Receive screen shows.
+    ///
+    /// Rotation on (Cake Wallet's "auto generate subaddresses"): the first
+    /// unused, unlabeled subaddress whose index is above every used and
+    /// every labeled address. Labeled addresses are reserved for what the
+    /// user named them for. The primary (index 0) is never chosen by the
+    /// rule. A manual pick, given as `selectedBaselineCount`, is kept until
+    /// that address receives a payment (pool included), then the rule runs.
+    ///
+    /// Rotation off: the selection persists; an index missing in this
+    /// wallet falls back to 0.
+    ///
+    /// - Parameters:
+    ///   - selected: the current `selectedSubaddressIndex`.
+    ///   - selectedBaselineCount: `transactionsCount` of `selected` when the
+    ///     user picked it in this wallet; nil when there was no manual pick.
+    ///   - subaddresses: the wallet's addresses that have a real address string.
+    ///   - rotate: the "Fresh Receive Address" setting.
+    /// - Returns: the index to show, or nil when rotation wants a fresh
+    ///   address and the wallet has none yet (the caller derives one).
+    nonisolated static func nextReceiveIndex(
+        selected: Int,
+        selectedBaselineCount: Int? = nil,
+        subaddresses: [ReceiveAddressSlot],
+        rotate: Bool
+    ) -> Int? {
+        let selectedSlot = subaddresses.first { $0.index == selected }
+        // The primary exists even before the kit lists it.
+        let selectedExists = selected == 0 || selectedSlot != nil
+
+        guard rotate else {
+            return selectedExists ? selected : 0
+        }
+
+        if let baseline = selectedBaselineCount, selectedExists,
+           (selectedSlot?.transactionsCount ?? 0) <= baseline {
+            return selected
+        }
+
+        let lastReserved = subaddresses
+            .filter { $0.transactionsCount > 0 || $0.isLabeled }
+            .map(\.index)
+            .max() ?? 0
+        return subaddresses
+            .filter { $0.index > lastReserved && $0.transactionsCount == 0 && !$0.isLabeled }
+            .map(\.index)
+            .min()
+    }
+
+    /// Incoming payments per receiving address, pool included, failed
+    /// ones excluded. The kit's `SubAddress.transactionsCount` resets to
+    /// 0 on every refresh (wallet2's address table replaces the stored
+    /// rows before the counts are written back), so the transaction list
+    /// is the source the app can trust.
+    nonisolated static func receiveUsageCounts(transactions: [MoneroTransaction]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for tx in transactions where tx.type == .incoming && tx.status != .failed && !tx.address.isEmpty {
+            counts[tx.address, default: 0] += 1
+        }
+        return counts
+    }
+
+    /// The active wallet's addresses as the rotation rule sees them.
+    /// Usage is the larger of the kit's count and the app's own count.
+    private func receiveAddressSlots() -> [ReceiveAddressSlot] {
+        let usage = Self.receiveUsageCounts(transactions: transactions)
+        return subaddresses
+            .filter { !$0.address.isEmpty && !NullKeyAddress.isNullKey($0.address) }
+            .map {
+                ReceiveAddressSlot(
+                    index: $0.index,
+                    transactionsCount: max($0.transactionsCount, usage[$0.address] ?? 0),
+                    isLabeled: !$0.label.trimmingCharacters(in: .whitespaces).isEmpty
+                )
+            }
+    }
+
+    /// Records a pick made in the address picker so rotation keeps it
+    /// until that address receives a payment.
+    func noteManualReceiveSelection(index: Int) {
+        let defaults = UserDefaults.standard
+        defaults.set(index, forKey: Self.selectedSubaddressIndexKey)
+        let count = receiveAddressSlots().first { $0.index == index }?.transactionsCount ?? 0
+        let baseline = ReceiveSelectionBaseline(walletId: activeWallet?.id, index: index, transactionsCount: count)
+        if let data = try? JSONEncoder().encode(baseline) {
+            defaults.set(data, forKey: Self.receiveSelectionBaselineKey)
+        }
+    }
+
+    private func loadReceiveSelectionBaseline() -> ReceiveSelectionBaseline? {
+        guard let data = UserDefaults.standard.data(forKey: Self.receiveSelectionBaselineKey) else { return nil }
+        return try? JSONDecoder().decode(ReceiveSelectionBaseline.self, from: data)
+    }
+
+    /// Applies `nextReceiveIndex` to the active wallet and writes the
+    /// result to `selectedSubaddressIndex`. Runs after every subaddress
+    /// and transaction update from the kit (one each per refresh), so a
+    /// payment to the shown address moves Receive on within a refresh.
+    /// Derives at most one new subaddress per update when the wallet has
+    /// no fresh one.
+    func reconcileReceiveAddress() {
+        let slots = receiveAddressSlots()
+        // Nothing to decide until the kit has listed the wallet's addresses.
+        guard !slots.isEmpty else { return }
+
+        if let pending = pendingRotatedIndex {
+            // The address derived below is selected already; judge again
+            // once the kit lists it, not before.
+            guard slots.contains(where: { $0.index == pending }) else { return }
+            pendingRotatedIndex = nil
+        }
+
+        let defaults = UserDefaults.standard
+        let selected = defaults.integer(forKey: Self.selectedSubaddressIndexKey)
+        var baselineCount: Int?
+        if let baseline = loadReceiveSelectionBaseline(),
+           baseline.walletId == activeWallet?.id,
+           baseline.index == selected {
+            baselineCount = baseline.transactionsCount
+        }
+        let rotate = rotateReceiveAddress
+
+        if let next = Self.nextReceiveIndex(
+            selected: selected,
+            selectedBaselineCount: baselineCount,
+            subaddresses: slots,
+            rotate: rotate
+        ) {
+            if next != selected {
+                defaults.set(next, forKey: Self.selectedSubaddressIndexKey)
+                defaults.removeObject(forKey: Self.receiveSelectionBaselineKey)
+            }
+            return
+        }
+
+        // Rotation wants a fresh address and the wallet has none after the
+        // last used or labeled one. Deriving one needs only the wallet's
+        // public keys, so view-only and hardware wallets work the same.
+        // Not `createSubaddress()`: rotation's addresses are not user
+        // created and stay out of `userCreatedSubaddressIndices`.
+        guard rotate, !primaryAddress.isEmpty, let wallet = moneroWallet,
+              let created = wallet.createSubaddress() else { return }
+        pendingRotatedIndex = created.index
+        defaults.set(created.index, forKey: Self.selectedSubaddressIndexKey)
+        defaults.removeObject(forKey: Self.receiveSelectionBaselineKey)
     }
 
     // MARK: - Validation

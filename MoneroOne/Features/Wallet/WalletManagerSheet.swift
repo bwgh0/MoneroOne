@@ -549,39 +549,74 @@ struct WalletManagerRows: View {
 
     private var wallets: [WalletInfo] { walletManager.wallets }
 
-    var body: some View {
+    /// The rows, with the system reorder on iOS 27. The availability branch
+    /// sits above the stack on purpose: `.reorderable()` has to be applied to
+    /// the `ForEach` itself, directly inside its container. Routing it
+    /// through a `some View` helper put a conditional wrapper between the
+    /// two; the rows still got a drag interaction but the container had no
+    /// payload for them, and SwiftUI asserted on every lift (three device
+    /// crashes on 2026-09-21).
+    @ViewBuilder
+    private var rowsStack: some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27.0, *) {
+            VStack(spacing: Self.rowGap) {
+                ForEach(wallets) { wallet in
+                    row(for: wallet)
+                }
+                .reorderable()
+
+                addWalletButton
+            }
+            // Off while the list collapses or a switch starts, so a lift that
+            // began on a row being removed is cancelled instead of asserting.
+            .reorderContainer(for: WalletInfo.self, isEnabled: isExpanded && !isSwitching && !walletManager.isSwitchingWallet) { difference in
+                switch difference.destination.position {
+                case .before(let id):
+                    walletManager.applyReorder(moving: difference.sources, before: id)
+                case .end:
+                    walletManager.applyReorder(moving: difference.sources, before: nil)
+                }
+            }
+        } else {
+            legacyRowsStack
+        }
+        #else
+        legacyRowsStack
+        #endif
+    }
+
+    private var legacyRowsStack: some View {
         VStack(spacing: Self.rowGap) {
             ForEach(wallets) { wallet in
                 row(for: wallet)
             }
-            .systemReorderable()
 
-            // Add Wallet button
-            Button {
-                showAddWallet = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
-                    Text("Add Wallet")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+            addWalletButton
+        }
+    }
+
+    private var addWalletButton: some View {
+        Button {
+            showAddWallet = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+                Text("Add Wallet")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
             }
-            .glassButtonStyle()
-            .padding(.horizontal)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
         }
-        // Off the moment the list collapses or a switch starts: UIKit's
-        // long-press lift driver on a row that is being removed still fired,
-        // and SwiftUI's drag container asserted when it could not find that
-        // row's payload (two device crashes on 2026-09-21). Disabling the
-        // container cancels the interaction instead.
-        .walletReorderContainer(isEnabled: isExpanded && !isSwitching && !walletManager.isSwitchingWallet) { moving, before in
-            walletManager.applyReorder(moving: moving, before: before)
-        }
+        .glassButtonStyle()
+        .padding(.horizontal)
+    }
+
+    var body: some View {
+        rowsStack
         .fullScreenCover(isPresented: $showAddWallet, onDismiss: {
             walletManager.addWalletPath = []
         }) {

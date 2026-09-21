@@ -44,6 +44,31 @@ struct WalletStore {
         }
     }
 
+    // MARK: - Order
+
+    /// Rewrites the persisted list in the order of `ids`. Store order is the
+    /// switcher's display order: insertion order until the user drags a row.
+    /// Unknown ids are ignored, wallets missing from `ids` keep their relative
+    /// order at the end, and the active wallet id is left alone.
+    @discardableResult
+    func reorderWallets(_ ids: [UUID]) -> [WalletInfo] {
+        let reordered = Self.reordered(loadWallets(), by: ids)
+        saveWallets(reordered)
+        return reordered
+    }
+
+    /// Pure reorder behind `reorderWallets(_:)`, exposed for tests.
+    static func reordered(_ wallets: [WalletInfo], by ids: [UUID]) -> [WalletInfo] {
+        var remaining = wallets
+        var result: [WalletInfo] = []
+        result.reserveCapacity(wallets.count)
+        for id in ids {
+            guard let index = remaining.firstIndex(where: { $0.id == id }) else { continue }
+            result.append(remaining.remove(at: index))
+        }
+        return result + remaining
+    }
+
     // MARK: - Active Wallet
 
     var activeWalletId: UUID? {

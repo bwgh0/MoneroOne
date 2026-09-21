@@ -415,18 +415,15 @@ private struct WalletHeaderContent: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            // The greeting and the chip stay put whether the list is open or
+            // not; only the content below swaps. The chip's ring shows the
+            // open state.
             HStack(spacing: 0) {
-                if !showWalletManager {
-                    DynamicGreeting()
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                    Spacer(minLength: 12)
-                }
-
+                DynamicGreeting()
+                Spacer(minLength: 12)
                 WalletSwitcherButton(isExpanded: $showWalletManager)
                     .environmentObject(walletManager)
-                    .frame(maxWidth: showWalletManager ? .infinity : nil)
             }
-            .animation(.snappy(duration: 0.35), value: showWalletManager)
             .padding(.horizontal)
 
             if walletManager.isTestnet {

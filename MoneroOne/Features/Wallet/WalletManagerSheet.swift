@@ -224,12 +224,13 @@ struct EmojiPickerSheet: View {
     }
 }
 
+/// Wallet switcher chip in the dashboard header: emoji over name. It stays a
+/// chip while the list is open (an orange ring marks the open state); the
+/// active wallet keeps its own slot in the list below instead of being pulled
+/// up into the chip, so the list never reshuffles on a switch.
 struct WalletSwitcherButton: View {
     @Binding var isExpanded: Bool
     @EnvironmentObject var walletManager: WalletManager
-    @State private var showRenameActive = false
-    @State private var renameText = ""
-    @State private var renameEmoji = ""
 
     var body: some View {
         Button {
@@ -237,158 +238,86 @@ struct WalletSwitcherButton: View {
                 isExpanded.toggle()
             }
         } label: {
-            if isExpanded {
-                expandedLabel
-            } else {
-                collapsedLabel
+            VStack(spacing: 2) {
+                Text(walletManager.activeWallet?.emoji ?? "\u{1F4B0}")
+                    .font(.system(size: 22))
+                Text(walletManager.activeWallet?.name ?? "Wallet")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: 66)
             }
+            .frame(width: 74)
         }
         .glassButtonStyle()
+        .overlay {
+            WalletRowSurface.ring(.orange.opacity(isExpanded ? 0.7 : 0))
+        }
+        .animation(.snappy(duration: 0.35), value: isExpanded)
         .accessibilityIdentifier("wallet.switcher")
-        .accessibilityHint(isExpanded ? "Closes the wallet list" : "Opens the wallet list, where you can switch, rename or add wallets")
-        // After the switcher's accessibility modifiers, so the pencil keeps
-        // its own identifier. Same trailing slots as `expandedLabel`: pencil,
-        // 14pt gap, the 24pt check, 18pt padding.
-        .overlay(alignment: .trailing) {
-            if isExpanded {
-                renameActiveButton
-                    .padding(.trailing, 18 + 24 + 14)
-            }
-        }
-        .sheet(isPresented: $showRenameActive) {
-            RenameWalletSheet(
-                name: $renameText,
-                emoji: $renameEmoji,
-                onSave: {
-                    let trimmed = renameText.trimmingCharacters(in: .whitespaces)
-                    if let id = walletManager.activeWallet?.id, !trimmed.isEmpty {
-                        walletManager.renameWallet(id: id, name: trimmed, emoji: renameEmoji)
-                    }
-                }
-            )
-            .presentationDetents([.medium])
-        }
-    }
-
-    // MARK: - Collapsed
-
-    private var collapsedLabel: some View {
-        VStack(spacing: 2) {
-            Text(walletManager.activeWallet?.emoji ?? "\u{1F4B0}")
-                .font(.system(size: 22))
-            Text(walletManager.activeWallet?.name ?? "Wallet")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(maxWidth: 66)
-        }
-        .frame(width: 74)
-    }
-
-    // MARK: - Expanded (current wallet card)
-
-    private var expandedLabel: some View {
-        HStack(spacing: 14) {
-            Text(walletManager.activeWallet?.emoji ?? "\u{1F4B0}")
-                .font(.system(size: 24))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(.ultraThinMaterial))
-                .clipShape(Circle())
-                .overlay(alignment: .bottomTrailing) {
-                    if walletManager.isViewOnly {
-                        ViewOnlyAvatarBadge().offset(x: 3, y: 3)
-                    }
-                }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(walletManager.activeWallet?.name ?? "Wallet")
-                    .font(.subheadline.weight(.semibold))
-
-                HStack(spacing: 0) {
-                    Text(XMRFormatter.format(walletManager.displayBalance))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .layoutPriority(0)
-                    Text(" XMR")
-                        .layoutPriority(1)
-                }
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.orange)
-
-                // Full address, truncated in the middle to whatever width is
-                // left: never wraps, shows more characters on wider rows.
-                Text(walletManager.primaryAddress)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .monospaced()
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Spacer()
-
-            // Holds the pencil's place; the real pencil is
-            // `renameActiveButton`, laid over the switcher outside its
-            // Button so VoiceOver reaches it.
-            Color.clear
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
-
-            Image(systemName: "checkmark.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.green)
-                .frame(width: 24, height: 24)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 18)
-    }
-
-    /// The pencil for the active wallet. A Button of its own, not part of
-    /// the switcher's label: inside the label VoiceOver merged it into the
-    /// switcher and a VoiceOver user could not find it.
-    private var renameActiveButton: some View {
-        WalletRenamePencil(name: walletManager.activeWallet?.name ?? "wallet") {
-            renameText = walletManager.activeWallet?.name ?? ""
-            renameEmoji = walletManager.activeWallet?.emoji ?? "\u{1F4B0}"
-            showRenameActive = true
-        }
-        .accessibilityIdentifier("wallet.switcher.rename")
+        .accessibilityHint(isExpanded ? "Closes the wallet list" : "Opens the wallet list")
     }
 }
 
-/// The rename pencil on a wallet row: 24pt glyph, 44pt touch target.
-struct WalletRenamePencil: View {
-    let name: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "pencil.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary.opacity(0.5))
-                .frame(width: 24, height: 24)
-                .padding(10)
-                .contentShape(Rectangle())
+/// The outline `.glassButtonStyle()` draws: a capsule under Liquid Glass, the
+/// 12pt rounded rectangle of the fallback style. Rings drawn with it sit on
+/// the glass edge instead of a guessed inset.
+enum WalletRowSurface {
+    @ViewBuilder
+    static func ring(_ color: Color, lineWidth: CGFloat = 1.5) -> some View {
+        if #available(iOS 26.0, *) {
+            Capsule().strokeBorder(color, lineWidth: lineWidth)
+        } else {
+            RoundedRectangle(cornerRadius: 12).strokeBorder(color, lineWidth: lineWidth)
         }
-        .buttonStyle(.plain)
-        .padding(-10)
-        .accessibilityLabel("Rename \(name)")
-        .accessibilityHint("Changes the wallet name and icon")
     }
 }
 
-/// A single inactive wallet row with swipe-to-delete and inline rename
+/// One wallet row: emoji, name, orange balance, address underneath, a rename
+/// pencil, and a check plus an orange ring when it is the active wallet.
+///
+/// Gestures: tap = switch (or close the list when it is the active one),
+/// pencil = rename, swipe left = delete (inactive rows only), long-press then
+/// drag = reorder. The reorder and delete gestures live on the label, inside
+/// the button, so a plain tap still reaches the button and a vertical swipe
+/// still reaches the scroll view: the long press fails after 10pt of movement,
+/// the delete swipe needs 20pt, and the scroll view claims the touch first.
 struct WalletRow: View {
     let wallet: WalletInfo
+    let isActive: Bool
+    let balance: Decimal
+    let address: String?
     let onTap: () -> Void
     let onRename: () -> Void
-    let onDelete: () -> Void
+    /// nil for the active wallet: it is deleted from Settings, not by a swipe.
+    let onDelete: (() -> Void)?
+    /// nil when the row is already first / last.
+    let onMoveUp: (() -> Void)?
+    let onMoveDown: (() -> Void)?
+    let reorder: ReorderHandlers
+
+    /// Reorder callbacks. The vertical translation is the finger's, relative
+    /// to where the long press fired.
+    struct ReorderHandlers {
+        var onDrag: (CGFloat) -> Void
+        var onDrop: (CGFloat) -> Void
+        var onCancel: () -> Void
+    }
+
+    private enum ReorderDrag: Equatable {
+        case idle
+        case lifted
+    }
 
     @State private var showDeleteZone = false
+    /// Mirrors the reorder gesture's phase. A gesture state resets when the
+    /// system cancels the gesture, which `onEnded` never reports, so the
+    /// `.lifted → .idle` edge is what tells the list to put the row back.
+    @GestureState private var reorderDrag: ReorderDrag = .idle
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            if showDeleteZone {
+            if showDeleteZone, let onDelete {
                 Button {
                     withAnimation(.snappy(duration: 0.25)) {
                         showDeleteZone = false
@@ -411,93 +340,164 @@ struct WalletRow: View {
                 .transition(.opacity)
             }
 
-            Button { onTap() } label: {
-                HStack(spacing: 14) {
-                    Text(wallet.emoji)
-                        .font(.system(size: 24))
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(.ultraThinMaterial))
-                        .clipShape(Circle())
-                        .overlay(alignment: .bottomTrailing) {
-                            if wallet.isViewOnly {
-                                ViewOnlyAvatarBadge().offset(x: 3, y: 3)
-                            }
-                        }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(wallet.name)
-                            .font(.subheadline.weight(.semibold))
-
-                        HStack(spacing: 0) {
-                            Text(XMRFormatter.format(wallet.cachedBalance ?? 0))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .layoutPriority(0)
-                            Text(" XMR")
-                                .layoutPriority(1)
-                        }
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.orange)
-
-                        if let address = wallet.cachedPrimaryAddress, !address.isEmpty {
-                            Text(address)
-                                .font(.caption2)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .foregroundStyle(.secondary)
-                                .monospaced()
-                        }
-                    }
-
-                    Spacer()
-
-                    // Holds the pencil's place; the real pencil is laid
-                    // over the row below, outside its Button, so VoiceOver
-                    // reaches it.
-                    Color.clear
-                        .frame(width: 24, height: 24)
-                        .accessibilityHidden(true)
-
-                    Circle()
-                        .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
-                        .frame(width: 24, height: 24)
+            Button {
+                if showDeleteZone {
+                    withAnimation(.snappy(duration: 0.25)) { showDeleteZone = false }
+                } else {
+                    onTap()
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 18)
+            } label: {
+                rowContent
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 18)
+                    .contentShape(Rectangle())
+                    .gesture(rowGesture)
             }
             .glassButtonStyle()
-            .opacity(0.85)
-            // VoiceOver cannot swipe the delete zone open or find the pencil
-            // inside the row; expose both as rotor actions on the row itself.
-            .accessibilityHint("Double tap to switch to this wallet")
-            .accessibilityAction(named: "Rename") { onRename() }
-            .accessibilityAction(named: "Delete") { onDelete() }
-            // Same trailing slots as the label: pencil, 14pt gap, the 24pt
-            // circle, 18pt padding.
-            .overlay(alignment: .trailing) {
-                WalletRenamePencil(name: wallet.name, action: onRename)
-                    .accessibilityIdentifier("wallet.row.rename")
-                    .padding(.trailing, 18 + 24 + 14)
+            .overlay {
+                WalletRowSurface.ring(.orange.opacity(isActive ? 0.7 : 0))
+            }
+            .opacity(isActive ? 1 : 0.85)
+            .accessibilityIdentifier(isActive ? "wallet.row.active" : "wallet.row")
+            .accessibilityHint(isActive ? "Double tap to close the wallet list" : "Double tap to switch to this wallet")
+            .accessibilityAddTraits(isActive ? .isSelected : [])
+            // VoiceOver cannot swipe the delete zone open, find the pencil
+            // inside the row, or long-press drag; expose all of it as rotor
+            // actions on the row itself.
+            .accessibilityActions {
+                Button("Rename") { onRename() }
+                if let onDelete {
+                    Button("Delete") { onDelete() }
+                }
+                if let onMoveUp {
+                    Button("Move up") { onMoveUp() }
+                }
+                if let onMoveDown {
+                    Button("Move down") { onMoveDown() }
+                }
             }
             .offset(x: showDeleteZone ? -88 : 0)
         }
         .padding(.horizontal)
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 20)
-                .onEnded { value in
+        .onChange(of: reorderDrag) { _, phase in
+            switch phase {
+            case .lifted:
+                withAnimation(.snappy(duration: 0.25)) { showDeleteZone = false }
+            case .idle:
+                reorder.onCancel()
+            }
+        }
+    }
+
+    // MARK: - Content
+
+    private var rowContent: some View {
+        HStack(spacing: 14) {
+            Text(wallet.emoji)
+                .font(.system(size: 24))
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(.ultraThinMaterial))
+                .clipShape(Circle())
+                .overlay(alignment: .bottomTrailing) {
+                    if wallet.isViewOnly {
+                        ViewOnlyAvatarBadge().offset(x: 3, y: 3)
+                    }
+                }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(wallet.name)
+                    .font(.subheadline.weight(.semibold))
+
+                HStack(spacing: 0) {
+                    Text(XMRFormatter.format(balance))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(0)
+                    Text(" XMR")
+                        .layoutPriority(1)
+                }
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.orange)
+
+                // Full address, truncated in the middle to whatever width is
+                // left: never wraps, shows more characters on wider rows.
+                if let address, !address.isEmpty {
+                    Text(address)
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundStyle(.secondary)
+                        .monospaced()
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "pencil.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary.opacity(0.5))
+                .onTapGesture { onRename() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Rename \(wallet.name)")
+                .accessibilityIdentifier(isActive ? "wallet.switcher.rename" : "wallet.row.rename")
+
+            if isActive {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.green)
+                    .accessibilityLabel("Current wallet")
+            } else {
+                Circle()
+                    .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
+                    .frame(width: 24, height: 24)
+            }
+        }
+    }
+
+    // MARK: - Gestures
+
+    /// Long-press then drag reorders; a clear horizontal swipe reveals Delete.
+    /// The two are exclusive with reorder first: the swipe only runs once the
+    /// long press has failed, so a held finger never opens the delete zone.
+    private var rowGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.4)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .exclusively(before: DragGesture(minimumDistance: 20))
+            .updating($reorderDrag) { value, state, _ in
+                if case .first(.second(true, _)) = value {
+                    state = .lifted
+                }
+            }
+            .onChanged { value in
+                if case .first(.second(true, let drag)) = value {
+                    reorder.onDrag(drag?.translation.height ?? 0)
+                }
+            }
+            .onEnded { value in
+                switch value {
+                case .first(.second(true, let drag)):
+                    reorder.onDrop(drag?.translation.height ?? 0)
+                case .second(let swipe):
+                    guard onDelete != nil else { return }
+                    let dx = swipe.translation.width
+                    guard abs(dx) > abs(swipe.translation.height) else { return }
                     withAnimation(.snappy(duration: 0.25)) {
-                        if value.translation.width < -40 {
+                        if dx < -40 {
                             showDeleteZone = true
-                        } else if value.translation.width > 20 {
+                        } else if dx > 20 {
                             showDeleteZone = false
                         }
                     }
+                default:
+                    break
                 }
-        )
+            }
     }
 }
 
-/// Additional wallet rows that appear when wallet manager is expanded
+/// Expanded wallet manager: EVERY wallet in store order (insertion order until
+/// the user drags), the active one marked in place with a check and an orange
+/// ring, then Add Wallet. Inline on the dashboard, not a sheet.
 struct WalletManagerRows: View {
     @Binding var isExpanded: Bool
     @EnvironmentObject var walletManager: WalletManager
@@ -512,36 +512,66 @@ struct WalletManagerRows: View {
     /// the in-flight `completeSwitchToWallet` teardown.
     @State private var isDeleting = false
 
-    private var otherWallets: [WalletInfo] {
-        walletManager.wallets.filter { $0.id != walletManager.activeWallet?.id }
+    // Reorder state: the lifted row follows the finger, the rows it passes
+    // slide aside by one step, the drop persists the new order. All of it is
+    // view state so the drop reads the live list and offset, never a value
+    // captured when a row's closures were built.
+    @State private var dragId: UUID?
+    @State private var dragOffset: CGFloat = 0
+    @State private var dragTarget: Int?
+    @State private var rowHeights: [UUID: CGFloat] = [:]
+    /// Keeps the dropped row above its neighbours while it settles.
+    @State private var settlingId: UUID?
+
+    private static let rowGap: CGFloat = 10
+    /// The snappy spring rows slide aside and settle on.
+    private static let slide = Animation.snappy(duration: 0.3)
+
+    private var wallets: [WalletInfo] { walletManager.wallets }
+
+    /// One slot: the lifted row's own height plus the gap.
+    private var step: CGFloat {
+        (dragId.flatMap { rowHeights[$0] } ?? 0) + Self.rowGap
+    }
+
+    private func dropTarget(from: Int) -> Int {
+        guard step > Self.rowGap, !wallets.isEmpty else { return from }
+        let moved = Int((dragOffset / step).rounded())
+        return min(max(from + moved, 0), wallets.count - 1)
+    }
+
+    /// How far a row that is not being dragged slides to make room.
+    private func shift(for index: Int, from: Int, to target: Int) -> CGFloat {
+        if index > from && index <= target { return -step }
+        if index < from && index >= target { return step }
+        return 0
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            ForEach(otherWallets) { wallet in
+        let activeId = walletManager.activeWallet?.id
+        let from = dragId.flatMap { id in wallets.firstIndex { $0.id == id } }
+        let target = from.map(dropTarget(from:))
+
+        VStack(spacing: Self.rowGap) {
+            ForEach(Array(wallets.enumerated()), id: \.element.id) { index, wallet in
+                let isActive = wallet.id == activeId
+                let isLifted = dragId == wallet.id
+                let offset: CGFloat = {
+                    if isLifted { return dragOffset }
+                    guard let from, let target else { return 0 }
+                    return shift(for: index, from: from, to: target)
+                }()
+
                 WalletRow(
                     wallet: wallet,
+                    isActive: isActive,
+                    balance: isActive ? walletManager.displayBalance : (wallet.cachedBalance ?? 0),
+                    address: isActive ? walletManager.primaryAddress : wallet.cachedPrimaryAddress,
                     onTap: {
-                        guard !isSwitching else { return }
-                        isSwitching = true
-
-                        // Phase 1: batch all @Published changes with the collapse animation
-                        var switchResult: (target: WalletInfo, previous: WalletInfo?)?
-                        withAnimation(.snappy(duration: 0.35)) {
-                            switchResult = walletManager.prepareSwitchToWallet(id: wallet.id)
-                            if switchResult != nil {
-                                isExpanded = false
-                            }
-                        }
-                        guard let result = switchResult else {
-                            isSwitching = false
-                            return
-                        }
-
-                        // Phase 2: heavy work in background (disk write + wallet start)
-                        Task {
-                            try? await walletManager.completeSwitchToWallet(target: result.target, persistPrevious: result.previous)
-                            isSwitching = false
+                        if isActive {
+                            withAnimation(.snappy(duration: 0.35)) { isExpanded = false }
+                        } else {
+                            switchTo(wallet)
                         }
                     },
                     onRename: {
@@ -549,10 +579,22 @@ struct WalletManagerRows: View {
                         renameEmoji = wallet.emoji
                         renameWalletId = wallet.id
                     },
-                    onDelete: {
-                        deleteWalletId = wallet.id
-                    }
+                    onDelete: isActive ? nil : { deleteWalletId = wallet.id },
+                    onMoveUp: index > 0 ? { move(wallet.id, by: -1) } : nil,
+                    onMoveDown: index < wallets.count - 1 ? { move(wallet.id, by: 1) } : nil,
+                    reorder: .init(
+                        onDrag: { dy in drag(wallet.id, to: dy) },
+                        onDrop: { dy in drop(wallet.id, at: dy) },
+                        onCancel: { cancelDrag(wallet.id) }
+                    )
                 )
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeights[wallet.id] = $0 }
+                .offset(y: offset)
+                .scaleEffect(isLifted ? 1.02 : 1)
+                .shadow(color: .black.opacity(isLifted ? 0.18 : 0), radius: isLifted ? 14 : 0, y: isLifted ? 6 : 0)
+                .zIndex(isLifted || settlingId == wallet.id ? 1 : 0)
+                .animation(isLifted ? nil : Self.slide, value: offset)
+                .animation(Self.slide, value: isLifted)
             }
 
             // Add Wallet button
@@ -620,6 +662,96 @@ struct WalletManagerRows: View {
             Text("This removes the wallet from this device. You can recover it with the seed phrase.")
         }
     }
+
+    // MARK: - Switching
+
+    private func switchTo(_ wallet: WalletInfo) {
+        guard !isSwitching else { return }
+        isSwitching = true
+
+        // Phase 1: batch all @Published changes with the collapse animation
+        var switchResult: (target: WalletInfo, previous: WalletInfo?)?
+        withAnimation(.snappy(duration: 0.35)) {
+            switchResult = walletManager.prepareSwitchToWallet(id: wallet.id)
+            if switchResult != nil {
+                isExpanded = false
+            }
+        }
+        guard let result = switchResult else {
+            isSwitching = false
+            return
+        }
+
+        // Phase 2: heavy work in background (disk write + wallet start)
+        Task {
+            try? await walletManager.completeSwitchToWallet(target: result.target, persistPrevious: result.previous)
+            isSwitching = false
+        }
+    }
+
+    // MARK: - Reorder
+
+    /// First call after the long press lifts the row (haptic, scale, shadow);
+    /// every call moves it with the finger and ticks when it passes a row.
+    private func drag(_ id: UUID, to dy: CGFloat) {
+        if dragId != id {
+            dragId = id
+            dragTarget = nil
+            HapticFeedback.shared.buttonPress()
+        }
+        dragOffset = dy
+        if let from = wallets.firstIndex(where: { $0.id == id }) {
+            let target = dropTarget(from: from)
+            if let previous = dragTarget, previous != target {
+                HapticFeedback.shared.softTick()
+            }
+            dragTarget = target
+        }
+    }
+
+    /// Commits the drop. The target and the list are read here, through
+    /// state and the manager, not from values captured when the row was built.
+    private func drop(_ id: UUID, at dy: CGFloat) {
+        guard dragId == id else { return }
+        dragOffset = dy
+        let list = walletManager.wallets
+        let to = list.firstIndex(where: { $0.id == id }).map(dropTarget(from:))
+        settle(id) {
+            if let to {
+                walletManager.moveWallet(id: id, to: to)
+            }
+        }
+    }
+
+    /// The system cancelled the gesture, or the drop already committed.
+    private func cancelDrag(_ id: UUID) {
+        guard dragId == id else { return }
+        settle(id) {}
+    }
+
+    private func settle(_ id: UUID, then commit: () -> Void) {
+        settlingId = id
+        withAnimation(Self.slide) {
+            dragId = nil
+            dragOffset = 0
+            dragTarget = nil
+            commit()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if settlingId == id { settlingId = nil }
+        }
+    }
+
+    /// VoiceOver "Move up" / "Move down": one slot, read from the live list.
+    private func move(_ id: UUID, by delta: Int) {
+        guard let index = wallets.firstIndex(where: { $0.id == id }) else { return }
+        let to = index + delta
+        guard wallets.indices.contains(to) else { return }
+        withAnimation(Self.slide) {
+            walletManager.moveWallet(id: id, to: to)
+        }
+        UIAccessibility.post(notification: .announcement, argument: delta < 0 ? "Moved up" : "Moved down")
+    }
 }
 
 /// Sheet for renaming a wallet with a tappable emoji picker circle
@@ -679,17 +811,12 @@ struct RenameWalletSheet: View {
     @Previewable @State var expanded = false
     VStack {
         HStack(spacing: 0) {
-            if !expanded {
-                Text("Good evening")
-                    .font(.title2.weight(.semibold))
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                Spacer(minLength: 12)
-            }
+            Text("Good evening")
+                .font(.title2.weight(.semibold))
+            Spacer(minLength: 12)
             WalletSwitcherButton(isExpanded: $expanded)
                 .environmentObject(WalletManager())
-                .frame(maxWidth: expanded ? .infinity : nil)
         }
-        .animation(.snappy(duration: 0.35), value: expanded)
         .padding()
         Spacer()
     }

@@ -24,7 +24,6 @@ struct SecurityView: View {
                             Text(biometricName)
                         }
                     }
-                    .tint(.orange)
                     .onChange(of: useBiometrics) { newValue in
                         if newValue {
                             showPINPrompt = true

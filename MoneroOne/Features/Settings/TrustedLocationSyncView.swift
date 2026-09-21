@@ -18,7 +18,6 @@ struct TrustedLocationSyncView: View {
                         Text("Trusted Locations")
                     }
                 }
-                .tint(.green)
             } footer: {
                 Text("Define security zones where your wallet stays updated. Requires \"Always\" location permission.")
             }

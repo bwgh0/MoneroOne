@@ -574,7 +574,12 @@ struct WalletManagerRows: View {
             .glassButtonStyle()
             .padding(.horizontal)
         }
-        .walletReorderContainer { moving, before in
+        // Off the moment the list collapses or a switch starts: UIKit's
+        // long-press lift driver on a row that is being removed still fired,
+        // and SwiftUI's drag container asserted when it could not find that
+        // row's payload (two device crashes on 2026-09-21). Disabling the
+        // container cancels the interaction instead.
+        .walletReorderContainer(isEnabled: isExpanded && !isSwitching && !walletManager.isSwitchingWallet) { moving, before in
             walletManager.applyReorder(moving: moving, before: before)
         }
         .fullScreenCover(isPresented: $showAddWallet, onDismiss: {
@@ -697,10 +702,10 @@ private extension View {
     /// halves of the `ReorderDifference`. Inert before iOS 27, and on the
     /// Xcode 26 toolchain CI builds with, where the API does not exist.
     @ViewBuilder
-    func walletReorderContainer(_ apply: @escaping (_ moving: [UUID], _ before: UUID?) -> Void) -> some View {
+    func walletReorderContainer(isEnabled: Bool = true, _ apply: @escaping (_ moving: [UUID], _ before: UUID?) -> Void) -> some View {
         #if compiler(>=6.4)
         if #available(iOS 27.0, *) {
-            self.reorderContainer(for: WalletInfo.self) { difference in
+            self.reorderContainer(for: WalletInfo.self, isEnabled: isEnabled) { difference in
                 switch difference.destination.position {
                 case .before(let id):
                     apply(difference.sources, id)

@@ -883,7 +883,13 @@ class WalletManager: ObservableObject {
         return snap.unlocked + confirmedNewIncoming
     }
 
-    @Published private(set) var walletSessionId = UUID()
+    /// A new session means a wallet just started (unlock, switch, or the add
+    /// flow finishing). `ContentView` rebuilds its tree on this id, so the Add
+    /// Wallet cover's `onDismiss` never runs in that case; reset its path here
+    /// or the next "Add Wallet" would open straight on the last step.
+    @Published private(set) var walletSessionId = UUID() {
+        didSet { addWalletPath = [] }
+    }
 
     /// True while the Add Wallet sheet is presented over an unlocked session.
     /// The scenePhase handler consults this to skip auto-lock when the user

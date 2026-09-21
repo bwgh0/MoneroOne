@@ -155,4 +155,99 @@ final class WalletManagerTests: XCTestCase {
     func testInitialSyncStateIsIdle() async {
         XCTAssertEqual(walletManager.syncState, .idle, "Initial sync state should be idle")
     }
+
+    // MARK: - Receive Address Rotation Rule
+
+    private func slot(_ index: Int, used: Int = 0, labeled: Bool = false) -> WalletManager.ReceiveAddressSlot {
+        WalletManager.ReceiveAddressSlot(index: index, transactionsCount: used, isLabeled: labeled)
+    }
+
+    func testRotationOffKeepsExistingSelection() {
+        let slots = [slot(0, used: 3), slot(1, used: 1), slot(2)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 1, subaddresses: slots, rotate: false), 1)
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 0, subaddresses: slots, rotate: false), 0)
+    }
+
+    func testRotationOffFallsBackToPrimaryWhenSelectionIsMissing() {
+        let slots = [slot(0), slot(1)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 7, subaddresses: slots, rotate: false), 0)
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 3, subaddresses: [], rotate: false), 0)
+    }
+
+    func testRotationNeverAutoSelectsPrimary() {
+        // Fresh wallet: nothing used, nothing labeled, primary unused.
+        let slots = [slot(0), slot(1)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 0, subaddresses: slots, rotate: true), 1)
+        // Only the primary is free: the rule still asks for a subaddress.
+        XCTAssertNil(WalletManager.nextReceiveIndex(selected: 0, subaddresses: [slot(0), slot(1, used: 1)], rotate: true))
+    }
+
+    func testRotationMovesOffUsedSelection() {
+        let slots = [slot(0, used: 2), slot(1, used: 1), slot(2), slot(3)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 1, subaddresses: slots, rotate: true), 2)
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 0, subaddresses: slots, rotate: true), 2)
+    }
+
+    func testRotationKeepsUnusedSelectionAfterLastUsedOrLabeled() {
+        let slots = [slot(0, used: 1), slot(1, used: 1), slot(2)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 2, subaddresses: slots, rotate: true), 2)
+    }
+
+    func testRotationSkipsLabeledUnusedAddress() {
+        // Index 2 is reserved by its label; the rule lands after it.
+        let slots = [slot(0, used: 1), slot(1, used: 1), slot(2, labeled: true), slot(3)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 1, subaddresses: slots, rotate: true), 3)
+    }
+
+    func testRotationPicksFirstAddressAfterLastUsedOrLabeled() {
+        // Unused 2 and 3 sit below the labeled 5, so they are skipped.
+        let slots = [slot(0, used: 1), slot(1, used: 1), slot(2), slot(3), slot(5, labeled: true), slot(6), slot(7)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 1, subaddresses: slots, rotate: true), 6)
+    }
+
+    func testRotationAsksForNewAddressWhenNothingFollowsLastUsedOrLabeled() {
+        let allUsed = [slot(0, used: 1), slot(1, used: 1), slot(2, used: 1)]
+        XCTAssertNil(WalletManager.nextReceiveIndex(selected: 2, subaddresses: allUsed, rotate: true))
+        let lastIsLabeled = [slot(0, used: 1), slot(1), slot(2, labeled: true)]
+        XCTAssertNil(WalletManager.nextReceiveIndex(selected: 1, subaddresses: lastIsLabeled, rotate: true))
+    }
+
+    func testManualPickIsHonoredUntilItReceives() {
+        // Picked the primary while it already had 3 payments.
+        var slots = [slot(0, used: 3), slot(1, used: 1), slot(2)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 0, selectedBaselineCount: 3, subaddresses: slots, rotate: true), 0)
+        // A fourth payment arrives (pool counts): the rule moves on.
+        slots = [slot(0, used: 4), slot(1, used: 1), slot(2)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 0, selectedBaselineCount: 3, subaddresses: slots, rotate: true), 2)
+    }
+
+    func testManualPickOfLabeledAddressIsHonored() {
+        let slots = [slot(0, used: 1), slot(1, labeled: true), slot(2)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 1, selectedBaselineCount: 0, subaddresses: slots, rotate: true), 1)
+        let afterPayment = [slot(0, used: 1), slot(1, used: 1, labeled: true), slot(2)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 1, selectedBaselineCount: 0, subaddresses: afterPayment, rotate: true), 2)
+    }
+
+    func testReceiveUsageCountsIncomingPerAddressPoolIncludedFailedExcluded() {
+        func tx(_ id: String, _ type: MoneroTransaction.TransactionType, _ status: MoneroTransaction.TransactionStatus, _ address: String) -> MoneroTransaction {
+            MoneroTransaction(id: id, type: type, amount: 1, fee: 0, address: address, timestamp: Date(),
+                              confirmations: nil, status: status, memo: nil, blockHeight: nil)
+        }
+        let counts = WalletManager.receiveUsageCounts(transactions: [
+            tx("a", .incoming, .confirmed, "8addrA"),
+            tx("b", .incoming, .pending, "8addrA"),
+            tx("c", .incoming, .confirmed, "8addrB"),
+            tx("d", .incoming, .failed, "8addrC"),
+            tx("e", .outgoing, .confirmed, "8addrD"),
+            tx("f", .incoming, .confirmed, ""),
+        ])
+        XCTAssertEqual(counts, ["8addrA": 2, "8addrB": 1])
+    }
+
+    func testSelectionMissingInSwitchedWalletFallsThroughToRule() {
+        // Index 7 was picked in another wallet; this wallet only has 0...2.
+        let slots = [slot(0, used: 1), slot(1, used: 1), slot(2)]
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 7, selectedBaselineCount: 0, subaddresses: slots, rotate: true), 2)
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 7, subaddresses: slots, rotate: true), 2)
+    }
 }

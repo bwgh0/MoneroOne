@@ -9,7 +9,8 @@ struct ReceiveView: View {
     @State private var requestFiatAmount = ""
     @State private var isFiatMode = false
     @State private var showShareSheet = false
-    @AppStorage("selectedSubaddressIndex") private var selectedAddressIndex: Int = 0
+    @AppStorage(WalletManager.selectedSubaddressIndexKey) private var selectedAddressIndex: Int = 0
+    @AppStorage(WalletManager.rotateReceiveAddressKey) private var rotateReceiveAddress: Bool = true
     @EnvironmentObject var priceService: PriceService
 
     /// Computes the effective address index, falling back to 0 if selected subaddress doesn't exist
@@ -17,7 +18,7 @@ struct ReceiveView: View {
     private var effectiveAddressIndex: Int {
         if selectedAddressIndex == 0 {
             return 0
-        } else if walletManager.subaddresses.contains(where: { $0.index == selectedAddressIndex }) {
+        } else if walletManager.subaddresses.contains(where: { $0.index == selectedAddressIndex && !$0.address.isEmpty }) {
             return selectedAddressIndex
         } else {
             // Subaddress doesn't exist (wallet changed or new wallet) - use primary
@@ -278,6 +279,17 @@ struct ReceiveView: View {
                                 }
                             }
 
+                            if rotateReceiveAddress {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.caption2)
+                                    Text("New address after each payment")
+                                        .font(.caption2)
+                                }
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
                             if selectedAddressIndex == 0 {
                                 HStack {
                                     Image(systemName: "exclamationmark.triangle.fill")
@@ -294,7 +306,7 @@ struct ReceiveView: View {
                         .padding()
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     }
-                    .accessibilityLabel("\(addressLabel), \(formatAddress(currentAddress))")
+                    .accessibilityLabel("\(addressLabel), \(formatAddress(currentAddress))\(rotateReceiveAddress ? ", new address after each payment" : "")")
                     .accessibilityHint("Opens address picker to change receiving address")
                     .padding(.horizontal)
 
@@ -356,8 +368,12 @@ struct ReceiveView: View {
                 ShareSheet(items: shareItems)
             }
             .onAppear {
-                // Reset to main address if selected subaddress doesn't exist
-                if selectedAddressIndex > 0 &&
+                walletManager.reconcileReceiveAddress()
+                // Rotation off: reset to the main address if the selected
+                // subaddress doesn't exist. With rotation on the manager
+                // owns the index; it may point at an address the kit has
+                // not listed yet, and resetting it here would undo that.
+                if !rotateReceiveAddress && selectedAddressIndex > 0 &&
                    !walletManager.subaddresses.contains(where: { $0.index == selectedAddressIndex && !$0.address.isEmpty }) {
                     selectedAddressIndex = 0
                 }
@@ -479,6 +495,7 @@ struct AddressPickerView: View {
                     isSelected: selectedIndex == 0,
                     showWarning: true
                 ) {
+                    walletManager.noteManualReceiveSelection(index: 0)
                     selectedIndex = 0
                     dismiss()
                 }
@@ -542,6 +559,7 @@ struct AddressPickerView: View {
                             isSelected: selectedIndex == subaddr.index,
                             showWarning: false,
                             onSelect: {
+                                walletManager.noteManualReceiveSelection(index: subaddr.index)
                                 selectedIndex = subaddr.index
                                 dismiss()
                             },

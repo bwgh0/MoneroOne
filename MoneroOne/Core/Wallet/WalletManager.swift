@@ -743,7 +743,9 @@ class WalletManager: ObservableObject {
                 confirmations: confirmations,
                 status: tx.status,
                 memo: tx.memo,
-                blockHeight: blockHeight
+                blockHeight: blockHeight,
+                destinations: tx.destinations,
+                subaddressIndex: tx.subaddressIndex
             )
         }
 

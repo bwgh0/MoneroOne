@@ -851,6 +851,75 @@ final class TransactionModelRegressionTests: XCTestCase {
         XCTAssertEqual(tx1.hashValue, tx2.hashValue)
     }
 
+    /// The memberwise defaults keep every older construction site
+    /// compiling and give a transaction with no destination data.
+    func testTransactionDefaultsToNoDestinations() {
+        let tx = MoneroTransaction(
+            id: "abc123", type: .outgoing, amount: 1, fee: 0,
+            address: "", timestamp: Date(), confirmations: nil,
+            status: .pending, memo: nil, blockHeight: nil
+        )
+        XCTAssertEqual(tx.destinations, [])
+        XCTAssertNil(tx.subaddressIndex)
+    }
+
+    // MARK: - Hardware tx snapshot format
+
+    /// A snapshot written before `destinations` and `subaddressIndex`
+    /// existed must still decode. A required field here once made every
+    /// old snapshot undecodable and the hardware tx list came back empty.
+    func testSnapshotDecodesOldFormatWithoutDestinations() throws {
+        let json = """
+        [{"id":"abc123","typeRaw":"outgoing","amount":1.5,"fee":0.001,"address":"","timestamp":700000000,"confirmations":3,"statusRaw":"confirmed","memo":null}]
+        """
+        let decoded = try JSONDecoder().decode([MoneroTransactionSnapshot].self, from: Data(json.utf8))
+        let tx = try XCTUnwrap(decoded.first).toTransaction()
+        XCTAssertEqual(tx.id, "abc123")
+        XCTAssertEqual(tx.type, .outgoing)
+        XCTAssertEqual(tx.status, .confirmed)
+        XCTAssertEqual(tx.confirmations, 3)
+        XCTAssertNil(tx.blockHeight)
+        XCTAssertEqual(tx.destinations, [])
+        XCTAssertNil(tx.subaddressIndex)
+    }
+
+    /// Destinations and the receiving subaddress index survive the trip
+    /// through the on-disk snapshot.
+    func testSnapshotRoundTripsDestinationsAndSubaddressIndex() throws {
+        // Amounts exact in binary so the JSON number path cannot drift.
+        let destinations = [
+            MoneroTransactionDestination(address: "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H", amount: 1.25),
+            MoneroTransactionDestination(address: "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A", amount: 0.125),
+        ]
+        let sent = MoneroTransaction(
+            id: "out-1", type: .outgoing, amount: 1.375, fee: 0.0625,
+            address: destinations[0].address,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+            confirmations: 12, status: .confirmed, memo: nil, blockHeight: 3_000_000,
+            destinations: destinations
+        )
+        let received = MoneroTransaction(
+            id: "in-1", type: .incoming, amount: 0.5, fee: 0,
+            address: "8BsubAddressOfThisWallet",
+            timestamp: Date(timeIntervalSince1970: 1_700_000_500),
+            confirmations: 4, status: .confirmed, memo: "rent", blockHeight: 3_000_010,
+            subaddressIndex: 3
+        )
+
+        let data = try JSONEncoder().encode([sent, received].map { MoneroTransactionSnapshot(from: $0) })
+        let back = try JSONDecoder().decode([MoneroTransactionSnapshot].self, from: data).map { $0.toTransaction() }
+
+        XCTAssertEqual(back.count, 2)
+        XCTAssertEqual(back[0].id, "out-1")
+        XCTAssertEqual(back[0].destinations, destinations)
+        XCTAssertEqual(back[0].address, destinations[0].address)
+        XCTAssertNil(back[0].subaddressIndex)
+        XCTAssertEqual(back[1].id, "in-1")
+        XCTAssertEqual(back[1].destinations, [])
+        XCTAssertEqual(back[1].subaddressIndex, 3)
+        XCTAssertEqual(back[1].address, "8BsubAddressOfThisWallet")
+    }
+
     func testTransactionTypes() {
         let incoming = MoneroTransaction.TransactionType.incoming
         let outgoing = MoneroTransaction.TransactionType.outgoing

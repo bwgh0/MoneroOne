@@ -149,6 +149,7 @@ struct SendFlowView: View {
                         try? await Task.sleep(nanoseconds: 900_000_000)
                         await MainActor.run {
                             HapticFeedback.shared.transactionSuccess()
+                            SoundFeedback.shared.playSendComplete()
                             withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                                 phase = .success(txHash: txId)
                             }
@@ -393,6 +394,7 @@ struct SendFlowView: View {
                     phase = .success(txHash: txHash)
                 }
                 HapticFeedback.shared.transactionSuccess()
+                SoundFeedback.shared.playSendComplete()
             } catch {
                 sendInProgress = false
                 let msg = friendlyErrorMessage(for: error)

@@ -1,6 +1,8 @@
 import XCTest
 import CoreLocation
 import CoreImage.CIFilterBuiltins
+import AVFoundation
+import UIKit
 @testable import MoneroOne
 
 // MARK: - Wallet Lifecycle Regression Tests
@@ -1065,5 +1067,47 @@ final class DiagnosticExportSanitizerTests: XCTestCase {
         let text = DiagnosticLog.shared.export()
         XCTAssertTrue(text.contains("Never contains:"))
         XCTAssertTrue(text.contains("wallet addresses, balances"))
+    }
+}
+
+// MARK: - Send Complete Chime
+
+final class SendCompleteSoundTests: XCTestCase {
+
+    /// The chime ships as a data asset in the app catalog and must decode into
+    /// a short player: two bell notes, well under two seconds.
+    func testSendCompleteAssetLoadsAndIsShort() throws {
+        let asset = try XCTUnwrap(
+            NSDataAsset(name: "SendComplete", bundle: .main),
+            "SendComplete data asset missing from the app bundle"
+        )
+        XCTAssertFalse(asset.data.isEmpty)
+
+        let player = try AVAudioPlayer(data: asset.data)
+        XCTAssertGreaterThan(player.duration, 0.5)
+        XCTAssertLessThan(player.duration, 1.5)
+    }
+
+    /// Sounds default to on and follow the Settings toggle's key.
+    @MainActor
+    func testSendSoundDefaultsToOnAndFollowsSetting() {
+        let key = SoundFeedback.sendSoundEnabledKey
+        let previous = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        UserDefaults.standard.removeObject(forKey: key)
+        XCTAssertTrue(SoundFeedback.shared.isEnabled)
+
+        UserDefaults.standard.set(false, forKey: key)
+        XCTAssertFalse(SoundFeedback.shared.isEnabled)
+
+        UserDefaults.standard.set(true, forKey: key)
+        XCTAssertTrue(SoundFeedback.shared.isEnabled)
     }
 }

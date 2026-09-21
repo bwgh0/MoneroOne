@@ -3,38 +3,19 @@ import SwiftUI
 struct CurrencySettingsView: View {
     @ObservedObject var priceService: PriceService
 
-    private let currencies: [(code: String, name: String)] = [
-        ("usd", "US Dollar"),
-        ("eur", "Euro"),
-        ("gbp", "British Pound"),
-        ("cad", "Canadian Dollar"),
-        ("aud", "Australian Dollar"),
-        ("jpy", "Japanese Yen"),
-        ("cny", "Chinese Yuan"),
-        ("try", "Turkish Lira"),
-        ("rub", "Russian Ruble"),
-        ("chf", "Swiss Franc"),
-        ("brl", "Brazilian Real"),
-        ("inr", "Indian Rupee"),
-        ("krw", "South Korean Won"),
-        ("mxn", "Mexican Peso"),
-        ("pln", "Polish Złoty"),
-        ("uah", "Ukrainian Hryvnia")
-    ]
-
     var body: some View {
         List {
             Section {
-                ForEach(currencies, id: \.code) { currency in
+                ForEach(FiatCurrency.all) { currency in
                     Button {
                         priceService.setCurrency(currency.code)
                     } label: {
                         HStack {
-                            Text(flagEmoji(for: currency.code))
+                            Text(currency.flag)
                                 .font(.title2)
 
                             VStack(alignment: .leading) {
-                                Text(currency.name)
+                                Text(currency.displayName)
                                     .foregroundColor(.primary)
                                 Text(currency.code.uppercased())
                                     .font(.caption)
@@ -111,28 +92,6 @@ struct CurrencySettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await priceService.fetchPrice()
-        }
-    }
-
-    private func flagEmoji(for code: String) -> String {
-        switch code {
-        case "usd": return "🇺🇸"
-        case "eur": return "🇪🇺"
-        case "gbp": return "🇬🇧"
-        case "cad": return "🇨🇦"
-        case "aud": return "🇦🇺"
-        case "jpy": return "🇯🇵"
-        case "cny": return "🇨🇳"
-        case "try": return "🇹🇷"
-        case "rub": return "🇷🇺"
-        case "chf": return "🇨🇭"
-        case "brl": return "🇧🇷"
-        case "inr": return "🇮🇳"
-        case "krw": return "🇰🇷"
-        case "mxn": return "🇲🇽"
-        case "pln": return "🇵🇱"
-        case "uah": return "🇺🇦"
-        default: return "💵"
         }
     }
 }

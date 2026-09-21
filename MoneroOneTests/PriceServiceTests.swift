@@ -46,18 +46,74 @@ final class PriceServiceTests: XCTestCase {
 
     // MARK: - Currency Tests
 
+    /// The original sixteen, in the order the picker has always listed them.
+    private let originalCodes = ["usd", "eur", "gbp", "cad", "aud", "jpy", "cny", "try", "rub", "chf", "brl", "inr", "krw", "mxn", "pln", "uah"]
+    private let addedCodes = ["nok", "dkk", "ron", "kes", "bam", "mad"]
+
     func testSupportedCurrenciesExist() async {
-        XCTAssertFalse(PriceService.supportedCurrencies.isEmpty)
+        XCTAssertEqual(PriceService.supportedCurrencies.count, 22)
+        XCTAssertEqual(PriceService.supportedCurrencies, originalCodes + addedCodes, "existing order kept, new six appended")
+        XCTAssertEqual(PriceService.supportedCurrencies, FiatCurrency.all.map(\.code))
         XCTAssertTrue(PriceService.supportedCurrencies.contains("usd"))
         XCTAssertTrue(PriceService.supportedCurrencies.contains("eur"))
         XCTAssertTrue(PriceService.supportedCurrencies.contains("gbp"))
     }
 
     func testCurrencySymbolsExist() async {
+        XCTAssertEqual(PriceService.currencySymbols.count, 22)
         XCTAssertEqual(PriceService.currencySymbols["usd"], "$")
         XCTAssertEqual(PriceService.currencySymbols["eur"], "€")
         XCTAssertEqual(PriceService.currencySymbols["gbp"], "£")
         XCTAssertEqual(PriceService.currencySymbols["jpy"], "¥")
+        XCTAssertEqual(PriceService.currencySymbols["pln"], "zł")
+        XCTAssertEqual(PriceService.currencySymbols["nok"], "kr")
+        XCTAssertEqual(PriceService.currencySymbols["dkk"], "kr")
+        XCTAssertEqual(PriceService.currencySymbols["ron"], "lei")
+        XCTAssertEqual(PriceService.currencySymbols["kes"], "KSh")
+        XCTAssertEqual(PriceService.currencySymbols["bam"], "KM")
+        XCTAssertEqual(PriceService.currencySymbols["mad"], "MAD")
+    }
+
+    func testEveryCurrencyHasSymbolFlagAndName() {
+        for currency in FiatCurrency.all {
+            XCTAssertFalse(currency.symbol.isEmpty, currency.code)
+            XCTAssertFalse(currency.flag.isEmpty, currency.code)
+            XCTAssertFalse(currency.displayName.isEmpty, currency.code)
+        }
+        XCTAssertEqual(FiatCurrency.named("pln")?.displayName, "Polish Złoty")
+        XCTAssertEqual(FiatCurrency.named("nok")?.flag, "🇳🇴")
+        XCTAssertEqual(FiatCurrency.named("bam")?.displayName, "Bosnian Mark")
+    }
+
+    func testCurrencyCodesAreUniqueAndLowercase() {
+        let codes = FiatCurrency.all.map(\.code)
+        XCTAssertEqual(Set(codes).count, codes.count, "no duplicate codes")
+        for code in codes {
+            XCTAssertEqual(code, code.lowercased(), code)
+            XCTAssertEqual(code.count, 3, code)
+        }
+    }
+
+    func testNamedLooksUpByCodeInEitherCase() {
+        XCTAssertEqual(FiatCurrency.named("nok")?.code, "nok")
+        XCTAssertEqual(FiatCurrency.named("NOK")?.code, "nok")
+        XCTAssertNil(FiatCurrency.named("xyz"))
+    }
+
+    /// `FiatCurrency.symbol(for:)` is what PriceWidget draws with. Every code
+    /// the app can select must resolve to the same symbol there, and never to
+    /// the old "$" fallback.
+    func testWidgetSymbolMatchesAppSymbolForEveryCode() {
+        for code in PriceService.supportedCurrencies {
+            let widgetSymbol = FiatCurrency.symbol(for: code)
+            XCTAssertEqual(widgetSymbol, PriceService.currencySymbols[code], code)
+            priceService.selectedCurrency = code
+            XCTAssertEqual(priceService.currencySymbol, widgetSymbol, code)
+            if code != "usd" {
+                XCTAssertNotEqual(widgetSymbol, "$", "\(code) must not fall back to $")
+            }
+        }
+        XCTAssertEqual(FiatCurrency.symbol(for: "xyz"), "XYZ", "an unknown code shows as itself")
     }
 
     func testCurrencySymbolProperty() async {
@@ -81,6 +137,78 @@ final class PriceServiceTests: XCTestCase {
 
         let saved = UserDefaults.standard.string(forKey: "selectedCurrency")
         XCTAssertEqual(saved, "jpy")
+    }
+
+    // MARK: - Missing quote
+
+    private func response(_ quotes: [String: Double]) -> PriceResponse {
+        PriceResponse(
+            quotes: quotes.mapValues { PriceQuote(price: $0, change24h: 1.5) },
+            timestamp: Date().timeIntervalSince1970
+        )
+    }
+
+    func testMissingQuoteIsReportedWithoutApplyingAnything() {
+        priceService.selectedCurrency = "nok"
+        priceService.usdToSelectedRate = 1.0
+        XCTAssertThrowsError(try priceService.applyPriceResponse(response(["usd": 500]))) { error in
+            guard case PriceError.missingQuote(let currency) = error else {
+                return XCTFail("expected missingQuote, got \(error)")
+            }
+            XCTAssertEqual(currency, "nok")
+        }
+        XCTAssertNil(priceService.xmrPrice)
+        XCTAssertNil(priceService.lastUpdated)
+        XCTAssertEqual(priceService.usdToSelectedRate, 1.0)
+    }
+
+    func testResponseWithQuoteAppliesPriceAndRate() throws {
+        priceService.selectedCurrency = "nok"
+        priceService.xmrPrice = nil
+        try priceService.applyPriceResponse(response(["usd": 500, "nok": 5000]))
+        XCTAssertEqual(priceService.xmrPrice, 5000)
+        XCTAssertEqual(priceService.priceChange24h, 1.5)
+        XCTAssertEqual(priceService.usdToSelectedRate, 10, accuracy: 1e-9)
+        XCTAssertNotNil(priceService.lastUpdated)
+    }
+
+    func testMissingQuoteIsNotRetried() async {
+        var attempts = 0
+        do {
+            try await priceService.fetchWithRetry(retries: 3) { () async throws -> Void in
+                attempts += 1
+                throw PriceError.missingQuote(currency: "nok")
+            }
+            XCTFail("expected a throw")
+        } catch {
+            guard case PriceError.missingQuote(let currency) = error else {
+                return XCTFail("expected missingQuote, got \(error)")
+            }
+            XCTAssertEqual(currency, "nok")
+        }
+        XCTAssertEqual(attempts, 1, "a missing quote is final: no backoff, no second request")
+    }
+
+    func testTransientErrorIsStillRetried() async {
+        var attempts = 0
+        do {
+            try await priceService.fetchWithRetry(retries: 2) { () async throws -> Void in
+                attempts += 1
+                throw URLError(.timedOut)
+            }
+            XCTFail("expected a throw")
+        } catch {
+            XCTAssertEqual((error as? URLError)?.code, .timedOut)
+        }
+        XCTAssertEqual(attempts, 2)
+    }
+
+    func testSetCurrencyDropsThePreviousCurrencyRate() {
+        priceService.selectedCurrency = "eur"
+        priceService.usdToSelectedRate = 0.92
+        priceService.setCurrency("nok")
+        XCTAssertEqual(priceService.usdToSelectedRate, 1.0, "no EUR rate left behind for a NOK chart")
+        XCTAssertNil(priceService.xmrPrice)
     }
 
     // MARK: - Formatting Tests

@@ -22,7 +22,6 @@ struct NodeSettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                .tint(.orange)
 
                 // Clearnet default nodes
                 ForEach(nodeManager.currentDefaultNodes) { node in
@@ -66,7 +65,6 @@ struct NodeSettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                .tint(.orange)
 
                 if torEnabled {
                     ForEach(NodeManager.defaultProxies) { proxy in

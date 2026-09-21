@@ -118,7 +118,6 @@ struct SyncSettingsView: View {
                             .foregroundColor(.green)
                     }
                 }
-                .tint(.green)
 
                 if syncManager.isEnabled {
                     // Only show permission status when there's a problem

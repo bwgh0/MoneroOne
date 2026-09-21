@@ -28,7 +28,6 @@ struct PriceAlertsView: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.orange)
                         .controlSize(.small)
                     }
                     .padding(.vertical, 4)
@@ -148,7 +147,6 @@ struct AlertRow: View {
                 set: { _ in onToggle() }
             ))
             .labelsHidden()
-            .tint(.orange)
         }
         .opacity(alert.isEnabled ? 1.0 : 0.6)
     }

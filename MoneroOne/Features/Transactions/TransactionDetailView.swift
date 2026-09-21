@@ -4,6 +4,8 @@ import SafariServices
 struct TransactionDetailView: View {
     let transaction: MoneroTransaction
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var priceService: PriceService
+    @EnvironmentObject var priceHistoryService: PriceHistoryService
     @AppStorage("isTestnet") private var isTestnet = false
 
     @State private var txKey: String?
@@ -48,6 +50,33 @@ struct TransactionDetailView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Amount: \(transaction.type == .incoming ? "plus" : "minus") \(XMRFormatter.format(transaction.amount)) XMR")
+
+                // Fiat value at the time it happened, from price history;
+                // hidden until the history has loaded.
+                if let valueAtTime = priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+                    .map({ priceService.formatFiat($0) }) {
+                    let label = transaction.type == .incoming ? "Value when received" : "Value when sent"
+                    HStack {
+                        Text(label)
+                        Spacer()
+                        Text(valueAtTime)
+                            .foregroundColor(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(label): \(valueAtTime)")
+                }
+
+                // Fiat value at the live price; hidden until one is known.
+                if let valueToday = priceService.formatFiatValue(transaction.amount) {
+                    HStack {
+                        Text("Value today")
+                        Spacer()
+                        Text(valueToday)
+                            .foregroundColor(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Value today: \(valueToday)")
+                }
 
                 if transaction.type == .outgoing {
                     HStack {

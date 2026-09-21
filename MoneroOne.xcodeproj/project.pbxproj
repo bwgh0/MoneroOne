@@ -65,6 +65,7 @@
 		A2173E3306237E1F4E1C9AB9 /* MoneroWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE53A66511AA0C64737C553 /* MoneroWallet.swift */; };
 		A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C28FF15F222C2E02553D871 /* TransactionsPanelView.swift */; };
 		AD0F7D6C1B7BB344FE46EEEA /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */; };
+		2DF02AC4B9C24E1FB4AF7222 /* PriceHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF5F81340EF449388897BC2B /* PriceHistoryService.swift */; };
 		AED7CF4AF876D3B29142BC6C /* BiometricAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4848074569E3E47EE8FE7F31 /* BiometricAuthManager.swift */; };
 		AF18D865D24B46B2E5F6C410 /* QuickActionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23FC248118281F12977CA025 /* QuickActionsCard.swift */; };
 		AF3420AD18242AB7B017171D /* MoneroOneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DA1C3CAB861DC98E98BED4 /* MoneroOneApp.swift */; };
@@ -102,6 +103,7 @@
 		F65EECC001BAE93898D97CB6 /* WidgetSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41BC6A6608335755705B5E8A /* WidgetSettingsView.swift */; };
 		F6ABA0841FC56C21D8B64743 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE0BF27D62647071D8D9F0E /* SettingsView.swift */; };
 		F96859B54E738595BB0571EC /* PriceServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */; };
+		761D4B62BC2444DDB2ED62F1 /* PriceHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED5463772B74881993C2E47 /* PriceHistoryTests.swift */; };
 		FB5F8533851FF83B35C4E6A6 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E494E802F7171F1946F2FA45 /* QRScannerView.swift */; };
 		FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF818FE69F2EC0B444D26754 /* QRCodeView.swift */; };
 		FF659956FD9D9759B11F49F9 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B332C777DDD3D470FA081B35 /* WidgetData.swift */; };
@@ -188,6 +190,7 @@
 		093E2F472F307A6400A0715B /* monero-one.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "monero-one.icon"; sourceTree = "<group>"; };
 		09AA838F4EF37023CE4794A9 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceServiceTests.swift; sourceTree = "<group>"; };
+		9ED5463772B74881993C2E47 /* PriceHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceHistoryTests.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000001 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A000000B /* SoundFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundFeedback.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000C20P /* SecureClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureClipboard.swift; sourceTree = "<group>"; };
@@ -283,6 +286,7 @@
 		F2DA1C3CAB861DC98E98BED4 /* MoneroOneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneApp.swift; sourceTree = "<group>"; };
 		F9AB3AE90F479675274F4E9D /* MoneroOneTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoneroOneTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
+		EF5F81340EF449388897BC2B /* PriceHistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceHistoryService.swift; sourceTree = "<group>"; };
 		FF6022942E141D54562F131E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		PRICEWIDGETREF123456789A /* PriceWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceWidget.swift; sourceTree = "<group>"; };
 		XMRFORMATREF12345678ABCD /* XMRFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XMRFormatter.swift; sourceTree = "<group>"; };
@@ -349,6 +353,7 @@
 				6A5A1C5565C8122238D41E47 /* NetworkMonitorTests.swift */,
 				70806977F6367D918B532021 /* NodeManagerTests.swift */,
 				09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */,
+				9ED5463772B74881993C2E47 /* PriceHistoryTests.swift */,
 				C28AE04350FBA393B5C0220F /* SecurityAuditTests.swift */,
 				A1B2C3D4E5F60002DEADBEEF /* SecurityAuditFixTests.swift */,
 				REGR3SS10NT3STS00000002 /* RegressionTests.swift */,
@@ -551,6 +556,7 @@
 				C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */,
 				8689F5157606DB44F6B09ECD /* PriceAlertService.swift */,
 				FCB0D885C26F0A318A8B6EA6 /* PriceService.swift */,
+				EF5F81340EF449388897BC2B /* PriceHistoryService.swift */,
 				B970167B0BFA69D181797B60 /* SyncActivityManager.swift */,
 			);
 			path = Services;
@@ -882,6 +888,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				CEF72F50673F6D89DA08FB52 /* NetworkMonitorTests.swift in Sources */,
 				6B3AD2E53A2A967DFDB3A407 /* NodeManagerTests.swift in Sources */,
 				F96859B54E738595BB0571EC /* PriceServiceTests.swift in Sources */,
+				761D4B62BC2444DDB2ED62F1 /* PriceHistoryTests.swift in Sources */,
 				282C36ABD1B88FEEFDF153A6 /* SecurityAuditTests.swift in Sources */,
 				A1B2C3D4E5F60001DEADBEEF /* SecurityAuditFixTests.swift in Sources */,
 				REGR3SS10NT3STS00000001 /* RegressionTests.swift in Sources */,
@@ -959,6 +966,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				79AC7BE8045740D2F375CDAD /* PriceAlertsView.swift in Sources */,
 				7EFE00922F8A910BDA499EC1 /* PriceChartView.swift in Sources */,
 				AD0F7D6C1B7BB344FE46EEEA /* PriceService.swift in Sources */,
+				2DF02AC4B9C24E1FB4AF7222 /* PriceHistoryService.swift in Sources */,
 				FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */,
 				FB5F8533851FF83B35C4E6A6 /* QRScannerView.swift in Sources */,
 				AF18D865D24B46B2E5F6C410 /* QuickActionsCard.swift in Sources */,

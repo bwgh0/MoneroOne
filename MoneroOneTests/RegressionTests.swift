@@ -1180,3 +1180,334 @@ final class SendCompleteSoundTests: XCTestCase {
         XCTAssertTrue(SoundFeedback.shared.isEnabled)
     }
 }
+
+// MARK: - Transaction Screen Logic Tests
+
+/// The pure functions behind the All Transactions list (filter, totals,
+/// receiving-address options) and the transaction detail screen
+/// (received-on label, sent-to rows, Copy All block).
+final class TransactionScreenLogicTests: XCTestCase {
+
+    private typealias FilterType = TransactionListView.FilterType
+
+    private func tx(
+        _ id: String,
+        _ type: MoneroTransaction.TransactionType,
+        amount: Decimal,
+        fee: Decimal = 0,
+        address: String = "",
+        status: MoneroTransaction.TransactionStatus = .confirmed,
+        confirmations: Int? = 12,
+        memo: String? = nil,
+        destinations: [MoneroTransactionDestination] = [],
+        subaddressIndex: Int? = nil
+    ) -> MoneroTransaction {
+        MoneroTransaction(
+            id: id, type: type, amount: amount, fee: fee,
+            address: address, timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+            confirmations: confirmations, status: status, memo: memo,
+            blockHeight: nil, destinations: destinations,
+            subaddressIndex: subaddressIndex
+        )
+    }
+
+    private let primary = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
+    private let sub2 = "8Bsub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2sub2"
+    private let sub3 = "8Bsub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3sub3"
+    private let dest1 = "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H"
+    private let dest2 = "42dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2dest2d"
+
+    private var subaddresses: [SubaddressSummary] {
+        [
+            SubaddressSummary(index: 0, address: primary, label: ""),
+            SubaddressSummary(index: 1, address: "8Bsub1", label: "", transactionsCount: 0),
+            SubaddressSummary(index: 2, address: sub2, label: "Work", transactionsCount: 0),
+            SubaddressSummary(index: 3, address: sub3, label: "🎁 Gifts", transactionsCount: 2),
+            SubaddressSummary(index: 4, address: "8Bsub4", label: "", transactionsCount: 0),
+            SubaddressSummary(index: 5, address: "", label: "Ghost", transactionsCount: 9)
+        ]
+    }
+
+    private var sample: [MoneroTransaction] {
+        [
+            tx("in-main", .incoming, amount: 1.0, address: primary, subaddressIndex: 0),
+            tx("in-sub3", .incoming, amount: 0.5, address: sub3, memo: "Birthday", subaddressIndex: 3),
+            tx("in-sub3-pending", .incoming, amount: 0.25, address: sub3, status: .pending, confirmations: 0, subaddressIndex: 3),
+            tx("out-one", .outgoing, amount: 2.0, fee: 0.001, address: dest1,
+               destinations: [MoneroTransactionDestination(address: dest1, amount: 2.0)]),
+            tx("out-failed", .outgoing, amount: 9.0, fee: 0.5, status: .failed, confirmations: 0),
+            tx("out-pending", .outgoing, amount: 0.1, fee: 0.002, status: .pending, confirmations: 0)
+        ]
+    }
+
+    private func ids(_ type: FilterType = .all, receiving: Int? = nil, search: String = "") -> [String] {
+        TransactionListLogic.filter(sample, type: type, receivingIndex: receiving, search: search).map(\.id)
+    }
+
+    // MARK: Filter predicate
+
+    func testFilterDefaultsKeepEverything() {
+        XCTAssertEqual(ids(), sample.map(\.id))
+    }
+
+    func testFilterByType() {
+        XCTAssertEqual(ids(.incoming), ["in-main", "in-sub3", "in-sub3-pending"])
+        XCTAssertEqual(ids(.outgoing), ["out-one", "out-failed", "out-pending"])
+        XCTAssertEqual(ids(.pending), ["in-sub3-pending", "out-pending"])
+    }
+
+    func testReceivingFilterKeepsIncomingOnThatIndexOnly() {
+        XCTAssertEqual(ids(receiving: 3), ["in-sub3", "in-sub3-pending"])
+        XCTAssertEqual(ids(receiving: 0), ["in-main"])
+        XCTAssertEqual(ids(receiving: 7), [])
+    }
+
+    func testReceivingFilterComposesWithType() {
+        XCTAssertEqual(ids(.pending, receiving: 3), ["in-sub3-pending"])
+        XCTAssertEqual(ids(.incoming, receiving: 3), ["in-sub3", "in-sub3-pending"])
+        // Sends are spent from the account, never from one subaddress.
+        XCTAssertEqual(ids(.outgoing, receiving: 3), [])
+    }
+
+    func testSearchMatchesIdAddressAndMemoCaseInsensitively() {
+        XCTAssertEqual(ids(search: "OUT-ONE"), ["out-one"])
+        XCTAssertEqual(ids(search: "birthday"), ["in-sub3"])
+        XCTAssertEqual(ids(search: String(dest1.prefix(12))), ["out-one"])
+        XCTAssertEqual(ids(search: "no such thing"), [])
+    }
+
+    func testSearchComposesWithTypeAndReceivingFilter() {
+        XCTAssertEqual(ids(.incoming, receiving: 3, search: "pending"), ["in-sub3-pending"])
+        XCTAssertEqual(ids(.outgoing, search: "pending"), ["out-pending"])
+        XCTAssertEqual(ids(.incoming, receiving: 0, search: "sub3"), [])
+    }
+
+    // MARK: Totals
+
+    func testTotalsSumReceivedAndSentIncludingFee() {
+        let totals = TransactionListLogic.totals(of: sample)
+        XCTAssertEqual(totals.received, Decimal(string: "1.75"))
+        // out-one 2.0 + 0.001, out-pending 0.1 + 0.002; out-failed skipped.
+        XCTAssertEqual(totals.sent, Decimal(string: "2.103"))
+        XCTAssertEqual(totals.count, 5)
+    }
+
+    func testTotalsExcludeFailedButIncludePending() {
+        let failedOnly = TransactionListLogic.totals(of: [
+            tx("f", .outgoing, amount: 3, fee: 1, status: .failed, confirmations: 0),
+            tx("g", .incoming, amount: 3, status: .failed, confirmations: 0)
+        ])
+        XCTAssertEqual(failedOnly, .empty)
+
+        let pending = TransactionListLogic.totals(of: [
+            tx("p", .incoming, amount: 0.4, status: .pending, confirmations: 0),
+            tx("q", .outgoing, amount: 0.6, fee: 0.01, status: .pending, confirmations: 0)
+        ])
+        XCTAssertEqual(pending.count, 2)
+        XCTAssertEqual(pending.received, Decimal(string: "0.4"))
+        XCTAssertEqual(pending.sent, Decimal(string: "0.61"))
+    }
+
+    func testTotalsOfFilteredSetFollowTheFilter() {
+        let onSub3 = TransactionListLogic.filter(sample, type: .all, receivingIndex: 3, search: "")
+        let totals = TransactionListLogic.totals(of: onSub3)
+        XCTAssertEqual(totals.count, 2)
+        XCTAssertEqual(totals.received, Decimal(string: "0.75"))
+        XCTAssertEqual(totals.sent, 0)
+    }
+
+    // MARK: Receiving-address options
+
+    func testReceivingAddressOptionsSkipUnusedUnlabeledSpares() {
+        let options = TransactionListLogic.receivingAddressOptions(subaddresses: subaddresses, transactions: [])
+        XCTAssertEqual(options.map(\.index), [0, 2, 3])
+        XCTAssertEqual(options.map(\.name), ["Main Address", "Work", "🎁 Gifts"])
+    }
+
+    func testReceivingAddressOptionsIncludeIndicesSeenInTransactions() {
+        let options = TransactionListLogic.receivingAddressOptions(
+            subaddresses: subaddresses,
+            transactions: [tx("x", .incoming, amount: 1, subaddressIndex: 4)]
+        )
+        XCTAssertEqual(options.map(\.index), [0, 2, 3, 4])
+        XCTAssertEqual(options.last?.name, "Subaddress #4")
+    }
+
+    func testReceivingAddressOptionsAlwaysStartWithMainAddress() {
+        let options = TransactionListLogic.receivingAddressOptions(subaddresses: [], transactions: [])
+        XCTAssertEqual(options.map(\.name), ["Main Address"])
+    }
+
+    // MARK: Summary title
+
+    func testSummaryTitleWording() {
+        XCTAssertEqual(TransactionListLogic.summaryTitle(count: 1, type: .all, receivingName: nil), "1 transaction")
+        XCTAssertEqual(TransactionListLogic.summaryTitle(count: 12, type: .all, receivingName: nil), "12 transactions")
+        XCTAssertEqual(TransactionListLogic.summaryTitle(count: 3, type: .incoming, receivingName: "Main Address"), "3 received transactions on Main Address")
+        XCTAssertEqual(TransactionListLogic.summaryTitle(count: 0, type: .pending, receivingName: nil), "0 pending transactions")
+        XCTAssertEqual(TransactionListLogic.summaryTitle(count: 2, type: .outgoing, receivingName: nil), "2 sent transactions")
+    }
+
+    // MARK: Subaddress naming
+
+    func testSubaddressDisplayNameMatchesThePicker() {
+        XCTAssertEqual(SubaddressName.display(index: 0, label: "ignored"), "Main Address")
+        XCTAssertEqual(SubaddressName.display(index: 3, label: ""), "Subaddress #3")
+        XCTAssertEqual(SubaddressName.display(index: 3, label: "Gifts"), "Gifts")
+        XCTAssertEqual(SubaddressName.display(index: 3, label: "🎁 Gifts"), "🎁 Gifts")
+        XCTAssertEqual(SubaddressName.display(index: 3, label: "🎁"), "🎁 Subaddress #3")
+    }
+
+    // MARK: Received-on label
+
+    func testReceivedOnLabelUsesSubaddressIndexFirst() {
+        func label(_ index: Int?, address: String = "") -> String? {
+            TransactionDetailLogic.receivedOnLabel(
+                subaddressIndex: index, address: address,
+                primaryAddress: primary, subaddresses: subaddresses
+            )
+        }
+        XCTAssertEqual(label(0), "Main Address")
+        XCTAssertEqual(label(2), "Work")
+        XCTAssertEqual(label(3), "🎁 Gifts")
+        XCTAssertEqual(label(4), "Subaddress #4")
+        XCTAssertEqual(label(42), "Subaddress #42")
+        // The index wins over a stale address.
+        XCTAssertEqual(label(2, address: primary), "Work")
+    }
+
+    func testReceivedOnLabelFallsBackToAddressMatch() {
+        func label(_ address: String) -> String? {
+            TransactionDetailLogic.receivedOnLabel(
+                subaddressIndex: nil, address: address,
+                primaryAddress: primary, subaddresses: subaddresses
+            )
+        }
+        XCTAssertEqual(label(primary), "Main Address")
+        XCTAssertEqual(label(sub2), "Work")
+        XCTAssertEqual(label(sub3), "🎁 Gifts")
+        XCTAssertEqual(label("8Bunknown"), "Subaddress")
+        XCTAssertNil(label(""))
+    }
+
+    func testReceivedOnAddressResolvesFromIndexWhenRowHasNone() {
+        func address(_ index: Int?, address: String = "") -> String? {
+            TransactionDetailLogic.receivedOnAddress(
+                subaddressIndex: index, address: address,
+                primaryAddress: primary, subaddresses: subaddresses
+            )
+        }
+        XCTAssertEqual(address(3, address: sub3), sub3)
+        XCTAssertEqual(address(0), primary)
+        XCTAssertEqual(address(2), sub2)
+        XCTAssertNil(address(5))
+        XCTAssertNil(address(nil))
+    }
+
+    // MARK: Sent-to rows
+
+    func testSentToRowsPerDestination() {
+        let single = TransactionDetailLogic.sentToRows(
+            destinations: [MoneroTransactionDestination(address: dest1, amount: 2)],
+            fallbackAddress: dest1
+        )
+        XCTAssertEqual(single, [SentToRow(label: "Sent to", amountLabel: nil, address: dest1)])
+
+        let two = TransactionDetailLogic.sentToRows(
+            destinations: [
+                MoneroTransactionDestination(address: dest1, amount: 1),
+                MoneroTransactionDestination(address: dest2, amount: 0.5)
+            ],
+            fallbackAddress: dest1
+        )
+        XCTAssertEqual(two.map(\.label), ["Sent to (1 of 2)", "Sent to (2 of 2)"])
+        XCTAssertEqual(two.map(\.amountLabel), ["1.0000 XMR", "0.5000 XMR"])
+        XCTAssertEqual(two.map(\.address), [dest1, dest2])
+    }
+
+    func testSentToRowsFallBackToAddressThenToNothing() {
+        let legacy = TransactionDetailLogic.sentToRows(destinations: [], fallbackAddress: dest1)
+        XCTAssertEqual(legacy, [SentToRow(label: "Sent to", amountLabel: nil, address: dest1)])
+        XCTAssertTrue(TransactionDetailLogic.sentToRows(destinations: [], fallbackAddress: "").isEmpty)
+    }
+
+    // MARK: Copy All
+
+    private func lines(
+        _ transaction: MoneroTransaction,
+        receivedOnLabel: String? = nil,
+        receivedOnAddress: String? = nil,
+        txKey: String? = nil
+    ) -> [TransactionDetailLine] {
+        TransactionDetailLogic.detailLines(
+            transaction: transaction,
+            dateText: "20 September 2026 at 10:00:00",
+            receivedOnLabel: receivedOnLabel,
+            receivedOnAddress: receivedOnAddress,
+            sentTo: TransactionDetailLogic.sentToRows(
+                destinations: transaction.destinations,
+                fallbackAddress: transaction.type == .outgoing ? transaction.address : ""
+            ),
+            txKey: txKey,
+            explorerURL: URL(string: "https://xmrchain.net/tx/\(transaction.id)")
+        )
+    }
+
+    func testCopyAllOutgoingOrderAndDestinations() {
+        let sent = tx(
+            "out-two", .outgoing, amount: 1.5, fee: 0.00001, address: dest1,
+            memo: "Rent",
+            destinations: [
+                MoneroTransactionDestination(address: dest1, amount: 1),
+                MoneroTransactionDestination(address: dest2, amount: 0.5)
+            ]
+        )
+        let result = lines(sent, txKey: "deadbeef")
+        XCTAssertEqual(result.map(\.label), [
+            "Type", "Amount", "Fee", "Status", "Confirmations", "Date", "Memo",
+            "Transaction ID",
+            "Sent to (1 of 2), 1.0000 XMR", "Sent to (2 of 2), 0.5000 XMR",
+            "Transaction Key", "Block Explorer"
+        ])
+        XCTAssertEqual(result[0].value, "Sent")
+        XCTAssertEqual(result[1].value, "-1.5000 XMR")
+        XCTAssertEqual(result[2].value, "0.00001 XMR")
+        XCTAssertEqual(result[3].value, "Confirmed")
+        XCTAssertEqual(result[4].value, "12")
+        XCTAssertEqual(result[6].value, "Rent")
+        XCTAssertEqual(result[8].value, dest1)
+        XCTAssertEqual(result[9].value, dest2)
+        XCTAssertEqual(result[10].value, "deadbeef")
+        XCTAssertEqual(result[11].value, "https://xmrchain.net/tx/out-two")
+        XCTAssertEqual(result.filter(\.isSecret).map(\.label), ["Transaction Key"])
+    }
+
+    func testCopyAllOmitsMissingFields() {
+        let incoming = tx("in-x", .incoming, amount: 0.75, address: sub3, confirmations: nil, subaddressIndex: 3)
+        let result = lines(incoming, receivedOnLabel: "🎁 Gifts", receivedOnAddress: sub3)
+        XCTAssertEqual(result.map(\.label), [
+            "Type", "Amount", "Date", "Transaction ID", "Received on (🎁 Gifts)", "Block Explorer"
+        ])
+        XCTAssertEqual(result[0].value, "Received")
+        XCTAssertEqual(result[1].value, "+0.7500 XMR")
+        XCTAssertEqual(result[4].value, sub3)
+        XCTAssertFalse(result.contains(where: \.isSecret))
+    }
+
+    func testCopyAllRestoredOutgoingExplainsMissingRecipient() {
+        let restored = tx("out-old", .outgoing, amount: 1, fee: 0.001)
+        let result = lines(restored)
+        XCTAssertEqual(result.map(\.label), [
+            "Type", "Amount", "Fee", "Status", "Confirmations", "Date", "Transaction ID", "Recipient", "Block Explorer"
+        ])
+        XCTAssertEqual(result[7].value, "Not available for transactions sent before this wallet was restored")
+    }
+
+    func testCopyAllTextIsOneLabelledLinePerField() {
+        let text = TransactionDetailLogic.copyAllText([
+            TransactionDetailLine(label: "Type", value: "Sent"),
+            TransactionDetailLine(label: "Transaction ID", value: "abc")
+        ])
+        XCTAssertEqual(text, "Type: Sent\nTransaction ID: abc")
+    }
+}

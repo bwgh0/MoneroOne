@@ -22,8 +22,8 @@ struct BalanceCard: View {
 
     /// Calculate 24h price change from 1D chart data (same as chart views)
     private var priceChange24h: Double? {
-        guard let dayData = priceService.chartDataCache["1D"],
-              dayData.count >= 2,
+        let dayData = priceService.chartData(for: "1D")
+        guard dayData.count >= 2,
               let firstPrice = dayData.first?.price,
               let lastPrice = dayData.last?.price,
               firstPrice > 0 else { return nil }

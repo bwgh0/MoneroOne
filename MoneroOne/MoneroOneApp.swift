@@ -124,6 +124,11 @@ struct MoneroOneApp: App {
                 schedulePriceCheck()
             }
         case .active:
+            // A chart left open across a long background is stale; the live
+            // tip would draw one long straight segment out to "now".
+            if walletManager.hasWallet {
+                Task { await priceService.refreshIfStale() }
+            }
             // Check if we should lock based on time in background
             if walletManager.isUnlocked, let bgTime = backgroundTime, autoLockMinutes > 0 {
                 let elapsed = Date().timeIntervalSince(bgTime)

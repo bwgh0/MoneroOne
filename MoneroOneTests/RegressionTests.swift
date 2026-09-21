@@ -1437,7 +1437,9 @@ final class TransactionScreenLogicTests: XCTestCase {
         _ transaction: MoneroTransaction,
         receivedOnLabel: String? = nil,
         receivedOnAddress: String? = nil,
-        txKey: String? = nil
+        txKey: String? = nil,
+        valueAtTime: String? = nil,
+        valueToday: String? = nil
     ) -> [TransactionDetailLine] {
         TransactionDetailLogic.detailLines(
             transaction: transaction,
@@ -1449,8 +1451,25 @@ final class TransactionScreenLogicTests: XCTestCase {
                 fallbackAddress: transaction.type == .outgoing ? transaction.address : ""
             ),
             txKey: txKey,
-            explorerURL: URL(string: "https://xmrchain.net/tx/\(transaction.id)")
+            explorerURL: URL(string: "https://xmrchain.net/tx/\(transaction.id)"),
+            valueAtTime: valueAtTime,
+            valueToday: valueToday
         )
+    }
+
+    func testCopyAllIncludesFiatValuesWhenKnown() {
+        let received = tx("in-fiat", .incoming, amount: 2, fee: 0, address: dest1)
+        let result = lines(received, valueAtTime: "$1,000.00", valueToday: "$1,130.70")
+        let labels = result.map(\.label)
+        XCTAssertEqual(Array(labels.prefix(4)), ["Type", "Amount", "Value when received", "Value today"])
+        XCTAssertEqual(result[2].value, "$1,000.00")
+        XCTAssertEqual(result[3].value, "$1,130.70")
+
+        let sent = tx("out-fiat", .outgoing, amount: 1, fee: 0.0001, address: dest1)
+        XCTAssertEqual(lines(sent, valueAtTime: "€500.00").map(\.label).prefix(4).last, "Value when sent")
+
+        // Unknown values leave no line behind.
+        XCTAssertFalse(lines(received).map(\.label).contains { $0.hasPrefix("Value") })
     }
 
     func testCopyAllOutgoingOrderAndDestinations() {

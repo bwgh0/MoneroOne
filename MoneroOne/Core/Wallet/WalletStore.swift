@@ -69,6 +69,31 @@ struct WalletStore {
         return result + remaining
     }
 
+    /// Pure reorder behind `WalletManager.applyReorder(moving:before:)`, the
+    /// shape of SwiftUI's `ReorderDifference`: the wallets whose ids are in
+    /// `moving` come out of `wallets` and go back in before the wallet
+    /// `before`, or at the end when it is nil. The moved wallets keep their
+    /// order in the list, whatever order they were picked up in. Ids not in
+    /// the list are ignored; a `before` that is not in the list appends, and
+    /// one that is itself moving changes nothing.
+    static func reordered(_ wallets: [WalletInfo], moving: [UUID], before: UUID?) -> [WalletInfo] {
+        let movingIds = Set(moving)
+        if let before, movingIds.contains(before) { return wallets }
+        var moved: [WalletInfo] = []
+        var rest: [WalletInfo] = []
+        for wallet in wallets {
+            if movingIds.contains(wallet.id) {
+                moved.append(wallet)
+            } else {
+                rest.append(wallet)
+            }
+        }
+        guard !moved.isEmpty else { return wallets }
+        let index = before.flatMap { id in rest.firstIndex { $0.id == id } } ?? rest.endIndex
+        rest.insert(contentsOf: moved, at: index)
+        return rest
+    }
+
     // MARK: - Active Wallet
 
     var activeWalletId: UUID? {

@@ -308,6 +308,40 @@ final class WalletOrderTests: XCTestCase {
         XCTAssertEqual(WalletStore.reordered(list, by: []).map(\.id), list.map(\.id))
     }
 
+    func testReorderedMovingBeforeAndToEnd() {
+        let a = wallet("A"), b = wallet("B"), c = wallet("C"), d = wallet("D")
+        let list = [a, b, c, d]
+
+        // One item before another, in both directions.
+        XCTAssertEqual(WalletStore.reordered(list, moving: [d.id], before: b.id).map(\.id),
+                       [a.id, d.id, b.id, c.id])
+        XCTAssertEqual(WalletStore.reordered(list, moving: [a.id], before: c.id).map(\.id),
+                       [b.id, a.id, c.id, d.id])
+        XCTAssertEqual(WalletStore.reordered(list, moving: [d.id], before: a.id).map(\.id),
+                       [d.id, a.id, b.id, c.id])
+        // To the end.
+        XCTAssertEqual(WalletStore.reordered(list, moving: [b.id], before: nil).map(\.id),
+                       [a.id, c.id, d.id, b.id])
+        // Sources not in the list are ignored; a move of only unknown ids is a no-op.
+        XCTAssertEqual(WalletStore.reordered(list, moving: [UUID(), c.id], before: a.id).map(\.id),
+                       [c.id, a.id, b.id, d.id])
+        XCTAssertEqual(WalletStore.reordered(list, moving: [UUID()], before: a.id).map(\.id),
+                       list.map(\.id))
+        // Moved items keep their list order whatever order they were picked up in.
+        XCTAssertEqual(WalletStore.reordered(list, moving: [d.id, b.id], before: a.id).map(\.id),
+                       [b.id, d.id, a.id, c.id])
+        XCTAssertEqual(WalletStore.reordered(list, moving: [c.id, a.id], before: nil).map(\.id),
+                       [b.id, d.id, a.id, c.id])
+        // An unknown `before` appends; an empty move or a drop onto a moving item changes nothing.
+        XCTAssertEqual(WalletStore.reordered(list, moving: [a.id], before: UUID()).map(\.id),
+                       [b.id, c.id, d.id, a.id])
+        XCTAssertEqual(WalletStore.reordered(list, moving: [], before: b.id).map(\.id), list.map(\.id))
+        XCTAssertEqual(WalletStore.reordered(list, moving: [b.id], before: b.id).map(\.id), list.map(\.id))
+        // Wallets themselves come through untouched, not just their ids.
+        XCTAssertEqual(WalletStore.reordered(list, moving: [d.id], before: b.id).map(\.name),
+                       ["A", "D", "B", "C"])
+    }
+
     func testReorderWalletsPersistsOrderAndKeepsActiveId() {
         let a = wallet("A"), b = wallet("B"), c = wallet("C")
         store.saveWallets([a, b, c])
@@ -361,6 +395,32 @@ final class WalletOrderTests: XCTestCase {
         manager.moveWallet(id: a.id, to: 99)
         XCTAssertEqual(manager.wallets.map(\.id), [c.id, b.id, a.id])
         XCTAssertEqual(store.loadWallets().map(\.id), [c.id, b.id, a.id])
+        XCTAssertEqual(store.activeWalletId, a.id)
+    }
+
+    func testApplyReorderPersistsThroughStoreAndLeavesActiveAlone() {
+        let a = wallet("A"), b = wallet("B"), c = wallet("C")
+        store.saveWallets([a, b, c])
+        store.setActiveWalletId(a.id)
+        let manager = WalletManager()
+
+        manager.applyReorder(moving: [a.id], before: c.id)
+        XCTAssertEqual(manager.wallets.map(\.id), [b.id, a.id, c.id])
+        XCTAssertEqual(store.loadWallets().map(\.id), [b.id, a.id, c.id])
+        XCTAssertEqual(manager.activeWallet?.id, a.id)
+        XCTAssertEqual(store.activeWalletId, a.id)
+
+        manager.applyReorder(moving: [b.id], before: nil)
+        XCTAssertEqual(manager.wallets.map(\.id), [a.id, c.id, b.id])
+        XCTAssertEqual(store.loadWallets().map(\.id), [a.id, c.id, b.id])
+
+        // Unknown sources and no-op drops change nothing, on disk or in memory.
+        manager.applyReorder(moving: [UUID()], before: a.id)
+        manager.applyReorder(moving: [a.id], before: c.id)
+        manager.applyReorder(moving: [b.id], before: b.id)
+        XCTAssertEqual(manager.wallets.map(\.id), [a.id, c.id, b.id])
+        XCTAssertEqual(store.loadWallets().map(\.id), [a.id, c.id, b.id])
+        XCTAssertEqual(manager.activeWallet?.id, a.id)
         XCTAssertEqual(store.activeWalletId, a.id)
     }
 }

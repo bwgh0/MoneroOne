@@ -272,29 +272,25 @@ enum WalletRowSurface {
 /// One wallet row: emoji, name, orange balance, address underneath, a rename
 /// pencil, and a check plus an orange ring when it is the active wallet.
 ///
-/// Gestures: tap = switch (or close the list when it is the active one),
-/// pencil = rename, swipe left = delete (inactive rows only), long-press then
-/// drag = reorder.
+/// The row is a Button so a tap is a plain button tap: switch, or close the
+/// list when it is the active one. The pencil renames.
 ///
-/// The row is a Button so a tap is a plain button tap. The reorder gesture is
-/// attached as a simultaneous gesture, outermost, so it never competes with
-/// the button or with the scroll view: a tap fires the action and a vertical
-/// swipe scrolls the list even though a long press is armed. Once the press
-/// lifts the row the parent disables scrolling; the row then follows the
-/// finger through its own gesture state (only this row re-renders per frame)
-/// and tells the parent about a move only when the finger crosses into
-/// another slot. The release that ends a lift is swallowed (`didLift`) so it
-/// never switches wallets. The delete swipe is the separate 20pt drag it has
-/// always been: it reads only a horizontal-dominant end and is ignored while
-/// a lift is in progress.
+/// iOS 27: reorder and delete are the system's. `.reorderable()` on the
+/// parent ForEach owns the long-press lift, the scroll-while-dragging and
+/// the drop, and `.swipeActions` reveals Delete on inactive rows. Two custom
+/// long-press-then-drag compositions failed on device: a gesture composed
+/// inside the ScrollView swallowed the vertical drags and the list could not
+/// scroll. The system implementation cannot have that problem.
+///
+/// Before iOS 27: no drag reorder. A context menu offers Move Up / Move
+/// Down / Rename / Delete, and the 20pt horizontal delete swipe reveals the
+/// custom Delete zone on inactive rows. VoiceOver gets the same four as
+/// rotor actions on every version.
 struct WalletRow: View {
     let wallet: WalletInfo
     let isActive: Bool
     let balance: Decimal
     let address: String?
-    /// Top of one row to the top of the next (row height plus the list gap);
-    /// each slot of drag moves the drop target by one.
-    let slot: CGFloat
     let onTap: () -> Void
     let onRename: () -> Void
     /// nil for the active wallet: it is deleted from Settings, not by a swipe.
@@ -302,40 +298,37 @@ struct WalletRow: View {
     /// nil when the row is already first / last.
     let onMoveUp: (() -> Void)?
     let onMoveDown: (() -> Void)?
-    let reorder: ReorderHandlers
 
-    /// Reorder callbacks. `delta` is how many slots the finger has moved
-    /// from where the long press fired, positive downward.
-    struct ReorderHandlers {
-        var onLift: () -> Void
-        var onMove: (Int) -> Void
-        var onDrop: (Int) -> Void
-        var onCancel: () -> Void
-    }
-
-    /// The lifted row's live state. A gesture state resets when the gesture
-    /// ends or the system cancels it (which `onEnded` never reports), so the
-    /// `isLifted` true to false edge is the one signal that covers both.
-    private struct Lift: Equatable {
-        var isLifted = false
-        var translation: CGFloat = 0
-    }
-
+    // The custom delete swipe, before iOS 27 only. Both stay false on iOS 27.
     @State private var showDeleteZone = false
-    @GestureState private var lift = Lift()
-    /// Set when the press lifts the row, cleared a beat after the finger goes
-    /// up: the Button action fires on that same release and must not switch.
-    @State private var didLift = false
     /// True from the moment a horizontal swipe is recognised until just after
     /// it ends, so the release does not fire the row's tap.
     @State private var didSwipe = false
-    /// The last slot delta the parent heard about; it hears about a move only
-    /// when this changes, not on every frame.
-    @State private var reportedDelta = 0
-
-    private static let slide = Animation.snappy(duration: 0.3)
 
     var body: some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27.0, *) {
+            rowButton
+                .padding(.horizontal)
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if let onDelete {
+                        Button(role: .destructive, action: onDelete) {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+        } else {
+            legacyRow
+        }
+        #else
+        legacyRow
+        #endif
+    }
+
+    /// The row before iOS 27: the custom Delete zone slides in from the
+    /// trailing edge on a horizontal swipe, and a long press opens a context
+    /// menu that stands in for drag reorder.
+    private var legacyRow: some View {
         ZStack(alignment: .trailing) {
             if showDeleteZone, let onDelete {
                 Button {
@@ -360,83 +353,75 @@ struct WalletRow: View {
                 .transition(.opacity)
             }
 
-            Button {
-                // The release that ends a drag or a swipe is not a tap.
-                guard !didLift, !didSwipe else { return }
-                if showDeleteZone {
-                    withAnimation(.snappy(duration: 0.25)) { showDeleteZone = false }
-                } else {
-                    onTap()
+            rowButton
+                // Normal priority, so the scroll view keeps every vertical
+                // drag (a high-priority drag here took them all and the list
+                // could not scroll); horizontal drags fall through to it,
+                // and `didSwipe` keeps that release from tapping.
+                .gesture(deleteSwipe)
+                .contextMenu {
+                    if let onMoveUp {
+                        Button { onMoveUp() } label: {
+                            Label("Move Up", systemImage: "arrow.up")
+                        }
+                    }
+                    if let onMoveDown {
+                        Button { onMoveDown() } label: {
+                            Label("Move Down", systemImage: "arrow.down")
+                        }
+                    }
+                    Button { onRename() } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    if let onDelete {
+                        Button(role: .destructive) { onDelete() } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
-            } label: {
-                rowContent
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 18)
-                    .contentShape(Rectangle())
-            }
-            .glassButtonStyle()
-            .overlay {
-                WalletRowSurface.ring(.orange.opacity(isActive ? 0.7 : 0))
-            }
-            .opacity(isActive ? 1 : 0.85)
-            // Inner: the delete swipe at normal priority, so the scroll view
-            // keeps every vertical drag (a high-priority drag here took them
-            // all and the list could not scroll); horizontal drags fall
-            // through to it, and `didSwipe` keeps that release from tapping.
-            // Outer: the reorder gesture runs alongside both and the scroll view.
-            .gesture(deleteSwipe)
-            .simultaneousGesture(reorderGesture)
-            .accessibilityIdentifier(isActive ? "wallet.row.active" : "wallet.row")
-            .accessibilityHint(isActive ? "Double tap to close the wallet list" : "Double tap to switch to this wallet")
-            .accessibilityAddTraits(isActive ? .isSelected : [])
-            // VoiceOver cannot swipe the delete zone open, find the pencil
-            // inside the row, or long-press drag; expose all of it as rotor
-            // actions on the row itself.
-            .accessibilityActions {
-                Button("Rename") { onRename() }
-                if let onDelete {
-                    Button("Delete") { onDelete() }
-                }
-                if let onMoveUp {
-                    Button("Move up") { onMoveUp() }
-                }
-                if let onMoveDown {
-                    Button("Move down") { onMoveDown() }
-                }
-            }
-            .offset(x: showDeleteZone ? -88 : 0)
+                .offset(x: showDeleteZone ? -88 : 0)
         }
         .padding(.horizontal)
-        // The lifted row follows the finger frame by frame with no animation
-        // (isLifted does not change per frame); the lift and the settle back
-        // to its slot ride the snappy spring. No shadow: one on a Liquid
-        // Glass surface re-renders every frame the row moves.
-        .offset(y: lift.translation)
-        .scaleEffect(lift.isLifted ? 1.03 : 1)
-        .animation(Self.slide, value: lift.isLifted)
-        .onChange(of: lift.isLifted) { _, lifted in
-            if lifted {
-                liftIfNeeded()
-            } else {
-                // A drop already cleared the parent's state; this is a no-op
-                // then and the put-back on a system cancel otherwise.
-                reorder.onCancel()
-                // Outlive the Button action that fires on the same release.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { didLift = false }
-            }
-        }
     }
 
-    /// The long press fired. Reached from the gesture's first change and from
-    /// the state edge, whichever lands first; the parent hears it once, and
-    /// always before the first slot move.
-    private func liftIfNeeded() {
-        guard !didLift else { return }
-        didLift = true
-        reportedDelta = 0
-        withAnimation(.snappy(duration: 0.25)) { showDeleteZone = false }
-        HapticFeedback.shared.buttonPress()
-        reorder.onLift()
+    /// The tappable row, shared by both paths.
+    private var rowButton: some View {
+        Button {
+            // The release that ends a delete swipe is not a tap.
+            guard !didSwipe else { return }
+            if showDeleteZone {
+                withAnimation(.snappy(duration: 0.25)) { showDeleteZone = false }
+            } else {
+                onTap()
+            }
+        } label: {
+            rowContent
+                .padding(.horizontal, 18)
+                .padding(.vertical, 18)
+                .contentShape(Rectangle())
+        }
+        .glassButtonStyle()
+        .overlay {
+            WalletRowSurface.ring(.orange.opacity(isActive ? 0.7 : 0))
+        }
+        .opacity(isActive ? 1 : 0.85)
+        .accessibilityIdentifier(isActive ? "wallet.row.active" : "wallet.row")
+        .accessibilityHint(isActive ? "Double tap to close the wallet list" : "Double tap to switch to this wallet")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+        // VoiceOver cannot swipe, long-press, drag, or find the pencil inside
+        // the row; expose all of it as rotor actions on the row itself.
+        .accessibilityActions {
+            Button("Rename") { onRename() }
+            if let onDelete {
+                Button("Delete") { onDelete() }
+            }
+            if let onMoveUp {
+                Button("Move up") { onMoveUp() }
+            }
+            if let onMoveDown {
+                Button("Move down") { onMoveDown() }
+            }
+        }
     }
 
     // MARK: - Content
@@ -504,46 +489,15 @@ struct WalletRow: View {
         }
     }
 
-    // MARK: - Gestures
-
-    /// Whole slots the finger has moved. Zero until the row has been
-    /// measured, so an unmeasured row can never jump to the end of the list.
-    private func slots(for dy: CGFloat) -> Int {
-        guard slot > 20 else { return 0 }
-        return Int((dy / slot).rounded())
-    }
-
-    /// Hold 0.4s, then drag. Global coordinates: the row moves with the
-    /// finger, so its own space would drift under the touch.
-    private var reorderGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.4)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .updating($lift) { value, state, _ in
-                if case .second(true, let drag) = value {
-                    state = Lift(isLifted: true, translation: drag?.translation.height ?? 0)
-                }
-            }
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
-                liftIfNeeded()
-                let delta = slots(for: drag?.translation.height ?? 0)
-                guard delta != reportedDelta else { return }
-                reportedDelta = delta
-                reorder.onMove(delta)
-            }
-            .onEnded { value in
-                guard case .second(true, let drag) = value else { return }
-                reorder.onDrop(slots(for: drag?.translation.height ?? 0))
-            }
-    }
+    // MARK: - Delete swipe (before iOS 27)
 
     /// A clear horizontal swipe reveals Delete on inactive rows. Vertical
     /// movement belongs to the scroll view, which cancels this drag when it
-    /// starts to pan; a swipe that began as a lift is ignored.
+    /// starts to pan.
     private var deleteSwipe: some Gesture {
         DragGesture(minimumDistance: 20)
             .onChanged { value in
-                guard onDelete != nil, !didLift, !lift.isLifted else { return }
+                guard onDelete != nil else { return }
                 if abs(value.translation.width) > abs(value.translation.height) {
                     didSwipe = true
                 }
@@ -552,7 +506,7 @@ struct WalletRow: View {
                 defer {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { didSwipe = false }
                 }
-                guard onDelete != nil, !didLift, !lift.isLifted else { return }
+                guard onDelete != nil else { return }
                 let dx = value.translation.width
                 guard abs(dx) > abs(value.translation.height) else { return }
                 withAnimation(.snappy(duration: 0.25)) {
@@ -569,11 +523,14 @@ struct WalletRow: View {
 /// Expanded wallet manager: EVERY wallet in store order (insertion order until
 /// the user drags), the active one marked in place with a check and an orange
 /// ring, then Add Wallet. Inline on the dashboard, not a sheet.
+///
+/// On iOS 27 the rows are a system reorder container: the drop hands back the
+/// moved ids and the id they land before, and `applyReorder` persists that
+/// order. Before iOS 27 the order changes one slot at a time through the
+/// row's context menu; VoiceOver has the same Move up / Move down on every
+/// version.
 struct WalletManagerRows: View {
     @Binding var isExpanded: Bool
-    /// True while a row is lifted. The dashboard disables its scroll view on
-    /// it so the pan cannot take the drag away from the row.
-    @Binding var isReordering: Bool
     @EnvironmentObject var walletManager: WalletManager
     @State private var showAddWallet = false
     @State private var renameWalletId: UUID?
@@ -586,81 +543,18 @@ struct WalletManagerRows: View {
     /// the in-flight `completeSwitchToWallet` teardown.
     @State private var isDeleting = false
 
-    // Reorder state. The lifted row keeps its own live translation (see
-    // WalletRow); this view knows only which row is lifted and where it
-    // would land, so a finger move re-renders one row, not the list, and the
-    // rows that slide aside animate on the few drop-target changes. The drop
-    // reads the live list and the live target, never a value captured when
-    // a row's closures were built.
-    @State private var dragId: UUID?
-    @State private var dropIndex: Int?
-    @State private var rowHeights: [UUID: CGFloat] = [:]
-    /// Keeps the dropped row above its neighbours while it settles.
-    @State private var settlingId: UUID?
-
     private static let rowGap: CGFloat = 10
-    /// The snappy spring rows slide aside and settle on.
+    /// The snappy spring a nudged row settles on.
     private static let slide = Animation.snappy(duration: 0.3)
 
     private var wallets: [WalletInfo] { walletManager.wallets }
 
-    /// One slot: the lifted row's own height plus the gap.
-    private var step: CGFloat {
-        (dragId.flatMap { rowHeights[$0] } ?? 0) + Self.rowGap
-    }
-
-    /// How far a row that is not being dragged slides to make room.
-    private func shift(for index: Int, from: Int, to target: Int) -> CGFloat {
-        if index > from && index <= target { return -step }
-        if index < from && index >= target { return step }
-        return 0
-    }
-
     var body: some View {
-        let activeId = walletManager.activeWallet?.id
-        let from = dragId.flatMap { id in wallets.firstIndex { $0.id == id } }
-
         VStack(spacing: Self.rowGap) {
-            ForEach(Array(wallets.enumerated()), id: \.element.id) { index, wallet in
-                let isActive = wallet.id == activeId
-                let aside: CGFloat = {
-                    guard let from, let dropIndex else { return 0 }
-                    return shift(for: index, from: from, to: dropIndex)
-                }()
-
-                WalletRow(
-                    wallet: wallet,
-                    isActive: isActive,
-                    balance: isActive ? walletManager.displayBalance : (wallet.cachedBalance ?? 0),
-                    address: isActive ? walletManager.primaryAddress : wallet.cachedPrimaryAddress,
-                    slot: (rowHeights[wallet.id] ?? 0) + Self.rowGap,
-                    onTap: {
-                        if isActive {
-                            withAnimation(.snappy(duration: 0.35)) { isExpanded = false }
-                        } else {
-                            switchTo(wallet)
-                        }
-                    },
-                    onRename: {
-                        renameText = wallet.name
-                        renameEmoji = wallet.emoji
-                        renameWalletId = wallet.id
-                    },
-                    onDelete: isActive ? nil : { deleteWalletId = wallet.id },
-                    onMoveUp: index > 0 ? { nudge(wallet.id, by: -1) } : nil,
-                    onMoveDown: index < wallets.count - 1 ? { nudge(wallet.id, by: 1) } : nil,
-                    reorder: .init(
-                        onLift: { lift(wallet.id) },
-                        onMove: { delta in drag(wallet.id, by: delta) },
-                        onDrop: { delta in drop(wallet.id, by: delta) },
-                        onCancel: { cancelDrag(wallet.id) }
-                    )
-                )
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeights[wallet.id] = $0 }
-                .offset(y: aside)
-                .zIndex(dragId == wallet.id || settlingId == wallet.id ? 1 : 0)
-                .animation(Self.slide, value: dropIndex)
+            ForEach(wallets) { wallet in
+                row(for: wallet)
             }
+            .systemReorderable()
 
             // Add Wallet button
             Button {
@@ -680,7 +574,9 @@ struct WalletManagerRows: View {
             .glassButtonStyle()
             .padding(.horizontal)
         }
-        .onDisappear { isReordering = false }
+        .walletReorderContainer { moving, before in
+            walletManager.applyReorder(moving: moving, before: before)
+        }
         .fullScreenCover(isPresented: $showAddWallet, onDismiss: {
             walletManager.addWalletPath = []
         }) {
@@ -729,6 +625,33 @@ struct WalletManagerRows: View {
         }
     }
 
+    /// One row. The closures read the live list through the manager when
+    /// they fire, never an index captured when the row was built.
+    private func row(for wallet: WalletInfo) -> some View {
+        let isActive = wallet.id == walletManager.activeWallet?.id
+        return WalletRow(
+            wallet: wallet,
+            isActive: isActive,
+            balance: isActive ? walletManager.displayBalance : (wallet.cachedBalance ?? 0),
+            address: isActive ? walletManager.primaryAddress : wallet.cachedPrimaryAddress,
+            onTap: {
+                if isActive {
+                    withAnimation(.snappy(duration: 0.35)) { isExpanded = false }
+                } else {
+                    switchTo(wallet)
+                }
+            },
+            onRename: {
+                renameText = wallet.name
+                renameEmoji = wallet.emoji
+                renameWalletId = wallet.id
+            },
+            onDelete: isActive ? nil : { deleteWalletId = wallet.id },
+            onMoveUp: wallets.first?.id == wallet.id ? nil : { nudge(wallet.id, by: -1) },
+            onMoveDown: wallets.last?.id == wallet.id ? nil : { nudge(wallet.id, by: 1) }
+        )
+    }
+
     // MARK: - Switching
 
     private func switchTo(_ wallet: WalletInfo) {
@@ -757,67 +680,40 @@ struct WalletManagerRows: View {
 
     // MARK: - Reorder
 
-    /// Where a row `delta` slots below its current place lands, clamped to
-    /// the list.
-    private func target(of id: UUID, by delta: Int) -> Int? {
-        guard let from = wallets.firstIndex(where: { $0.id == id }) else { return nil }
-        return min(max(from + delta, 0), wallets.count - 1)
-    }
-
-    /// The long press fired: the row is lifted and the list stops scrolling.
-    private func lift(_ id: UUID) {
-        dragId = id
-        dropIndex = target(of: id, by: 0)
-        settlingId = nil
-        isReordering = true
-    }
-
-    /// The finger crossed into another slot: the rows in between slide
-    /// aside and the pass ticks.
-    private func drag(_ id: UUID, by delta: Int) {
-        guard dragId == id, let to = target(of: id, by: delta), to != dropIndex else { return }
-        dropIndex = to
-        HapticFeedback.shared.softTick()
-    }
-
-    /// Commits the drop. The target and the list are read here, through the
-    /// manager, not from values captured when the row was built.
-    private func drop(_ id: UUID, by delta: Int) {
-        guard dragId == id else { return }
-        let to = target(of: id, by: delta)
-        settle(id) {
-            if let to {
-                walletManager.moveWallet(id: id, to: to)
-            }
-        }
-    }
-
-    /// The system cancelled the gesture, or the drop already committed.
-    private func cancelDrag(_ id: UUID) {
-        guard dragId == id else { return }
-        settle(id) {}
-    }
-
-    private func settle(_ id: UUID, then commit: () -> Void) {
-        settlingId = id
-        withAnimation(Self.slide) {
-            dragId = nil
-            dropIndex = nil
-            commit()
-        }
-        isReordering = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            if settlingId == id { settlingId = nil }
-        }
-    }
-
-    /// VoiceOver "Move up" / "Move down": one slot, read from the live list.
+    /// Context menu and VoiceOver "Move up" / "Move down": one slot, read
+    /// from the live list; `moveWallet` clamps the target.
     private func nudge(_ id: UUID, by delta: Int) {
-        guard let to = target(of: id, by: delta) else { return }
+        guard let from = wallets.firstIndex(where: { $0.id == id }) else { return }
         withAnimation(Self.slide) {
-            walletManager.moveWallet(id: id, to: to)
+            walletManager.moveWallet(id: id, to: from + delta)
         }
         UIAccessibility.post(notification: .announcement, argument: delta < 0 ? "Moved up" : "Moved down")
+    }
+}
+
+private extension View {
+    /// System drag-to-reorder for the wallet rows on iOS 27: `apply` gets the
+    /// moved wallet ids and the id they land before (nil = the end), the two
+    /// halves of the `ReorderDifference`. Inert before iOS 27, and on the
+    /// Xcode 26 toolchain CI builds with, where the API does not exist.
+    @ViewBuilder
+    func walletReorderContainer(_ apply: @escaping (_ moving: [UUID], _ before: UUID?) -> Void) -> some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27.0, *) {
+            self.reorderContainer(for: WalletInfo.self) { difference in
+                switch difference.destination.position {
+                case .before(let id):
+                    apply(difference.sources, id)
+                case .end:
+                    apply(difference.sources, nil)
+                }
+            }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
     }
 }
 

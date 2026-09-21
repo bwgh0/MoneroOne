@@ -326,6 +326,9 @@ struct WalletRow: View {
     /// Set when the press lifts the row, cleared a beat after the finger goes
     /// up: the Button action fires on that same release and must not switch.
     @State private var didLift = false
+    /// True from the moment a horizontal swipe is recognised until just after
+    /// it ends, so the release does not fire the row's tap.
+    @State private var didSwipe = false
     /// The last slot delta the parent heard about; it hears about a move only
     /// when this changes, not on every frame.
     @State private var reportedDelta = 0
@@ -358,8 +361,8 @@ struct WalletRow: View {
             }
 
             Button {
-                // The release that ends a drag is not a tap.
-                guard !didLift else { return }
+                // The release that ends a drag or a swipe is not a tap.
+                guard !didLift, !didSwipe else { return }
                 if showDeleteZone {
                     withAnimation(.snappy(duration: 0.25)) { showDeleteZone = false }
                 } else {
@@ -376,10 +379,12 @@ struct WalletRow: View {
                 WalletRowSurface.ring(.orange.opacity(isActive ? 0.7 : 0))
             }
             .opacity(isActive ? 1 : 0.85)
-            // Inner: the delete swipe outranks the button's tap once it has
-            // moved 20pt, so a swipe never switches wallets. Outer: the
-            // reorder gesture runs alongside both and the scroll view.
-            .highPriorityGesture(deleteSwipe)
+            // Inner: the delete swipe at normal priority, so the scroll view
+            // keeps every vertical drag (a high-priority drag here took them
+            // all and the list could not scroll); horizontal drags fall
+            // through to it, and `didSwipe` keeps that release from tapping.
+            // Outer: the reorder gesture runs alongside both and the scroll view.
+            .gesture(deleteSwipe)
             .simultaneousGesture(reorderGesture)
             .accessibilityIdentifier(isActive ? "wallet.row.active" : "wallet.row")
             .accessibilityHint(isActive ? "Double tap to close the wallet list" : "Double tap to switch to this wallet")
@@ -537,7 +542,16 @@ struct WalletRow: View {
     /// starts to pan; a swipe that began as a lift is ignored.
     private var deleteSwipe: some Gesture {
         DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                guard onDelete != nil, !didLift, !lift.isLifted else { return }
+                if abs(value.translation.width) > abs(value.translation.height) {
+                    didSwipe = true
+                }
+            }
             .onEnded { value in
+                defer {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { didSwipe = false }
+                }
                 guard onDelete != nil, !didLift, !lift.isLifted else { return }
                 let dx = value.translation.width
                 guard abs(dx) > abs(value.translation.height) else { return }

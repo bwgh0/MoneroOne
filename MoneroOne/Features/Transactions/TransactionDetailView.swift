@@ -336,7 +336,7 @@ struct TransactionDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button {
-                    copy(value, field: field)
+                    copy(value, field: field, secret: field == .txKey)
                 } label: {
                     Image(systemName: copiedField == field ? "checkmark.circle.fill" : "doc.on.doc")
                         .font(.body)
@@ -359,7 +359,10 @@ struct TransactionDetailView: View {
             receivedOnAddress: receivingAddress,
             sentTo: sentToRows,
             txKey: txKey,
-            explorerURL: blockExplorerURL
+            explorerURL: blockExplorerURL,
+            valueAtTime: priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+                .map { priceService.formatFiat($0) },
+            valueToday: priceService.formatFiatValue(transaction.amount)
         )
         copy(
             TransactionDetailLogic.copyAllText(lines),
@@ -491,7 +494,9 @@ enum TransactionDetailLogic {
         receivedOnAddress: String?,
         sentTo: [SentToRow],
         txKey: String?,
-        explorerURL: URL?
+        explorerURL: URL?,
+        valueAtTime: String? = nil,
+        valueToday: String? = nil
     ) -> [TransactionDetailLine] {
         var lines: [TransactionDetailLine] = []
         func add(_ label: String, _ value: String?, secret: Bool = false) {
@@ -505,6 +510,8 @@ enum TransactionDetailLogic {
         if !incoming {
             add("Fee", "\(XMRFormatter.format(transaction.fee)) XMR")
         }
+        add(incoming ? "Value when received" : "Value when sent", valueAtTime)
+        add("Value today", valueToday)
         add("Status", transaction.displayStatusText)
         if let confirmations = transaction.confirmations {
             add("Confirmations", "\(confirmations)")

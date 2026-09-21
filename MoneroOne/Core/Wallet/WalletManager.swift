@@ -3249,6 +3249,33 @@ class WalletManager: ObservableObject {
         }
     }
 
+    // MARK: - Reorder
+
+    /// Persist a drag-to-reorder from the wallet switcher. `wallets` IS the
+    /// switcher's display order and the active wallet keeps its slot like any
+    /// other row, so only the array order changes: `activeWallet` and the
+    /// stored active id are untouched. The in-memory array is reordered
+    /// directly (it can carry cached balances newer than disk) and the store
+    /// rewrites its own copy in the same order.
+    func moveWallets(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var reordered = wallets
+        reordered.move(fromOffsets: source, toOffset: destination)
+        let ids = reordered.map(\.id)
+        guard ids != wallets.map(\.id) else { return }
+        wallets = reordered
+        walletStore.reorderWallets(ids)
+    }
+
+    /// Move one wallet so it lands at `index` in the list, the drop target the
+    /// switcher computes. Does the insert-before-removal arithmetic of
+    /// `move(fromOffsets:toOffset:)` here so callers pass a plain index.
+    func moveWallet(id: UUID, to index: Int) {
+        guard let from = wallets.firstIndex(where: { $0.id == id }) else { return }
+        let to = min(max(index, 0), wallets.count - 1)
+        guard to != from else { return }
+        moveWallets(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+    }
+
     /// Re-encrypt every wallet's secret material when PIN changes. Walks
     /// wallets by `source` so view-only and hardware wallets (no seed) are
     /// re-encrypted through their view-key slot — the previous seed-only

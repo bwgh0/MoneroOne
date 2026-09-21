@@ -251,3 +251,116 @@ final class WalletManagerTests: XCTestCase {
         XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 7, subaddresses: slots, rotate: true), 2)
     }
 }
+
+// MARK: - Wallet Order Tests
+
+/// Store order is the switcher's display order: loading never sorts, a switch
+/// never moves a row, and a drag rewrites the persisted array in place.
+@MainActor
+final class WalletOrderTests: XCTestCase {
+
+    private let store = WalletStore()
+    private var savedWallets: Data?
+    private var savedActiveId: String?
+
+    override func setUp() async throws {
+        savedWallets = UserDefaults.standard.data(forKey: "one.monero.walletStore.wallets")
+        savedActiveId = UserDefaults.standard.string(forKey: "one.monero.walletStore.activeWalletId")
+        store.deleteAll()
+    }
+
+    override func tearDown() async throws {
+        store.deleteAll()
+        if let savedWallets {
+            UserDefaults.standard.set(savedWallets, forKey: "one.monero.walletStore.wallets")
+        }
+        if let savedActiveId {
+            UserDefaults.standard.set(savedActiveId, forKey: "one.monero.walletStore.activeWalletId")
+        }
+    }
+
+    private func wallet(_ name: String) -> WalletInfo {
+        WalletInfo(
+            id: UUID(),
+            name: name,
+            source: .seed(.polyseed),
+            createdAt: Date(),
+            restoreHeight: 0,
+            syncResetCount: 0,
+            userCreatedSubaddressIndices: [],
+            cachedPrimaryAddress: nil,
+            cachedBalance: nil
+        )
+    }
+
+    func testReorderedFollowsIdsIgnoresUnknownAndAppendsMissing() {
+        let a = wallet("A"), b = wallet("B"), c = wallet("C"), d = wallet("D")
+        let list = [a, b, c, d]
+
+        XCTAssertEqual(WalletStore.reordered(list, by: [c.id, a.id, b.id, d.id]).map(\.id),
+                       [c.id, a.id, b.id, d.id])
+        // Unknown ids are skipped; wallets left out keep their order at the end.
+        XCTAssertEqual(WalletStore.reordered(list, by: [UUID(), d.id, b.id]).map(\.id),
+                       [d.id, b.id, a.id, c.id])
+        // A duplicate id places the wallet once.
+        XCTAssertEqual(WalletStore.reordered(list, by: [b.id, b.id]).map(\.id),
+                       [b.id, a.id, c.id, d.id])
+        XCTAssertEqual(WalletStore.reordered(list, by: []).map(\.id), list.map(\.id))
+    }
+
+    func testReorderWalletsPersistsOrderAndKeepsActiveId() {
+        let a = wallet("A"), b = wallet("B"), c = wallet("C")
+        store.saveWallets([a, b, c])
+        store.setActiveWalletId(b.id)
+
+        store.reorderWallets([c.id, UUID(), a.id])
+
+        XCTAssertEqual(store.loadWallets().map(\.id), [c.id, a.id, b.id])
+        XCTAssertEqual(store.loadWallets().map(\.name), ["C", "A", "B"])
+        XCTAssertEqual(store.activeWalletId, b.id, "Reordering must not touch the active wallet")
+    }
+
+    func testLoadingKeepsStoreOrderAndSwitchingDoesNotMoveRows() {
+        let a = wallet("A"), b = wallet("B"), c = wallet("C")
+        store.saveWallets([c, a, b])
+        store.setActiveWalletId(b.id)
+
+        let manager = WalletManager()
+        XCTAssertEqual(manager.wallets.map(\.id), [c.id, a.id, b.id], "Loading must keep store order")
+        XCTAssertEqual(manager.activeWallet?.id, b.id)
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: c.id))
+        XCTAssertEqual(manager.activeWallet?.id, c.id)
+        XCTAssertEqual(manager.wallets.map(\.id), [c.id, a.id, b.id], "A switch must not move any row")
+        XCTAssertEqual(store.loadWallets().map(\.id), [c.id, a.id, b.id])
+    }
+
+    func testMoveWalletsPersistsOffsetsAndLeavesActiveAlone() {
+        let a = wallet("A"), b = wallet("B"), c = wallet("C")
+        store.saveWallets([a, b, c])
+        store.setActiveWalletId(a.id)
+        let manager = WalletManager()
+
+        manager.moveWallets(fromOffsets: IndexSet(integer: 0), toOffset: 3)
+        XCTAssertEqual(manager.wallets.map(\.id), [b.id, c.id, a.id])
+        XCTAssertEqual(store.loadWallets().map(\.id), [b.id, c.id, a.id])
+        XCTAssertEqual(manager.activeWallet?.id, a.id)
+        XCTAssertEqual(store.activeWalletId, a.id)
+
+        manager.moveWallet(id: a.id, to: 1)
+        XCTAssertEqual(manager.wallets.map(\.id), [b.id, a.id, c.id])
+        XCTAssertEqual(store.loadWallets().map(\.id), [b.id, a.id, c.id])
+
+        manager.moveWallet(id: c.id, to: 0)
+        XCTAssertEqual(manager.wallets.map(\.id), [c.id, b.id, a.id])
+        XCTAssertEqual(store.loadWallets().map(\.id), [c.id, b.id, a.id])
+
+        // Unknown ids and no-op moves change nothing.
+        manager.moveWallet(id: UUID(), to: 0)
+        manager.moveWallet(id: c.id, to: 0)
+        manager.moveWallet(id: a.id, to: 99)
+        XCTAssertEqual(manager.wallets.map(\.id), [c.id, b.id, a.id])
+        XCTAssertEqual(store.loadWallets().map(\.id), [c.id, b.id, a.id])
+        XCTAssertEqual(store.activeWalletId, a.id)
+    }
+}

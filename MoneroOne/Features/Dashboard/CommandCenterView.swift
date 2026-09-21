@@ -124,18 +124,15 @@ struct CommandCenterView: View {
 
     // MARK: - Pieces
 
+    /// The greeting and the chip stay put whether the list is open or not;
+    /// only the content below swaps. The chip's ring shows the open state.
     private var greetingHeader: some View {
         HStack(spacing: 0) {
-            if !showWalletManager {
-                DynamicGreeting()
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                Spacer(minLength: 12)
-            }
+            DynamicGreeting()
+            Spacer(minLength: 12)
             WalletSwitcherButton(isExpanded: $showWalletManager)
                 .environmentObject(walletManager)
-                .frame(maxWidth: showWalletManager ? .infinity : nil)
         }
-        .animation(.snappy(duration: 0.35), value: showWalletManager)
     }
 
     private var walletRows: some View {

@@ -399,6 +399,27 @@ class MoneroWallet: ObservableObject {
     nonisolated private static func mapTransaction(_ info: MoneroKit.TransactionInfo, coinRate: Decimal, kit: MoneroKit.Kit) -> MoneroTransaction {
         let amount = Decimal(info.amount) / coinRate
         let fee = Decimal(info.fee) / coinRate
+        let type: MoneroTransaction.TransactionType = info.type == .incoming ? .incoming : .outgoing
+
+        // wallet2 only knows destinations for transactions it built on
+        // this device; a wallet restored from seed gets none, and the
+        // empty list is the honest answer in that case.
+        let destinations = info.destinations.map {
+            MoneroTransactionDestination(address: $0.address, amount: Decimal($0.amount) / coinRate)
+        }
+
+        // `address` keeps one meaning per direction: the subaddress we
+        // received on for incoming, the first destination for outgoing.
+        let address: String
+        let subaddressIndex: Int?
+        switch type {
+        case .incoming:
+            address = info.recipientAddress ?? ""
+            subaddressIndex = info.subaddressIndices.first
+        case .outgoing:
+            address = destinations.first?.address ?? ""
+            subaddressIndex = nil
+        }
 
         // Calculate confirmations from block height
         let confirmations: Int?
@@ -425,15 +446,17 @@ class MoneroWallet: ObservableObject {
 
         return MoneroTransaction(
             id: info.hash,
-            type: info.type == .incoming ? .incoming : .outgoing,
+            type: type,
             amount: amount,
             fee: fee,
-            address: info.recipientAddress ?? "",
+            address: address,
             timestamp: Date(timeIntervalSince1970: Double(info.timestamp)),
             confirmations: confirmations,
             status: status,
             memo: info.memo,
-            blockHeight: info.blockHeight == 0 ? nil : info.blockHeight
+            blockHeight: info.blockHeight == 0 ? nil : info.blockHeight,
+            destinations: destinations,
+            subaddressIndex: subaddressIndex
         )
     }
 
@@ -697,11 +720,21 @@ extension MoneroWallet: MoneroKitDelegate {
 
 // MARK: - Transaction Model
 
+/// One output of an outgoing transaction: the address paid and the
+/// amount in XMR.
+struct MoneroTransactionDestination: Equatable, Hashable, Codable {
+    let address: String
+    let amount: Decimal
+}
+
 struct MoneroTransaction: Identifiable, Equatable, Hashable {
     let id: String
     let type: TransactionType
     let amount: Decimal
     let fee: Decimal
+    /// Incoming: the subaddress of this wallet the funds arrived on.
+    /// Outgoing: the first destination address, or "" when wallet2 has
+    /// no record of the destinations (see `destinations`).
     let address: String
     let timestamp: Date
     let confirmations: Int?
@@ -714,6 +747,42 @@ struct MoneroTransaction: Identifiable, Equatable, Hashable {
     /// All Transactions row stays stuck at "1 confirmation" even
     /// after the chain has moved hundreds of blocks past it.
     let blockHeight: UInt64?
+    /// Every destination of an outgoing transaction, in wallet2 order.
+    /// Empty for incoming transactions, and for outgoing ones wallet2
+    /// did not build on this device (restored from seed): destinations
+    /// are not on chain, so nothing can recover them.
+    let destinations: [MoneroTransactionDestination]
+    /// Incoming: the minor index of the subaddress the funds arrived
+    /// on. nil for outgoing transactions.
+    let subaddressIndex: Int?
+
+    init(
+        id: String,
+        type: TransactionType,
+        amount: Decimal,
+        fee: Decimal,
+        address: String,
+        timestamp: Date,
+        confirmations: Int?,
+        status: TransactionStatus,
+        memo: String?,
+        blockHeight: UInt64?,
+        destinations: [MoneroTransactionDestination] = [],
+        subaddressIndex: Int? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.amount = amount
+        self.fee = fee
+        self.address = address
+        self.timestamp = timestamp
+        self.confirmations = confirmations
+        self.status = status
+        self.memo = memo
+        self.blockHeight = blockHeight
+        self.destinations = destinations
+        self.subaddressIndex = subaddressIndex
+    }
 
     enum TransactionType: Hashable {
         case incoming
@@ -752,6 +821,13 @@ struct MoneroTransactionSnapshot: Codable {
     /// decode it as `nil`, in which case the consumer falls back to
     /// the frozen `confirmations` value.
     let blockHeight: UInt64?
+    /// Optional for the same reason: snapshots written before these
+    /// two fields existed must still decode (synthesized Codable uses
+    /// `decodeIfPresent` for optionals). A non-optional field here
+    /// once made every old snapshot fail to decode and the whole
+    /// hardware transaction list vanished.
+    let destinations: [MoneroTransactionDestination]?
+    let subaddressIndex: Int?
 
     init(from tx: MoneroTransaction) {
         self.id = tx.id
@@ -768,6 +844,8 @@ struct MoneroTransactionSnapshot: Codable {
         }
         self.memo = tx.memo
         self.blockHeight = tx.blockHeight
+        self.destinations = tx.destinations
+        self.subaddressIndex = tx.subaddressIndex
     }
 
     func toTransaction() -> MoneroTransaction {
@@ -788,7 +866,9 @@ struct MoneroTransactionSnapshot: Codable {
             confirmations: confirmations,
             status: status,
             memo: memo,
-            blockHeight: blockHeight
+            blockHeight: blockHeight,
+            destinations: destinations ?? [],
+            subaddressIndex: subaddressIndex
         )
     }
 }

@@ -89,7 +89,7 @@ struct SettingsView: View {
                         SettingsRow(
                             icon: "qrcode",
                             title: "Fresh Receive Address",
-                            color: .green
+                            color: .cyan
                         )
                     }
                     .accessibilityIdentifier("settings.rotateReceiveAddressToggle")
@@ -170,7 +170,7 @@ struct SettingsView: View {
                     Toggle(isOn: $sendSoundEnabled) {
                         SettingsRow(
                             icon: "speaker.wave.2.fill",
-                            title: "Sounds",
+                            title: "Send Sound",
                             color: .teal
                         )
                     }

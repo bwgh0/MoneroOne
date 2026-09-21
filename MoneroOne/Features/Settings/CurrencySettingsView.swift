@@ -51,7 +51,7 @@ struct CurrencySettingsView: View {
                         Text("1 XMR")
                             .fontWeight(.medium)
                         Spacer()
-                        Text("\(priceService.currencySymbol)\(String(format: "%.2f", price))")
+                        Text(priceService.formatFiat(Decimal(price)))
                             .fontWeight(.semibold)
                     }
 

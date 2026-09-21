@@ -212,8 +212,12 @@ struct TransactionRow: View {
 }
 
 #Preview {
+    let priceService = PriceService()
+    let priceHistoryService = PriceHistoryService(priceService: priceService)
     NavigationStack {
         TransactionListView()
             .environmentObject(WalletManager())
+            .environmentObject(priceService)
+            .environmentObject(priceHistoryService)
     }
 }

@@ -275,13 +275,10 @@ enum WalletRowSurface {
 /// The row is a Button so a tap is a plain button tap: switch, or close the
 /// list when it is the active one. The pencil renames.
 ///
-/// Reorder is the system's drag and drop (`draggable` / `dropDestination`,
-/// iOS 16): UIKit owns the long-press lift, scrolling while dragging and the
-/// drop, on every supported iOS. Dropping a row onto another moves it next
-/// to that row. Two custom long-press-then-drag compositions failed on
-/// device (the list could not scroll), and the iOS 27 `reorderContainer`
-/// asserted on every lift with "Unexpected identifier type. Expected UUID,
-/// got UUID" (and the same with String keys), so neither is used.
+/// Reorder is driven by `WalletManagerRows`: one UIKit long-press recognizer
+/// on the enclosing scroll view lifts a row (see `ReorderPressHost`), and the
+/// rows draw the lift and slide aside in SwiftUI. This row only needs to know
+/// whether it is the lifted one, so its delete swipe stays quiet meanwhile.
 ///
 /// The 20pt horizontal delete swipe reveals the custom Delete zone on
 /// inactive rows. VoiceOver gets Rename / Delete / Move up / Move down as
@@ -298,12 +295,10 @@ struct WalletRow: View {
     /// nil when the row is already first / last.
     let onMoveUp: (() -> Void)?
     let onMoveDown: (() -> Void)?
-    /// Another wallet (by id) was dropped onto this row.
-    let onDrop: (UUID) -> Void
+    /// True while this row is the one being dragged.
+    let isLifted: Bool
 
     @State private var showDeleteZone = false
-    /// True while a dragged row hovers over this one.
-    @State private var isDropTarget = false
     /// True from the moment a horizontal swipe is recognised until just after
     /// it ends, so the release does not fire the row's tap.
     @State private var didSwipe = false
@@ -340,20 +335,6 @@ struct WalletRow: View {
                 // and `didSwipe` keeps that release from tapping.
                 .gesture(deleteSwipe)
                 .offset(x: showDeleteZone ? -88 : 0)
-                // System drag and drop: a long press lifts the row, the
-                // scroll view keeps scrolling under the finger, and dropping
-                // it on another row moves it next to that row.
-                .draggable(wallet.id.uuidString)
-                .dropDestination(for: String.self) { items, _ in
-                    guard let key = items.first, let moving = UUID(uuidString: key), moving != wallet.id else {
-                        return false
-                    }
-                    onDrop(moving)
-                    return true
-                } isTargeted: { targeted in
-                    withAnimation(.snappy(duration: 0.2)) { isDropTarget = targeted }
-                }
-                .scaleEffect(isDropTarget ? 1.02 : 1)
         }
         .padding(.horizontal)
     }
@@ -471,7 +452,7 @@ struct WalletRow: View {
     private var deleteSwipe: some Gesture {
         DragGesture(minimumDistance: 20)
             .onChanged { value in
-                guard onDelete != nil else { return }
+                guard onDelete != nil, !isLifted else { return }
                 if abs(value.translation.width) > abs(value.translation.height) {
                     didSwipe = true
                 }
@@ -480,7 +461,7 @@ struct WalletRow: View {
                 defer {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { didSwipe = false }
                 }
-                guard onDelete != nil else { return }
+                guard onDelete != nil, !isLifted else { return }
                 let dx = value.translation.width
                 guard abs(dx) > abs(value.translation.height) else { return }
                 withAnimation(.snappy(duration: 0.25)) {
@@ -521,15 +502,45 @@ struct WalletManagerRows: View {
     /// The snappy spring a nudged row settles on.
     private static let slide = Animation.snappy(duration: 0.3)
 
+    // Drag to reorder. UIKit recognises the press (`ReorderPressHost`),
+    // SwiftUI draws it: the lifted row follows the finger through
+    // `dragTranslation`, the others slide aside as `dropIndex` changes.
+    @State private var dragId: UUID?
+    @State private var dragTranslation: CGFloat = 0
+    @State private var dropIndex: Int?
+    /// Row frames in window space, kept current by the rows.
+    @State private var rowFrames: [UUID: CGRect] = [:]
+    /// The frames when the lift began; the maths uses these, not the moving ones.
+    @State private var framesAtLift: [UUID: CGRect] = [:]
+    @State private var liftPoint: CGPoint = .zero
+    /// The release that ends a drag reaches the row's Button; swallow it.
+    @State private var suppressTapsUntil = Date.distantPast
+
     private var wallets: [WalletInfo] { walletManager.wallets }
 
     private var rowsStack: some View {
         VStack(spacing: Self.rowGap) {
             ForEach(wallets) { wallet in
                 row(for: wallet)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { rowFrames[wallet.id] = $0 }
+                    .offset(y: rowOffset(for: wallet.id))
+                    .scaleEffect(dragId == wallet.id ? 1.03 : 1)
+                    .zIndex(dragId == wallet.id ? 1 : 0)
+                    .animation(dragId == wallet.id ? nil : Self.slide, value: dropIndex)
+                    .animation(.snappy(duration: 0.2), value: dragId)
             }
 
             addWalletButton
+        }
+        .background {
+            ReorderPressHost(
+                isEnabled: isExpanded && !isSwitching && !walletManager.isSwitchingWallet,
+                shouldBegin: { point in rowId(at: point) != nil },
+                onBegan: lift,
+                onChanged: move,
+                onEnded: drop,
+                onCancelled: cancelDrag
+            )
         }
     }
 
@@ -612,6 +623,7 @@ struct WalletManagerRows: View {
             balance: isActive ? walletManager.displayBalance : (wallet.cachedBalance ?? 0),
             address: isActive ? walletManager.primaryAddress : wallet.cachedPrimaryAddress,
             onTap: {
+                guard dragId == nil, Date() > suppressTapsUntil else { return }
                 if isActive {
                     withAnimation(.snappy(duration: 0.35)) { isExpanded = false }
                 } else {
@@ -626,24 +638,76 @@ struct WalletManagerRows: View {
             onDelete: isActive ? nil : { deleteWalletId = wallet.id },
             onMoveUp: wallets.first?.id == wallet.id ? nil : { nudge(wallet.id, by: -1) },
             onMoveDown: wallets.last?.id == wallet.id ? nil : { nudge(wallet.id, by: 1) },
-            onDrop: { moving in drop(moving, onto: wallet.id) }
+            isLifted: dragId == wallet.id
         )
     }
 
-    /// A row was dropped onto another: it lands just past the target when it
-    /// came from above, just before it when it came from below, so the drop
-    /// reads as "put it here". The order is read from the manager at drop
-    /// time, not from values captured when the row was built.
-    private func drop(_ moving: UUID, onto target: UUID) {
-        guard let placement = WalletStore.insertionPoint(moving: moving, droppedOnto: target, order: walletManager.wallets.map(\.id)) else { return }
-        let before: UUID?
-        switch placement {
-        case .before(let id): before = id
-        case .atEnd: before = nil
+    // MARK: - Drag to reorder
+
+    private func rowId(at point: CGPoint) -> UUID? {
+        rowFrames.first { $0.value.contains(point) }?.key
+    }
+
+    /// The press began on a row: lift it. Frames are snapshotted here so the
+    /// drop maths never sees the rows it is moving.
+    private func lift(at point: CGPoint) {
+        guard let id = rowId(at: point), let index = wallets.firstIndex(where: { $0.id == id }) else { return }
+        framesAtLift = rowFrames
+        liftPoint = point
+        dragTranslation = 0
+        dropIndex = index
+        dragId = id
+        suppressTapsUntil = .distantFuture
+        HapticFeedback.shared.buttonPress()
+    }
+
+    private func move(to point: CGPoint) {
+        guard let dragId, let frame = framesAtLift[dragId] else { return }
+        dragTranslation = point.y - liftPoint.y
+        let centerY = frame.midY + dragTranslation
+        let others = wallets.filter { $0.id != dragId }.compactMap { framesAtLift[$0.id]?.midY }
+        let target = others.filter { $0 < centerY }.count
+        if target != dropIndex {
+            dropIndex = target
+            HapticFeedback.shared.softTick()
         }
-        withAnimation(.snappy(duration: 0.3)) {
-            walletManager.applyReorder(moving: [moving], before: before)
+    }
+
+    /// Commit: the target and the list are read here, through the manager,
+    /// not from values captured when the row was built.
+    private func drop(at point: CGPoint) {
+        move(to: point)
+        guard let id = dragId else { return }
+        let target = dropIndex
+        suppressTapsUntil = Date().addingTimeInterval(0.3)
+        withAnimation(Self.slide) {
+            if let target { walletManager.moveWallet(id: id, to: target) }
+            dragId = nil
+            dragTranslation = 0
+            dropIndex = nil
         }
+    }
+
+    private func cancelDrag() {
+        guard dragId != nil else { return }
+        suppressTapsUntil = Date().addingTimeInterval(0.3)
+        withAnimation(Self.slide) {
+            dragId = nil
+            dragTranslation = 0
+            dropIndex = nil
+        }
+    }
+
+    /// Where each row draws while a drag is in flight: the lifted row follows
+    /// the finger, the rows between its old and new slot shift by one slot.
+    private func rowOffset(for id: UUID) -> CGFloat {
+        guard let dragId, let from = wallets.firstIndex(where: { $0.id == dragId }) else { return 0 }
+        if id == dragId { return dragTranslation }
+        guard let to = dropIndex, to != from, let i = wallets.firstIndex(where: { $0.id == id }) else { return 0 }
+        let slot = (framesAtLift[dragId]?.height ?? 0) + Self.rowGap
+        if from < to, i > from, i <= to { return -slot }
+        if to < from, i >= to, i < from { return slot }
+        return 0
     }
 
     // MARK: - Switching
@@ -685,6 +749,126 @@ struct WalletManagerRows: View {
     }
 }
 
+
+
+/// One UIKit long-press recognizer on the enclosing scroll view, the way
+/// UITableView reorders. UIKit arbitrates with the scroll view itself: hold
+/// still for 0.4 s and the press begins and the pan is cancelled; move earlier
+/// and the press fails and the list scrolls. SwiftUI gesture compositions
+/// could not do this inside a ScrollView (each attempt swallowed the vertical
+/// drags), the iOS 27 reorder container asserted on every lift, and system
+/// drag and drop showed a copy badge. Locations are in window space, which
+/// is what the rows report through `frame(in: .global)`.
+private struct ReorderPressHost: UIViewRepresentable {
+    var isEnabled: Bool
+    var shouldBegin: (CGPoint) -> Bool
+    var onBegan: (CGPoint) -> Void
+    var onChanged: (CGPoint) -> Void
+    var onEnded: (CGPoint) -> Void
+    var onCancelled: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> AttachView {
+        let view = AttachView()
+        view.isUserInteractionEnabled = false
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateUIView(_ view: AttachView, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.recognizer.isEnabled = isEnabled
+    }
+
+    static func dismantleUIView(_ view: AttachView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
+    final class AttachView: UIView {
+        weak var coordinator: Coordinator?
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { coordinator?.attach(from: self) }
+        }
+        override func didMoveToSuperview() {
+            super.didMoveToSuperview()
+            if window != nil { coordinator?.attach(from: self) }
+        }
+        // The hierarchy above a SwiftUI-hosted view can still be assembling
+        // when it first lands in a window; keep trying until it is.
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            coordinator?.attach(from: self)
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: ReorderPressHost
+        let recognizer = UILongPressGestureRecognizer()
+        private weak var scrollView: UIScrollView?
+
+        init(_ parent: ReorderPressHost) {
+            self.parent = parent
+            super.init()
+            recognizer.minimumPressDuration = 0.4
+            recognizer.allowableMovement = 10
+            recognizer.delegate = self
+            recognizer.addTarget(self, action: #selector(handle(_:)))
+        }
+
+        /// Attach to the nearest enclosing UIScrollView so the recognizer sees
+        /// every touch that lands on a row (touches reach the recognizers of
+        /// every ancestor of the hit view).
+        func attach(from view: UIView) {
+            guard recognizer.view == nil else { return }
+            var candidate = view.superview
+            while let current = candidate, !(current is UIScrollView) {
+                candidate = current.superview
+            }
+            guard let scroll = candidate as? UIScrollView else { return }
+            scroll.addGestureRecognizer(recognizer)
+            scrollView = scroll
+        }
+
+        func detach() {
+            recognizer.view?.removeGestureRecognizer(recognizer)
+            scrollView?.isScrollEnabled = true
+        }
+
+        /// SwiftUI's own recognizer on the hosting view takes every touch
+        /// down (that is the Button's pressed state) and is exclusive by
+        /// default, which cancelled this press before it could begin. Run
+        /// alongside it; the row swallows the tap that ends a lift.
+        func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            true
+        }
+
+        func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+            parent.isEnabled && parent.shouldBegin(gesture.location(in: nil))
+        }
+
+        @objc private func handle(_ gesture: UILongPressGestureRecognizer) {
+            let point = gesture.location(in: nil)
+            switch gesture.state {
+            case .began:
+                // Kill the pan for the rest of this touch; re-enabled on release.
+                scrollView?.isScrollEnabled = false
+                parent.onBegan(point)
+            case .changed:
+                parent.onChanged(point)
+            case .ended:
+                scrollView?.isScrollEnabled = true
+                parent.onEnded(point)
+            case .cancelled, .failed:
+                scrollView?.isScrollEnabled = true
+                parent.onCancelled()
+            default:
+                break
+            }
+        }
+    }
+}
 
 /// Sheet for renaming a wallet with a tappable emoji picker circle
 struct RenameWalletSheet: View {

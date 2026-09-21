@@ -13,7 +13,6 @@ final class SoundFeedback {
     static let shared = SoundFeedback()
 
     /// UserDefaults key behind the Settings > Display > Sounds toggle.
-    static let sendSoundEnabledKey = "sendSoundEnabled"
 
     private let player: AVAudioPlayer?
     private var sessionActivated = false
@@ -32,14 +31,10 @@ final class SoundFeedback {
         }
     }
 
-    /// Mirrors the `@AppStorage("sendSoundEnabled")` default of `true`.
-    var isEnabled: Bool {
-        UserDefaults.standard.object(forKey: Self.sendSoundEnabledKey) as? Bool ?? true
-    }
-
-    /// Play the chime. No-op when Sounds is off or the asset did not load.
+    /// Play the chime. No-op when the asset did not load. The `.ambient`
+    /// session already keeps it silent while the ringer switch is off.
     func playSendComplete() {
-        guard isEnabled, let player else { return }
+        guard let player else { return }
         if !sessionActivated {
             sessionActivated = (try? AVAudioSession.sharedInstance().setActive(true)) != nil
         }

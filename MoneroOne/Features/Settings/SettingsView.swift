@@ -27,7 +27,6 @@ struct SettingsView: View {
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceAlertService: PriceAlertService
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
-    @AppStorage("sendSoundEnabled") private var sendSoundEnabled: Bool = true
     @AppStorage(WalletManager.rotateReceiveAddressKey) private var rotateReceiveAddress: Bool = true
     @State private var showBackup = false
     @State private var showSecurity = false
@@ -103,7 +102,7 @@ struct SettingsView: View {
                 }
 
                 // Display Section
-                Section {
+                Section("Display") {
                     Picker(selection: $appearanceMode) {
                         ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
                             Text(mode.displayName).tag(mode.rawValue)
@@ -166,19 +165,6 @@ struct SettingsView: View {
                             color: .blue
                         )
                     }
-
-                    Toggle(isOn: $sendSoundEnabled) {
-                        SettingsRow(
-                            icon: "speaker.wave.2.fill",
-                            title: "Send Sound",
-                            color: .teal
-                        )
-                    }
-                    .accessibilityIdentifier("settings.soundsToggle")
-                } header: {
-                    Text("Display")
-                } footer: {
-                    Text("Play a chime when a transaction is sent.")
                 }
 
                 // Sync Section

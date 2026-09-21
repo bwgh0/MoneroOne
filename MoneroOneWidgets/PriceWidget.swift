@@ -419,11 +419,7 @@ struct PriceWidgetView: View {
     // MARK: - Formatting
 
     private var currencySymbol: String {
-        let symbols: [String: String] = [
-            "usd": "$", "eur": "€", "gbp": "£",
-            "cad": "C$", "aud": "A$", "jpy": "¥", "cny": "¥"
-        ]
-        return symbols[entry.data.priceCurrency ?? "usd"] ?? "$"
+        FiatCurrency.symbol(for: entry.data.priceCurrency ?? "usd")
     }
 
     private func formatPrice(_ price: Double) -> String {

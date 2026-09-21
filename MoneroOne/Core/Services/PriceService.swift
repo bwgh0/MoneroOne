@@ -83,26 +83,12 @@ class PriceService: ObservableObject {
     // Optional alert service for triggering price alerts
     weak var priceAlertService: PriceAlertService?
 
-    static let supportedCurrencies = ["usd", "eur", "gbp", "cad", "aud", "jpy", "cny", "try", "rub", "chf", "brl", "inr", "krw", "mxn", "pln", "uah"]
+    /// Codes the app accepts, in picker order. Both tables derive from
+    /// `FiatCurrency.all`, the one list the app and the widget share.
+    static let supportedCurrencies: [String] = FiatCurrency.all.map(\.code)
 
-    static let currencySymbols: [String: String] = [
-        "usd": "$",
-        "eur": "€",
-        "gbp": "£",
-        "cad": "C$",
-        "aud": "A$",
-        "jpy": "¥",
-        "cny": "¥",
-        "try": "₺",
-        "rub": "₽",
-        "chf": "Fr",
-        "brl": "R$",
-        "inr": "₹",
-        "krw": "₩",
-        "mxn": "MX$",
-        "pln": "zł",
-        "uah": "₴"
-    ]
+    static let currencySymbols: [String: String] =
+        Dictionary(uniqueKeysWithValues: FiatCurrency.all.map { ($0.code, $0.symbol) })
 
     init() {
         loadCurrency()
@@ -130,6 +116,10 @@ class PriceService: ObservableObject {
         // old price value with new currency symbol
         xmrPrice = nil
         priceChange24h = nil
+        // The rate was for the previous currency. Back to the API's native
+        // unit (USD) until the new currency's quote arrives, so a failed
+        // switch cannot leave the chart converting with a stale rate.
+        usdToSelectedRate = 1.0
 
         // Debounce: wait 300ms before fetching to avoid rate limits during rapid switching
         currencyChangeDebounceTask = Task {
@@ -143,11 +133,11 @@ class PriceService: ObservableObject {
     }
 
     var currencySymbol: String {
-        Self.currencySymbols[selectedCurrency] ?? "$"
+        FiatCurrency.symbol(for: selectedCurrency)
     }
 
     /// Execute an async operation with exponential backoff retry
-    private func fetchWithRetry<T>(
+    func fetchWithRetry<T>(
         retries: Int = 3,
         operation: @escaping () async throws -> T
     ) async throws -> T {
@@ -158,6 +148,9 @@ class PriceService: ObservableObject {
             do {
                 return try await operation()
             } catch {
+                // A missing quote is a fact about the feed, not a hiccup:
+                // asking again returns the same answer, so surface it at once.
+                if case PriceError.missingQuote = error { throw error }
                 lastError = error
                 if attempt < retries {
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -239,8 +232,14 @@ class PriceService: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
+        try applyPriceResponse(result)
+    }
+
+    /// Validates a decoded price response and, when it passes, publishes it.
+    /// Kept apart from the network step so a fixture can drive it.
+    func applyPriceResponse(_ result: PriceResponse) throws {
         guard let quote = result.quotes[selectedCurrency] else {
-            throw URLError(.cannotParseResponse)
+            throw PriceError.missingQuote(currency: selectedCurrency)
         }
 
         // Sanity-check before this value is allowed anywhere near money math.
@@ -527,6 +526,9 @@ enum PriceError: LocalizedError {
     case implausiblePrice(Double)
     case implausibleDeviation(previous: Double, new: Double)
     case staleResponse(age: TimeInterval)
+    /// The feed has no quote for the selected currency. Not transient: the
+    /// upstream rate API lacks it, so a retry returns the same response.
+    case missingQuote(currency: String)
 
     var errorDescription: String? {
         switch self {
@@ -536,6 +538,8 @@ enum PriceError: LocalizedError {
             return "XMR price moved implausibly far in one update. Keeping the last known value."
         case .staleResponse:
             return "Received an out-of-date price response. Keeping the last known value."
+        case .missingQuote(let currency):
+            return "The price feed has no \(currency.uppercased()) quote."
         }
     }
 }

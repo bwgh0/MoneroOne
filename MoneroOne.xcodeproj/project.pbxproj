@@ -39,6 +39,7 @@
 		7324C5B0F049E590C2DC176D /* WalletIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9698D5ECB87A0302392684C6 /* WalletIntegrationTests.swift */; };
 		79AC7BE8045740D2F375CDAD /* PriceAlertsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BDCBAC09269EA2BCBDEDE3C /* PriceAlertsView.swift */; };
 		7A3D2F3A1A59DD93FC9DBC58 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B332C777DDD3D470FA081B35 /* WidgetData.swift */; };
+		03A2AAC563474919B05890E7 /* FiatCurrency.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA3814BAB2E944A085268962 /* FiatCurrency.swift */; };
 		7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873A08AAC18A1EE631F3FC67 /* WalletView.swift */; };
 		D4E5F6A7B8C9D0E1F2A3B4C5 /* WalletManagerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* WalletManagerSheet.swift */; };
 		7EFE00922F8A910BDA499EC1 /* PriceChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC83A18E25A660B8C7DFC5EA /* PriceChartView.swift */; };
@@ -104,6 +105,7 @@
 		FB5F8533851FF83B35C4E6A6 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E494E802F7171F1946F2FA45 /* QRScannerView.swift */; };
 		FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF818FE69F2EC0B444D26754 /* QRCodeView.swift */; };
 		FF659956FD9D9759B11F49F9 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B332C777DDD3D470FA081B35 /* WidgetData.swift */; };
+		64EEFAEFECDA4726A441CBD8 /* FiatCurrency.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA3814BAB2E944A085268962 /* FiatCurrency.swift */; };
 		PRICEWIDGET1234567890ABCD /* PriceWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = PRICEWIDGETREF123456789A /* PriceWidget.swift */; };
 		XMRFORMAT123456789ABCDEF0 /* XMRFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMRFORMATREF12345678ABCD /* XMRFormatter.swift */; };
 		TXSTATUS123456789ABCDEF01 /* MoneroTransaction+Status.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */; };
@@ -253,6 +255,7 @@
 		B03E2005118D429FE332C194 /* NodeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeSettingsView.swift; sourceTree = "<group>"; };
 		B21A52926BAFEF95AC6BB226 /* SyncSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSettingsView.swift; sourceTree = "<group>"; };
 		B332C777DDD3D470FA081B35 /* WidgetData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetData.swift; sourceTree = "<group>"; };
+		EA3814BAB2E944A085268962 /* FiatCurrency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiatCurrency.swift; sourceTree = "<group>"; };
 		B7C4D9F0B5479B927D727DBA /* SecurityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityTests.swift; sourceTree = "<group>"; };
 		B970167B0BFA69D181797B60 /* SyncActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncActivityManager.swift; sourceTree = "<group>"; };
 		BA5847FCE9402558A35491F8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -644,6 +647,7 @@
 		D8C6D910FBF41986F00A04C8 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				EA3814BAB2E944A085268962 /* FiatCurrency.swift */,
 				258D3AE9C07684C76F5645BB /* GlassButtonStyle.swift */,
 				1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */,
 				B332C777DDD3D470FA081B35 /* WidgetData.swift */,
@@ -892,6 +896,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 			buildActionMask = 2147483647;
 			files = (
 				F203826DEF4239A5D60CD9F9 /* BalanceWidget.swift in Sources */,
+				03A2AAC563474919B05890E7 /* FiatCurrency.swift in Sources */,
 				1BA4AE0A0A268DE7F27D1308 /* GlassButtonStyle.swift in Sources */,
 				2DE69D71C831027842B0A4CA /* MoneroOneWidgetsBundle.swift in Sources */,
 				PRICEWIDGET1234567890ABCD /* PriceWidget.swift in Sources */,
@@ -987,6 +992,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */,
 				B6CA1E6614A397E2BC1F155A /* WelcomeView.swift in Sources */,
 				FF659956FD9D9759B11F49F9 /* WidgetData.swift in Sources */,
+				64EEFAEFECDA4726A441CBD8 /* FiatCurrency.swift in Sources */,
 				F65EECC001BAE93898D97CB6 /* WidgetSettingsView.swift in Sources */,
 				XMRFORMAT123456789ABCDEF0 /* XMRFormatter.swift in Sources */,
 				TXSTATUS123456789ABCDEF01 /* MoneroTransaction+Status.swift in Sources */,

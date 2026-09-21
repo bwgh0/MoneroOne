@@ -120,7 +120,6 @@ struct WalletView: View {
                 }
             }
             // Lets the wallet rows' swipe-to-delete work outside a List (iOS 27).
-            .systemSwipeActionsContainer()
             .animation(.snappy(duration: 0.4), value: showWalletManager)
             // Viewport below the header bar and above the tab bar (background
             // content respects safe areas), used to size the activity card.

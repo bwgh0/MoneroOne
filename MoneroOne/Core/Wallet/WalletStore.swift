@@ -94,6 +94,25 @@ struct WalletStore {
         return rest
     }
 
+    /// Where a wallet dropped onto another row lands.
+    enum DropPlacement: Equatable {
+        case before(UUID)
+        case atEnd
+    }
+
+    /// Coming from above, the moved wallet goes just past the target; coming
+    /// from below, just before it. nil when nothing should move.
+    static func insertionPoint(moving: UUID, droppedOnto target: UUID, order: [UUID]) -> DropPlacement? {
+        guard moving != target,
+              let from = order.firstIndex(of: moving),
+              let to = order.firstIndex(of: target) else { return nil }
+        if from < to {
+            let after = order.index(after: to)
+            return after < order.endIndex ? .before(order[after]) : .atEnd
+        }
+        return .before(target)
+    }
+
     // MARK: - Active Wallet
 
     var activeWalletId: UUID? {

@@ -275,17 +275,17 @@ enum WalletRowSurface {
 /// The row is a Button so a tap is a plain button tap: switch, or close the
 /// list when it is the active one. The pencil renames.
 ///
-/// iOS 27: reorder and delete are the system's. `.reorderable()` on the
-/// parent ForEach owns the long-press lift, the scroll-while-dragging and
-/// the drop, and `.swipeActions` reveals Delete on inactive rows. Two custom
-/// long-press-then-drag compositions failed on device: a gesture composed
-/// inside the ScrollView swallowed the vertical drags and the list could not
-/// scroll. The system implementation cannot have that problem.
+/// Reorder is the system's drag and drop (`draggable` / `dropDestination`,
+/// iOS 16): UIKit owns the long-press lift, scrolling while dragging and the
+/// drop, on every supported iOS. Dropping a row onto another moves it next
+/// to that row. Two custom long-press-then-drag compositions failed on
+/// device (the list could not scroll), and the iOS 27 `reorderContainer`
+/// asserted on every lift with "Unexpected identifier type. Expected UUID,
+/// got UUID" (and the same with String keys), so neither is used.
 ///
-/// Before iOS 27: no drag reorder. A context menu offers Move Up / Move
-/// Down / Rename / Delete, and the 20pt horizontal delete swipe reveals the
-/// custom Delete zone on inactive rows. VoiceOver gets the same four as
-/// rotor actions on every version.
+/// The 20pt horizontal delete swipe reveals the custom Delete zone on
+/// inactive rows. VoiceOver gets Rename / Delete / Move up / Move down as
+/// rotor actions.
 struct WalletRow: View {
     let wallet: WalletInfo
     let isActive: Bool
@@ -298,37 +298,17 @@ struct WalletRow: View {
     /// nil when the row is already first / last.
     let onMoveUp: (() -> Void)?
     let onMoveDown: (() -> Void)?
+    /// Another wallet (by id) was dropped onto this row.
+    let onDrop: (UUID) -> Void
 
-    // The custom delete swipe, before iOS 27 only. Both stay false on iOS 27.
     @State private var showDeleteZone = false
+    /// True while a dragged row hovers over this one.
+    @State private var isDropTarget = false
     /// True from the moment a horizontal swipe is recognised until just after
     /// it ends, so the release does not fire the row's tap.
     @State private var didSwipe = false
 
     var body: some View {
-        #if compiler(>=6.4)
-        if #available(iOS 27.0, *) {
-            rowButton
-                .padding(.horizontal)
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if let onDelete {
-                        Button(role: .destructive, action: onDelete) {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-                }
-        } else {
-            legacyRow
-        }
-        #else
-        legacyRow
-        #endif
-    }
-
-    /// The row before iOS 27: the custom Delete zone slides in from the
-    /// trailing edge on a horizontal swipe, and a long press opens a context
-    /// menu that stands in for drag reorder.
-    private var legacyRow: some View {
         ZStack(alignment: .trailing) {
             if showDeleteZone, let onDelete {
                 Button {
@@ -359,27 +339,21 @@ struct WalletRow: View {
                 // could not scroll); horizontal drags fall through to it,
                 // and `didSwipe` keeps that release from tapping.
                 .gesture(deleteSwipe)
-                .contextMenu {
-                    if let onMoveUp {
-                        Button { onMoveUp() } label: {
-                            Label("Move Up", systemImage: "arrow.up")
-                        }
-                    }
-                    if let onMoveDown {
-                        Button { onMoveDown() } label: {
-                            Label("Move Down", systemImage: "arrow.down")
-                        }
-                    }
-                    Button { onRename() } label: {
-                        Label("Rename", systemImage: "pencil")
-                    }
-                    if let onDelete {
-                        Button(role: .destructive) { onDelete() } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-                }
                 .offset(x: showDeleteZone ? -88 : 0)
+                // System drag and drop: a long press lifts the row, the
+                // scroll view keeps scrolling under the finger, and dropping
+                // it on another row moves it next to that row.
+                .draggable(wallet.id.uuidString)
+                .dropDestination(for: String.self) { items, _ in
+                    guard let key = items.first, let moving = UUID(uuidString: key), moving != wallet.id else {
+                        return false
+                    }
+                    onDrop(moving)
+                    return true
+                } isTargeted: { targeted in
+                    withAnimation(.snappy(duration: 0.2)) { isDropTarget = targeted }
+                }
+                .scaleEffect(isDropTarget ? 1.02 : 1)
         }
         .padding(.horizontal)
     }
@@ -549,44 +523,7 @@ struct WalletManagerRows: View {
 
     private var wallets: [WalletInfo] { walletManager.wallets }
 
-    /// The rows, with the system reorder on iOS 27. The availability branch
-    /// sits above the stack on purpose: `.reorderable()` has to be applied to
-    /// the `ForEach` itself, directly inside its container. Routing it
-    /// through a `some View` helper put a conditional wrapper between the
-    /// two; the rows still got a drag interaction but the container had no
-    /// payload for them, and SwiftUI asserted on every lift (three device
-    /// crashes on 2026-09-21).
-    @ViewBuilder
     private var rowsStack: some View {
-        #if compiler(>=6.4)
-        if #available(iOS 27.0, *) {
-            VStack(spacing: Self.rowGap) {
-                ForEach(wallets) { wallet in
-                    row(for: wallet)
-                }
-                .reorderable()
-
-                addWalletButton
-            }
-            // Off while the list collapses or a switch starts, so a lift that
-            // began on a row being removed is cancelled instead of asserting.
-            .reorderContainer(for: WalletInfo.self, isEnabled: isExpanded && !isSwitching && !walletManager.isSwitchingWallet) { difference in
-                switch difference.destination.position {
-                case .before(let id):
-                    walletManager.applyReorder(moving: difference.sources, before: id)
-                case .end:
-                    walletManager.applyReorder(moving: difference.sources, before: nil)
-                }
-            }
-        } else {
-            legacyRowsStack
-        }
-        #else
-        legacyRowsStack
-        #endif
-    }
-
-    private var legacyRowsStack: some View {
         VStack(spacing: Self.rowGap) {
             ForEach(wallets) { wallet in
                 row(for: wallet)
@@ -688,8 +625,25 @@ struct WalletManagerRows: View {
             },
             onDelete: isActive ? nil : { deleteWalletId = wallet.id },
             onMoveUp: wallets.first?.id == wallet.id ? nil : { nudge(wallet.id, by: -1) },
-            onMoveDown: wallets.last?.id == wallet.id ? nil : { nudge(wallet.id, by: 1) }
+            onMoveDown: wallets.last?.id == wallet.id ? nil : { nudge(wallet.id, by: 1) },
+            onDrop: { moving in drop(moving, onto: wallet.id) }
         )
+    }
+
+    /// A row was dropped onto another: it lands just past the target when it
+    /// came from above, just before it when it came from below, so the drop
+    /// reads as "put it here". The order is read from the manager at drop
+    /// time, not from values captured when the row was built.
+    private func drop(_ moving: UUID, onto target: UUID) {
+        guard let placement = WalletStore.insertionPoint(moving: moving, droppedOnto: target, order: walletManager.wallets.map(\.id)) else { return }
+        let before: UUID?
+        switch placement {
+        case .before(let id): before = id
+        case .atEnd: before = nil
+        }
+        withAnimation(.snappy(duration: 0.3)) {
+            walletManager.applyReorder(moving: [moving], before: before)
+        }
     }
 
     // MARK: - Switching
@@ -731,31 +685,6 @@ struct WalletManagerRows: View {
     }
 }
 
-private extension View {
-    /// System drag-to-reorder for the wallet rows on iOS 27: `apply` gets the
-    /// moved wallet ids and the id they land before (nil = the end), the two
-    /// halves of the `ReorderDifference`. Inert before iOS 27, and on the
-    /// Xcode 26 toolchain CI builds with, where the API does not exist.
-    @ViewBuilder
-    func walletReorderContainer(isEnabled: Bool = true, _ apply: @escaping (_ moving: [UUID], _ before: UUID?) -> Void) -> some View {
-        #if compiler(>=6.4)
-        if #available(iOS 27.0, *) {
-            self.reorderContainer(for: WalletInfo.self, isEnabled: isEnabled) { difference in
-                switch difference.destination.position {
-                case .before(let id):
-                    apply(difference.sources, id)
-                case .end:
-                    apply(difference.sources, nil)
-                }
-            }
-        } else {
-            self
-        }
-        #else
-        self
-        #endif
-    }
-}
 
 /// Sheet for renaming a wallet with a tappable emoji picker circle
 struct RenameWalletSheet: View {

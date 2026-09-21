@@ -301,15 +301,35 @@ class PriceService: ObservableObject {
         savePriceWidgetData()
     }
 
+    /// What `xmrAmount` is worth at the live price, formatted in the
+    /// selected currency. Nil until a price has been fetched.
     func formatFiatValue(_ xmrAmount: Decimal) -> String? {
         guard let price = xmrPrice else { return nil }
 
         let fiatValue = (xmrAmount as NSDecimalNumber).doubleValue * price
+        return formatFiat(Decimal(fiatValue))
+    }
+
+    /// Formats a fiat amount in the selected currency, e.g. "$12.34". Takes
+    /// a value rather than an XMR amount, so values priced from history and
+    /// values priced live format the same way.
+    func formatFiat(_ value: Decimal) -> String {
+        fiatFormatter().string(from: value as NSDecimalNumber) ?? "\(value)"
+    }
+
+    private var cachedFiatFormatter: (currency: String, formatter: NumberFormatter)?
+
+    /// One formatter per currency. Transaction rows format on every render
+    /// and building a `NumberFormatter` each time is slow.
+    private func fiatFormatter() -> NumberFormatter {
+        if let cached = cachedFiatFormatter, cached.currency == selectedCurrency {
+            return cached.formatter
+        }
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = selectedCurrency.uppercased()
-
-        return formatter.string(from: NSNumber(value: fiatValue))
+        cachedFiatFormatter = (selectedCurrency, formatter)
+        return formatter
     }
 
     func formatPriceChange() -> String? {

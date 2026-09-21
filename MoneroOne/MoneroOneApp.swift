@@ -8,7 +8,8 @@ private let logger = Logger(subsystem: "one.monero.MoneroOne", category: "App")
 @main
 struct MoneroOneApp: App {
     @StateObject private var walletManager = WalletManager()
-    @StateObject private var priceService = PriceService()
+    @StateObject private var priceService: PriceService
+    @StateObject private var priceHistoryService: PriceHistoryService
     @StateObject private var priceAlertService = PriceAlertService()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("autoLockMinutes") private var autoLockMinutes = 5
@@ -22,6 +23,12 @@ struct MoneroOneApp: App {
     }
 
     init() {
+        // The history service prices by the currency the price service
+        // selects, so both state objects share one PriceService instance.
+        let priceService = PriceService()
+        _priceService = StateObject(wrappedValue: priceService)
+        _priceHistoryService = StateObject(wrappedValue: PriceHistoryService(priceService: priceService))
+
         #if DEBUG
         // UI test state reset — clear all persisted data for a clean slate
         if CommandLine.arguments.contains("--uitesting") && CommandLine.arguments.contains("--reset-state") {
@@ -55,6 +62,7 @@ struct MoneroOneApp: App {
             ContentView()
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
+                .environmentObject(priceHistoryService)
                 .environmentObject(priceAlertService)
                 .preferredColorScheme(colorScheme)
                 .onAppear {
@@ -64,12 +72,14 @@ struct MoneroOneApp: App {
                     // Avoids IP/connection leak on first launch before seed.
                     if walletManager.hasWallet {
                         priceService.startAutoRefresh()
+                        priceHistoryService.startAutoRefresh()
                         schedulePriceCheck()
                     }
                 }
                 .onChange(of: walletManager.hasWallet) { hasWallet in
                     if hasWallet {
                         priceService.startAutoRefresh()
+                        priceHistoryService.startAutoRefresh()
                         schedulePriceCheck()
                     }
                 }
@@ -127,7 +137,10 @@ struct MoneroOneApp: App {
             // A chart left open across a long background is stale; the live
             // tip would draw one long straight segment out to "now".
             if walletManager.hasWallet {
-                Task { await priceService.refreshIfStale() }
+                Task {
+                    await priceService.refreshIfStale()
+                    await priceHistoryService.refreshIfStale()
+                }
             }
             // Check if we should lock based on time in background
             if walletManager.isUnlocked, let bgTime = backgroundTime, autoLockMinutes > 0 {

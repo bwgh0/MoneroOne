@@ -306,6 +306,8 @@ struct RecentTransactionsSection: View {
 struct RecentTransactionCard: View {
     let transaction: MoneroTransaction
     let onTap: () -> Void
+    @EnvironmentObject var priceService: PriceService
+    @EnvironmentObject var priceHistoryService: PriceHistoryService
 
     var body: some View {
         Button(action: onTap) {
@@ -339,18 +341,29 @@ struct RecentTransactionCard: View {
                         .fontWeight(.semibold)
                         .foregroundColor(transaction.type == .incoming ? .green : .primary)
 
-                    HStack(spacing: 4) {
-                        if transaction.isStatusLoading {
-                            ProgressView()
-                                .scaleEffect(0.5)
-                                .frame(width: 6, height: 6)
-                        } else {
-                            Circle()
-                                .fill(transaction.displayStatusColor)
-                                .frame(width: 6, height: 6)
-                            Text(transaction.displayStatusText)
-                                .font(.caption2)
-                                .foregroundColor(transaction.displayStatusColor)
+                    // Status and fiat share one line under the amount, so
+                    // the row keeps its height whether or not the fiat
+                    // value has loaded yet.
+                    HStack(spacing: 8) {
+                        HStack(spacing: 4) {
+                            if transaction.isStatusLoading {
+                                ProgressView()
+                                    .scaleEffect(0.5)
+                                    .frame(width: 6, height: 6)
+                            } else {
+                                Circle()
+                                    .fill(transaction.displayStatusColor)
+                                    .frame(width: 6, height: 6)
+                                Text(transaction.displayStatusText)
+                                    .font(.caption2)
+                                    .foregroundColor(transaction.displayStatusColor)
+                            }
+                        }
+
+                        if let fiatAtTime {
+                            Text(fiatAtTime)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -364,12 +377,19 @@ struct RecentTransactionCard: View {
         }
         .glassButtonStyle()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR, \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR\(fiatAtTime.map { ", worth \($0) at the time" } ?? ""), \(formattedDate), \(transaction.displayStatusText)")
         .accessibilityHint("Shows transaction details")
     }
 
     private var iconColor: Color {
         transaction.type == .incoming ? .green : .orange
+    }
+
+    /// What the amount was worth when the transaction happened, in the
+    /// selected currency. Nil until price history has loaded.
+    private var fiatAtTime: String? {
+        priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+            .map { priceService.formatFiat($0) }
     }
 
     private var formattedDate: String {

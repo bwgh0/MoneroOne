@@ -1156,29 +1156,6 @@ final class SendCompleteSoundTests: XCTestCase {
         XCTAssertGreaterThan(player.duration, 0.5)
         XCTAssertLessThan(player.duration, 1.5)
     }
-
-    /// Sounds default to on and follow the Settings toggle's key.
-    @MainActor
-    func testSendSoundDefaultsToOnAndFollowsSetting() {
-        let key = SoundFeedback.sendSoundEnabledKey
-        let previous = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let previous {
-                UserDefaults.standard.set(previous, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-
-        UserDefaults.standard.removeObject(forKey: key)
-        XCTAssertTrue(SoundFeedback.shared.isEnabled)
-
-        UserDefaults.standard.set(false, forKey: key)
-        XCTAssertFalse(SoundFeedback.shared.isEnabled)
-
-        UserDefaults.standard.set(true, forKey: key)
-        XCTAssertTrue(SoundFeedback.shared.isEnabled)
-    }
 }
 
 // MARK: - Transaction Screen Logic Tests

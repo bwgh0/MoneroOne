@@ -8,6 +8,7 @@ struct NodeSettingsView: View {
     @State private var editingNode: MoneroNode? = nil
     @State private var editingProxy: ProxyEntry? = nil
     @State private var torEnabled: Bool = false
+    @State private var showTorWarning = false
 
     var body: some View {
         List {
@@ -56,7 +57,7 @@ struct NodeSettingsView: View {
 
             // MARK: - Tor Proxy Section
             Section {
-                Toggle(isOn: $torEnabled) {
+                Toggle(isOn: torToggleBinding) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Use Tor Proxy")
                             .font(.body)
@@ -106,6 +107,12 @@ struct NodeSettingsView: View {
         }
         .onChange(of: torEnabled) { _, enabled in
             handleTorToggle(enabled)
+        }
+        .alert("Tor Proxy Required", isPresented: $showTorWarning) {
+            Button("Cancel", role: .cancel) {}
+            Button("Turn On") { torEnabled = true }
+        } message: {
+            Text("Monero One does not include Tor. Turn this on only if Orbot or another Tor proxy app is running on this iPhone. Without one, none of your nodes will connect.")
         }
         .sheet(isPresented: $showAddNode) {
             AddCustomNodeView { name, url, login, password in
@@ -368,6 +375,22 @@ struct NodeSettingsView: View {
     private func selectNode(_ node: MoneroNode) {
         nodeManager.selectNode(node)
         walletManager.setNode(url: node.url, isTrusted: node.isTrusted, login: node.login, password: node.password)
+    }
+
+    /// Turning Tor on goes through the warning first; turning it off is
+    /// immediate. The app ships no Tor of its own, so without Orbot or a
+    /// similar proxy app running, every node connection fails once this is on.
+    private var torToggleBinding: Binding<Bool> {
+        Binding(
+            get: { torEnabled },
+            set: { wantsOn in
+                if wantsOn && !torEnabled {
+                    showTorWarning = true
+                } else {
+                    torEnabled = wantsOn
+                }
+            }
+        )
     }
 
     private func handleTorToggle(_ enabled: Bool) {

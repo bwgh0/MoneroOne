@@ -84,25 +84,6 @@ private struct EdgeBreathingRoomInstaller: UIViewRepresentable {
     }
 }
 
-extension DynamicViewContent {
-    /// System drag-to-reorder for this ForEach's rows on iOS 27: the system
-    /// owns the long-press lift, scroll-while-dragging and the drop, and the
-    /// enclosing `reorderContainer` gets the difference. A plain ForEach
-    /// before iOS 27. Same toolchain gate as `horizontalBarsOnDuo()`.
-    @ViewBuilder
-    func systemReorderable() -> some View {
-        #if compiler(>=6.4)
-        if #available(iOS 27.0, *) {
-            self.reorderable()
-        } else {
-            self
-        }
-        #else
-        self
-        #endif
-    }
-}
-
 extension View {
     /// Keeps a sheet's navigation bar horizontal on iPhone Duo instead of the
     /// trailing vertical bar, so its title stays centered. Apple reserves this
@@ -115,23 +96,6 @@ extension View {
         #if compiler(>=6.4)
         if #available(iOS 27.1, *) {
             self.toolbarVerticalBehavior(.disabled)
-        } else {
-            self
-        }
-        #else
-        self
-        #endif
-    }
-
-    /// Lets `swipeActions` on rows inside this scroll view work on iOS 27,
-    /// where they are no longer List-only. Inert before iOS 27. Gated on the
-    /// toolchain like `horizontalBarsOnDuo()`: the symbol is missing from the
-    /// Xcode 26 SDK CI still builds with.
-    @ViewBuilder
-    func systemSwipeActionsContainer() -> some View {
-        #if compiler(>=6.4)
-        if #available(iOS 27.0, *) {
-            self.swipeActionsContainer()
         } else {
             self
         }

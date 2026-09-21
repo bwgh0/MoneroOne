@@ -8,6 +8,8 @@ struct WalletView: View {
     @State private var showSend = false
     @State private var showPortfolio = false
     @State private var showWalletManager = false
+    /// A wallet row is lifted for reordering: the scroll view must not pan.
+    @State private var isReorderingWallets = false
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
     @Binding var selectedTab: MainTabView.Tab
     /// Viewport and above-activity heights, so the empty activity card can
@@ -114,11 +116,12 @@ struct WalletView: View {
 
                     // Wallet rows — slide in from the right
                     if showWalletManager {
-                        WalletManagerRows(isExpanded: $showWalletManager)
+                        WalletManagerRows(isExpanded: $showWalletManager, isReordering: $isReorderingWallets)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
             }
+            .scrollDisabled(isReorderingWallets)
             .animation(.snappy(duration: 0.4), value: showWalletManager)
             // Viewport below the header bar and above the tab bar (background
             // content respects safe areas), used to size the activity card.
@@ -416,7 +419,7 @@ private struct WalletHeaderContent: View {
     var body: some View {
         VStack(spacing: 8) {
             // The greeting and the chip stay put whether the list is open or
-            // not; only the content below swaps. The chip's ring shows the
+            // not; only the content below swaps, and that is what shows the
             // open state.
             HStack(spacing: 0) {
                 DynamicGreeting()

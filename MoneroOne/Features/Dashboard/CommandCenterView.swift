@@ -12,6 +12,8 @@ struct CommandCenterView: View {
     /// stretches, and the wallet rows replace the balance column (same
     /// choreography as WalletView on iPhone).
     @State private var showWalletManager = false
+    /// A wallet row is lifted for reordering: the scroll view must not pan.
+    @State private var isReorderingWallets = false
 
     /// Below this width (iPad portrait, iPhone Duo unfolded) the chart stacks
     /// under the balance instead of taking its own column.
@@ -44,6 +46,7 @@ struct CommandCenterView: View {
                 .frame(height: columnHeight)
                 .padding()
             }
+            .scrollDisabled(isReorderingWallets)
             .safeAreaInset(edge: .top, spacing: 0) {
                 bannerSection
             }
@@ -125,7 +128,7 @@ struct CommandCenterView: View {
     // MARK: - Pieces
 
     /// The greeting and the chip stay put whether the list is open or not;
-    /// only the content below swaps. The chip's ring shows the open state.
+    /// only the content below swaps, and that is what shows the open state.
     private var greetingHeader: some View {
         HStack(spacing: 0) {
             DynamicGreeting()
@@ -136,7 +139,7 @@ struct CommandCenterView: View {
     }
 
     private var walletRows: some View {
-        WalletManagerRows(isExpanded: $showWalletManager)
+        WalletManagerRows(isExpanded: $showWalletManager, isReordering: $isReorderingWallets)
             // Rows carry the phone's 16pt screen inset; the column already
             // has it, so pull them back flush with the switcher pill.
             .padding(.horizontal, -16)

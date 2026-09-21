@@ -466,7 +466,10 @@ private extension View {
 }
 
 #Preview {
+    let priceService = PriceService()
+    let priceHistoryService = PriceHistoryService(priceService: priceService)
     WalletView(selectedTab: .constant(.wallet))
         .environmentObject(WalletManager())
-        .environmentObject(PriceService())
+        .environmentObject(priceService)
+        .environmentObject(priceHistoryService)
 }

@@ -298,6 +298,8 @@ struct TransactionDetailView: View {
 }
 
 #Preview {
+    let priceService = PriceService()
+    let priceHistoryService = PriceHistoryService(priceService: priceService)
     NavigationStack {
         TransactionDetailView(transaction: MoneroTransaction(
             id: "abc123def456",
@@ -312,6 +314,8 @@ struct TransactionDetailView: View {
             blockHeight: nil
         ))
         .environmentObject(WalletManager())
+        .environmentObject(priceService)
+        .environmentObject(priceHistoryService)
     }
 }
 

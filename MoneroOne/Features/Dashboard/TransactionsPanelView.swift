@@ -192,8 +192,12 @@ struct TransactionPanelRow: View {
 }
 
 #Preview {
+    let priceService = PriceService()
+    let priceHistoryService = PriceHistoryService(priceService: priceService)
     TransactionsPanelView()
         .environmentObject(WalletManager())
+        .environmentObject(priceService)
+        .environmentObject(priceHistoryService)
         .frame(width: 350, height: 500)
         .padding()
 }

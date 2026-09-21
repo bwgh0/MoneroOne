@@ -362,7 +362,7 @@ struct RecentTransactionCard: View {
 
                         if let fiatAtTime {
                             Text(fiatAtTime)
-                                .font(.caption)
+                                .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                     }

@@ -45,7 +45,6 @@ struct CommandCenterView: View {
                 .padding()
             }
             // Lets the wallet rows' swipe-to-delete work outside a List (iOS 27).
-            .systemSwipeActionsContainer()
             .safeAreaInset(edge: .top, spacing: 0) {
                 bannerSection
             }

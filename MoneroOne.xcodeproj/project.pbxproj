@@ -50,6 +50,7 @@
 		9B8891204A64866A6A3404D2 /* SyncActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */; };
 		9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8C8A112B161D2A874330F /* TransactionListView.swift */; };
 		A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000001 /* HapticFeedback.swift */; };
+		A1B2C3D400000001A000000B /* SoundFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A000000B /* SoundFeedback.swift */; };
 		CAC4E1D0000000000000C10P /* SecureClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000C20P /* SecureClipboard.swift */; };
 		A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000002 /* NumericKeypad.swift */; };
 		A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */; };
@@ -186,6 +187,7 @@
 		09AA838F4EF37023CE4794A9 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceServiceTests.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000001 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
+		A1B2C3D400000002A000000B /* SoundFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundFeedback.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000C20P /* SecureClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureClipboard.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000002 /* NumericKeypad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericKeypad.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessCheckmarkView.swift; sourceTree = "<group>"; };
@@ -697,6 +699,7 @@
 			children = (
 				A1B2C3D400000002A0000001 /* HapticFeedback.swift */,
 				CAC4E1D0000000000000C20P /* SecureClipboard.swift */,
+				A1B2C3D400000002A000000B /* SoundFeedback.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -973,6 +976,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */,
 				A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */,
 				CAC4E1D0000000000000C10P /* SecureClipboard.swift in Sources */,
+				A1B2C3D400000001A000000B /* SoundFeedback.swift in Sources */,
 				A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */,
 				A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */,
 				A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */,

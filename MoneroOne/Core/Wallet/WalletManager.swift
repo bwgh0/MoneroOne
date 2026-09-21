@@ -3298,6 +3298,19 @@ class WalletManager: ObservableObject {
         moveWallets(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
     }
 
+    /// Persist a system drag-to-reorder from the switcher (iOS 27): the
+    /// wallets in `moving` land before the wallet `before`, or at the end when
+    /// it is nil, the shape of SwiftUI's `ReorderDifference`. Same contract as
+    /// `moveWallets`: only the array order changes, the active wallet and its
+    /// stored id are untouched, and a drop that changes nothing writes nothing.
+    func applyReorder(moving: [UUID], before: UUID?) {
+        let reordered = WalletStore.reordered(wallets, moving: moving, before: before)
+        let ids = reordered.map(\.id)
+        guard ids != wallets.map(\.id) else { return }
+        wallets = reordered
+        walletStore.reorderWallets(ids)
+    }
+
     /// Re-encrypt every wallet's secret material when PIN changes. Walks
     /// wallets by `source` so view-only and hardware wallets (no seed) are
     /// re-encrypted through their view-key slot — the previous seed-only

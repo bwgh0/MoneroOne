@@ -8,8 +8,6 @@ struct WalletView: View {
     @State private var showSend = false
     @State private var showPortfolio = false
     @State private var showWalletManager = false
-    /// A wallet row is lifted for reordering: the scroll view must not pan.
-    @State private var isReorderingWallets = false
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
     @Binding var selectedTab: MainTabView.Tab
     /// Viewport and above-activity heights, so the empty activity card can
@@ -116,12 +114,13 @@ struct WalletView: View {
 
                     // Wallet rows — slide in from the right
                     if showWalletManager {
-                        WalletManagerRows(isExpanded: $showWalletManager, isReordering: $isReorderingWallets)
+                        WalletManagerRows(isExpanded: $showWalletManager)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
             }
-            .scrollDisabled(isReorderingWallets)
+            // Lets the wallet rows' swipe-to-delete work outside a List (iOS 27).
+            .systemSwipeActionsContainer()
             .animation(.snappy(duration: 0.4), value: showWalletManager)
             // Viewport below the header bar and above the tab bar (background
             // content respects safe areas), used to size the activity card.

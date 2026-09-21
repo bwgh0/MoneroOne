@@ -12,8 +12,6 @@ struct CommandCenterView: View {
     /// stretches, and the wallet rows replace the balance column (same
     /// choreography as WalletView on iPhone).
     @State private var showWalletManager = false
-    /// A wallet row is lifted for reordering: the scroll view must not pan.
-    @State private var isReorderingWallets = false
 
     /// Below this width (iPad portrait, iPhone Duo unfolded) the chart stacks
     /// under the balance instead of taking its own column.
@@ -46,7 +44,8 @@ struct CommandCenterView: View {
                 .frame(height: columnHeight)
                 .padding()
             }
-            .scrollDisabled(isReorderingWallets)
+            // Lets the wallet rows' swipe-to-delete work outside a List (iOS 27).
+            .systemSwipeActionsContainer()
             .safeAreaInset(edge: .top, spacing: 0) {
                 bannerSection
             }
@@ -139,7 +138,7 @@ struct CommandCenterView: View {
     }
 
     private var walletRows: some View {
-        WalletManagerRows(isExpanded: $showWalletManager, isReordering: $isReorderingWallets)
+        WalletManagerRows(isExpanded: $showWalletManager)
             // Rows carry the phone's 16pt screen inset; the column already
             // has it, so pull them back flush with the switcher pill.
             .padding(.horizontal, -16)

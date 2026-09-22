@@ -251,7 +251,7 @@ struct WalletSwitcherButton: View {
         }
         .glassButtonStyle()
         .accessibilityIdentifier("wallet.switcher")
-        .accessibilityHint(isExpanded ? "Closes the wallet list" : "Opens the wallet list")
+        .accessibilityHint(isExpanded ? "Closes the wallet list" : "Opens the wallet list, where you can switch, rename or add wallets")
     }
 }
 
@@ -377,6 +377,33 @@ struct WalletRow: View {
                 Button("Move down") { onMoveDown() }
             }
         }
+        // After the row's accessibility modifiers, so the pencil keeps its own
+        // identifier and does not read as "Selected".
+        .overlay(alignment: .trailing) {
+            // Same trailing slots as `rowContent`: pencil, 14pt gap, the
+            // 24pt check or circle, 18pt row padding.
+            renameButton
+                .padding(.trailing, 18 + 24 + 14)
+        }
+    }
+
+    /// The pencil. A Button of its own, not part of the row's label: inside
+    /// the label VoiceOver merged it into the row and a VoiceOver user could
+    /// only rename through the rotor, which they did not find.
+    private var renameButton: some View {
+        Button(action: onRename) {
+            Image(systemName: "pencil.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary.opacity(0.5))
+                .frame(width: 24, height: 24)
+                .padding(10)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(-10)
+        .accessibilityLabel("Rename \(wallet.name)")
+        .accessibilityHint("Changes the wallet name and icon")
+        .accessibilityIdentifier(isActive ? "wallet.switcher.rename" : "wallet.row.rename")
     }
 
     // MARK: - Content
@@ -423,18 +450,17 @@ struct WalletRow: View {
 
             Spacer()
 
-            Image(systemName: "pencil.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary.opacity(0.5))
-                .onTapGesture { onRename() }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Rename \(wallet.name)")
-                .accessibilityIdentifier(isActive ? "wallet.switcher.rename" : "wallet.row.rename")
+            // Holds the pencil's place; the real pencil is `renameButton`,
+            // laid over the row outside its Button so VoiceOver reaches it.
+            Color.clear
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
 
             if isActive {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(.green)
+                    .frame(width: 24, height: 24)
                     .accessibilityLabel("Current wallet")
             } else {
                 Circle()

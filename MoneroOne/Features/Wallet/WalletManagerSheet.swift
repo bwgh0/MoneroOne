@@ -245,6 +245,16 @@ struct WalletSwitcherButton: View {
         }
         .glassButtonStyle()
         .accessibilityIdentifier("wallet.switcher")
+        .accessibilityHint(isExpanded ? "Closes the wallet list" : "Opens the wallet list, where you can switch, rename or add wallets")
+        // After the switcher's accessibility modifiers, so the pencil keeps
+        // its own identifier. Same trailing slots as `expandedLabel`: pencil,
+        // 14pt gap, the 24pt check, 18pt padding.
+        .overlay(alignment: .trailing) {
+            if isExpanded {
+                renameActiveButton
+                    .padding(.trailing, 18 + 24 + 14)
+            }
+        }
         .sheet(isPresented: $showRenameActive) {
             RenameWalletSheet(
                 name: $renameText,
@@ -317,25 +327,53 @@ struct WalletSwitcherButton: View {
 
             Spacer()
 
-            // Rename pencil for active wallet
-            Image(systemName: "pencil.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary.opacity(0.5))
-                .onTapGesture {
-                    renameText = walletManager.activeWallet?.name ?? ""
-                    renameEmoji = walletManager.activeWallet?.emoji ?? "\u{1F4B0}"
-                    showRenameActive = true
-                }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Rename wallet")
-                .accessibilityIdentifier("wallet.switcher.rename")
+            // Holds the pencil's place; the real pencil is
+            // `renameActiveButton`, laid over the switcher outside its
+            // Button so VoiceOver reaches it.
+            Color.clear
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.title3)
                 .foregroundStyle(.green)
+                .frame(width: 24, height: 24)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 18)
+    }
+
+    /// The pencil for the active wallet. A Button of its own, not part of
+    /// the switcher's label: inside the label VoiceOver merged it into the
+    /// switcher and a VoiceOver user could not find it.
+    private var renameActiveButton: some View {
+        WalletRenamePencil(name: walletManager.activeWallet?.name ?? "wallet") {
+            renameText = walletManager.activeWallet?.name ?? ""
+            renameEmoji = walletManager.activeWallet?.emoji ?? "\u{1F4B0}"
+            showRenameActive = true
+        }
+        .accessibilityIdentifier("wallet.switcher.rename")
+    }
+}
+
+/// The rename pencil on a wallet row: 24pt glyph, 44pt touch target.
+struct WalletRenamePencil: View {
+    let name: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "pencil.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary.opacity(0.5))
+                .frame(width: 24, height: 24)
+                .padding(10)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(-10)
+        .accessibilityLabel("Rename \(name)")
+        .accessibilityHint("Changes the wallet name and icon")
     }
 }
 
@@ -413,13 +451,12 @@ struct WalletRow: View {
 
                     Spacer()
 
-                    // Rename pencil
-                    Image(systemName: "pencil.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.secondary.opacity(0.5))
-                        .onTapGesture { onRename() }
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel("Rename \\(wallet.name)")
+                    // Holds the pencil's place; the real pencil is laid
+                    // over the row below, outside its Button, so VoiceOver
+                    // reaches it.
+                    Color.clear
+                        .frame(width: 24, height: 24)
+                        .accessibilityHidden(true)
 
                     Circle()
                         .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
@@ -435,6 +472,13 @@ struct WalletRow: View {
             .accessibilityHint("Double tap to switch to this wallet")
             .accessibilityAction(named: "Rename") { onRename() }
             .accessibilityAction(named: "Delete") { onDelete() }
+            // Same trailing slots as the label: pencil, 14pt gap, the 24pt
+            // circle, 18pt padding.
+            .overlay(alignment: .trailing) {
+                WalletRenamePencil(name: wallet.name, action: onRename)
+                    .accessibilityIdentifier("wallet.row.rename")
+                    .padding(.trailing, 18 + 24 + 14)
+            }
             .offset(x: showDeleteZone ? -88 : 0)
         }
         .padding(.horizontal)

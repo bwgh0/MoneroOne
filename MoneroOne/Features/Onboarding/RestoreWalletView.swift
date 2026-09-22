@@ -21,15 +21,12 @@ struct RestoreWalletView: View {
     @State private var showErrorAlert = false
     @State private var isRestoring = false
     @State private var walletCreationDate: Date = Date()
-    /// `.unset` until the user chooses. The step used to pre-select today and
-    /// accept it, which put the restore height ~1,440 blocks below the tip:
-    /// sync "finished" in seconds with an empty history.
-    @State private var creationDateChoice: CreationDateChoice = .unset
+    /// Off scans the whole chain. A date within the last 30 days asks for
+    /// confirmation: accepting today put the restore height ~1,440 blocks
+    /// below the tip, so sync "finished" in seconds with an empty history.
+    @State private var useCreationDate = true
     @State private var showRecentDateConfirm = false
 
-    enum CreationDateChoice { case unset, knowDate, unknown }
-
-    private var useCreationDate: Bool { creationDateChoice == .knowDate }
     @State private var selectedPINLength = 6
     @FocusState private var focusedField: PINField?
 
@@ -519,50 +516,44 @@ struct RestoreWalletView: View {
         }
     }
 
+    /// Scrolls so the graphical calendar never squeezes the copy on short
+    /// screens (iPhone Duo inner display); Continue stays pinned below.
     private var creationDateView: some View {
-        VStack(spacing: 24) {
-            Text("When did you create this wallet?")
-                .font(.headline)
+        ScrollView {
+            VStack(spacing: 24) {
+                Text("When did you create this wallet?")
+                    .font(.headline)
 
-            Text("Scanning starts a little before this date, so choose a date from before your first transaction. Not sure? Pick an earlier date or scan everything.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+                Text("This helps speed up transaction scanning by skipping blocks before your wallet existed.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
 
-            VStack(spacing: 12) {
-                SelectableOptionCard(
-                    id: CreationDateChoice.knowDate,
-                    selection: $creationDateChoice,
-                    title: "I know roughly when",
-                    badge: "Faster",
-                    subtitle: "Skips blocks from before the wallet existed"
-                )
-                .accessibilityIdentifier("restore.date.knowDate")
-                SelectableOptionCard(
-                    id: CreationDateChoice.unknown,
-                    selection: $creationDateChoice,
-                    title: "I'm not sure",
-                    subtitle: "Scans the whole chain. Finds everything, takes hours."
-                )
-                .accessibilityIdentifier("restore.date.unknown")
+                Toggle("Use wallet creation date", isOn: $useCreationDate)
+                    .accessibilityLabel("Use wallet creation date")
+                    .accessibilityHint("Toggle to specify when the wallet was created for faster scanning")
+                    .accessibilityIdentifier("restore.date.toggle")
+                    .padding(.horizontal)
+
+                if useCreationDate {
+                    DatePicker(
+                        "Creation date",
+                        selection: $walletCreationDate,
+                        in: Self.genesisDate...Date(),
+                        displayedComponents: [.date]
+                    )
+                    .datePickerStyle(.graphical)
+                    .padding(.horizontal)
+                } else {
+                    Text("Will scan from the beginning (slower)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
-            .padding(.horizontal, 4)
-
-            if creationDateChoice == .knowDate {
-                DatePicker(
-                    "Creation date",
-                    selection: $walletCreationDate,
-                    in: Self.genesisDate...Date(),
-                    displayedComponents: [.date]
-                )
-                .datePickerStyle(.wheel)
-                .labelsHidden()
-                .accessibilityLabel("Wallet creation date")
-                .padding(.horizontal)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .safeAreaInset(edge: .bottom) {
             Button {
                 proceedFromCreationDate()
             } label: {
@@ -570,25 +561,23 @@ struct RestoreWalletView: View {
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(creationDateChoice == .unset ? Color.gray : Color.orange)
+                    .background(Color.orange)
                     .foregroundColor(.white)
                     .cornerRadius(14)
             }
-            .disabled(creationDateChoice == .unset)
             .accessibilityLabel("Continue")
-            .accessibilityHint(creationDateChoice == .unset ? "Choose whether you know when the wallet was created" : "Double tap to proceed to PIN setup")
+            .accessibilityHint("Double tap to proceed to PIN setup")
             .accessibilityIdentifier("restore.date.continueButton")
             .padding(.horizontal)
             .alert("Restore from \(walletCreationDate.formatted(date: .abbreviated, time: .omitted))?", isPresented: $showRecentDateConfirm) {
                 Button("Choose another date", role: .cancel) { }
                 Button("Continue") { advanceFromCreationDate() }
             } message: {
-                Text("Only transactions after this date will be found. If the wallet is older, pick an earlier date.")
+                Text("Only finds transactions after this date.")
             }
-
-            Spacer()
+            .padding(.top, 8)
+            .background(Color(.systemBackground))
         }
-        .animation(.snappy(duration: 0.3), value: creationDateChoice)
     }
 
     /// A date inside the last 30 days is the classic mistake (the picker used

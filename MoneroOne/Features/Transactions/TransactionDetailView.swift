@@ -348,7 +348,9 @@ struct TransactionDetailView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label): \(value)")
+        // Speak the trailing name too ("Received on, Donation: 84…"); it was
+        // visible on screen but VoiceOver skipped it.
+        .accessibilityLabel("\(label)\(trailingLabel.map { ", \($0)" } ?? ""): \(value)")
     }
 
     private func copyAllDetails() {

@@ -345,6 +345,23 @@ enum SubaddressName {
     }
 }
 
+extension WalletManager {
+    /// The subaddress name VoiceOver speaks on a transaction row: the name
+    /// of the subaddress an incoming transaction arrived on. Nil for sends
+    /// and for the main address, so a wallet that uses one address keeps
+    /// quiet rows. The detail screen always names the address.
+    func receivedOnRowName(for tx: MoneroTransaction) -> String? {
+        guard tx.type == .incoming else { return nil }
+        let name = TransactionDetailLogic.receivedOnLabel(
+            subaddressIndex: tx.subaddressIndex,
+            address: tx.address,
+            primaryAddress: primaryAddress,
+            subaddresses: subaddresses.map(SubaddressSummary.init)
+        )
+        return name == SubaddressName.display(index: 0, label: "") ? nil : name
+    }
+}
+
 enum TransactionListLogic {
     /// Type filter, receiving-address filter and search compose with AND.
     /// A receiving-address filter keeps incoming transactions only:
@@ -461,6 +478,7 @@ enum TransactionListLogic {
 
 struct TransactionRow: View {
     let transaction: MoneroTransaction
+    @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
 
@@ -526,7 +544,7 @@ struct TransactionRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR\(fiatAtTime.map { ", worth \($0) at the time" } ?? ""), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR\(receivedOn.map { " on \($0)" } ?? "")\(fiatAtTime.map { ", worth \($0) at the time" } ?? ""), \(formattedDate), \(transaction.displayStatusText)")
     }
 
     private var formattedDate: String {
@@ -534,6 +552,12 @@ struct TransactionRow: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: transaction.timestamp)
+    }
+
+    /// The subaddress name an incoming transaction arrived on, spoken by
+    /// VoiceOver only; the row stays as it was on screen.
+    private var receivedOn: String? {
+        walletManager.receivedOnRowName(for: transaction)
     }
 
     /// What the amount was worth when the transaction happened, in the

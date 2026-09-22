@@ -306,6 +306,7 @@ struct RecentTransactionsSection: View {
 struct RecentTransactionCard: View {
     let transaction: MoneroTransaction
     let onTap: () -> Void
+    @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
 
@@ -377,12 +378,18 @@ struct RecentTransactionCard: View {
         }
         .glassButtonStyle()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR\(fiatAtTime.map { ", worth \($0) at the time" } ?? ""), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR\(receivedOn.map { " on \($0)" } ?? "")\(fiatAtTime.map { ", worth \($0) at the time" } ?? ""), \(formattedDate), \(transaction.displayStatusText)")
         .accessibilityHint("Shows transaction details")
     }
 
     private var iconColor: Color {
         transaction.type == .incoming ? .green : .orange
+    }
+
+    /// The subaddress name an incoming transaction arrived on, spoken by
+    /// VoiceOver only; the row stays as it was on screen.
+    private var receivedOn: String? {
+        walletManager.receivedOnRowName(for: transaction)
     }
 
     /// What the amount was worth when the transaction happened, in the

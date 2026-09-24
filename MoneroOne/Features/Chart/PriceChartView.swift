@@ -275,9 +275,7 @@ struct PriceChartView: View {
     // MARK: - Helpers
 
     private func formatPrice(_ price: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = priceService.selectedCurrency.uppercased()
+        let formatter = FiatCurrency.formatter(for: priceService.selectedCurrency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: price)) ?? "\(price)"
@@ -553,9 +551,7 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     /// Axis amount with as many decimals as the axis span needs: none for
     /// a $400 span, two for a portfolio that moved 80 cents.
     private static func compact(_ amount: Double, currencyCode: String, span: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currencyCode
+        let formatter = FiatCurrency.formatter(for: currencyCode)
         formatter.maximumFractionDigits = span < 5 ? 2 : 0
         formatter.minimumFractionDigits = formatter.maximumFractionDigits
         return formatter.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"

@@ -71,7 +71,34 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertEqual(PriceService.currencySymbols["ron"], "lei")
         XCTAssertEqual(PriceService.currencySymbols["kes"], "KSh")
         XCTAssertEqual(PriceService.currencySymbols["bam"], "KM")
-        XCTAssertEqual(PriceService.currencySymbols["mad"], "MAD")
+        XCTAssertEqual(PriceService.currencySymbols["mad"], "DH")
+        XCTAssertEqual(PriceService.currencySymbols["rub"], "₽")
+        XCTAssertEqual(PriceService.currencySymbols["uah"], "₴")
+        XCTAssertEqual(PriceService.currencySymbols["try"], "₺")
+    }
+
+    /// Every amount draws the table's symbol, never the ISO code the system
+    /// falls back to ("RUB 1,234.56" on an English iPhone).
+    func testFormattedAmountsUseTheTableSymbol() {
+        let english = Locale(identifier: "en_US")
+        for currency in FiatCurrency.all {
+            let text = FiatCurrency.formatter(for: currency.code, locale: english).string(from: 1234.56) ?? ""
+            XCTAssertTrue(text.contains(currency.symbol), "\(currency.code): \(text)")
+            XCTAssertFalse(text.contains(currency.code.uppercased()), "\(currency.code): \(text)")
+        }
+        XCTAssertEqual(FiatCurrency.formatter(for: "rub", locale: english).string(from: 1234.56), "₽1,234.56")
+        XCTAssertEqual(FiatCurrency.formatter(for: "uah", locale: english).string(from: 1234.56), "₴1,234.56")
+        XCTAssertEqual(FiatCurrency.formatter(for: "try", locale: english).string(from: 1234.56), "₺1,234.56")
+        XCTAssertEqual(FiatCurrency.formatter(for: "pln", locale: english).string(from: 1234.56), "zł\u{00A0}1,234.56",
+                       "a letter symbol keeps its space")
+        let russian = FiatCurrency.formatter(for: "rub", locale: Locale(identifier: "ru_RU")).string(from: 1234.56) ?? ""
+        XCTAssertTrue(russian.hasSuffix("₽"), "the locale still decides the side: \(russian)")
+    }
+
+    func testFormatFiatUsesTheTableSymbol() {
+        priceService.setCurrency("uah")
+        XCTAssertTrue(priceService.formatFiat(12).contains("₴"), priceService.formatFiat(12))
+        XCTAssertFalse(priceService.formatFiat(12).contains("UAH"), priceService.formatFiat(12))
     }
 
     func testEveryCurrencyHasSymbolFlagAndName() {

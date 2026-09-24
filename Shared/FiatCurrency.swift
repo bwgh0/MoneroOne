@@ -37,7 +37,7 @@ public struct FiatCurrency: Hashable, Identifiable, Sendable {
         FiatCurrency(code: "ron", symbol: "lei", flag: "🇷🇴", displayName: "Romanian Leu"),
         FiatCurrency(code: "kes", symbol: "KSh", flag: "🇰🇪", displayName: "Kenyan Shilling"),
         FiatCurrency(code: "bam", symbol: "KM", flag: "🇧🇦", displayName: "Bosnian Mark"),
-        FiatCurrency(code: "mad", symbol: "MAD", flag: "🇲🇦", displayName: "Moroccan Dirham"),
+        FiatCurrency(code: "mad", symbol: "DH", flag: "🇲🇦", displayName: "Moroccan Dirham"),
     ]
 
     /// The currency for a code, in either case, or nil when this build does
@@ -50,6 +50,20 @@ public struct FiatCurrency: Hashable, Identifiable, Sendable {
     /// not know shows as itself rather than as a wrong "$".
     public static func symbol(for code: String) -> String {
         named(code)?.symbol ?? code.uppercased()
+    }
+
+    /// A currency formatter for `code` that draws this table's symbol.
+    /// NumberFormatter's own symbol comes from the phone's language and falls
+    /// back to the ISO code: an English iPhone showed "RUB 1,234.56" where
+    /// the picker shows "₽". Placement and spacing still follow `locale`
+    /// ("₽1,234.56" in English, "1 234,56 ₽" in Russian).
+    public static func formatter(for code: String, locale: Locale = .current) -> NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .currency
+        formatter.currencyCode = code.uppercased()
+        formatter.currencySymbol = symbol(for: code)
+        return formatter
     }
 
     private static let byCode: [String: FiatCurrency] =

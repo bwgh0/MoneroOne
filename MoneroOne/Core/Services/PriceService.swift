@@ -325,9 +325,7 @@ class PriceService: ObservableObject {
         if let cached = cachedFiatFormatter, cached.currency == selectedCurrency {
             return cached.formatter
         }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = selectedCurrency.uppercased()
+        let formatter = FiatCurrency.formatter(for: selectedCurrency)
         cachedFiatFormatter = (selectedCurrency, formatter)
         return formatter
     }

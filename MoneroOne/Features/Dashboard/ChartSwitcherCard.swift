@@ -263,9 +263,7 @@ struct ChartSwitcherCard: View {
     // MARK: - Helpers
 
     private func formatPrice(_ price: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = priceService.selectedCurrency.uppercased()
+        let formatter = FiatCurrency.formatter(for: priceService.selectedCurrency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: price)) ?? "\(price)"

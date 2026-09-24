@@ -749,21 +749,71 @@ class WalletManager: ObservableObject {
             )
         }
 
+        return Self.mergedByHash(transactions, refreshedSnapshot)
+    }
+
+    /// VIEW's transactions and the snapshot's as one list, one record
+    /// per hash, newest first.
+    static func mergedByHash(_ view: [MoneroTransaction], _ snapshot: [MoneroTransaction]) -> [MoneroTransaction] {
         var byHash: [String: MoneroTransaction] = [:]
-        let merge: (MoneroTransaction) -> Void = { tx in
+        for tx in view + snapshot {
             if let existing = byHash[tx.id] {
                 // Outgoing wins over incoming for the same hash —
                 // it's the same on-chain transaction, and the
                 // outgoing entry is the one that reflects what
                 // the user actually did.
-                if existing.type == .outgoing { return }
-                if tx.type == .outgoing { byHash[tx.id] = tx; return }
+                if existing.type == .outgoing { continue }
+                if tx.type == .outgoing { byHash[tx.id] = tx; continue }
             }
             byHash[tx.id] = tx
         }
-        for tx in transactions { merge(tx) }
-        for tx in refreshedSnapshot { merge(tx) }
         return byHash.values.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    // MARK: - Balance history
+
+    /// Balance history from the transactions already in memory. Those
+    /// are only the newest 100, so a longer history is known back to the
+    /// oldest of them; `balanceLedger()` loads the rest.
+    var recentBalanceLedger: BalanceLedger {
+        let hardware = isHardwareWallet
+        var snapshot: [MoneroTransaction] = []
+        if hardware, let walletId = activeWallet?.id {
+            snapshot = loadHardwareTxSnapshot(walletId: walletId)
+        }
+        return BalanceLedger(
+            balance: displayBalance,
+            transactions: hardware ? Self.mergedByHash(transactions, snapshot) : transactions,
+            countsPendingIncoming: hardware,
+            knownSince: [transactions, snapshot].compactMap { Self.coverageStart(of: $0) }.max()
+        )
+    }
+
+    /// Balance history from every transaction the wallet has, for the
+    /// portfolio chart.
+    func balanceLedger() async -> BalanceLedger {
+        guard let wallet = moneroWallet else { return recentBalanceLedger }
+        let all = await wallet.fetchAllTransactions()
+        // A wallet switch while loading: the list belongs to the old one.
+        guard moneroWallet === wallet else { return recentBalanceLedger }
+        guard isHardwareWallet, let walletId = activeWallet?.id else {
+            return BalanceLedger(balance: displayBalance, transactions: all, countsPendingIncoming: false)
+        }
+        // The sends live in the snapshot, which keeps only the newest ones.
+        let snapshot = loadHardwareTxSnapshot(walletId: walletId)
+        return BalanceLedger(
+            balance: displayBalance,
+            transactions: Self.mergedByHash(all, snapshot),
+            countsPendingIncoming: true,
+            knownSince: Self.coverageStart(of: snapshot)
+        )
+    }
+
+    /// Where a newest-first list stops being complete: its oldest entry
+    /// when it holds as many as the fetch limit, else nil.
+    private static func coverageStart(of list: [MoneroTransaction]) -> Date? {
+        guard list.count >= MoneroWallet.recentTransactionLimit else { return nil }
+        return list.map(\.timestamp).min()
     }
 
     // MARK: - Hardware balance snapshot

@@ -366,12 +366,15 @@ class MoneroWallet: ObservableObject {
 
     // MARK: - Transactions
 
+    /// How many of the newest transactions `transactions` holds.
+    nonisolated static let recentTransactionLimit = 100
+
     func fetchTransactions() {
         guard let kit = kit else { return }
         let rate = coinRate
 
         Task.detached {
-            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 100)
+            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: MoneroWallet.recentTransactionLimit)
             let mapped = txInfos.map { MoneroWallet.mapTransaction($0, coinRate: rate, kit: kit) }
             await MainActor.run { [weak self] in
                 self?.transactions = mapped
@@ -389,11 +392,24 @@ class MoneroWallet: ObservableObject {
         guard let kit = kit else { return [] }
         let rate = coinRate
         let mapped = await Task.detached { () -> [MoneroTransaction] in
-            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 100)
+            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: MoneroWallet.recentTransactionLimit)
             return txInfos.map { MoneroWallet.mapTransaction($0, coinRate: rate, kit: kit) }
         }.value
         self.transactions = mapped
         return mapped
+    }
+
+    /// Every transaction of this account, newest first, with no count
+    /// limit. `transactions` keeps only the newest 100; the portfolio
+    /// chart needs all of them to know the balance held on older dates.
+    /// Leaves `transactions` alone.
+    func fetchAllTransactions() async -> [MoneroTransaction] {
+        guard let kit = kit else { return transactions }
+        let rate = coinRate
+        return await Task.detached { () -> [MoneroTransaction] in
+            kit.transactions(fromHash: nil, descending: true, type: nil, limit: nil)
+                .map { MoneroWallet.mapTransaction($0, coinRate: rate, kit: kit) }
+        }.value
     }
 
     nonisolated private static func mapTransaction(_ info: MoneroKit.TransactionInfo, coinRate: Decimal, kit: MoneroKit.Kit) -> MoneroTransaction {
@@ -801,6 +817,63 @@ struct MoneroTransaction: Identifiable, Equatable, Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+}
+
+// MARK: - Balance History
+
+/// One transaction's effect on the balance the app shows.
+struct BalanceChange: Equatable {
+    let id: String
+    let type: MoneroTransaction.TransactionType
+    let timestamp: Date
+    /// The amount the activity list shows for the transaction.
+    let amount: Decimal
+    /// Signed change to the balance: +amount received, -(amount + fee) sent.
+    let delta: Decimal
+
+    /// nil when the transaction never moved the balance: a failed one,
+    /// or an incoming one still in the pool when the balance does not
+    /// count those yet. wallet2's balance leaves pool incoming out; the
+    /// hardware display balance adds new incoming as soon as the view
+    /// wallet sees it.
+    init?(_ tx: MoneroTransaction, countsPendingIncoming: Bool) {
+        if tx.status == .failed { return nil }
+        if tx.type == .incoming, tx.status == .pending, !countsPendingIncoming { return nil }
+        self.id = tx.id
+        self.type = tx.type
+        self.timestamp = tx.timestamp
+        self.amount = tx.amount
+        self.delta = tx.type == .incoming ? tx.amount : -(tx.amount + tx.fee)
+    }
+}
+
+/// What it takes to know the balance held at any past moment: the
+/// balance now and every change that led to it. Walking back from the
+/// balance now, not forward from zero, keeps the newest point equal to
+/// the balance on screen.
+struct BalanceLedger: Equatable {
+    /// The balance the app shows now, in XMR.
+    let balance: Decimal
+    /// Oldest first.
+    let changes: [BalanceChange]
+    /// The changes are complete from this moment on. Earlier, the
+    /// balance is unknown. nil when they reach back to the wallet's
+    /// first transaction.
+    let knownSince: Date?
+
+    init(balance: Decimal, changes: [BalanceChange], knownSince: Date? = nil) {
+        self.balance = balance
+        self.changes = changes.sorted { $0.timestamp < $1.timestamp }
+        self.knownSince = knownSince
+    }
+
+    init(balance: Decimal, transactions: [MoneroTransaction], countsPendingIncoming: Bool, knownSince: Date? = nil) {
+        self.init(
+            balance: balance,
+            changes: transactions.compactMap { BalanceChange($0, countsPendingIncoming: countsPendingIncoming) },
+            knownSince: knownSince
+        )
     }
 }
 

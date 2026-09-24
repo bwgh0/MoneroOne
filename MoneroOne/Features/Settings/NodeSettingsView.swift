@@ -286,6 +286,15 @@ struct NodeSettingsView: View {
             }
         }
         .opacity(nodeManager.autoSelectEnabled && !isSelected ? 0.5 : 1.0)
+        .accessibilityValue(missingLatencyDescription(isOnion: isOnion, stats: stats))
+    }
+
+    /// Spoken when a clearnet row shows no latency. The row is otherwise
+    /// silent about it, so a node that did not answer the latency test
+    /// (blocked or down on this network) sounded like a VoiceOver bug.
+    private func missingLatencyDescription(isOnion: Bool, stats: NodeStats?) -> String {
+        guard !isOnion, let stats, stats.latencyMs == nil else { return "" }
+        return nodeManager.isLoadingStats ? "Checking latency" : "No response"
     }
 
     // MARK: - Helpers

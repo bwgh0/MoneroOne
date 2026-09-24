@@ -336,6 +336,7 @@ enum ChartTimeAxis: String, Equatable {
         if self == .day {
             return dayTicks(in: span, calendar: calendar)
         }
+        let step = step(across: span)
         var ticks: [Date] = []
         var tick = firstTick(atOrAfter: span.lowerBound, calendar: calendar)
         while tick <= span.upperBound, ticks.count < 64 {
@@ -344,6 +345,20 @@ enum ChartTimeAxis: String, Equatable {
             tick = next
         }
         return ticks
+    }
+
+    /// The range whose ticks suit a span this long. The portfolio's "All"
+    /// starts when the wallet first held XMR, weeks or years ago.
+    static func fitting(span: TimeInterval) -> ChartTimeAxis {
+        let day: TimeInterval = 24 * 60 * 60
+        switch span {
+        case ..<(2 * day): return .day
+        case ..<(10 * day): return .week
+        case ..<(60 * day): return .month
+        // Month names repeat past a year, so longer spans label years.
+        case ..<(400 * day): return .year
+        default: return .all
+        }
     }
 
     /// Axis label for a tick.
@@ -401,13 +416,17 @@ enum ChartTimeAxis: String, Equatable {
         return ticks
     }
 
-    private var step: (component: Calendar.Component, count: Int) {
+    private func step(across span: ClosedRange<Date>) -> (component: Calendar.Component, count: Int) {
         switch self {
         case .day: return (.hour, 5)  // unused: `dayTicks` restarts at midnight
         case .week: return (.day, 1)
         case .month: return (.day, 7)
         case .year: return (.month, 2)
-        case .all: return (.year, 2)
+        case .all:
+            // Every other year across the price history since 2014; every
+            // year for a shorter span, so it still gets a few labels.
+            let years = span.upperBound.timeIntervalSince(span.lowerBound) / (365 * 24 * 60 * 60)
+            return (.year, years < 6 ? 1 : 2)
         }
     }
 
@@ -454,11 +473,14 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     let value: KeyPath<Point, Double>
     /// nil hides both axes (dashboard card).
     let axes: Axes?
+    /// Dots drawn on top of the line.
+    var markers: [ChartMarker] = []
     let onSelect: (Point?) -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.points == rhs.points && lhs.domain == rhs.domain && lhs.axes == rhs.axes
             && lhs.timestamp == rhs.timestamp && lhs.value == rhs.value
+            && lhs.markers == rhs.markers
     }
 
     private static var fill: LinearGradient {
@@ -519,6 +541,18 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                 .lineStyle(StrokeStyle(lineWidth: 2))
                 .interpolationMethod(.linear)
             }
+
+            ForEach(markers) { marker in
+                PointMark(
+                    x: .value("Time", marker.timestamp),
+                    y: .value("Value", marker.value)
+                )
+                .symbol {
+                    ChartMarkerBadge(style: marker.style)
+                }
+                .accessibilityLabel(marker.accessibilityLabel)
+                .accessibilityValue(marker.accessibilityValue)
+            }
         }
         .chartYScale(domain: domain)
         .chartOverlay { proxy in
@@ -527,6 +561,7 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                     proxy: proxy,
                     plotFrame: Self.plotFrame(proxy, in: geometry),
                     points: points,
+                    markers: markers,
                     timestamp: timestamp,
                     value: value,
                     onSelect: onSelect
@@ -558,20 +593,74 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     }
 }
 
-/// Touch or drag to read a sample; releasing clears it. The gesture runs
-/// alongside the page's scroll view. The first clear move of a touch
+/// A badge on a real sample of the line that stands for an event, such as
+/// a transaction on the portfolio chart.
+struct ChartMarker: Identifiable, Equatable {
+    /// Colors and arrows follow the activity rows: green in, orange out.
+    enum Style: Equatable {
+        case received
+        case sent
+    }
+
+    var id: Date { timestamp }
+    let timestamp: Date
+    let value: Double
+    let style: Style
+    let accessibilityLabel: String
+    let accessibilityValue: String
+}
+
+/// A disc in the activity row's color with its arrow. A ring in the
+/// card's color cuts it out of the line under it. Selected, it grows and
+/// sits in a halo.
+private struct ChartMarkerBadge: View {
+    let style: ChartMarker.Style
+    var selected = false
+
+    private var tint: Color { style == .received ? .green : .orange }
+
+    var body: some View {
+        Image(systemName: style == .received ? "arrow.down.left" : "arrow.up.right")
+            .font(.system(size: 9, weight: .heavy))
+            .foregroundStyle(.white)
+            .frame(width: 18, height: 18)
+            .background(Circle().fill(tint))
+            .padding(2)
+            .background(Circle().fill(Color(.secondarySystemGroupedBackground)))
+            .scaleEffect(selected ? 1.25 : 1)
+            .background {
+                if selected {
+                    Circle().fill(tint.opacity(0.15)).frame(width: 38, height: 38)
+                }
+            }
+    }
+}
+
+/// Touch or drag to read a sample; releasing clears it. Tapping a marker
+/// keeps its sample selected until the next tap, so the caller can show
+/// it up top; tapping it again or anywhere else clears it. The gesture
+/// runs alongside the page's scroll view. The first clear move of a touch
 /// decides its axis once: mostly vertical means the page is scrolling and
 /// the touch is ignored until it ends; anything else scrubs.
 private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     let proxy: ChartProxy
     let plotFrame: CGRect
     let points: [Point]
+    let markers: [ChartMarker]
     let timestamp: KeyPath<Point, Date>
     let value: KeyPath<Point, Double>
     let onSelect: (Point?) -> Void
 
     @State private var selected: Point?
     @State private var scrolling = false
+    /// The marker a tap left selected.
+    @State private var pinned: ChartMarker?
+    /// What was pinned when the current touch began, so tapping it again clears it.
+    @State private var pinnedAtTouchStart: ChartMarker?
+    @State private var touching = false
+
+    /// Half of the 44 pt minimum hit target.
+    private static var markerHitRadius: CGFloat { 22 }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -580,6 +669,11 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .onChanged { drag in
+                            if !touching {
+                                touching = true
+                                pinnedAtTouchStart = pinned
+                                pinned = nil
+                            }
                             if scrolling { return }
                             let dx = abs(drag.translation.width)
                             let dy = abs(drag.translation.height)
@@ -589,9 +683,17 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                             }
                             select(at: drag.location)
                         }
-                        .onEnded { _ in
+                        .onEnded { drag in
+                            let tapped = !scrolling
+                                && abs(drag.translation.width) < 10 && abs(drag.translation.height) < 10
+                            if tapped, let marker = marker(near: drag.location), marker != pinnedAtTouchStart {
+                                pin(marker)
+                            } else {
+                                update(nil)
+                            }
+                            touching = false
                             scrolling = false
-                            update(nil)
+                            pinnedAtTouchStart = nil
                         }
                 )
 
@@ -606,16 +708,47 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                 }
                 .stroke(Color.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
 
-                Circle()
-                    .fill(Color.orange)
-                    .frame(width: 10, height: 10)
-                    .position(x: px, y: py)
+                // On a marker, the marker itself shows the selection.
+                if let marker = markers.first(where: { $0.timestamp == point[keyPath: timestamp] }) {
+                    ChartMarkerBadge(style: marker.style, selected: true)
+                        .position(x: px, y: py)
+                        .accessibilityHidden(true)
+                } else {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 10, height: 10)
+                        .position(x: px, y: py)
+                }
             }
         }
         .onChange(of: points) { _ in
             // New range under the finger: the old sample no longer exists.
+            pinned = nil
             update(nil)
         }
+    }
+
+    /// The marker closest to `location`, if one is within reach of a finger.
+    private func marker(near location: CGPoint) -> ChartMarker? {
+        markers
+            .compactMap { marker -> (marker: ChartMarker, distance: CGFloat)? in
+                guard let x = proxy.position(forX: marker.timestamp),
+                      let y = proxy.position(forY: marker.value) else { return nil }
+                let distance = hypot(plotFrame.minX + x - location.x, plotFrame.minY + y - location.y)
+                return distance <= Self.markerHitRadius ? (marker, distance) : nil
+            }
+            .min { $0.distance < $1.distance }?
+            .marker
+    }
+
+    private func pin(_ marker: ChartMarker) {
+        guard let point = points.first(where: { $0[keyPath: timestamp] == marker.timestamp }) else {
+            update(nil)
+            return
+        }
+        pinned = marker
+        update(point)
+        HapticFeedback.shared.softTick()
     }
 
     private func select(at location: CGPoint) {

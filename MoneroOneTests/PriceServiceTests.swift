@@ -483,6 +483,22 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertEqual(all.count, 6)
     }
 
+    func testShortAllSpanStillGetsYearTicks() {
+        let span = date("2024-03-10T00:00:00Z")...date("2026-09-20T00:00:00Z")
+        let ticks = ChartTimeAxis.all.ticks(in: span, calendar: utc)
+        XCTAssertEqual(ticks, [date("2025-01-01T00:00:00Z"), date("2026-01-01T00:00:00Z")], "every year under six years")
+    }
+
+    func testFittingAxisFollowsTheSpan() {
+        let day: TimeInterval = 86_400
+        XCTAssertEqual(ChartTimeAxis.fitting(span: day), .day)
+        XCTAssertEqual(ChartTimeAxis.fitting(span: 5 * day), .week)
+        XCTAssertEqual(ChartTimeAxis.fitting(span: 30 * day), .month)
+        XCTAssertEqual(ChartTimeAxis.fitting(span: 300 * day), .year)
+        XCTAssertEqual(ChartTimeAxis.fitting(span: 500 * day), .all, "month names would repeat")
+        XCTAssertEqual(ChartTimeAxis.fitting(span: 4 * 365 * day), .all)
+    }
+
     func testDayScrubLabelNamesYesterday() {
         // The relative word comes from the system formatter, which reads the
         // real clock, so anchor the fixture to the real clock too.
@@ -495,6 +511,157 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertFalse(today.localizedCaseInsensitiveContains("yesterday"), today)
         XCTAssertTrue(yesterday.localizedCaseInsensitiveContains("yesterday"), yesterday)
     }
+
+    // MARK: - Portfolio history
+
+    private func d(_ s: String) -> Decimal { Decimal(string: s)! }
+
+    private func tx(
+        _ id: String,
+        _ type: MoneroTransaction.TransactionType,
+        _ amount: Decimal,
+        fee: Decimal = 0,
+        at time: Date,
+        status: MoneroTransaction.TransactionStatus = .confirmed
+    ) -> MoneroTransaction {
+        MoneroTransaction(
+            id: id, type: type, amount: amount, fee: fee, address: "", timestamp: time,
+            confirmations: status == .confirmed ? 10 : 0, status: status, memo: nil, blockHeight: nil
+        )
+    }
+
+    /// Hourly samples at 100, 110, 120, ..., the last one at `end` ("now").
+    private func hourlyPrices(_ count: Int, end: Date = Date(timeIntervalSince1970: 1_800_000_000)) -> [PriceDataPoint] {
+        (0..<count).map { i in
+            PriceDataPoint(timestamp: end.addingTimeInterval(-Double(count - 1 - i) * 3600), price: 100 + Double(i) * 10)
+        }
+    }
+
+    /// Received 2 between the 2nd and 3rd sample, sent 0.5 + 0.01 fee
+    /// between the 4th and the last.
+    private func twoTransactionLedger(_ prices: [PriceDataPoint]) -> BalanceLedger {
+        let txs = [
+            tx("in", .incoming, 2, at: prices[1].timestamp.addingTimeInterval(600)),
+            tx("out", .outgoing, d("0.5"), fee: d("0.01"), at: prices[3].timestamp.addingTimeInterval(600)),
+        ]
+        return BalanceLedger(balance: d("2.99"), transactions: txs, countsPendingIncoming: false)
+    }
+
+    func testPortfolioWithoutTransactionsIsTheBalanceAtEverySample() {
+        let prices = hourlyPrices(5)
+        let points = PortfolioHistory.points(prices: prices, rate: 2, ledger: BalanceLedger(balance: d("1.5"), changes: []))
+        XCTAssertEqual(points.map(\.timestamp), prices.map(\.timestamp), "one point per real sample")
+        XCTAssertEqual(points.map(\.value), prices.map { 1.5 * $0.price * 2 })
+        XCTAssertTrue(points.allSatisfy { $0.changes.isEmpty && $0.balance == d("1.5") })
+    }
+
+    func testPortfolioHoldsWhatWasHeldAtEachSample() {
+        let prices = hourlyPrices(5)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: twoTransactionLedger(prices))
+        XCTAssertEqual(points.map(\.balance), [d("1.5"), d("1.5"), d("3.5"), d("3.5"), d("2.99")])
+        XCTAssertEqual(points[0].value, 1.5 * 100, accuracy: 1e-9)
+        XCTAssertEqual(points[2].value, 3.5 * 120, accuracy: 1e-9)
+        XCTAssertEqual(points[4].value, 2.99 * 140, accuracy: 1e-9, "the tip is the balance on screen")
+        XCTAssertEqual(points.map { $0.changes.map(\.id) }, [[], [], ["in"], [], ["out"]],
+                       "a transaction shows on the first sample that includes it")
+    }
+
+    func testTransactionAfterTheLastSampleShowsAtTheTip() {
+        // The live tip is stamped when the price was fetched; a receive
+        // after that still belongs to "now".
+        let prices = hourlyPrices(3)
+        let late = tx("late", .incoming, 1, at: prices[2].timestamp.addingTimeInterval(60))
+        let ledger = BalanceLedger(balance: 3, transactions: [late], countsPendingIncoming: false)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger)
+        XCTAssertEqual(points.map(\.balance), [2, 2, 3])
+        XCTAssertEqual(points.last?.changes.map(\.id), ["late"])
+    }
+
+    func testOnlyTransactionsThatMovedTheBalanceCount() {
+        let t = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertNil(BalanceChange(tx("f", .outgoing, 1, at: t, status: .failed), countsPendingIncoming: true))
+        XCTAssertNil(BalanceChange(tx("p", .incoming, 1, at: t, status: .pending), countsPendingIncoming: false),
+                     "wallet2's balance leaves pool incoming out")
+        XCTAssertEqual(BalanceChange(tx("p", .incoming, 1, at: t, status: .pending), countsPendingIncoming: true)?.delta, 1,
+                       "the hardware display balance counts it")
+        XCTAssertEqual(BalanceChange(tx("o", .outgoing, d("0.5"), fee: d("0.01"), at: t, status: .pending),
+                                     countsPendingIncoming: false)?.delta, d("-0.51"),
+                       "a pending send has already left the balance, fee included")
+        XCTAssertEqual(BalanceChange(tx("i", .incoming, 2, fee: d("0.01"), at: t), countsPendingIncoming: false)?.delta, 2,
+                       "the sender paid the fee")
+    }
+
+    func testChangesBeforeTheRangeSetTheLevelWithoutADot() {
+        let prices = hourlyPrices(3)
+        let old = tx("old", .incoming, 5, at: prices[0].timestamp.addingTimeInterval(-86_400))
+        let points = PortfolioHistory.points(
+            prices: prices, rate: 1,
+            ledger: BalanceLedger(balance: 5, transactions: [old], countsPendingIncoming: false)
+        )
+        XCTAssertEqual(points.map(\.balance), [5, 5, 5])
+        XCTAssertTrue(points.allSatisfy { $0.changes.isEmpty })
+    }
+
+    func testUnknownHistoryIsNotDrawn() {
+        let prices = hourlyPrices(5)
+        let ledger = BalanceLedger(balance: 1, changes: [], knownSince: prices[2].timestamp)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger)
+        XCTAssertEqual(points.map(\.timestamp), Array(prices[2...].map(\.timestamp)))
+    }
+
+    func testAllRangeStartsWhereTheWalletFirstHeldSomething() {
+        let prices = hourlyPrices(6)
+        let first = tx("first", .incoming, 1, at: prices[3].timestamp.addingTimeInterval(600))
+        let ledger = BalanceLedger(balance: 1, transactions: [first], countsPendingIncoming: false)
+        XCTAssertEqual(PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger).count, 6)
+        let trimmed = PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger, startAtFirstHolding: true)
+        XCTAssertEqual(trimmed.map(\.balance), [0, 1, 1], "keeps the one empty sample the line rises from")
+        XCTAssertEqual(trimmed.first?.timestamp, prices[3].timestamp)
+    }
+
+    func testLedgerThatDoesNotAddUpNeverGoesBelowZero() {
+        let prices = hourlyPrices(3)
+        let receive = tx("in", .incoming, 2, at: prices[1].timestamp.addingTimeInterval(600))
+        let ledger = BalanceLedger(balance: 1, transactions: [receive], countsPendingIncoming: false)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger)
+        XCTAssertEqual(points.map(\.balance), [0, 0, 1])
+        XCTAssertTrue(points.allSatisfy { $0.value >= 0 })
+    }
+
+    func testMarkersSitOnTheSamplesWithTransactions() {
+        let prices = hourlyPrices(5)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: twoTransactionLedger(prices))
+        let markers = PortfolioHistory.markers(for: points) { String(format: "$%.2f", $0) }
+        XCTAssertEqual(markers.map(\.timestamp), [prices[2].timestamp, prices[4].timestamp])
+        XCTAssertEqual(markers.map(\.value), [points[2].value, points[4].value], "each dot is on a real sample")
+        XCTAssertEqual(markers.map(\.style), [.received, .sent])
+        XCTAssertEqual(markers.map(\.accessibilityLabel), ["Received 2.0000 XMR", "Sent 0.5000 XMR"])
+        XCTAssertTrue(markers[0].accessibilityValue.hasSuffix("portfolio $420.00"), markers[0].accessibilityValue)
+        XCTAssertEqual(PortfolioHistory.summary(of: points[2].changes), "Received 2.0000 XMR")
+        XCTAssertNil(PortfolioHistory.summary(of: points[3].changes))
+    }
+
+    func testManyTransactionsOnOneSampleAreSummed() {
+        let prices = hourlyPrices(2)
+        let t = prices[0].timestamp
+        let txs = (0..<4).map { tx("in\($0)", .incoming, d("0.25"), at: t.addingTimeInterval(Double($0 + 1) * 60)) }
+            + [tx("out", .outgoing, d("0.1"), at: t.addingTimeInterval(600))]
+        let ledger = BalanceLedger(balance: d("0.9"), transactions: txs, countsPendingIncoming: false)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger)
+        XCTAssertEqual(PortfolioHistory.summary(of: points[1].changes), "5 transactions")
+        let marker = PortfolioHistory.markers(for: points) { "\($0)" }.first
+        XCTAssertEqual(marker?.style, .received, "net +0.9")
+        XCTAssertEqual(marker?.accessibilityLabel, "5 transactions, received 1.0000 XMR, sent 0.1000 XMR")
+    }
+
+    func testHardwareMergeKeepsTheSendOverItsChangeOutput() {
+        let t = Date(timeIntervalSince1970: 1_800_000_000)
+        // VIEW sees the change of a send as incoming, under the send's hash.
+        let view = [tx("send", .incoming, d("0.3"), at: t), tx("gift", .incoming, 1, at: t.addingTimeInterval(60))]
+        let snapshot = [tx("send", .outgoing, d("0.5"), fee: d("0.01"), at: t)]
+        let merged = WalletManager.mergedByHash(view, snapshot)
+        XCTAssertEqual(merged.map(\.id), ["gift", "send"], "newest first")
+        XCTAssertEqual(merged.last?.type, .outgoing)
+        XCTAssertEqual(WalletManager.mergedByHash(snapshot, view).last?.type, .outgoing, "whichever side it came from")
+    }
 }
-
-

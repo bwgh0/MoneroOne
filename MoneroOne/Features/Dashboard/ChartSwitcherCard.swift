@@ -4,12 +4,16 @@ import Charts
 /// Combined chart card for iPad Command Center with Portfolio/Price toggle
 struct ChartSwitcherCard: View {
     @EnvironmentObject var priceService: PriceService
+    @EnvironmentObject var walletManager: WalletManager
     let balance: Decimal
 
     @State private var chartMode: ChartMode = .portfolio
     @State private var selectedTimeRange: TimeRange = .week
     @State private var selectedPricePoint: PriceDataPoint?
-    @State private var selectedPortfolioPoint: PortfolioPoint?
+    @State private var selectedPortfolioPoint: PortfolioDataPoint?
+    /// nil until the first load, which follows the first frame.
+    @State private var ledger: BalanceLedger?
+    @State private var seriesCache = PortfolioSeriesCache()
 
     enum ChartMode: String, CaseIterable {
         case portfolio = "Portfolio"
@@ -48,10 +52,26 @@ struct ChartSwitcherCard: View {
         return priceService.chartData.map { PriceDataPoint(timestamp: $0.timestamp, price: $0.price * rate) }
     }
 
-    /// Portfolio value at every real price sample, in the selected currency.
-    private var portfolioData: [PortfolioPoint] {
-        let scale = balanceDouble * priceService.usdToSelectedRate
-        return priceService.chartData.map { PortfolioPoint(timestamp: $0.timestamp, value: $0.price * scale) }
+    /// Portfolio value at every real price sample, in the selected
+    /// currency: the XMR held then times the price then, with a dot where
+    /// transactions landed. Empty until the ledger loads.
+    private var portfolioSeries: (points: [PortfolioDataPoint], markers: [ChartMarker]) {
+        guard let ledger else { return ([], []) }
+        return seriesCache.series(
+            prices: priceService.chartData,
+            rate: priceService.usdToSelectedRate,
+            ledger: ledger,
+            currency: priceService.selectedCurrency,
+            formatValue: formatPrice
+        )
+    }
+
+    private var portfolioData: [PortfolioDataPoint] { portfolioSeries.points }
+
+    /// Changes whenever the balance or any transaction does, so the
+    /// ledger reloads when a transaction arrives or confirms.
+    private var ledgerKey: [String] {
+        ["\(balance)"] + walletManager.transactions.map { "\($0.id) \($0.status)" }
     }
 
     /// Calculate percentage change based on chart data for selected time range
@@ -149,6 +169,17 @@ struct ChartSwitcherCard: View {
         .task {
             priceService.selectChartRange(selectedTimeRange.apiRange)
         }
+        .task(id: ledgerKey) {
+            // The newest transactions are in memory and draw at once;
+            // the full list replaces them when it has loaded.
+            if ledger == nil {
+                ledger = walletManager.recentBalanceLedger
+            }
+            let full = await walletManager.balanceLedger()
+            if !Task.isCancelled {
+                ledger = full
+            }
+        }
         .onChange(of: selectedTimeRange) { newValue in
             selectedPricePoint = nil
             selectedPortfolioPoint = nil
@@ -206,16 +237,9 @@ struct ChartSwitcherCard: View {
 
     // MARK: - Chart View
 
-    private var chartYDomain: ClosedRange<Double> {
-        switch chartMode {
-        case .price: return PriceService.chartYDomain(for: priceData.map { $0.price })
-        case .portfolio: return PriceService.chartYDomain(for: portfolioData.map { $0.value })
-        }
-    }
-
     @ViewBuilder
     private var chartView: some View {
-        if priceService.isLoadingChart && priceService.chartData.isEmpty {
+        if (priceService.isLoadingChart && priceService.chartData.isEmpty) || (chartMode == .portfolio && ledger == nil) {
             VStack {
                 ProgressView()
                 Text("Loading...")
@@ -238,7 +262,7 @@ struct ChartSwitcherCard: View {
                 if chartMode == .price {
                     SampledLineChart(
                         points: priceData,
-                        domain: chartYDomain,
+                        domain: PriceService.chartYDomain(for: priceData.map { $0.price }),
                         timestamp: \.timestamp,
                         value: \.price,
                         axes: nil,
@@ -246,12 +270,14 @@ struct ChartSwitcherCard: View {
                     )
                     .equatable()
                 } else {
+                    let series = portfolioSeries
                     SampledLineChart(
-                        points: portfolioData,
-                        domain: chartYDomain,
+                        points: series.points,
+                        domain: PriceService.chartYDomain(for: series.points.map { $0.value }),
                         timestamp: \.timestamp,
                         value: \.value,
                         axes: nil,
+                        markers: series.markers,
                         onSelect: { selectedPortfolioPoint = $0 }
                     )
                     .equatable()
@@ -270,16 +296,9 @@ struct ChartSwitcherCard: View {
     }
 }
 
-// MARK: - Portfolio Point
-
-private struct PortfolioPoint: Identifiable, Equatable {
-    var id: Double { timestamp.timeIntervalSince1970 }
-    let timestamp: Date
-    let value: Double
-}
-
 #Preview {
     ChartSwitcherCard(balance: 1.5)
         .environmentObject(PriceService())
+        .environmentObject(WalletManager())
         .padding()
 }

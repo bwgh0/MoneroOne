@@ -480,6 +480,63 @@ final class QRCodeRegressionTests: XCTestCase {
 
         return UIImage(cgImage: cgImage)
     }
+
+    // MARK: Scanning the code as the app draws it
+
+    /// The QR as `QRCodeView` draws it, with the flat mark on its white disc
+    /// in the center, still decodes to the full text at every size the app
+    /// uses: Donation 240, Receive 280, full screen 338 on a 402pt phone,
+    /// the share and save image 400, and full screen on a wide display 448.
+    @MainActor
+    func testQRCodeViewWithLogoDecodesAtAppSizes() throws {
+        let contents = [
+            "monero:44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A",
+            "monero:888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H?tx_amount=0.5",
+        ]
+        for content in contents {
+            for size in [240, 280, 338, 400, 448] as [CGFloat] {
+                let image = try XCTUnwrap(QRCodeRenderer.renderToImage(content: content, size: size))
+                XCTAssertEqual(decodedMessages(in: image), [content], "\(content.prefix(12)) at \(Int(size))pt")
+            }
+        }
+    }
+
+    /// Full screen shows the address as its first and last eight characters.
+    func testFullscreenShortAddress() {
+        let address = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
+        XCTAssertEqual(QRFullscreenView.shortAddress(address), "44AFFq5k…VGQBEP3A")
+        XCTAssertEqual(QRFullscreenView.shortAddress("Loading..."), "Loading...")
+    }
+
+    /// Full screen turns the screen to full brightness and puts the old level
+    /// back when it goes away.
+    @MainActor
+    func testFullscreenBrightnessBoostsAndRestores() throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let screen = scene.screen
+        let original = screen.brightness
+        defer { screen.brightness = original }
+        screen.brightness = 0.3
+        try XCTSkipIf(abs(screen.brightness - 0.3) > 0.01, "This screen does not take brightness changes")
+
+        let window = UIWindow(windowScene: scene)
+        let view = FullBrightness.BrightnessView()
+        window.addSubview(view)
+        XCTAssertEqual(screen.brightness, 1, accuracy: 0.01)
+
+        view.removeFromSuperview()
+        XCTAssertEqual(screen.brightness, 0.3, accuracy: 0.01)
+    }
+
+    private func decodedMessages(in image: UIImage) -> [String] {
+        guard let ciImage = CIImage(image: image),
+              let detector = CIDetector(
+                ofType: CIDetectorTypeQRCode,
+                context: nil,
+                options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]
+              ) else { return [] }
+        return detector.features(in: ciImage).compactMap { ($0 as? CIQRCodeFeature)?.messageString }
+    }
 }
 
 // MARK: - Decimal Input Filtering Regression Tests

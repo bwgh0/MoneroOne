@@ -176,7 +176,7 @@ struct UnlockView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             } catch {
                 attempts += 1
-                errorMessage = "Invalid PIN"
+                errorMessage = String(localized: "Invalid PIN")
                 pin = ""
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             }
@@ -196,9 +196,9 @@ struct UnlockView: View {
             let minutes = remaining / 60
             let seconds = remaining % 60
             if minutes > 0 {
-                errorMessage = "Too many attempts. Try again in \(minutes)m \(seconds)s"
+                errorMessage = String(localized: "Too many attempts. Try again in \(minutes)m \(seconds)s", comment: "Lockout: minutes and seconds left, e.g. 4m 30s")
             } else {
-                errorMessage = "Too many attempts. Try again in \(seconds)s"
+                errorMessage = String(localized: "Too many attempts. Try again in \(seconds)s", comment: "Lockout: seconds left, e.g. 30s")
             }
         }
     }

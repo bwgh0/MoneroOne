@@ -60,10 +60,10 @@ struct RestoreWalletView: View {
 
     private var biometricName: String {
         switch biometricType {
-        case .faceID: return "Face ID"
-        case .touchID: return "Touch ID"
-        case .opticID: return "Optic ID"
-        @unknown default: return "Biometrics"
+        case .faceID: return String(localized: "Face ID")
+        case .touchID: return String(localized: "Touch ID")
+        case .opticID: return String(localized: "Optic ID")
+        @unknown default: return String(localized: "Biometrics")
         }
     }
 
@@ -96,7 +96,7 @@ struct RestoreWalletView: View {
                 step = .enterSeed
             }
         } message: {
-            Text(errorMessage ?? "An unknown error occurred. Please check your seed phrase and try again.")
+            Text(errorMessage ?? String(localized: "An unknown error occurred. Please check your seed phrase and try again."))
         }
     }
 
@@ -157,6 +157,9 @@ struct RestoreWalletView: View {
             Text("Set a PIN to secure your wallet")
                 .font(.headline)
                 .multilineTextAlignment(.center)
+                // Longer languages need two lines; with the keyboard up the
+                // column is short and the prompt was cut to one ("…schüt…").
+                .fixedSize(horizontal: false, vertical: true)
 
             // PIN Length Selection
             VStack(spacing: 8) {
@@ -185,7 +188,7 @@ struct RestoreWalletView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("4 digit PIN. \(selectedPINLength == 4 ? "Selected" : "Not selected")")
+                    .accessibilityLabel("4 digit PIN. \(selectedPINLength == 4 ? String(localized: "Selected") : String(localized: "Not selected"))")
                     .accessibilityHint("Double tap to use a 4 digit PIN")
 
                     // 6 digits option (recommended)
@@ -217,7 +220,7 @@ struct RestoreWalletView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("6 digit PIN, recommended. \(selectedPINLength == 6 ? "Selected" : "Not selected")")
+                    .accessibilityLabel("6 digit PIN, recommended. \(selectedPINLength == 6 ? String(localized: "Selected") : String(localized: "Not selected"))")
                     .accessibilityHint("Double tap to use a 6 digit PIN")
                 }
                 .padding(.horizontal, 20)
@@ -458,13 +461,13 @@ struct RestoreWalletView: View {
 
     private func authenticateBiometrics() {
         let context = LAContext()
-        context.localizedCancelTitle = "Cancel"
+        context.localizedCancelTitle = String(localized: "Cancel")
 
         Task {
             do {
                 let success = try await context.evaluatePolicy(
                     .deviceOwnerAuthenticationWithBiometrics,
-                    localizedReason: "Verify \(biometricName) to enable quick unlock"
+                    localizedReason: String(localized: "Verify \(biometricName) to enable quick unlock", comment: "Face ID or Touch ID")
                 )
                 await MainActor.run {
                     if success {
@@ -481,13 +484,13 @@ struct RestoreWalletView: View {
 
     private func validateAndProceed() {
         guard isValidSeedCount else {
-            errorMessage = "Please enter 16, 24, or 25 words"
+            errorMessage = String(localized: "Please enter 16, 24, or 25 words")
             return
         }
 
         // Validate mnemonic words (BIP39 word list check for 24-word seeds)
         guard walletManager.validateMnemonic(seedWords) else {
-            errorMessage = "Invalid seed phrase. Please check your words and try again."
+            errorMessage = String(localized: "Invalid seed phrase. Please check your words and try again.")
             return
         }
 

@@ -105,7 +105,7 @@ struct RestoreViewKeyView: View {
         .alert("Restore Failed", isPresented: $showErrorAlert) {
             Button("OK") {}
         } message: {
-            Text(errorMessage ?? "Unknown error")
+            Text(errorMessage ?? String(localized: "Unknown error"))
         }
     }
 
@@ -148,7 +148,9 @@ struct RestoreViewKeyView: View {
                     .accessibilityIdentifier("restoreViewKey.addressField")
 
                 if !addressInput.isEmpty && !isAddressValid {
-                    Text("Address doesn't look valid for \(walletManager.networkType == .testnet ? "testnet" : "mainnet").")
+                    Text(walletManager.networkType == .testnet
+                        ? "Address doesn't look valid for testnet."
+                        : "Address doesn't look valid for mainnet.")
                         .font(.caption)
                         .foregroundColor(.red)
                 }

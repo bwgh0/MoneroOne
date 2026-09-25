@@ -168,9 +168,9 @@ struct TrustedLocationRow: View {
 
     private var radiusDescription: String {
         if location.radius >= 1000 {
-            return String(format: "%.1f km radius", location.radius / 1000)
+            return String(localized: "\(location.radius / 1000, specifier: "%.1f") km radius")
         } else {
-            return "\(Int(location.radius))m radius"
+            return String(localized: "\(Int(location.radius))m radius", comment: "Radius in meters, e.g. 500m radius")
         }
     }
 }

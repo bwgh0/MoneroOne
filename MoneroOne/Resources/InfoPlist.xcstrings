@@ -1,0 +1,618 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSBluetoothAlwaysUsageDescription" : {
+      "comment" : "Privacy - Bluetooth Always Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One nutzt Bluetooth, um mit deiner Trezor-Hardware-Wallet zu kommunizieren und Transaktionen sicher zu signieren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MoneroOne uses Bluetooth to communicate with your Trezor hardware wallet for secure transaction signing."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One usa Bluetooth para comunicarse con tu cartera de hardware Trezor y firmar transacciones de forma segura."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One utilise Bluetooth pour communiquer avec votre portefeuille matériel Trezor afin de signer les transactions en toute sécurité."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One usa il Bluetooth per comunicare con il tuo portafoglio hardware Trezor e firmare le transazioni in modo sicuro."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero Oneは、トランザクションに安全に署名するため、BluetoothでTrezorハードウェアウォレットと通信します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One은 Trezor 하드웨어 지갑과 통신하여 거래에 안전하게 서명하기 위해 Bluetooth를 사용합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One gebruikt Bluetooth om met je Trezor-hardwareportemonnee te communiceren, zodat je transacties veilig kunt ondertekenen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One używa Bluetooth do komunikacji z portfelem sprzętowym Trezor, aby bezpiecznie podpisywać transakcje."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Monero One usa o Bluetooth para se comunicar com sua carteira de hardware Trezor e assinar transações com segurança."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One folosește Bluetooth pentru a comunica cu portofelul hardware Trezor și pentru a semna tranzacțiile în siguranță."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One использует Bluetooth для связи с аппаратным кошельком Trezor, чтобы безопасно подписывать транзакции."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One, işlemleri güvenli bir şekilde imzalamak için Trezor donanım cüzdanınızla Bluetooth üzerinden iletişim kurar."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One використовує Bluetooth для зв’язку з апаратним гаманцем Trezor, щоб безпечно підписувати транзакції."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One 使用蓝牙与你的 Trezor 硬件钱包通信，以安全地签署交易。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One 使用藍牙與你的 Trezor 硬體錢包通訊，以安全地簽署交易。"
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "comment" : "Privacy - Camera Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Kamera wird zum Scannen von QR-Codes verwendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Camera is used to scan QR codes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cámara se usa para escanear códigos QR."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One utilise l’appareil photo pour scanner les codes QR."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One usa la fotocamera per scansionare i codici QR."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QRコードをスキャンするためにカメラを使用します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR 코드를 스캔하기 위해 카메라를 사용합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One gebruikt de camera om QR-codes te scannen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aparat służy do skanowania kodów QR."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A câmera é usada para escanear códigos QR."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera este folosită pentru scanarea codurilor QR."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Камера нужна для сканирования QR-кодов"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera, QR kodlarını taramak için kullanılır."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One використовує камеру для сканування QR-кодів."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One 需要使用相机来扫描二维码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One 需要使用相機來掃描 QR Code。"
+          }
+        }
+      }
+    },
+    "NSFaceIDUsageDescription" : {
+      "comment" : "Privacy - Face ID Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID wird zum Entsperren deiner Wallet verwendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Face ID is used to unlock your wallet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID se usa para desbloquear tu cartera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One utilise Face ID pour déverrouiller votre portefeuille."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One usa Face ID per sbloccare il tuo portafoglio."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ウォレットのロックを解除するためにFace IDを使用します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지갑 잠금을 해제하기 위해 Face ID를 사용합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One gebruikt Face ID om je portemonnee te ontgrendelen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID służy do odblokowywania portfela."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Face ID é usado para desbloquear sua carteira."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID este folosit pentru deblocarea portofelului."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID используется для разблокировки кошелька"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID, cüzdanınızın kilidini açmak için kullanılır."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID використовується для розблокування гаманця."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One 使用面容 ID 来解锁你的钱包。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One 使用 Face ID 來解鎖你的錢包。"
+          }
+        }
+      }
+    },
+    "NSLocationAlwaysAndWhenInUseUsageDescription" : {
+      "comment" : "Privacy - Location Always and When In Use Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vertrauenswürdige Orte legt Sicherheitszonen um Orte fest, die du wählst, etwa Zuhause oder Arbeit. Deine Wallet bleibt nur in diesen Zonen aktuell. Standortdaten verlassen dein Gerät nie."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trusted Locations creates security zones around places you choose, like home or work. Your wallet only stays updated within these safe zones. Location data never leaves your device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ubicaciones de confianza crea zonas de seguridad alrededor de los lugares que elijas, como tu casa o tu trabajo. Tu cartera solo se mantiene actualizada dentro de estas zonas seguras. Los datos de ubicación nunca salen de tu dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La fonction Lieux de confiance crée des zones de sécurité autour des lieux que vous choisissez, comme votre domicile ou votre travail. Votre portefeuille ne se met à jour que dans ces zones sûres. Les données de localisation ne quittent jamais votre appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luoghi attendibili crea zone di sicurezza intorno ai luoghi che scegli, come casa o lavoro. Il portafoglio resta aggiornato solo all’interno di queste zone sicure. I dati sulla posizione non lasciano mai il tuo dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「信頼できる場所」は、自宅や職場など、指定した場所の周囲にセキュリティゾーンを作成します。ウォレットはこれらの安全なゾーン内でのみ最新の状態に保たれます。位置情報がデバイスの外に送信されることはありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "신뢰할 수 있는 위치 기능은 집이나 직장처럼 사용자가 선택한 장소 주변에 보안 구역을 만듭니다. 지갑은 이 안전 구역 안에서만 최신 상태로 유지됩니다. 위치 데이터는 기기 밖으로 전송되지 않습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vertrouwde locaties maakt beveiligingszones rond plekken die je kiest, zoals thuis of je werk. Je portemonnee blijft alleen binnen deze veilige zones bijgewerkt. Locatiegegevens verlaten je apparaat nooit."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zaufane lokalizacje tworzą strefy bezpieczeństwa wokół wybranych miejsc, np. domu lub pracy. Portfel pozostaje aktualny tylko w tych bezpiecznych strefach. Dane o lokalizacji nigdy nie opuszczają urządzenia."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O recurso Locais Confiáveis cria zonas de segurança em torno de lugares que você escolher, como sua casa ou trabalho. Sua carteira só fica atualizada dentro dessas zonas seguras. Os dados de localização nunca saem do seu dispositivo."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Funcția Locații de încredere creează zone de securitate în jurul locurilor alese de tine, cum ar fi casa sau locul de muncă. Portofelul rămâne actualizat doar în aceste zone sigure. Datele de localizare nu părăsesc niciodată dispozitivul."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Функция «Доверенные места» создаёт зоны безопасности вокруг выбранных вами мест, например дома или работы. Кошелёк обновляется только в этих безопасных зонах. Данные о геопозиции никогда не покидают устройство."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Güvenilir Konumlar, ev veya iş gibi seçtiğiniz yerlerin çevresinde güvenlik bölgeleri oluşturur. Cüzdanınız yalnızca bu güvenli bölgelerde güncel kalır. Konum verileri aygıtınızdan asla çıkmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Функція «Довірені місця» створює безпечні зони навколо вибраних вами місць, як-от дім чи робота. Гаманець оновлюється лише в цих безпечних зонах. Дані про локацію ніколи не залишають ваш пристрій."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“可信位置”会在你选择的地点（例如家或工作场所）周围创建安全区域。你的钱包仅在这些安全区域内保持更新。位置数据绝不会离开你的设备。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「信任的位置」會在你選擇的地點（例如住家或工作場所）周圍建立安全區域。你的錢包只會在這些安全區域內保持更新。位置資料絕不會離開你的裝置。"
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Privacy - Location When In Use Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle vertrauenswürdige Orte wie Zuhause oder Arbeit, um Sicherheitszonen für deine Wallet festzulegen. Standortdaten bleiben auf deinem Gerät."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose trusted locations like home or work to define security zones for your wallet. Location data stays on your device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige ubicaciones de confianza, como tu casa o tu trabajo, para definir zonas de seguridad para tu cartera. Los datos de ubicación se quedan en tu dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez des lieux de confiance, comme votre domicile ou votre travail, pour définir les zones de sécurité de votre portefeuille. Les données de localisation restent sur votre appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli luoghi attendibili come casa o lavoro per definire le zone di sicurezza del tuo portafoglio. I dati sulla posizione restano sul tuo dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自宅や職場などの信頼できる場所を選んで、ウォレットのセキュリティゾーンを設定します。位置情報はデバイス内にとどまります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "집이나 직장 같은 신뢰할 수 있는 위치를 선택하여 지갑의 보안 구역을 정하세요. 위치 데이터는 기기에만 저장됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies vertrouwde locaties, zoals thuis of je werk, om beveiligingszones voor je portemonnee in te stellen. Locatiegegevens blijven op je apparaat."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz zaufane lokalizacje, np. dom lub pracę, aby określić strefy bezpieczeństwa portfela. Dane o lokalizacji pozostają na urządzeniu."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha locais confiáveis, como sua casa ou trabalho, para definir zonas de segurança para sua carteira. Os dados de localização ficam no seu dispositivo."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alege locații de încredere, cum ar fi casa sau locul de muncă, pentru a defini zone de securitate pentru portofel. Datele de localizare rămân pe dispozitiv."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите доверенные места, например дом или работу, чтобы задать зоны безопасности для кошелька. Данные о геопозиции остаются на устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cüzdanınız için güvenlik bölgeleri tanımlamak üzere ev veya iş gibi güvenilir konumlar seçin. Konum verileri aygıtınızda kalır."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть довірені місця, як-от дім чи роботу, щоб визначити безпечні зони для гаманця. Дані про локацію залишаються на вашому пристрої."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择家或工作场所等可信位置，为你的钱包设定安全区域。位置数据会保留在你的设备上。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇住家或工作場所等信任的位置，為你的錢包設定安全區域。位置資料會保留在你的裝置上。"
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryAddUsageDescription" : {
+      "comment" : "Privacy - Photo Library Additions Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One sichert deinen Empfangs-QR-Code nur in deiner Fotomediathek, wenn du darum bittest."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Monero One saves your receive QR code to your photo library only when you ask it to."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One guarda tu código QR de recepción en tu fototeca solo cuando se lo pides."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One enregistre votre code QR de réception dans votre photothèque uniquement lorsque vous le demandez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One salva il codice QR di ricezione nella libreria Foto solo quando lo chiedi tu."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero Oneは、ご指示があった場合にのみ、受け取り用QRコードをフォトライブラリに保存します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One은 사용자가 요청할 때만 받기 QR 코드를 사진 보관함에 저장합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One bewaart de QR-code van je ontvangstadres alleen in je fotobibliotheek als je daarom vraagt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One zachowuje kod QR do odbierania w bibliotece zdjęć tylko wtedy, gdy o to poprosisz."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Monero One salva o código QR de recebimento na sua fototeca somente quando você pede."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One salvează codul QR de primire în Poze doar atunci când îi ceri."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One сохраняет QR-код для получения в медиатеку, только когда вы об этом просите."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One, ödeme alma QR kodunuzu yalnızca siz istediğinizde fotoğraf arşivinize kaydeder."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One зберігає QR-код для отримання у вашу медіатеку, лише коли ви про це просите."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只有在你要求时，Monero One 才会将你的收款二维码存储到照片图库。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只有在你要求時，Monero One 才會將你的收款 QR Code 儲存到照片圖庫。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

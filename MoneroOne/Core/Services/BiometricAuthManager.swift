@@ -13,9 +13,9 @@ class BiometricAuthManager: ObservableObject {
 
         var displayName: String {
             switch self {
-            case .none: return "None"
-            case .touchID: return "Touch ID"
-            case .faceID: return "Face ID"
+            case .none: return String(localized: "None", comment: "No biometric sensor")
+            case .touchID: return String(localized: "Touch ID")
+            case .faceID: return String(localized: "Face ID")
             }
         }
 
@@ -72,7 +72,7 @@ class BiometricAuthManager: ObservableObject {
     /// back to the device passcode instead of silently passing. Without this,
     /// anyone holding an already-unlocked phone could empty the wallet during
     /// the auto-lock window (5 minutes by default) with no prompt at all.
-    func authenticateForTransaction(reason: String = "Confirm this transaction") async -> Bool {
+    func authenticateForTransaction(reason: String = String(localized: "Confirm this transaction")) async -> Bool {
         let context = LAContext()
         var error: NSError?
 
@@ -90,11 +90,11 @@ class BiometricAuthManager: ObservableObject {
         }
     }
 
-    func authenticate(reason: String = "Unlock your wallet") async -> Bool {
+    func authenticate(reason: String = String(localized: "Unlock your wallet")) async -> Bool {
         guard biometricType != .none else { return false }
 
         let context = LAContext()
-        context.localizedCancelTitle = "Use PIN"
+        context.localizedCancelTitle = String(localized: "Use PIN")
 
         do {
             let success = try await context.evaluatePolicy(

@@ -106,9 +106,9 @@ struct SecurityView: View {
 
     private var biometricName: String {
         switch biometricType {
-        case .faceID: return "Face ID"
-        case .touchID: return "Touch ID"
-        default: return "Biometrics"
+        case .faceID: return String(localized: "Face ID")
+        case .touchID: return String(localized: "Touch ID")
+        default: return String(localized: "Biometrics")
         }
     }
 
@@ -125,7 +125,7 @@ struct SecurityView: View {
     private func enableBiometrics() {
         do {
             guard let _ = try walletManager.getSeedPhrase(pin: pinForBiometrics) else {
-                pinError = "Invalid PIN"
+                pinError = String(localized: "Invalid PIN")
                 pinForBiometrics = ""
                 return
             }
@@ -135,7 +135,7 @@ struct SecurityView: View {
             pinError = nil
             showPINPrompt = false
         } catch {
-            pinError = "Invalid PIN"
+            pinError = String(localized: "Invalid PIN")
             pinForBiometrics = ""
         }
     }
@@ -306,7 +306,7 @@ struct ChangePINView: View {
 
             dismiss()
         } catch {
-            errorMessage = "Failed to change PIN"
+            errorMessage = String(localized: "Failed to change PIN")
         }
 
         isChanging = false

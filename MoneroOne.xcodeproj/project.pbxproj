@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		10CA11E0D780EDC7298FD2E7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E0B762CCA121C33098 /* Localizable.xcstrings */; };
+		10CA11E013C9FC8238B72689 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */; };
+		10CA11E0DA7FA5402BCDCC79 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E06B53612C5424F864 /* Localizable.xcstrings */; };
 		0078BD68A0F42B7F096CC5B0 /* BiometricAuthManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78543F60FF832ABD15C47107 /* BiometricAuthManagerTests.swift */; };
 		REGR3SS10NT3STS00000001 /* RegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = REGR3SS10NT3STS00000002 /* RegressionTests.swift */; };
 		093E2F482F307A6400A0715B /* monero-one.icon in Resources */ = {isa = PBXBuildFile; fileRef = 093E2F472F307A6400A0715B /* monero-one.icon */; };
@@ -186,6 +189,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		10CA11E0B762CCA121C33098 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
+		10CA11E06B53612C5424F864 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		029F663A58F5CE2B18C3B33C /* ScrambledText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrambledText.swift; sourceTree = "<group>"; };
 		03AFA2AEF2E9BE07586929E2 /* CommandCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandCenterView.swift; sourceTree = "<group>"; };
 		0522BFB54176E930AB3D4A9B /* MoneroOneWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MoneroOneWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -498,6 +504,7 @@
 				FF6022942E141D54562F131E /* Assets.xcassets */,
 				50B87EA15DE9A6C8674D5669 /* BalanceWidget.swift */,
 				BA5847FCE9402558A35491F8 /* Info.plist */,
+				10CA11E06B53612C5424F864 /* Localizable.xcstrings */,
 				80E783520494A8A2ED1812BA /* MoneroOneWidgets.entitlements */,
 				DC58487C5764E22EA877B236 /* MoneroOneWidgetsBundle.swift */,
 				PRICEWIDGETREF123456789A /* PriceWidget.swift */,
@@ -595,6 +602,8 @@
 			isa = PBXGroup;
 			children = (
 				D5B417D8D6615D3C56F22085 /* Assets.xcassets */,
+				10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */,
+				10CA11E0B762CCA121C33098 /* Localizable.xcstrings */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -837,6 +846,21 @@
 			knownRegions = (
 				Base,
 				en,
+				es,
+				"pt-BR",
+				fr,
+				de,
+				it,
+				nl,
+				pl,
+				ru,
+				uk,
+				tr,
+				ro,
+				"zh-Hans",
+				"zh-Hant",
+				ja,
+				ko,
 			);
 			mainGroup = 453FE5EA1C7EBE179675DED5;
 			minimizedProjectReferenceProxies = 1;
@@ -863,6 +887,8 @@
 				AF8CD53F523DABC80F06F168 /* Assets.xcassets in Resources */,
 				093E2F482F307A6400A0715B /* monero-one.icon in Resources */,
 				PRIVACYINFOBUILD1234ABCD /* PrivacyInfo.xcprivacy in Resources */,
+				10CA11E0D780EDC7298FD2E7 /* Localizable.xcstrings in Resources */,
+				10CA11E013C9FC8238B72689 /* InfoPlist.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -879,6 +905,7 @@
 			files = (
 				186E1F281B45C7929D9F7CB7 /* Assets.xcassets in Resources */,
 				WIDGETPRIVACYBUILD12345A /* PrivacyInfo.xcprivacy in Resources */,
+				10CA11E0DA7FA5402BCDCC79 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1171,6 +1198,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 		8664DCFA45786101AD56359B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -1285,6 +1313,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 		ED4E1805BDA1D3F456068996 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;

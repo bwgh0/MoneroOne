@@ -85,6 +85,6 @@ private struct KeypadButton: View {
             .frame(height: 60)
         }
         .glassButtonStyle()
-        .accessibilityLabel(key == "⌫" ? "Delete" : key == "." ? "Decimal point" : key)
+        .accessibilityLabel(key == "⌫" ? String(localized: "Delete") : key == "." ? String(localized: "Decimal point") : key)
     }
 }

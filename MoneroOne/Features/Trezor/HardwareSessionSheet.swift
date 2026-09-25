@@ -105,8 +105,8 @@ struct HardwareSessionSheet: View {
 
     private var navTitle: String {
         switch intent {
-        case .syncSentTransactions: return "Sync Sent Transactions"
-        case .send, .sendAll: return "Sign with Trezor"
+        case .syncSentTransactions: return String(localized: "Sync Sent Transactions")
+        case .send, .sendAll: return String(localized: "Sign with Trezor")
         }
     }
 
@@ -251,7 +251,7 @@ struct HardwareSessionSheet: View {
         }
     }
 
-    private func progressLabel(_ text: String) -> some View {
+    private func progressLabel(_ text: LocalizedStringResource) -> some View {
         VStack(spacing: 12) {
             ProgressView().scaleEffect(1.2)
             Text(text)
@@ -260,7 +260,7 @@ struct HardwareSessionSheet: View {
         }
     }
 
-    private func simpleProgress(title: String, subtitle: String?) -> some View {
+    private func simpleProgress(title: LocalizedStringResource, subtitle: LocalizedStringResource?) -> some View {
         VStack(spacing: 16) {
             ProgressView().scaleEffect(1.4).padding(.bottom, 4)
             Text(title)

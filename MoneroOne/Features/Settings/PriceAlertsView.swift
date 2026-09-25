@@ -117,6 +117,11 @@ struct AlertRow: View {
         PriceService.currencySymbols[alert.currency] ?? "$"
     }
 
+    /// "$150.00"
+    private var targetText: String {
+        "\(currencySymbol)\(String(format: "%.2f", alert.targetPrice))"
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -124,7 +129,7 @@ struct AlertRow: View {
                     Image(systemName: alert.alertType == .above ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
                         .foregroundColor(alert.alertType == .above ? .green : .red)
 
-                    Text("\(alert.alertType == .above ? "Above" : "Below") \(currencySymbol)\(String(format: "%.2f", alert.targetPrice))")
+                    Text(alert.alertType == .above ? "Above \(targetText)" : "Below \(targetText)")
                         .fontWeight(.medium)
                 }
 

@@ -24,14 +24,15 @@ class PriceAlertNotificationManager {
 
     func sendAlert(_ alert: PriceAlert, currentPrice: Double) {
         let content = UNMutableNotificationContent()
-        content.title = "XMR Price Alert"
+        content.title = String(localized: "XMR Price Alert")
 
         let currencySymbol = PriceService.currencySymbols[alert.currency] ?? "$"
-        let direction = alert.alertType == .above ? "above" : "below"
-        let formattedTarget = String(format: "%.2f", alert.targetPrice)
-        let formattedCurrent = String(format: "%.2f", currentPrice)
+        let target = "\(currencySymbol)\(String(format: "%.2f", alert.targetPrice))"
+        let current = "\(currencySymbol)\(String(format: "%.2f", currentPrice))"
 
-        content.body = "Monero is now \(direction) \(currencySymbol)\(formattedTarget) (currently \(currencySymbol)\(formattedCurrent))"
+        content.body = alert.alertType == .above
+            ? String(localized: "Monero is now above \(target) (currently \(current))", comment: "Price alert: target price, then the price now")
+            : String(localized: "Monero is now below \(target) (currently \(current))", comment: "Price alert: target price, then the price now")
         content.sound = .default
 
         let request = UNNotificationRequest(

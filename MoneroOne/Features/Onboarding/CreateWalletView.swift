@@ -57,10 +57,10 @@ struct CreateWalletView: View {
 
     private var biometricName: String {
         switch biometricType {
-        case .faceID: return "Face ID"
-        case .touchID: return "Touch ID"
-        case .opticID: return "Optic ID"
-        @unknown default: return "Biometrics"
+        case .faceID: return String(localized: "Face ID")
+        case .touchID: return String(localized: "Touch ID")
+        case .opticID: return String(localized: "Optic ID")
+        @unknown default: return String(localized: "Biometrics")
         }
     }
 
@@ -90,7 +90,7 @@ struct CreateWalletView: View {
                 step = .seedType
             }
         } message: {
-            Text(errorMessage ?? "An unknown error occurred. Please try again.")
+            Text(errorMessage ?? String(localized: "An unknown error occurred. Please try again."))
         }
     }
 
@@ -139,7 +139,7 @@ struct CreateWalletView: View {
             }
             .glassButtonStyle()
             .accessibilityLabel("Continue")
-            .accessibilityHint("Double tap to proceed with \(selectedSeedType == .polyseed ? "Polyseed" : "Standard") seed format")
+            .accessibilityHint("Double tap to proceed with \(selectedSeedType == .polyseed ? "Polyseed" : String(localized: "Standard", comment: "Seed format: 24-word BIP39")) seed format")
             .accessibilityIdentifier("create.seedType.continueButton")
             .padding(.horizontal)
 
@@ -152,6 +152,9 @@ struct CreateWalletView: View {
             Text("Set a PIN to secure your wallet")
                 .font(.headline)
                 .multilineTextAlignment(.center)
+                // Longer languages need two lines; with the keyboard up the
+                // column is short and the prompt was cut to one ("…schüt…").
+                .fixedSize(horizontal: false, vertical: true)
 
             // PIN Length Selection
             VStack(spacing: 8) {
@@ -180,7 +183,7 @@ struct CreateWalletView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("4 digit PIN. \(selectedPINLength == 4 ? "Selected" : "Not selected")")
+                    .accessibilityLabel("4 digit PIN. \(selectedPINLength == 4 ? String(localized: "Selected") : String(localized: "Not selected"))")
                     .accessibilityHint("Double tap to use a 4 digit PIN")
 
                     // 6 digits option (recommended)
@@ -212,7 +215,7 @@ struct CreateWalletView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("6 digit PIN, recommended. \(selectedPINLength == 6 ? "Selected" : "Not selected")")
+                    .accessibilityLabel("6 digit PIN, recommended. \(selectedPINLength == 6 ? String(localized: "Selected") : String(localized: "Not selected"))")
                     .accessibilityHint("Double tap to use a 6 digit PIN")
                 }
                 .padding(.horizontal, 20)
@@ -501,13 +504,13 @@ struct CreateWalletView: View {
 
     private func authenticateBiometrics() {
         let context = LAContext()
-        context.localizedCancelTitle = "Cancel"
+        context.localizedCancelTitle = String(localized: "Cancel")
 
         Task {
             do {
                 let success = try await context.evaluatePolicy(
                     .deviceOwnerAuthenticationWithBiometrics,
-                    localizedReason: "Verify \(biometricName) to enable quick unlock"
+                    localizedReason: String(localized: "Verify \(biometricName) to enable quick unlock", comment: "Face ID or Touch ID")
                 )
                 await MainActor.run {
                     if success {

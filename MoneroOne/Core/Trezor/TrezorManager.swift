@@ -100,7 +100,7 @@ class TrezorManager: ObservableObject {
                         }
                         TrezorLog.log("[Manager] BLE disconnected mid-flow, tearing down THP")
                         self.signingProgress = nil
-                        self.state = .error("Trezor disconnected — please reconnect.")
+                        self.state = .error(String(localized: "Trezor disconnected — please reconnect."))
                         self.stopBridge()
                         self.thpChannel = nil
                     default:
@@ -255,10 +255,10 @@ class TrezorManager: ObservableObject {
 
     private func resetChecklist() {
         checklist = [
-            TrezorChecklistItem(id: "channel", label: "Channel Allocated"),
-            TrezorChecklistItem(id: "handshake", label: "Encrypted Handshake"),
-            TrezorChecklistItem(id: "pairing", label: "Device Paired"),
-            TrezorChecklistItem(id: "session", label: "Session Created"),
+            TrezorChecklistItem(id: "channel", label: String(localized: "Channel Allocated", comment: "Trezor pairing checklist step")),
+            TrezorChecklistItem(id: "handshake", label: String(localized: "Encrypted Handshake", comment: "Trezor pairing checklist step")),
+            TrezorChecklistItem(id: "pairing", label: String(localized: "Device Paired", comment: "Trezor pairing checklist step")),
+            TrezorChecklistItem(id: "session", label: String(localized: "Session Created", comment: "Trezor pairing checklist step")),
             TrezorChecklistItem(id: "initialize", label: "Initialize → Features"),
             TrezorChecklistItem(id: "getAddress", label: "MoneroGetAddress"),
             TrezorChecklistItem(id: "getWatchKey", label: "MoneroGetWatchKey"),
@@ -321,7 +321,7 @@ class TrezorManager: ObservableObject {
                            idx + 1 < stepOrder.count {
                             let nextStep = stepOrder[idx + 1]
                             // Add hints for steps that need user interaction
-                            let hint: String? = (nextStep == "pairing") ? "Enter code shown on Trezor" : nil
+                            let hint: String? = (nextStep == "pairing") ? String(localized: "Enter code shown on Trezor") : nil
                             self?.updateChecklistItem(nextStep, status: .inProgress, detail: hint)
                         }
                     }
@@ -387,7 +387,7 @@ class TrezorManager: ObservableObject {
                             if respType == 26 {
                                 self.updateChecklistItem("getWatchKey",
                                     status: .inProgress,
-                                    detail: "Confirm on your Trezor")
+                                    detail: String(localized: "Confirm on your Trezor"))
                             } else {
                                 self.updateChecklistItem("getWatchKey",
                                     status: fail ? .failed : .success,
@@ -433,7 +433,7 @@ class TrezorManager: ObservableObject {
                         if self.signingProgress != nil {
                             if respType == 26 { // ButtonRequest — Trezor wants user confirmation
                                 self.signingProgress = .confirmOnDevice
-                                self.devicePrompt = .confirmOnDevice(action: "Confirm the transaction on your Trezor")
+                                self.devicePrompt = .confirmOnDevice(action: String(localized: "Confirm the transaction on your Trezor"))
                             } else if respType == 518 { // MoneroTransactionFinalAck — signing complete
                                 self.signingProgress = nil
                                 self.devicePrompt = nil
@@ -451,7 +451,7 @@ class TrezorManager: ObservableObject {
                 TrezorLog.log("[Manager] Bridge started with THP")
             } catch {
                 TrezorLog.log("[Manager] THP/Bridge setup failed: %@", error.localizedDescription)
-                state = .error("Setup failed: \(error.localizedDescription)")
+                state = .error(String(localized: "Setup failed: \(error.localizedDescription)"))
             }
         }
     }

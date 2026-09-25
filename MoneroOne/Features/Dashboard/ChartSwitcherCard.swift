@@ -18,6 +18,13 @@ struct ChartSwitcherCard: View {
     enum ChartMode: String, CaseIterable {
         case portfolio = "Portfolio"
         case price = "XMR Price"
+
+        var title: String {
+            switch self {
+            case .portfolio: return String(localized: "Portfolio")
+            case .price: return String(localized: "XMR Price")
+            }
+        }
     }
 
     enum TimeRange: String, CaseIterable {
@@ -34,6 +41,9 @@ struct ChartSwitcherCard: View {
             case .year: return "1Y"
             }
         }
+
+        /// The button label, in the user's language ("1W").
+        var title: String { ChartRangeTitle.title(for: rawValue) }
     }
 
     private var balanceDouble: Double {
@@ -100,7 +110,7 @@ struct ChartSwitcherCard: View {
     var body: some View {
         VStack(spacing: 12) {
             CompactGlassSegmentedPicker(selection: $chartMode) { mode in
-                mode.rawValue
+                mode.title
             }
             .accessibilityLabel("Chart mode")
             .accessibilityHint("Switch between portfolio and price chart")
@@ -136,13 +146,13 @@ struct ChartSwitcherCard: View {
                             .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
                             .cornerRadius(8)
                             .accessibilityElement(children: .combine)
-                            .accessibilityLabel("\(chartMode == .price ? "Price" : "Portfolio") change, \(change >= 0 ? "up" : "down") \(formatChange(change))")
+                            .accessibilityLabel("\(chartMode == .price ? String(localized: "Price") : String(localized: "Portfolio")) change, \(change >= 0 ? String(localized: "up", comment: "Price went up") : String(localized: "down", comment: "Price went down")) \(formatChange(change))")
                         } else if priceService.isLoadingChart {
                             ProgressView()
                                 .scaleEffect(0.6)
                         }
 
-                        Text(selectedTimeRange.rawValue)
+                        Text(selectedTimeRange.title)
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -153,7 +163,7 @@ struct ChartSwitcherCard: View {
 
             // Time range selector
             CompactGlassSegmentedPicker(selection: $selectedTimeRange) { range in
-                range.rawValue
+                range.title
             }
 
             chartView
@@ -264,7 +274,7 @@ struct ChartSwitcherCard: View {
                         timestamp: \.timestamp,
                         value: \.price,
                         axes: nil,
-                        speech: ChartSpeech(title: "Monero price", span: spokenSpan, currencyCode: priceService.selectedCurrency),
+                        speech: ChartSpeech(title: String(localized: "Monero price"), span: spokenSpan, currencyCode: priceService.selectedCurrency),
                         onSelect: { selectedPricePoint = $0 }
                     )
                     .equatable()
@@ -278,11 +288,11 @@ struct ChartSwitcherCard: View {
                         axes: nil,
                         markers: series.markers,
                         speech: ChartSpeech(
-                            title: "Portfolio",
+                            title: String(localized: "Portfolio"),
                             span: spokenSpan,
                             currencyCode: priceService.selectedCurrency,
                             note: PortfolioHistory.spokenCount(in: series.points),
-                            markerHint: "Moves between transactions"
+                            markerHint: String(localized: "Moves between transactions", comment: "VoiceOver hint: swipe up or down on the chart")
                         ),
                         onSelect: { selectedPortfolioPoint = $0 }
                     )

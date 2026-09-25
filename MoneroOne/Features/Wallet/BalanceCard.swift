@@ -59,11 +59,29 @@ struct BalanceCard: View {
         return fiatBalance.map { "≈ \($0)" }
     }
 
+    private func viewOnlyPill(showsText: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "eye.fill")
+                .font(.caption2)
+            if showsText {
+                Text("View-only")
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(Color.orange))
+    }
+
     private var balanceAccessibilityLabel: String {
         if isFiatFirst, let fiatBalance {
-            return "Balance: \(fiatBalance), \(XMRFormatter.format(balance)) XMR"
+            return String(localized: "Balance: \(fiatBalance), \(XMRFormatter.format(balance)) XMR", comment: "VoiceOver: Fiat Mode balance, fiat first, then XMR")
         }
-        return "Balance: \(XMRFormatter.format(balance)) XMR\(fiatBalance.map { ", approximately \($0)" } ?? "")"
+        let approximately = fiatBalance.map { String(localized: ", approximately \($0)", comment: "VoiceOver: fiat value after an XMR amount") } ?? ""
+        return String(localized: "Balance: \(XMRFormatter.format(balance)) XMR\(approximately)")
     }
 
     private var availableAccessibilityLabel: String {
@@ -73,9 +91,9 @@ struct BalanceCard: View {
         if isFiatFirst, let fiat {
             amounts = "\(fiat), \(xmr) XMR"
         } else {
-            amounts = "\(xmr) XMR\(fiat.map { ", approximately \($0)" } ?? "")"
+            amounts = "\(xmr) XMR" + (fiat.map { String(localized: ", approximately \($0)", comment: "VoiceOver: fiat value after an XMR amount") } ?? "")
         }
-        return "Available balance: \(amounts). Some funds locked until recent transactions confirm."
+        return String(localized: "Available balance: \(amounts). Some funds locked until recent transactions confirm.", comment: "VoiceOver: spendable balance while some funds are locked; %@ is the amount")
     }
 
     var body: some View {
@@ -98,6 +116,10 @@ struct BalanceCard: View {
                     Text("Synced")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        // One line at full width: squeezed by a long pill,
+                        // "Синхронизировано" broke with a hyphen.
+                        .lineLimit(1)
+                        .fixedSize()
                         .accessibilityLabel("Sync status: synced")
                 } else if case .error(let msg) = syncState {
                     Circle()
@@ -132,7 +154,7 @@ struct BalanceCard: View {
                             Image(systemName: isHardwareDeviceWarm ? "bolt.fill" : "bolt.slash.fill")
                                 .font(.caption2.weight(.bold))
                             Text(isHardwareDeviceWarm
-                                 ? "\(hardwareDeviceName ?? "Trezor") • Live"
+                                 ? String(localized: "\(hardwareDeviceName ?? "Trezor") • Live", comment: "Hardware wallet pill: device name, then that the link is up")
                                  : (hardwareDeviceName ?? "Trezor"))
                                 .font(.caption2.weight(.semibold))
                                 .lineLimit(1)
@@ -148,19 +170,17 @@ struct BalanceCard: View {
                         .padding(.leading, 6)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(hardwareDeviceName ?? "Hardware wallet")\(isHardwareDeviceWarm ? ", connected" : ", not connected"). Tap to sync sent transactions.")
+                    .accessibilityLabel("\(hardwareDeviceName ?? String(localized: "Hardware wallet"))\(isHardwareDeviceWarm ? String(localized: ", connected") : String(localized: ", not connected")). Tap to sync sent transactions.")
                 } else if isViewOnly {
-                    HStack(spacing: 4) {
-                        Image(systemName: "eye.fill")
-                            .font(.caption2)
-                        Text("View-only")
-                            .font(.caption2.weight(.semibold))
+                    // The eye alone when the word does not fit beside the
+                    // status: "Solo visualizzazione" and "Только просмотр"
+                    // wrapped inside the pill.
+                    ViewThatFits(in: .horizontal) {
+                        viewOnlyPill(showsText: true)
+                        viewOnlyPill(showsText: false)
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.orange))
                     .padding(.leading, 6)
+                    .accessibilityElement(children: .ignore)
                     .accessibilityLabel("View-only wallet")
                 }
 
@@ -322,7 +342,7 @@ struct BalanceCard: View {
                     }
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Sync progress: \(Int(progress)) percent\(remaining.map { ", \(formatBlockCount($0)) blocks remaining" } ?? "")")
+                .accessibilityLabel("Sync progress: \(Int(progress)) percent\(remaining.map { String(localized: ", \(formatBlockCount($0)) blocks remaining", comment: "VoiceOver: after the sync percent") } ?? "")")
             }
 
             // Trusted location status
@@ -384,12 +404,12 @@ struct BalanceCard: View {
     /// run one.
     private var lastSentSyncSubtitle: String {
         guard let last = hardwareLastSentSyncAt else {
-            return "Outgoing transactions may be out of date"
+            return String(localized: "Outgoing transactions may be out of date")
         }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         let stamp = formatter.localizedString(for: last, relativeTo: Date())
-        return "Last synced \(stamp)"
+        return String(localized: "Last synced \(stamp)", comment: "Relative time, e.g. 5 min. ago")
     }
 
     /// Extract sync progress from syncState for the step indicator
@@ -500,7 +520,7 @@ private struct ConnectionStepIndicator: View {
 
     private var statusText: String {
         if case .syncing = stage, let progress = syncProgress {
-            return "Scanning \(Int(progress))%..."
+            return String(localized: "Scanning \(Int(progress))%...", comment: "Sync status with percent")
         }
         return stage.displayText
     }

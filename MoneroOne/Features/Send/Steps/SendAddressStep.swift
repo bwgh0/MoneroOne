@@ -15,7 +15,7 @@ struct SendAddressStep: View {
                 VStack(spacing: 24) {
                     if !isConnected {
                         ErrorBanner(
-                            message: "No internet connection. Cannot send.",
+                            message: String(localized: "No internet connection. Cannot send."),
                             type: .offline
                         )
                         .accessibilityLabel("Offline: no internet connection")

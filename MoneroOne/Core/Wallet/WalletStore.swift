@@ -114,10 +114,10 @@ struct WalletStore {
     func nextWalletName(existing: [WalletInfo]) -> String {
         var n = existing.count + 1
         let existingNames = Set(existing.map(\.name))
-        while existingNames.contains("Wallet \(n)") {
+        while existingNames.contains(String(localized: "Wallet \(n)", comment: "Default wallet name, numbered")) {
             n += 1
         }
-        return "Wallet \(n)"
+        return String(localized: "Wallet \(n)", comment: "Default wallet name, numbered")
     }
 
     // MARK: - Reset

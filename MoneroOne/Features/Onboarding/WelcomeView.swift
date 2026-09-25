@@ -115,7 +115,7 @@ struct WelcomeView: View {
             .foregroundColor(.secondary)
     }
 
-    private func buttonLabel(_ text: String, systemImage: String) -> some View {
+    private func buttonLabel(_ text: LocalizedStringResource, systemImage: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
                 .font(.callout.weight(.semibold))

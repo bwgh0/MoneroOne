@@ -102,8 +102,8 @@ struct ExportViewKeyView: View {
 /// glass card with per-field copy, a "copy all" button, and a system share
 /// sheet.
 fileprivate struct ViewKeyExportCard: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringResource
+    let subtitle: LocalizedStringResource
     let address: String
     let viewKey: String
     let restoreHeight: UInt64
@@ -150,19 +150,19 @@ fileprivate struct ViewKeyExportCard: View {
 
     private var sharePayload: String {
         var lines = [
-            "Monero View-Only Wallet",
+            String(localized: "Monero View-Only Wallet"),
             "",
-            "Address:",
+            String(localized: "Address:"),
             address,
             "",
-            "Private View Key:",
+            String(localized: "Private View Key:"),
             viewKey
         ]
         if let dateString = formattedCreationDate {
-            lines.append(contentsOf: ["", "Creation Date: \(dateString)"])
+            lines.append(contentsOf: ["", String(localized: "Creation Date: \(dateString)")])
         }
         if restoreHeight > 0 {
-            lines.append("Restore Height: \(restoreHeight)")
+            lines.append(String(localized: "Restore Height: \(restoreHeight)"))
         }
         return lines.joined(separator: "\n")
     }
@@ -308,7 +308,7 @@ fileprivate struct ViewKeyExportCard: View {
 }
 
 fileprivate struct ViewKeyField: View {
-    let label: String
+    let label: LocalizedStringResource
     let value: String
     var monospace: Bool = true
     let copied: Bool
@@ -316,7 +316,7 @@ fileprivate struct ViewKeyField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased())
+            Text(String(localized: label).uppercased())
                 .font(.caption2.weight(.semibold))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
@@ -335,7 +335,7 @@ fileprivate struct ViewKeyField: View {
                         .symbolEffect(.bounce, value: copied)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(copied ? "\(label) copied" : "Copy \(label)")
+                .accessibilityLabel(copied ? "\(String(localized: label)) copied" : "Copy \(String(localized: label))")
             }
             .padding(12)
             .background(

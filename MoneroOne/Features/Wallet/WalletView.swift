@@ -183,7 +183,7 @@ struct TestnetBanner: View {
 
 /// Compact action button with reduced height
 struct CompactActionButton: View {
-    let title: String
+    let title: LocalizedStringResource
     let icon: String
     let color: Color
     var isDisabled: Bool = false
@@ -323,6 +323,9 @@ struct RecentTransactionCard: View {
                     Text(transaction.type == .incoming ? "Received" : "Sent")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        // Whole: next to a long amount, "Получено" broke with a
+                        // hyphen; the amount column gives way instead.
+                        .fixedSize()
                         .foregroundColor(.primary)
 
                     Text(formattedDate)
@@ -343,7 +346,7 @@ struct RecentTransactionCard: View {
         }
         .glassButtonStyle()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
         .accessibilityHint("Shows transaction details")
     }
 

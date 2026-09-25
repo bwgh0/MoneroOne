@@ -294,7 +294,7 @@ struct NodeSettingsView: View {
     /// (blocked or down on this network) sounded like a VoiceOver bug.
     private func missingLatencyDescription(isOnion: Bool, stats: NodeStats?) -> String {
         guard !isOnion, let stats, stats.latencyMs == nil else { return "" }
-        return nodeManager.isLoadingStats ? "Checking latency" : "No response"
+        return nodeManager.isLoadingStats ? String(localized: "Checking latency") : String(localized: "No response")
     }
 
     // MARK: - Helpers

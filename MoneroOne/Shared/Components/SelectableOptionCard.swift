@@ -8,18 +8,18 @@ import SwiftUI
 struct SelectableOptionCard<ID: Hashable>: View {
     let id: ID
     @Binding var selection: ID
-    let title: String
-    let badge: String?
-    let subtitle: String?
-    let detail: String?
+    let title: LocalizedStringResource
+    let badge: LocalizedStringResource?
+    let subtitle: LocalizedStringResource?
+    let detail: LocalizedStringResource?
 
     init(
         id: ID,
         selection: Binding<ID>,
-        title: String,
-        badge: String? = nil,
-        subtitle: String? = nil,
-        detail: String? = nil
+        title: LocalizedStringResource,
+        badge: LocalizedStringResource? = nil,
+        subtitle: LocalizedStringResource? = nil,
+        detail: LocalizedStringResource? = nil
     ) {
         self.id = id
         self._selection = selection
@@ -30,6 +30,14 @@ struct SelectableOptionCard<ID: Hashable>: View {
     }
 
     private var isSelected: Bool { selection == id }
+
+    /// "Polyseed, Recommended. 16 words … . Selected"
+    private var spokenLabel: String {
+        let badgeText = badge.map { ", " + String(localized: $0) } ?? ""
+        let subtitleText = subtitle.map { ". " + String(localized: $0) } ?? ""
+        let state = isSelected ? String(localized: "Selected") : String(localized: "Not selected")
+        return String(localized: title) + badgeText + subtitleText + ". " + state
+    }
 
     var body: some View {
         Button {
@@ -84,7 +92,7 @@ struct SelectableOptionCard<ID: Hashable>: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title)\(badge.map { ", \($0)" } ?? "")\(subtitle.map { ". \($0)" } ?? ""). \(isSelected ? "Selected" : "Not selected")")
-        .accessibilityHint("Double tap to select \(title)")
+        .accessibilityLabel(spokenLabel)
+        .accessibilityHint("Double tap to select \(String(localized: title))")
     }
 }

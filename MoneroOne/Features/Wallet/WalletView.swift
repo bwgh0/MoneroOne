@@ -141,12 +141,7 @@ struct WalletView: View {
                     .environmentObject(walletManager)
                     .environmentObject(priceService)
             }
-            .onChange(of: walletManager.shouldShowSendView) { show in
-                if show {
-                    showSend = true
-                    walletManager.shouldShowSendView = false
-                }
-            }
+            .presentsSendRequests(from: walletManager, showSend: $showSend)
             .sheet(isPresented: $showPortfolio) {
                 PortfolioChartView(
                     balance: walletManager.displayBalance,

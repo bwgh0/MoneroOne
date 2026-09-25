@@ -59,6 +59,9 @@ struct CommandCenterView: View {
         .sheet(isPresented: $showSend) {
             SendFlowView()
         }
+        // Donate and `monero:` links ask for Send through the manager. Without
+        // this they did nothing on iPad and the unfolded iPhone Duo.
+        .presentsSendRequests(from: walletManager, showSend: $showSend)
         .sheet(isPresented: $showAllTransactions) {
             NavigationStack {
                 TransactionListView()

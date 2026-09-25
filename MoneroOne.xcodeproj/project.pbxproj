@@ -111,6 +111,8 @@
 		64EEFAEFECDA4726A441CBD8 /* FiatCurrency.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA3814BAB2E944A085268962 /* FiatCurrency.swift */; };
 		PRICEWIDGET1234567890ABCD /* PriceWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = PRICEWIDGETREF123456789A /* PriceWidget.swift */; };
 		XMRFORMAT123456789ABCDEF0 /* XMRFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMRFORMATREF12345678ABCD /* XMRFormatter.swift */; };
+		DEE91100000000000000B001 /* MoneroPaymentURI.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE91100000000000000F001 /* MoneroPaymentURI.swift */; };
+		DEE91100000000000000B002 /* MoneroPaymentURITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE91100000000000000F002 /* MoneroPaymentURITests.swift */; };
 		TXSTATUS123456789ABCDEF01 /* MoneroTransaction+Status.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */; };
 		79EHBYMQ890HSWGX9A766GWT /* TrustedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = GL3BJBT1LYNYZPYODUN2Z9VQ /* TrustedLocation.swift */; };
 		QAMZ0UB2O8VQDF4FSC4AUXUE /* TrustedLocationsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TCL37IUYOMDWC3RVR9YBDRJA /* TrustedLocationsManager.swift */; };
@@ -292,6 +294,8 @@
 		FF6022942E141D54562F131E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		PRICEWIDGETREF123456789A /* PriceWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceWidget.swift; sourceTree = "<group>"; };
 		XMRFORMATREF12345678ABCD /* XMRFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XMRFormatter.swift; sourceTree = "<group>"; };
+		DEE91100000000000000F001 /* MoneroPaymentURI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroPaymentURI.swift; sourceTree = "<group>"; };
+		DEE91100000000000000F002 /* MoneroPaymentURITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroPaymentURITests.swift; sourceTree = "<group>"; };
 		TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroTransaction+Status.swift"; sourceTree = "<group>"; };
 		GL3BJBT1LYNYZPYODUN2Z9VQ /* TrustedLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocation.swift; sourceTree = "<group>"; };
 		TCL37IUYOMDWC3RVR9YBDRJA /* TrustedLocationsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocationsManager.swift; sourceTree = "<group>"; };
@@ -366,6 +370,7 @@
 				CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */,
 				CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */,
 				CAC4E1D0000000000000D40T /* GethashesDeviceDiagTests.swift */,
+				DEE91100000000000000F002 /* MoneroPaymentURITests.swift */,
 			);
 			path = MoneroOneTests;
 			sourceTree = "<group>";
@@ -456,6 +461,7 @@
 			isa = PBXGroup;
 			children = (
 				XMRFORMATREF12345678ABCD /* XMRFormatter.swift */,
+				DEE91100000000000000F001 /* MoneroPaymentURI.swift */,
 			);
 			path = Formatters;
 			sourceTree = "<group>";
@@ -884,6 +890,7 @@
 			buildActionMask = 2147483647;
 			files = (
 D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
+				DEE91100000000000000B002 /* MoneroPaymentURITests.swift in Sources */,
 				CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */,
 				CAC4E1D0000000000000D10T /* AuditRemediationTests.swift in Sources */,
 				CAC4E1D0000000000000D30T /* GethashesDeviceDiagTests.swift in Sources */,
@@ -1007,6 +1014,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				64EEFAEFECDA4726A441CBD8 /* FiatCurrency.swift in Sources */,
 				F65EECC001BAE93898D97CB6 /* WidgetSettingsView.swift in Sources */,
 				XMRFORMAT123456789ABCDEF0 /* XMRFormatter.swift in Sources */,
+				DEE91100000000000000B001 /* MoneroPaymentURI.swift in Sources */,
 				TXSTATUS123456789ABCDEF01 /* MoneroTransaction+Status.swift in Sources */,
 				AA0000000000000000000002 /* WalletInfo.swift in Sources */,
 				AA0000000000000000000004 /* WalletStore.swift in Sources */,

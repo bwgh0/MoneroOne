@@ -211,35 +211,14 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         if let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
            let stringValue = metadataObject.stringValue {
 
-            // Parse monero: URI or plain address
-            let (address, amount) = parseMoneroURI(stringValue)
+            // A monero: URI or a bare address. The lenient reader keeps the
+            // address when the amount is bad; the send flow checks the address.
+            let scanned = MoneroPaymentURI.parseScanned(stringValue)
 
             hasScanned = true
             AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
-            delegate?.didScanCode(address, amount: amount)
+            delegate?.didScanCode(scanned.address, amount: scanned.amount)
         }
-    }
-
-    private func parseMoneroURI(_ string: String) -> (address: String, amount: String?) {
-        // Handle monero: URI format
-        // monero:ADDRESS?tx_amount=AMOUNT&recipient_name=NAME&tx_description=DESC
-        if string.lowercased().hasPrefix("monero:") {
-            let withoutScheme = String(string.dropFirst(7))
-            if let questionIndex = withoutScheme.firstIndex(of: "?") {
-                let address = String(withoutScheme[..<questionIndex])
-                let query = String(withoutScheme[withoutScheme.index(after: questionIndex)...])
-                var amount: String? = nil
-                for param in query.components(separatedBy: "&") {
-                    let parts = param.components(separatedBy: "=")
-                    if parts.count == 2 && parts[0] == "tx_amount" {
-                        amount = parts[1]
-                    }
-                }
-                return (address, amount)
-            }
-            return (withoutScheme, nil)
-        }
-        return (string, nil)
     }
 }
 

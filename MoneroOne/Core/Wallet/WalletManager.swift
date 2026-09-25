@@ -1029,6 +1029,17 @@ class WalletManager: ObservableObject {
     @Published var prefillSendAmount: String?
     @Published var shouldShowSendView: Bool = false
 
+    /// A `monero:` link another app opened us with, held until Send is done
+    /// with it. `lock()` keeps it, so a link that wakes a locked app opens
+    /// Send once the PIN is in. See `openPaymentLink(_:)`.
+    @Published var pendingPaymentRequest: PaymentRequest?
+    /// Why the last `monero:` link was refused; the app root shows it, or
+    /// Send while Send is open.
+    @Published var paymentLinkError: String?
+    /// True while Send is on screen. The root then leaves a refused link's
+    /// alert to Send: presenting it from the root closes the Send sheet.
+    @Published var isSendFlowPresented = false
+
     // Connection progress tracking
     @Published var connectionStage: ConnectionStage = .noNetwork
     @Published var daemonHeight: UInt64 = 0
@@ -3594,5 +3605,89 @@ private class AllCertsTrustDelegate: NSObject, URLSessionDelegate, URLSessionTas
         } else {
             completionHandler(.performDefaultHandling, nil)
         }
+    }
+}
+
+// MARK: - Payment links
+
+extension WalletManager {
+    /// A payment request from a `monero:` link: the address and amount only.
+    /// The link's free-text fields never reach the screen.
+    struct PaymentRequest: Equatable {
+        let address: String
+        let amount: String?
+        let receivedAt: Date
+    }
+
+    /// How long a held link stays good. A link left at the lock screen must
+    /// not open Send when someone unlocks the app an hour later.
+    nonisolated static let paymentRequestLifetime: TimeInterval = 10 * 60
+
+    /// Reads a URL the system opened us with. A good `monero:` link waits in
+    /// `pendingPaymentRequest` until the dashboard opens Send with it; a bad
+    /// one sets `paymentLinkError`. Other schemes (the widget's
+    /// `moneroone://`) and links that arrive before any wallet exists are
+    /// ignored.
+    func openPaymentLink(_ url: URL) {
+        guard url.scheme?.lowercased() == "monero", hasWallet else { return }
+        do {
+            let uri = try MoneroPaymentURI.parseLink(url.absoluteString)
+            // Checked against this app's network: a testnet link must not
+            // fill a mainnet send, and the other way round.
+            guard isValidAddress(uri.address) else {
+                paymentLinkError = MoneroPaymentURI.ParseError.invalidAddress.message
+                return
+            }
+            // A view-only wallet has no spend key, so say so instead of
+            // opening a Send it cannot finish. Read from the wallet record:
+            // `canSend` is only current once the wallet has started, and a
+            // link can wake a locked app. Hardware wallets send as usual.
+            if case .viewOnly = activeWallet?.source {
+                paymentLinkError = String(localized: "This wallet is view-only and cannot send. Switch to a wallet that can send, then open the link again.")
+                return
+            }
+            paymentLinkError = nil
+            pendingPaymentRequest = PaymentRequest(address: uri.address, amount: uri.amount, receivedAt: Date())
+        } catch {
+            paymentLinkError = (error as? MoneroPaymentURI.ParseError)?.message
+                ?? MoneroPaymentURI.ParseError.notMoneroURI.message
+        }
+    }
+
+    /// The held link while it is still good. Drops a stale one, so the
+    /// dashboard never opens an empty Send for it.
+    ///
+    /// Reading does not clear it. The link stays held while Send shows it:
+    /// a link that brings the app back after the auto-lock time arrives in
+    /// the same activation as the lock, and the lock can close Send just
+    /// after Send took the link.
+    func currentPaymentRequest(now: Date = Date()) -> PaymentRequest? {
+        guard let request = Self.freshPaymentRequest(pendingPaymentRequest, now: now) else {
+            if pendingPaymentRequest != nil { pendingPaymentRequest = nil }
+            return nil
+        }
+        return request
+    }
+
+    /// Send is done with `request`. It is done when the user confirms the
+    /// send (`confirmed`), so a sent link never opens again, or when Send
+    /// closes while the wallet stays unlocked. A lock also closes Send; then
+    /// the link stays held and opens again after the PIN.
+    func releasePaymentRequest(_ request: PaymentRequest, confirmed: Bool) {
+        guard pendingPaymentRequest == request, confirmed || isUnlocked else { return }
+        pendingPaymentRequest = nil
+    }
+
+    /// Drops `request` and tells the user why: for a link Send cannot take
+    /// now. Held, it would fill the next Send the user opens on purpose.
+    func refusePaymentRequest(_ request: PaymentRequest, message: String) {
+        guard pendingPaymentRequest == request else { return }
+        pendingPaymentRequest = nil
+        paymentLinkError = message
+    }
+
+    nonisolated static func freshPaymentRequest(_ request: PaymentRequest?, now: Date) -> PaymentRequest? {
+        guard let request, now.timeIntervalSince(request.receivedAt) < paymentRequestLifetime else { return nil }
+        return request
     }
 }

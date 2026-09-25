@@ -83,6 +83,22 @@ struct MoneroOneApp: App {
                         schedulePriceCheck()
                     }
                 }
+                // `monero:` links from Safari, Messages, the camera and
+                // other apps. The dashboard opens Send once it is unlocked.
+                .onOpenURL { url in
+                    walletManager.openPaymentLink(url)
+                }
+                .alert(
+                    "Can't Open Payment Link",
+                    isPresented: Binding(
+                        get: { walletManager.paymentLinkError != nil && !walletManager.isSendFlowPresented },
+                        set: { if !$0 { walletManager.paymentLinkError = nil } }
+                    )
+                ) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(walletManager.paymentLinkError ?? "")
+                }
         }
         .onChange(of: scenePhase) { newPhase in
             handleScenePhaseChange(newPhase: newPhase)

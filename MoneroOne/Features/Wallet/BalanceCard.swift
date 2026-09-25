@@ -185,6 +185,10 @@ struct BalanceCard: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Balance: \(XMRFormatter.format(balance)) XMR\(priceService.formatFiatValue(balance).map { ", approximately \($0)" } ?? "")")
+            // The card's tap opens the portfolio chart; say so to VoiceOver.
+            .accessibilityAddTraits(onCardTap == nil ? [] : .isButton)
+            .accessibilityHint(onCardTap == nil ? "" : "Opens the portfolio chart")
+            .accessibilityAction { onCardTap?() }
 
             // Unlocked Balance
             if unlockedBalance != balance {

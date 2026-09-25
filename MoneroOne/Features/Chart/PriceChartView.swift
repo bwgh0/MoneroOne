@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import Accessibility
 
 struct PriceChartView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -190,13 +191,12 @@ struct PriceChartView: View {
                     timestamp: \.timestamp,
                     value: \.price,
                     axes: .init(time: timeAxis, currencyCode: priceService.selectedCurrency.uppercased()),
+                    speech: ChartSpeech(title: "Monero price", span: timeAxis.spokenSpan, currencyCode: priceService.selectedCurrency),
                     onSelect: { selectedPoint = $0 }
                 )
                 .equatable()
                 .frame(height: 240)
                 .clipped()
-                .accessibilityLabel("Price chart for \(selectedTimeRange.rawValue)")
-                .accessibilityHint("Shows XMR price trend over the selected time range")
             }
         }
         .frame(height: 280)
@@ -372,6 +372,28 @@ enum ChartTimeAxis: String, Equatable {
         }
     }
 
+    /// The range as VoiceOver says it on a range button: "1 week".
+    var spokenName: String {
+        switch self {
+        case .day: return "24 hours"
+        case .week: return "1 week"
+        case .month: return "1 month"
+        case .year: return "1 year"
+        case .all: return "All time"
+        }
+    }
+
+    /// The time a chart on this range covers, as VoiceOver says it: "past week".
+    var spokenSpan: String {
+        switch self {
+        case .day: return "past 24 hours"
+        case .week: return "past week"
+        case .month: return "past month"
+        case .year: return "past year"
+        case .all: return "all time"
+        }
+    }
+
     /// Label for the sample under the finger.
     func scrubLabel(for date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         switch self {
@@ -461,6 +483,9 @@ enum ChartTimeAxis: String, Equatable {
 /// `.equatable()`; the marks then rebuild only when `points`, `domain` or
 /// `axes` change. That is what keeps 700 samples smooth; the old code hid
 /// the cost by drawing 96 of them.
+///
+/// VoiceOver sees the chart as one element (see `ChartSpeech`); the marks
+/// are hidden, or Swift Charts adds a stop for every day of the range.
 struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     struct Axes: Equatable {
         var time: ChartTimeAxis
@@ -475,12 +500,13 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     let axes: Axes?
     /// Dots drawn on top of the line.
     var markers: [ChartMarker] = []
+    let speech: ChartSpeech
     let onSelect: (Point?) -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.points == rhs.points && lhs.domain == rhs.domain && lhs.axes == rhs.axes
             && lhs.timestamp == rhs.timestamp && lhs.value == rhs.value
-            && lhs.markers == rhs.markers
+            && lhs.markers == rhs.markers && lhs.speech == rhs.speech
     }
 
     private static var fill: LinearGradient {
@@ -532,6 +558,7 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                 )
                 .foregroundStyle(Self.fill)
                 .interpolationMethod(.linear)
+                .accessibilityHidden(true)
 
                 LineMark(
                     x: .value("Time", point[keyPath: timestamp]),
@@ -540,6 +567,7 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                 .foregroundStyle(Color.orange)
                 .lineStyle(StrokeStyle(lineWidth: 2))
                 .interpolationMethod(.linear)
+                .accessibilityHidden(true)
             }
 
             ForEach(markers) { marker in
@@ -550,8 +578,7 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                 .symbol {
                     ChartMarkerBadge(style: marker.style)
                 }
-                .accessibilityLabel(marker.accessibilityLabel)
-                .accessibilityValue(marker.accessibilityValue)
+                .accessibilityHidden(true)
             }
         }
         .chartYScale(domain: domain)
@@ -564,10 +591,29 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                     markers: markers,
                     timestamp: timestamp,
                     value: value,
+                    speech: speech,
+                    summary: summary,
+                    audioGraph: audioGraph,
                     onSelect: onSelect
                 )
             }
         }
+    }
+
+    /// "From $504.46 to $550.29, up 8.99%": the first and last sample.
+    private var summary: String {
+        guard let first = points.first?[keyPath: value], let last = points.last?[keyPath: value] else { return "" }
+        return speech.summary(first: first, last: last)
+    }
+
+    private var audioGraph: ChartAudioGraph {
+        ChartAudioGraph(
+            speech: speech,
+            summary: summary,
+            samples: points.map { ChartAudioGraph.Sample(date: $0[keyPath: timestamp], value: $0[keyPath: value]) },
+            markers: markers,
+            domain: domain
+        )
     }
 
     private static func plotFrame(_ proxy: ChartProxy, in geometry: GeometryProxy) -> CGRect {
@@ -610,6 +656,93 @@ struct ChartMarker: Identifiable, Equatable {
     let accessibilityValue: String
 }
 
+/// What VoiceOver says for a chart. The chart is one element: the label
+/// names it, the value sums the line up, the rotor offers an Audio Graph
+/// of every sample, and when the chart has markers a swipe up or down
+/// steps through them.
+struct ChartSpeech: Equatable {
+    /// "Portfolio", "Monero price".
+    var title: String
+    /// `ChartTimeAxis.spokenSpan`: "past week".
+    var span: String
+    /// The currency of the values.
+    var currencyCode: String
+    /// Said after the numbers: "3 transactions".
+    var note: String? = nil
+    /// What a swipe up or down does when the chart has markers.
+    var markerHint: String? = nil
+
+    /// "Portfolio chart, past week".
+    var label: String { "\(title) chart, \(span)" }
+
+    /// A value on the line: "$1,234.56".
+    func format(_ amount: Double) -> String {
+        let formatter = FiatCurrency.formatter(for: currencyCode)
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+    }
+
+    /// "From $504.46 to $550.29, up 8.99%, 3 transactions". No change is
+    /// given from zero, as the headers give none.
+    func summary(first: Double, last: Double) -> String {
+        var parts = ["From \(format(first)) to \(format(last))"]
+        if first > 0 {
+            parts.append(Self.spokenChange((last - first) / first * 100))
+        }
+        if let note { parts.append(note) }
+        return parts.joined(separator: ", ")
+    }
+
+    /// A percent change as the headers round it: "up 8.99%", "down 1.20%",
+    /// "unchanged".
+    static func spokenChange(_ percent: Double) -> String {
+        let size = String(format: "%.2f", abs(percent))
+        if size == "0.00" { return "unchanged" }
+        return "\(percent > 0 ? "up" : "down") \(size)%"
+    }
+}
+
+/// Every sample as an Audio Graph (VoiceOver rotor, Audio Graph): time
+/// across, value up. A sample with a marker carries the marker's words.
+struct ChartAudioGraph: AXChartDescriptorRepresentable {
+    struct Sample {
+        let date: Date
+        let value: Double
+    }
+
+    let speech: ChartSpeech
+    let summary: String
+    let samples: [Sample]
+    let markers: [ChartMarker]
+    let domain: ClosedRange<Double>
+
+    func makeChartDescriptor() -> AXChartDescriptor {
+        let labels = Dictionary(markers.map { ($0.timestamp, $0.accessibilityLabel) }) { first, _ in first }
+        let start = samples.first?.date.timeIntervalSince1970 ?? 0
+        let end = max(samples.last?.date.timeIntervalSince1970 ?? 0, start)
+        let time = AXNumericDataAxisDescriptor(title: "Time", range: start...end, gridlinePositions: []) { seconds in
+            Date(timeIntervalSince1970: seconds).formatted(date: .abbreviated, time: .shortened)
+        }
+        let value = AXNumericDataAxisDescriptor(title: "Value", range: domain, gridlinePositions: [], valueDescriptionProvider: speech.format)
+        let series = AXDataSeriesDescriptor(
+            name: speech.title,
+            isContinuous: true,
+            dataPoints: samples.map { AXDataPoint(x: $0.date.timeIntervalSince1970, y: $0.value, label: labels[$0.date]) }
+        )
+        return AXChartDescriptor(title: speech.label, summary: summary, xAxis: time, yAxis: value, series: [series])
+    }
+
+    func updateChartDescriptor(_ descriptor: AXChartDescriptor) {
+        let fresh = makeChartDescriptor()
+        descriptor.title = fresh.title
+        descriptor.summary = fresh.summary
+        descriptor.xAxis = fresh.xAxis
+        descriptor.yAxis = fresh.yAxis
+        descriptor.series = fresh.series
+    }
+}
+
 /// A disc in the activity row's color with its arrow. A ring in the
 /// card's color cuts it out of the line under it. Selected, it grows and
 /// sits in a halo.
@@ -642,6 +775,10 @@ private struct ChartMarkerBadge: View {
 /// runs alongside the page's scroll view. The first clear move of a touch
 /// decides its axis once: mostly vertical means the page is scrolling and
 /// the touch is ignored until it ends; anything else scrubs.
+///
+/// The overlay is also the chart's one VoiceOver element. A swipe up or
+/// down pins the next or previous marker, as a tap on it would, so the
+/// header shows it too; moving VoiceOver off the chart clears it.
 private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     let proxy: ChartProxy
     let plotFrame: CGRect
@@ -649,20 +786,76 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     let markers: [ChartMarker]
     let timestamp: KeyPath<Point, Date>
     let value: KeyPath<Point, Double>
+    let speech: ChartSpeech
+    let summary: String
+    let audioGraph: ChartAudioGraph
     let onSelect: (Point?) -> Void
 
     @State private var selected: Point?
     @State private var scrolling = false
-    /// The marker a tap left selected.
+    /// The marker a tap or a VoiceOver swipe left selected.
     @State private var pinned: ChartMarker?
     /// What was pinned when the current touch began, so tapping it again clears it.
     @State private var pinnedAtTouchStart: ChartMarker?
     @State private var touching = false
+    @AccessibilityFocusState private var voiceOverFocus: Bool
 
     /// Half of the 44 pt minimum hit target.
     private static var markerHitRadius: CGFloat { 22 }
 
     var body: some View {
+        steppingThroughMarkers(
+            plot
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(speech.label)
+                .accessibilityValue(spokenValue)
+                .accessibilityChartDescriptor(audioGraph)
+                .accessibilityFocused($voiceOverFocus)
+        )
+        .onChange(of: voiceOverFocus) { focused in
+            // Off the chart, the header goes back to the value now.
+            if !focused, pinned != nil {
+                pinned = nil
+                update(nil)
+            }
+        }
+    }
+
+    /// With markers, the element is adjustable: a swipe up or down steps
+    /// through them. Without, there is nothing to step to.
+    @ViewBuilder
+    private func steppingThroughMarkers(_ content: some View) -> some View {
+        if markers.isEmpty {
+            content
+        } else {
+            content
+                .accessibilityHint(speech.markerHint ?? "")
+                .accessibilityAdjustableAction(step)
+        }
+    }
+
+    /// The summary, or the pinned marker and where it falls: "Received
+    /// 2.0000 XMR, Sep 20, 2026 at 3:05 PM, portfolio $1,234.56, 2 of 5".
+    private var spokenValue: String {
+        guard let pinned, let index = markers.firstIndex(of: pinned) else { return summary }
+        return "\(pinned.accessibilityLabel), \(pinned.accessibilityValue), \(index + 1) of \(markers.count)"
+    }
+
+    /// Up is the next marker in time, down the one before. From none, up
+    /// starts at the oldest and down at the newest.
+    private func step(_ direction: AccessibilityAdjustmentDirection) {
+        guard !markers.isEmpty else { return }
+        let current = pinned.flatMap { markers.firstIndex(of: $0) }
+        let next: Int
+        switch direction {
+        case .increment: next = current.map { min($0 + 1, markers.count - 1) } ?? 0
+        case .decrement: next = current.map { max($0 - 1, 0) } ?? markers.count - 1
+        @unknown default: return
+        }
+        pin(markers[next])
+    }
+
+    private var plot: some View {
         ZStack(alignment: .topLeading) {
             Color.clear
                 .contentShape(Rectangle())

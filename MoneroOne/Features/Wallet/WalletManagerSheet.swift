@@ -877,6 +877,22 @@ private struct ReorderPressHost: UIViewRepresentable {
             guard let scroll = candidate as? UIScrollView else { return }
             scroll.addGestureRecognizer(recognizer)
             scrollView = scroll
+            Self.yieldGlassDrags(to: scroll)
+        }
+
+        /// Liquid Glass buttons stretch toward a dragging finger through one
+        /// recognizer UIKit keeps on the window. For about a second after
+        /// the rows appear it beat the list's own pan: a flick that landed
+        /// on a row did nothing, then scrolling suddenly worked (iPhone 17
+        /// Pro Max, iOS 27.0). Make it wait for the scroll view's pan to
+        /// fail, as content does in any scroll view; a still press never
+        /// starts it, so the press feedback stays. The recognizer is private
+        /// and matched by name: if it is renamed this does nothing.
+        private static func yieldGlassDrags(to scroll: UIScrollView) {
+            for recognizer in scroll.window?.gestureRecognizers ?? []
+            where String(describing: type(of: recognizer)).contains("FlexInteraction") {
+                recognizer.require(toFail: scroll.panGestureRecognizer)
+            }
         }
 
         func detach() {

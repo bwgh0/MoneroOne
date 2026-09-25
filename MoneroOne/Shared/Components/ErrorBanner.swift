@@ -88,7 +88,7 @@ struct RestoreHeightHintBanner: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("No transactions found since block \(restoreHeight.formatted())")
+                Text("No transactions found since block \(restoreHeight.formatted(.number.locale(.numbers)))")
                     .font(.subheadline.weight(.semibold))
                 Text("If this wallet is older, lower the restore height in Settings › Sync Settings and reset the sync data.")
                     .font(.caption)

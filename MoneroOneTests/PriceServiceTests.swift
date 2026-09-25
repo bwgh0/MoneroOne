@@ -114,6 +114,17 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertTrue(russian.hasSuffix("₽"), "the locale still decides the side: \(russian)")
     }
 
+    /// Fiat on screen reads "." for decimals and "," for thousands whatever
+    /// the phone's region, like the XMR amounts beside it.
+    func testFiatUsesPointDecimalsWhateverTheRegion() {
+        XCTAssertEqual(Locale.numbers.decimalSeparator, ".")
+        XCTAssertEqual(Locale.numbers.groupingSeparator, ",")
+        XCTAssertEqual(FiatCurrency.formatter(for: "eur").string(from: 1234.56), "€1,234.56")
+        XCTAssertEqual(FiatCurrency.formatter(for: "rub").string(from: 1234.56), "₽1,234.56")
+        priceService.setCurrency("eur")
+        XCTAssertEqual(priceService.formatFiat(1234.56), "€1,234.56")
+    }
+
     func testFormatFiatUsesTheTableSymbol() {
         priceService.setCurrency("uah")
         XCTAssertTrue(priceService.formatFiat(12).contains("₴"), priceService.formatFiat(12))

@@ -501,13 +501,6 @@ final class QRCodeRegressionTests: XCTestCase {
         }
     }
 
-    /// Full screen shows the address as its first and last eight characters.
-    func testFullscreenShortAddress() {
-        let address = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
-        XCTAssertEqual(QRFullscreenView.shortAddress(address), "44AFFq5k…VGQBEP3A")
-        XCTAssertEqual(QRFullscreenView.shortAddress("Loading..."), "Loading...")
-    }
-
     /// Full screen turns the screen to full brightness and puts the old level
     /// back when it goes away.
     @MainActor

@@ -135,6 +135,7 @@ struct WalletView: View {
                 ReceiveView()
                     .environmentObject(walletManager)
                     .environmentObject(priceService)
+                    .closesForPaymentLink()
             }
             .sheet(isPresented: $showSend) {
                 SendFlowView()
@@ -149,6 +150,7 @@ struct WalletView: View {
                 )
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
+                .closesForPaymentLink()
             }
             .sheet(item: $hardwareSheetIntent) { intent in
                 HardwareSessionSheet(
@@ -292,6 +294,7 @@ struct RecentTransactionsSection: View {
             NavigationStack {
                 TransactionDetailView(transaction: transaction)
             }
+            .closesForPaymentLink()
             .presentationDetents([.fraction(0.75)])
             .presentationDragIndicator(.visible)
         }

@@ -286,6 +286,7 @@ fileprivate struct ViewKeyExportCard: View {
 
     private var formattedHeight: String {
         let formatter = NumberFormatter()
+        formatter.locale = .numbers
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: restoreHeight)) ?? "\(restoreHeight)"
     }
@@ -322,11 +323,17 @@ fileprivate struct ViewKeyField: View {
                 .foregroundStyle(.secondary)
 
             HStack(alignment: .top, spacing: 10) {
-                Text(value.isEmpty ? "—" : value)
-                    .font(monospace ? .system(.footnote, design: .monospaced) : .footnote)
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    if monospace {
+                        CodeText(value.isEmpty ? "—" : value, style: .footnote, color: .label, selectable: true)
+                    } else {
+                        Text(value.isEmpty ? "—" : value)
+                            .font(.footnote)
+                            .foregroundStyle(.primary)
+                            .textSelection(.enabled)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button(action: onCopy) {
                     Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")

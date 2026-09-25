@@ -59,6 +59,7 @@ struct TransactionsPanelView: View {
             NavigationStack {
                 TransactionDetailView(transaction: transaction)
             }
+            .closesForPaymentLink()
             .presentationDetents([.fraction(0.75)])
             .presentationDragIndicator(.visible)
         }

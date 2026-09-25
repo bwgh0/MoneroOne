@@ -142,7 +142,7 @@ struct TransactionDetailView: View {
                     Text("Confirmations")
                     Spacer()
                     if let confirmations = transaction.confirmations {
-                        Text("\(confirmations)")
+                        Text(confirmations.formatted(.number.locale(.numbers)))
                             .foregroundColor(.secondary)
                     } else {
                         ProgressView()
@@ -331,10 +331,7 @@ struct TransactionDetailView: View {
             }
 
             HStack(alignment: .top, spacing: 10) {
-                Text(value)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .textSelection(.enabled)
+                CodeText(value, selectable: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button {

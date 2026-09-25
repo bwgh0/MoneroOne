@@ -55,9 +55,10 @@ public struct FiatCurrency: Hashable, Identifiable, Sendable {
     /// A currency formatter for `code` that draws this table's symbol.
     /// NumberFormatter's own symbol comes from the phone's language and falls
     /// back to the ISO code: an English iPhone showed "RUB 1,234.56" where
-    /// the picker shows "₽". Placement and spacing still follow `locale`
-    /// ("₽1,234.56" in English, "1 234,56 ₽" in Russian).
-    public static func formatter(for code: String, locale: Locale = .current) -> NumberFormatter {
+    /// the picker shows "₽". Separators, placement and spacing follow
+    /// `locale`, which is `Locale.numbers` on screen: "₽1,234.56" whatever
+    /// the phone's region.
+    public static func formatter(for code: String, locale: Locale = .numbers) -> NumberFormatter {
         let formatter = NumberFormatter()
         formatter.locale = locale
         formatter.numberStyle = .currency
@@ -68,4 +69,12 @@ public struct FiatCurrency: Hashable, Identifiable, Sendable {
 
     private static let byCode: [String: FiatCurrency] =
         Dictionary(uniqueKeysWithValues: all.map { ($0.code, $0) })
+}
+
+public extension Locale {
+    /// The locale for numbers on screen: "." for decimals and "," for
+    /// thousands whatever the phone's region, so fiat, heights and counts
+    /// read like the XMR amounts beside them (`XMRFormatter`) and like what
+    /// the amount fields take. Dates and text still follow the user.
+    static let numbers = Locale(identifier: "en_US")
 }

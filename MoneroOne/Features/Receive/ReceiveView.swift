@@ -178,8 +178,8 @@ struct ReceiveView: View {
                             .opensQRFullscreen(
                                 content: qrContent,
                                 title: addressLabel,
-                                address: currentAddress,
-                                amount: Decimal(string: requestAmount).flatMap { $0 > 0 ? $0 : nil }
+                                // The same lenient read as the code: "1,5" is 1.5.
+                                amount: requestedXMR.flatMap { $0 > 0 ? $0 : nil }
                             )
                     } else {
                         Rectangle()
@@ -288,9 +288,7 @@ struct ReceiveView: View {
                                         .fontWeight(.medium)
                                         .foregroundColor(.primary)
 
-                                    Text(formatAddress(currentAddress))
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundColor(.secondary)
+                                    CodeText(formatAddress(currentAddress))
                                 }
 
                                 Spacer()
@@ -690,9 +688,7 @@ struct AddressCard: View {
                             }
                         }
 
-                        Text(formatAddress(address))
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.secondary)
+                        CodeText(formatAddress(address))
                     }
 
                     Spacer()

@@ -2415,6 +2415,7 @@ class WalletManager: ObservableObject {
 
         DispatchQueue.global(qos: .utility).async {
             let formatter = NumberFormatter()
+            formatter.locale = .numbers
             formatter.numberStyle = .decimal
             formatter.minimumFractionDigits = 4
             formatter.maximumFractionDigits = 4

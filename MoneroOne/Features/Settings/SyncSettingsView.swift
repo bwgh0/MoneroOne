@@ -401,6 +401,7 @@ struct RestoreHeightSheet: View {
 
     private func formatHeight(_ height: UInt64) -> String {
         let formatter = NumberFormatter()
+        formatter.locale = .numbers
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: height)) ?? "\(height)"
     }

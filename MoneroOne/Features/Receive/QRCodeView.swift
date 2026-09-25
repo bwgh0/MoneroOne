@@ -156,15 +156,14 @@ extension View {
     /// Tapping this view shows `content` full screen in `QRFullscreenView`.
     /// On iOS 18 and later the page zooms out of this view and back into
     /// it, and a swipe down closes it.
-    func opensQRFullscreen(content: String, title: String, address: String, amount: Decimal?) -> some View {
-        modifier(QRFullscreenPresenter(qrContent: content, title: title, address: address, amount: amount))
+    func opensQRFullscreen(content: String, title: String, amount: Decimal?) -> some View {
+        modifier(QRFullscreenPresenter(qrContent: content, title: title, amount: amount))
     }
 }
 
 private struct QRFullscreenPresenter: ViewModifier {
     let qrContent: String
     let title: String
-    let address: String
     let amount: Decimal?
     @State private var isPresented = false
     @Namespace private var zoomNamespace
@@ -178,7 +177,7 @@ private struct QRFullscreenPresenter: ViewModifier {
             .accessibilityAction(.default, open)
             .zoomTransitionSource(id: zoomID, in: zoomNamespace)
             .fullScreenCover(isPresented: $isPresented) {
-                QRFullscreenView(content: qrContent, title: title, address: address, amount: amount)
+                QRFullscreenView(content: qrContent, title: title, amount: amount)
                     .zoomTransition(sourceID: zoomID, in: zoomNamespace)
             }
     }
@@ -197,14 +196,19 @@ private struct QRFullscreenPresenter: ViewModifier {
 
 /// A receive QR code as large as the screen allows, on a white card with the
 /// Monero One lockup, so a payer can scan it from arm's length. The screen
-/// goes to full brightness while it shows, the way Wallet shows a pass.
+/// goes to full brightness while it shows, the way Wallet shows a pass. Like
+/// Cake's page it shows no address: the code is the address.
 struct QRFullscreenView: View {
     let content: String
     /// What the code points at: "Main Address", a label, or "Subaddress #n".
+    /// VoiceOver reads it with the code; the page does not show it.
     let title: String
-    let address: String
     /// The amount the code requests, nil for none.
     var amount: Decimal? = nil
+    /// VoiceOver starts on the code, not on Close, so the escape gesture
+    /// (two-finger Z) closes the page right away: the page takes escape,
+    /// and the Close button sits outside the page in the navigation bar.
+    @AccessibilityFocusState private var codeFocused: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -233,6 +237,13 @@ struct QRFullscreenView: View {
                 }
                 .navigationBarTitleDisplayMode(.inline)
                 .horizontalBarsOnDuo()
+                // After the zoom settles: VoiceOver puts focus on the first
+                // element of a new screen when the presentation ends, which
+                // would override a focus set on appear.
+                .task {
+                    try? await Task.sleep(for: .milliseconds(700))
+                    codeFocused = true
+                }
         }
         .background(FullBrightness())
     }
@@ -247,7 +258,7 @@ struct QRFullscreenView: View {
                     code
                     VStack(alignment: .leading, spacing: 16) {
                         lockup
-                        captions(alignment: .leading)
+                        amountCaption
                     }
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
@@ -256,7 +267,7 @@ struct QRFullscreenView: View {
                 VStack(spacing: 16) {
                     lockup
                     code
-                    captions(alignment: .center)
+                    amountCaption
                 }
                 .frame(maxWidth: 448)
             }
@@ -281,7 +292,11 @@ struct QRFullscreenView: View {
     private var code: some View {
         QRCodeView(content: content)
             .aspectRatio(1, contentMode: .fit)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("QR code for Monero address")
+            .accessibilityValue(title)
             .accessibilityIdentifier("qrFullscreen.qrCode")
+            .accessibilityFocused($codeFocused)
     }
 
     private var lockup: some View {
@@ -296,24 +311,15 @@ struct QRFullscreenView: View {
         .accessibilityHidden(true)
     }
 
-    private func captions(alignment: HorizontalAlignment) -> some View {
-        VStack(alignment: alignment, spacing: 4) {
-            if let amount {
-                Text("\(XMRFormatter.format(amount)) XMR")
-                    .font(.title2.weight(.semibold))
-                    .monospacedDigit()
-            }
-            Text(title)
-                .font(.headline)
-            Text(Self.shortAddress(address))
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+    @ViewBuilder
+    private var amountCaption: some View {
+        if let amount {
+            Text("\(XMRFormatter.format(amount)) XMR")
+                .font(.title2.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
-        .multilineTextAlignment(alignment == .leading ? .leading : .center)
-        .lineLimit(2)
-        .minimumScaleFactor(0.7)
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -332,12 +338,6 @@ struct QRFullscreenView: View {
             .accessibilityLabel("Close")
             .accessibilityIdentifier("qrFullscreen.close")
         }
-    }
-
-    /// First and last eight characters: "44AFFq5k…VGQBEP3A".
-    static func shortAddress(_ address: String) -> String {
-        guard address.count > 20 else { return address }
-        return "\(address.prefix(8))…\(address.suffix(8))"
     }
 }
 
@@ -425,7 +425,6 @@ private extension View {
     QRFullscreenView(
         content: "monero:888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H?tx_amount=0.5",
         title: "Subaddress #1",
-        address: "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H",
         amount: 0.5
     )
 }

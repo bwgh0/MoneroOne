@@ -55,6 +55,7 @@ struct CommandCenterView: View {
         }
         .sheet(isPresented: $showReceive) {
             ReceiveView()
+                .closesForPaymentLink()
         }
         .sheet(isPresented: $showSend) {
             SendFlowView()
@@ -66,6 +67,7 @@ struct CommandCenterView: View {
             NavigationStack {
                 TransactionListView()
             }
+            .closesForPaymentLink()
         }
     }
 

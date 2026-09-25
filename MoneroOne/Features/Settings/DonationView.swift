@@ -40,11 +40,7 @@ struct DonationView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    Text(donationAddress)
-                        .font(.system(.caption, design: .monospaced))
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.primary)
-                        .textSelection(.enabled)
+                    CodeText(donationAddress, color: .label, alignment: .center, selectable: true)
                 }
                 .padding()
                 .frame(maxWidth: .infinity)

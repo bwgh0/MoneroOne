@@ -159,7 +159,7 @@ final class VoiceOverTests: XCTestCase {
             .frame(width: 280, height: 280)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("QR code for receiving Monero")
-            .opensQRFullscreen(content: "monero:\(address)", title: "Main Address", address: address, amount: nil)
+            .opensQRFullscreen(content: "monero:\(address)", title: "Main Address", amount: nil)
         let controller = UIHostingController(rootView: smallQR)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
@@ -177,8 +177,12 @@ final class VoiceOverTests: XCTestCase {
 
         let page = accessibilityElements(in: presented.view)
         XCTAssertTrue(page.contains { $0.accessibilityLabel == "Close" }, "a Close button")
-        let caption = try XCTUnwrap(page.first { $0.accessibilityLabel?.hasPrefix("Main Address") == true }, "the caption")
-        XCTAssertTrue(performEscape(from: caption), "the page takes the escape gesture")
+        // The page shows no address text; VoiceOver names the code instead,
+        // and the page moves VoiceOver focus there so escape works at once.
+        XCTAssertFalse(page.contains { $0.accessibilityLabel?.contains(address.prefix(8)) == true }, "no address on the page")
+        let code = try XCTUnwrap(page.first { $0.accessibilityLabel == "QR code for Monero address" }, "the code")
+        XCTAssertEqual(code.accessibilityValue, "Main Address")
+        XCTAssertTrue(performEscape(from: code), "escape from the code closes the page")
         RunLoop.main.run(until: Date().addingTimeInterval(1.5))
         XCTAssertNil(controller.presentedViewController, "escape closes full screen")
     }

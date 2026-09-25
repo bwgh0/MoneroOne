@@ -96,6 +96,7 @@
 		E2276935B7E0FA16D8904A2E /* RestoreWalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFDF397CD9F75684D51EA38 /* RestoreWalletView.swift */; };
 		E3AAAA2781637EFF950CCADE /* ScrambledText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029F663A58F5CE2B18C3B33C /* ScrambledText.swift */; };
 		E7106F3BC27599F634D24964 /* ErrorBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B3390E2738445B8D347933 /* ErrorBanner.swift */; };
+		C0DE7E470000000000000002 /* CodeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE7E470000000000000001 /* CodeText.swift */; };
 		E7C33EC8082FAB9206BD8A0B /* BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D836D865F70A7477790100 /* BackupView.swift */; };
 		E8E7018CE585AB43B38F22C5 /* SyncActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B970167B0BFA69D181797B60 /* SyncActivityManager.swift */; };
 		EC48D2094BD359C95BB6B08E /* SyncLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B6DB1BCF707C6A91E194AF5 /* SyncLiveActivity.swift */; };
@@ -277,6 +278,7 @@
 		A1B2C3D4E5F60002DEADBEEF /* SecurityAuditFixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityAuditFixTests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60003DEADBEEF /* DiagnosticLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLog.swift; sourceTree = "<group>"; };
 		C2B3390E2738445B8D347933 /* ErrorBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorBanner.swift; sourceTree = "<group>"; };
+		C0DE7E470000000000000001 /* CodeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeText.swift; sourceTree = "<group>"; };
 		C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertNotificationManager.swift; sourceTree = "<group>"; };
 		CAA44CACB97519C2456A1D98 /* UnlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnlockView.swift; sourceTree = "<group>"; };
 		CF818FE69F2EC0B444D26754 /* QRCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeView.swift; sourceTree = "<group>"; };
@@ -520,6 +522,7 @@
 			children = (
 				7821313ACB80A039D75B32D4 /* AnimatedMoneroLogo.swift */,
 				7821313ACB80A039D75B32D5 /* AnimatedWalletIcon.swift */,
+				C0DE7E470000000000000001 /* CodeText.swift */,
 				C2B3390E2738445B8D347933 /* ErrorBanner.swift */,
 				0F1C17A0DAB5332E049A04B0 /* GlassSegmentedPicker.swift */,
 				A1B2C3D400000002A0000004 /* GradientSpinner.swift */,
@@ -986,6 +989,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				B7E8275313B16877F1E2B0CB /* CreateWalletView.swift in Sources */,
 				C4EE7FC3ED57B61F7C24C722 /* CurrencySettingsView.swift in Sources */,
 				DA18F80BA8998B9D71869B82 /* DonationView.swift in Sources */,
+				C0DE7E470000000000000002 /* CodeText.swift in Sources */,
 				E7106F3BC27599F634D24964 /* ErrorBanner.swift in Sources */,
 				EFFC6F8C42D7612A8DE76248 /* GlassButtonStyle.swift in Sources */,
 				2A841431F06DE4BF09DCE55B /* GlassSegmentedPicker.swift in Sources */,

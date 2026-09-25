@@ -533,13 +533,65 @@ struct SendRequestPresenter: ViewModifier {
     private func present() {
         guard walletManager.shouldShowSendView else { return }
         walletManager.shouldShowSendView = false
-        showSend = true
+        // A link while another sheet is up: sheets that hold no work close
+        // themselves (`closesForPaymentLink`), then Send opens. Anything
+        // else (a hardware session, Add Wallet, a form) stays, and the link
+        // waits for the next Send as before. Send open handles the link
+        // itself.
+        guard walletManager.currentPaymentRequest() != nil,
+              !walletManager.isSendFlowPresented,
+              Self.isSheetShowing else {
+            showSend = true
+            return
+        }
+        NotificationCenter.default.post(name: .paymentLinkClosesSheets, object: nil)
+        Task { @MainActor in
+            // Until the sheet is gone (its dismissal animates), at most 3 s.
+            var waited = 0
+            while Self.isSheetShowing, waited < 30 {
+                try? await Task.sleep(for: .milliseconds(100))
+                waited += 1
+            }
+            showSend = true
+        }
+    }
+
+    /// True while anything is presented over the app's root screen.
+    @MainActor
+    private static var isSheetShowing: Bool {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .contains { $0.isKeyWindow && $0.rootViewController?.presentedViewController != nil }
+    }
+}
+
+extension Notification.Name {
+    /// A good `monero:` link needs the screen for Send.
+    static let paymentLinkClosesSheets = Notification.Name("one.monero.paymentLinkClosesSheets")
+}
+
+/// Closes the sheet it is on when a payment link needs the screen for Send.
+private struct ClosesForPaymentLink: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .paymentLinkClosesSheets)) { _ in
+                dismiss()
+            }
     }
 }
 
 extension View {
     func presentsSendRequests(from walletManager: WalletManager, showSend: Binding<Bool>) -> some View {
         modifier(SendRequestPresenter(walletManager: walletManager, showSend: showSend))
+    }
+
+    /// For the root of a sheet with nothing to lose (Receive, a chart, a
+    /// transaction): a payment link closes it and opens Send.
+    func closesForPaymentLink() -> some View {
+        modifier(ClosesForPaymentLink())
     }
 }
 

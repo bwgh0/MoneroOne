@@ -48,8 +48,7 @@ struct SendReviewStep: View {
                                 Text("Recipient")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Text(formatAddress(recipientAddress))
-                                    .font(.system(.caption, design: .monospaced))
+                                CodeText(formatAddress(recipientAddress), color: .label)
                             }
 
                             Spacer()

@@ -104,6 +104,7 @@
 		F6ABA0841FC56C21D8B64743 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE0BF27D62647071D8D9F0E /* SettingsView.swift */; };
 		F96859B54E738595BB0571EC /* PriceServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */; };
 		761D4B62BC2444DDB2ED62F1 /* PriceHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED5463772B74881993C2E47 /* PriceHistoryTests.swift */; };
+		CAC4E1D0000000000000A11Y /* VoiceOverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000A12Y /* VoiceOverTests.swift */; };
 		FB5F8533851FF83B35C4E6A6 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E494E802F7171F1946F2FA45 /* QRScannerView.swift */; };
 		FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF818FE69F2EC0B444D26754 /* QRCodeView.swift */; };
 		FF659956FD9D9759B11F49F9 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B332C777DDD3D470FA081B35 /* WidgetData.swift */; };
@@ -191,6 +192,7 @@
 		09AA838F4EF37023CE4794A9 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceServiceTests.swift; sourceTree = "<group>"; };
 		9ED5463772B74881993C2E47 /* PriceHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceHistoryTests.swift; sourceTree = "<group>"; };
+		CAC4E1D0000000000000A12Y /* VoiceOverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceOverTests.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000001 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A000000B /* SoundFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundFeedback.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000C20P /* SecureClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureClipboard.swift; sourceTree = "<group>"; };
@@ -354,6 +356,7 @@
 				70806977F6367D918B532021 /* NodeManagerTests.swift */,
 				09E290A77E7326FFF43ABAB1 /* PriceServiceTests.swift */,
 				9ED5463772B74881993C2E47 /* PriceHistoryTests.swift */,
+				CAC4E1D0000000000000A12Y /* VoiceOverTests.swift */,
 				C28AE04350FBA393B5C0220F /* SecurityAuditTests.swift */,
 				A1B2C3D4E5F60002DEADBEEF /* SecurityAuditFixTests.swift */,
 				REGR3SS10NT3STS00000002 /* RegressionTests.swift */,
@@ -889,6 +892,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				6B3AD2E53A2A967DFDB3A407 /* NodeManagerTests.swift in Sources */,
 				F96859B54E738595BB0571EC /* PriceServiceTests.swift in Sources */,
 				761D4B62BC2444DDB2ED62F1 /* PriceHistoryTests.swift in Sources */,
+				CAC4E1D0000000000000A11Y /* VoiceOverTests.swift in Sources */,
 				282C36ABD1B88FEEFDF153A6 /* SecurityAuditTests.swift in Sources */,
 				A1B2C3D4E5F60001DEADBEEF /* SecurityAuditFixTests.swift in Sources */,
 				REGR3SS10NT3STS00000001 /* RegressionTests.swift in Sources */,

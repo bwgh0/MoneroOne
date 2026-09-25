@@ -421,7 +421,14 @@ final class DuoWalkthroughTests: XCTestCase {
         if tapIfExists(app.buttons["wallet.switcher"], timeout: 3) {
             sleep(2)
             shot("09b-wallet-switcher-open")
-            if tapIfExists(app.buttons["wallet.switcher.rename"], timeout: 3) {
+            // The pencil is hidden from VoiceOver (Rename is a rotor action
+            // on the row), so tap it where it sits: 68 pt in from the row's
+            // trailing edge, on its vertical center.
+            let activeRow = app.buttons["wallet.row.active"]
+            if activeRow.waitForExistence(timeout: 3) {
+                activeRow.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+                    .withOffset(CGVector(dx: -68, dy: 0))
+                    .tap()
                 sleep(2)
                 shot("09c-rename-wallet")
                 if tapIfExists(app.buttons["emojiPicker.circle"], timeout: 3) {

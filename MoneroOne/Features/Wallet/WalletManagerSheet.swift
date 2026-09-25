@@ -281,8 +281,9 @@ enum WalletRowSurface {
 /// whether it is the lifted one, so its delete swipe stays quiet meanwhile.
 ///
 /// The 20pt horizontal delete swipe reveals the custom Delete zone on
-/// inactive rows. VoiceOver gets Rename / Delete / Move up / Move down as
-/// rotor actions.
+/// inactive rows. VoiceOver stops once per wallet: the row reads the name
+/// and balance, and Rename / Delete / Move up / Move down are rotor actions
+/// on it.
 struct WalletRow: View {
     let wallet: WalletInfo
     let isActive: Bool
@@ -361,24 +362,33 @@ struct WalletRow: View {
         }
         .opacity(isActive ? 1 : 0.85)
         .accessibilityIdentifier(isActive ? "wallet.row.active" : "wallet.row")
+        // Name and balance only. The merged label also read the whole
+        // 95-character address on every row; the address and icon wait on
+        // the More Content rotor instead.
+        .accessibilityLabel(spokenLabel)
+        .accessibilityCustomContent(AccessibilityCustomContentKey("Address"), address.flatMap { $0.isEmpty ? nil : Text($0) })
+        .accessibilityCustomContent("Icon", wallet.emoji)
         .accessibilityHint(isActive ? "Double tap to close the wallet list" : "Double tap to switch to this wallet")
         .accessibilityAddTraits(isActive ? .isSelected : [])
-        // VoiceOver cannot swipe, long-press, drag, or find the pencil inside
-        // the row; expose all of it as rotor actions on the row itself.
+        // VoiceOver cannot swipe, long-press, drag, or tap the pencil; all
+        // of it is a rotor action on the row itself. SwiftUI hands actions
+        // to VoiceOver last first (same on iOS 18.5, 26.1 and 27.0), so
+        // they are listed backwards to reach it as Rename, Delete, Move up,
+        // Move down.
         .accessibilityActions {
-            Button("Rename") { onRename() }
-            if let onDelete {
-                Button("Delete") { onDelete() }
+            if let onMoveDown {
+                Button("Move down") { onMoveDown() }
             }
             if let onMoveUp {
                 Button("Move up") { onMoveUp() }
             }
-            if let onMoveDown {
-                Button("Move down") { onMoveDown() }
+            if let onDelete {
+                Button("Delete") { onDelete() }
             }
+            Button("Rename") { onRename() }
         }
         // After the row's accessibility modifiers, so the pencil keeps its own
-        // identifier and does not read as "Selected".
+        // identifier.
         .overlay(alignment: .trailing) {
             // Same trailing slots as `rowContent`: pencil, 14pt gap, the
             // 24pt check or circle, 18pt row padding.
@@ -387,9 +397,22 @@ struct WalletRow: View {
         }
     }
 
-    /// The pencil. A Button of its own, not part of the row's label: inside
-    /// the label VoiceOver merged it into the row and a VoiceOver user could
-    /// only rename through the rotor, which they did not find.
+    /// "Savings, 1.2500 XMR, view-only". The Selected trait marks the
+    /// active wallet.
+    private var spokenLabel: String {
+        var parts = [wallet.name, "\(XMRFormatter.format(balance)) XMR"]
+        if wallet.requiresHardwareSession {
+            parts.append("hardware wallet")
+        } else if wallet.isViewOnly {
+            parts.append("view-only")
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    /// The pencil, for touch. A Button of its own so a tap on it renames
+    /// instead of switching. Hidden from VoiceOver: as its own element it
+    /// put a "Rename" stop before every wallet, and the row already has
+    /// Rename as a rotor action.
     private var renameButton: some View {
         Button(action: onRename) {
             Image(systemName: "pencil.circle.fill")
@@ -401,8 +424,7 @@ struct WalletRow: View {
         }
         .buttonStyle(.plain)
         .padding(-10)
-        .accessibilityLabel("Rename \(wallet.name)")
-        .accessibilityHint("Changes the wallet name and icon")
+        .accessibilityHidden(true)
         .accessibilityIdentifier(isActive ? "wallet.switcher.rename" : "wallet.row.rename")
     }
 
@@ -451,7 +473,7 @@ struct WalletRow: View {
             Spacer()
 
             // Holds the pencil's place; the real pencil is `renameButton`,
-            // laid over the row outside its Button so VoiceOver reaches it.
+            // laid over the row outside its Button so its tap renames.
             Color.clear
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)

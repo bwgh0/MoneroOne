@@ -35,6 +35,49 @@ struct BalanceCard: View {
         return "\(sign)\(String(format: "%.2f", change))%"
     }
 
+    /// The balance at the live price. Nil until a price has been fetched.
+    private var fiatBalance: String? {
+        priceService.formatFiatValue(balance)
+    }
+
+    /// Fiat Mode puts the fiat balance in the hero and the XMR amount under
+    /// it. With no price yet the card keeps XMR on top.
+    private var isFiatFirst: Bool {
+        priceService.showFiatFirst && fiatBalance != nil
+    }
+
+    /// The hero number: "1.2345" beside an "XMR" unit, or "$150.23".
+    private var heroText: String {
+        isFiatFirst ? fiatBalance ?? "" : XMRFormatter.format(balance)
+    }
+
+    /// The line under the hero: "≈ $150.23", or "1.2345 XMR" in Fiat Mode.
+    private var captionText: String? {
+        if isFiatFirst {
+            return "\(XMRFormatter.format(balance)) XMR"
+        }
+        return fiatBalance.map { "≈ \($0)" }
+    }
+
+    private var balanceAccessibilityLabel: String {
+        if isFiatFirst, let fiatBalance {
+            return "Balance: \(fiatBalance), \(XMRFormatter.format(balance)) XMR"
+        }
+        return "Balance: \(XMRFormatter.format(balance)) XMR\(fiatBalance.map { ", approximately \($0)" } ?? "")"
+    }
+
+    private var availableAccessibilityLabel: String {
+        let xmr = XMRFormatter.format(unlockedBalance)
+        let fiat = priceService.formatFiatValue(unlockedBalance)
+        let amounts: String
+        if isFiatFirst, let fiat {
+            amounts = "\(fiat), \(xmr) XMR"
+        } else {
+            amounts = "\(xmr) XMR\(fiat.map { ", approximately \($0)" } ?? "")"
+        }
+        return "Available balance: \(amounts). Some funds locked until recent transactions confirm."
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             HStack {
@@ -157,34 +200,36 @@ struct BalanceCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(XMRFormatter.format(balance))
+                        Text(heroText)
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .contentTransition(.numericText())
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
 
-                        Text("XMR")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
+                        if !isFiatFirst {
+                            Text("XMR")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .fixedSize(horizontal: false, vertical: true)
-                    .animation(.easeInOut(duration: 0.2), value: balance)
+                    .animation(.easeInOut(duration: 0.2), value: heroText)
 
-                    if let fiatValue = priceService.formatFiatValue(balance) {
-                        Text("≈ \(fiatValue)")
+                    if let captionText {
+                        Text(captionText)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .monospacedDigit()
                             .contentTransition(.numericText())
-                            .animation(.easeInOut(duration: 0.2), value: balance)
+                            .animation(.easeInOut(duration: 0.2), value: captionText)
                     }
                 }
 
                 Spacer()
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Balance: \(XMRFormatter.format(balance)) XMR\(priceService.formatFiatValue(balance).map { ", approximately \($0)" } ?? "")")
+            .accessibilityLabel(balanceAccessibilityLabel)
             // The card's tap opens the portfolio chart; say so to VoiceOver.
             .accessibilityAddTraits(onCardTap == nil ? [] : .isButton)
             .accessibilityHint(onCardTap == nil ? "" : "Opens the portfolio chart")
@@ -196,13 +241,20 @@ struct BalanceCard: View {
                     HStack {
                         Text("Available:")
                             .foregroundColor(.secondary)
-                        Text(XMRFormatter.format(unlockedBalance))
-                            .fontWeight(.medium)
-                        Text("XMR")
-                            .foregroundColor(.secondary)
-                        if let fiat = priceService.formatFiatValue(unlockedBalance) {
-                            Text("(\(fiat))")
+                        if isFiatFirst, let fiat = priceService.formatFiatValue(unlockedBalance) {
+                            Text(fiat)
+                                .fontWeight(.medium)
+                            Text("(\(XMRFormatter.format(unlockedBalance)) XMR)")
                                 .foregroundColor(.secondary)
+                        } else {
+                            Text(XMRFormatter.format(unlockedBalance))
+                                .fontWeight(.medium)
+                            Text("XMR")
+                                .foregroundColor(.secondary)
+                            if let fiat = priceService.formatFiatValue(unlockedBalance) {
+                                Text("(\(fiat))")
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                     .font(.subheadline)
@@ -217,7 +269,7 @@ struct BalanceCard: View {
                     .foregroundColor(.orange)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Available balance: \(XMRFormatter.format(unlockedBalance)) XMR\(priceService.formatFiatValue(unlockedBalance).map { ", approximately \($0)" } ?? ""). Some funds locked until recent transactions confirm.")
+                .accessibilityLabel(availableAccessibilityLabel)
             }
 
             // Hardware-wallet "sent transactions may be out of date" banner.

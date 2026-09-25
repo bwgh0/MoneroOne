@@ -337,38 +337,7 @@ struct RecentTransactionCard: View {
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(transaction.type == .incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount))")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(transaction.type == .incoming ? .green : .primary)
-
-                    // Status and fiat share one line under the amount, so
-                    // the row keeps its height whether or not the fiat
-                    // value has loaded yet.
-                    HStack(spacing: 8) {
-                        HStack(spacing: 4) {
-                            if transaction.isStatusLoading {
-                                ProgressView()
-                                    .scaleEffect(0.5)
-                                    .frame(width: 6, height: 6)
-                            } else {
-                                Circle()
-                                    .fill(transaction.displayStatusColor)
-                                    .frame(width: 6, height: 6)
-                                Text(transaction.displayStatusText)
-                                    .font(.caption2)
-                                    .foregroundColor(transaction.displayStatusColor)
-                            }
-                        }
-
-                        if let fiatAtTime {
-                            Text(fiatAtTime)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
+                TransactionAmountColumn(transaction: transaction, amount: amount)
 
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -379,8 +348,17 @@ struct RecentTransactionCard: View {
         }
         .glassButtonStyle()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR\(receivedOn.map { " on \($0)" } ?? "")\(fiatAtTime.map { ", worth \($0) at the time" } ?? ""), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
         .accessibilityHint("Shows transaction details")
+    }
+
+    private var amount: TransactionAmountText {
+        TransactionAmountText(
+            transaction: transaction,
+            fiatAtTime: fiatAtTime,
+            fiatFirst: priceService.showFiatFirst,
+            receivedOn: receivedOn
+        )
     }
 
     private var iconColor: Color {

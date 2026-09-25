@@ -9,9 +9,12 @@ final class PriceServiceTests: XCTestCase {
     /// `setCurrency` writes the real `selectedCurrency` preference. Snapshot
     /// it and put it back, otherwise a test run leaves the sim app on GBP/JPY.
     private var savedCurrency: String?
+    /// Same for the Fiat Mode switch.
+    private var savedFiatFirst: Any?
 
     override func setUp() async throws {
         savedCurrency = UserDefaults.standard.string(forKey: "selectedCurrency")
+        savedFiatFirst = UserDefaults.standard.object(forKey: PriceService.fiatFirstKey)
         priceService = PriceService()
     }
 
@@ -22,6 +25,22 @@ final class PriceServiceTests: XCTestCase {
         } else {
             UserDefaults.standard.removeObject(forKey: "selectedCurrency")
         }
+        if let savedFiatFirst {
+            UserDefaults.standard.set(savedFiatFirst, forKey: PriceService.fiatFirstKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: PriceService.fiatFirstKey)
+        }
+    }
+
+    // MARK: - Fiat Mode
+
+    func testFiatModeIsOffByDefaultAndPersists() {
+        UserDefaults.standard.removeObject(forKey: PriceService.fiatFirstKey)
+        XCTAssertFalse(PriceService().showFiatFirst)
+
+        PriceService().showFiatFirst = true
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: PriceService.fiatFirstKey))
+        XCTAssertTrue(PriceService().showFiatFirst, "A new service reads the saved setting")
     }
 
     // MARK: - Initial State Tests

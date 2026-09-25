@@ -102,7 +102,7 @@ struct SettingsView: View {
                 }
 
                 // Display Section
-                Section("Display") {
+                Section {
                     Picker(selection: $appearanceMode) {
                         ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
                             Text(mode.displayName).tag(mode.rawValue)
@@ -132,6 +132,15 @@ struct SettingsView: View {
                         .accessibilityLabel("Currency, \(priceService.selectedCurrency.uppercased())")
                         .accessibilityHint("Change display currency")
                     }
+
+                    Toggle(isOn: $priceService.showFiatFirst) {
+                        SettingsRow(
+                            icon: "banknote",
+                            title: "Fiat Mode",
+                            color: .green
+                        )
+                    }
+                    .accessibilityIdentifier("settings.fiatModeToggle")
 
                     NavigationLink {
                         PriceAlertsView(
@@ -165,6 +174,10 @@ struct SettingsView: View {
                             color: .blue
                         )
                     }
+                } header: {
+                    Text("Display")
+                } footer: {
+                    Text("Fiat Mode shows balances and transactions in \(priceService.selectedCurrency.uppercased()) first, with XMR below.")
                 }
 
                 // Sync Section

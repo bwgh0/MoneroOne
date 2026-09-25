@@ -147,6 +147,42 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertFalse(elements.first?.accessibilityTraits.contains(.adjustable) ?? true)
     }
 
+    // MARK: - Full screen QR
+
+    /// The Receive QR is a button: VoiceOver's double tap opens the full
+    /// screen page, and the escape gesture (two-finger Z) closes it.
+    func testQRFullscreenOpensOnDoubleTapAndClosesOnEscape() throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let address = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
+        // The same modifier order as ReceiveView.
+        let smallQR = QRCodeView(content: "monero:\(address)")
+            .frame(width: 280, height: 280)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("QR code for receiving Monero")
+            .opensQRFullscreen(content: "monero:\(address)", title: "Main Address", address: address, amount: nil)
+        let controller = UIHostingController(rootView: smallQR)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        self.window = window
+        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+
+        let small = try XCTUnwrap(accessibilityElements(in: controller.view).first)
+        XCTAssertEqual(small.accessibilityLabel, "QR code for receiving Monero")
+        XCTAssertTrue(small.accessibilityTraits.contains(.button), "VoiceOver says it can be activated")
+        XCTAssertTrue(small.accessibilityActivate())
+        RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+        let presented = try XCTUnwrap(controller.presentedViewController, "double tap opens full screen")
+
+        let page = accessibilityElements(in: presented.view)
+        XCTAssertTrue(page.contains { $0.accessibilityLabel == "Close" }, "a Close button")
+        let caption = try XCTUnwrap(page.first { $0.accessibilityLabel?.hasPrefix("Main Address") == true }, "the caption")
+        XCTAssertTrue(performEscape(from: caption), "the page takes the escape gesture")
+        RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+        XCTAssertNil(controller.presentedViewController, "escape closes full screen")
+    }
+
     // MARK: - Helpers
 
     private func wallet(_ name: String, emoji: String = "💰", source: WalletSource, address: String) -> WalletInfo {
@@ -197,6 +233,21 @@ final class VoiceOverTests: XCTestCase {
         }
         walk(root)
         return found
+    }
+
+    /// What VoiceOver's escape gesture does: offer it to the focused
+    /// element, then to each container above it, until one takes it.
+    private func performEscape(from element: NSObject) -> Bool {
+        var node: NSObject? = element
+        let container = Selector(("accessibilityContainer"))
+        while let current = node {
+            if current.accessibilityPerformEscape() { return true }
+            let parent = current.responds(to: container)
+                ? current.perform(container)?.takeUnretainedValue() as? NSObject
+                : nil
+            node = parent ?? (current as? UIView)?.superview
+        }
+        return false
     }
 
     /// The More Content rotor. SwiftUI's elements answer it without

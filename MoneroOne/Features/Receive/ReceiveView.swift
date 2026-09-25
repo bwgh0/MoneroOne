@@ -67,11 +67,13 @@ struct ReceiveView: View {
 
     private var qrContent: String {
         let addr = currentAddress
-        if addr == "Loading..." { return "" }
+        if addr.isEmpty || addr == "Loading..." { return "" }
         if let amount = Decimal(string: requestAmount), amount > 0 {
             return "monero:\(addr)?tx_amount=\(amount)"
         }
-        return addr
+        // A monero: URI rather than the bare address, so the Camera app and
+        // other wallets offer to open it. Copy still copies the bare address.
+        return "monero:\(addr)"
     }
 
     /// Writes the QR to the photo library (add-only permission, prompted on
@@ -150,14 +152,23 @@ struct ReceiveView: View {
                                     }
                                 }
                             }
-                            .accessibilityIdentifier("receive.qrCode")
+                            // The id goes after accessibilityElement: set
+                            // before it, the id sat on the ignored child and
+                            // UI tests could not find the code.
                             .accessibilityElement(children: .ignore)
+                            .accessibilityIdentifier("receive.qrCode")
                             .accessibilityLabel("QR code for receiving Monero")
                             .accessibilityAddTraits(.isImage)
-                            .accessibilityHint("Actions available: save to Photos, or share")
+                            .accessibilityHint("Shows the code full screen. Actions available: save to Photos, or share")
                             .accessibilityAction(named: "Save to Photos") {
                                 saveQRToPhotos()
                             }
+                            .opensQRFullscreen(
+                                content: qrContent,
+                                title: addressLabel,
+                                address: currentAddress,
+                                amount: Decimal(string: requestAmount).flatMap { $0 > 0 ? $0 : nil }
+                            )
                     } else {
                         Rectangle()
                             .fill(Color(.secondarySystemBackground))

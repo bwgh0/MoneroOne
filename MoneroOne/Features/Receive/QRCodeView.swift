@@ -10,22 +10,26 @@ struct QRCodeView: View {
             let size = min(geo.size.width, geo.size.height)
 
             ZStack {
-                // Standard QR code that actually works
-                if let qrImage = generateQRImage(from: content, size: size) {
+                // One pixel per module, scaled up with interpolation off, so
+                // the modules keep sharp edges at any size (full screen too).
+                if let qrImage = Self.qrImage(for: content) {
                     Image(uiImage: qrImage)
                         .interpolation(.none)
                         .resizable()
                         .frame(width: size, height: size)
                 }
 
-                // Logo overlay in center
+                // Logo overlay in center: the flat mark on a white disc the
+                // same size the old logo covered, so the modules stay clear
+                // of the mark's edge and the code scans as before.
                 if showLogo {
-                    let logoSize = size * 0.22
-                    Image("MoneroSymbol")
+                    let plateSize = size * 0.22
+                    Image("MoneroLogo")
                         .resizable()
-                        .scaledToFill()
-                        .frame(width: logoSize, height: logoSize)
-                        .clipShape(Circle())
+                        .scaledToFit()
+                        .padding(plateSize * 0.1)
+                        .frame(width: plateSize, height: plateSize)
+                        .background(Circle().fill(Color.white))
                         .accessibilityHidden(true)
                 }
             }
@@ -36,24 +40,18 @@ struct QRCodeView: View {
         }
     }
 
-    private func generateQRImage(from string: String, size: CGFloat) -> UIImage? {
-        let context = CIContext()
+    private static let context = CIContext()
+
+    /// The code at one pixel per module, error correction H so the logo can
+    /// cover the center. Nil when the text does not fit in a QR code.
+    static func qrImage(for string: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
-
-        guard let data = string.data(using: .utf8) else { return nil }
-        filter.setValue(data, forKey: "inputMessage")
-        filter.setValue("H", forKey: "inputCorrectionLevel")
-
-        guard let outputImage = filter.outputImage else { return nil }
-
-        // Scale up for crisp rendering
-        let scale = size / outputImage.extent.size.width
-        let scaledImage = outputImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-
-        guard let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) else {
+        filter.message = Data(string.utf8)
+        filter.correctionLevel = "H"
+        guard let output = filter.outputImage,
+              let cgImage = context.createCGImage(output, from: output.extent) else {
             return nil
         }
-
         return UIImage(cgImage: cgImage)
     }
 
@@ -152,9 +150,282 @@ struct QRCodeRenderer {
     }
 }
 
+// MARK: - Full Screen
+
+extension View {
+    /// Tapping this view shows `content` full screen in `QRFullscreenView`.
+    /// On iOS 18 and later the page zooms out of this view and back into
+    /// it, and a swipe down closes it.
+    func opensQRFullscreen(content: String, title: String, address: String, amount: Decimal?) -> some View {
+        modifier(QRFullscreenPresenter(qrContent: content, title: title, address: address, amount: amount))
+    }
+}
+
+private struct QRFullscreenPresenter: ViewModifier {
+    let qrContent: String
+    let title: String
+    let address: String
+    let amount: Decimal?
+    @State private var isPresented = false
+    @Namespace private var zoomNamespace
+    private let zoomID = "qrFullscreen"
+
+    func body(content: Content) -> some View {
+        content
+            .contentShape(Rectangle())
+            .onTapGesture(perform: open)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(.default, open)
+            .zoomTransitionSource(id: zoomID, in: zoomNamespace)
+            .fullScreenCover(isPresented: $isPresented) {
+                QRFullscreenView(content: qrContent, title: title, address: address, amount: amount)
+                    .zoomTransition(sourceID: zoomID, in: zoomNamespace)
+            }
+    }
+
+    private func open() {
+        HapticFeedback.shared.softTick()
+        // End editing first (the Receive amount field), so the keyboard
+        // does not stay up over the page.
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
+        isPresented = true
+    }
+}
+
+/// A receive QR code as large as the screen allows, on a white card with the
+/// Monero One lockup, so a payer can scan it from arm's length. The screen
+/// goes to full brightness while it shows, the way Wallet shows a pass.
+struct QRFullscreenView: View {
+    let content: String
+    /// What the code points at: "Main Address", a label, or "Subaddress #n".
+    let title: String
+    let address: String
+    /// The amount the code requests, nil for none.
+    var amount: Decimal? = nil
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    var body: some View {
+        NavigationStack {
+            card
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background { Color(.systemGroupedBackground).ignoresSafeArea() }
+                // No input on this page. After the Receive amount field has
+                // been edited, turning the phone raises a keyboard inset
+                // behind the page; ignore it so the card stays centered.
+                // Inside the stack: its UIKit container does not pass the
+                // modifier down.
+                .ignoresSafeArea(.keyboard)
+                // VoiceOver's escape (two-finger Z) looks for this among
+                // the focused element's ancestors. The stack's UIKit
+                // container sits between the page and anything outside
+                // it, so the action goes on the page itself.
+                .accessibilityAction(.escape) { dismiss() }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        closeButton
+                    }
+                }
+                .navigationBarTitleDisplayMode(.inline)
+                .horizontalBarsOnDuo()
+        }
+        .background(FullBrightness())
+    }
+
+    /// Lockup, code and captions stacked; side by side when the screen is
+    /// short (landscape), so the code keeps most of the height. Side by
+    /// side, the card hugs the code instead of stretching to the width cap.
+    private var card: some View {
+        Group {
+            if verticalSizeClass == .compact {
+                HStack(spacing: 24) {
+                    code
+                    VStack(alignment: .leading, spacing: 16) {
+                        lockup
+                        captions(alignment: .leading)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
+                }
+            } else {
+                VStack(spacing: 16) {
+                    lockup
+                    code
+                    captions(alignment: .center)
+                }
+                .frame(maxWidth: 448)
+            }
+        }
+        .padding(16)
+        .background {
+            // White in dark mode too: a QR code needs dark modules on a
+            // light field to scan.
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.white)
+                .shadow(
+                    color: colorScheme == .light ? Color.black.opacity(0.08) : Color.clear,
+                    radius: 12,
+                    x: 0,
+                    y: 4
+                )
+        }
+        // Text on the white card takes its light-mode colors.
+        .environment(\.colorScheme, .light)
+    }
+
+    private var code: some View {
+        QRCodeView(content: content)
+            .aspectRatio(1, contentMode: .fit)
+            .accessibilityIdentifier("qrFullscreen.qrCode")
+    }
+
+    private var lockup: some View {
+        HStack(spacing: 8) {
+            Image("MoneroLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 28)
+            Text(verbatim: "Monero One")
+                .font(.headline.bold())
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func captions(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 4) {
+            if let amount {
+                Text("\(XMRFormatter.format(amount)) XMR")
+                    .font(.title2.weight(.semibold))
+                    .monospacedDigit()
+            }
+            Text(title)
+                .font(.headline)
+            Text(Self.shortAddress(address))
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+        .multilineTextAlignment(alignment == .leading ? .leading : .center)
+        .lineLimit(2)
+        .minimumScaleFactor(0.7)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var closeButton: some View {
+        if #available(iOS 26.0, *) {
+            Button(role: .close) {
+                dismiss()
+            }
+            .accessibilityIdentifier("qrFullscreen.close")
+        } else {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .accessibilityLabel("Close")
+            .accessibilityIdentifier("qrFullscreen.close")
+        }
+    }
+
+    /// First and last eight characters: "44AFFq5k…VGQBEP3A".
+    static func shortAddress(_ address: String) -> String {
+        guard address.count > 20 else { return address }
+        return "\(address.prefix(8))…\(address.suffix(8))"
+    }
+}
+
+/// Full screen brightness while this view is in a window, the old level back
+/// when it leaves or its scene goes inactive. Reads the window's own screen,
+/// not `UIScreen.main`.
+struct FullBrightness: UIViewRepresentable {
+    func makeUIView(context: Context) -> BrightnessView { BrightnessView() }
+    func updateUIView(_ uiView: BrightnessView, context: Context) {}
+
+    final class BrightnessView: UIView {
+        private weak var screen: UIScreen?
+        private var savedBrightness: CGFloat?
+        private var observers: [NSObjectProtocol] = []
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            stopObserving()
+            guard let scene = window?.windowScene else {
+                restore()
+                return
+            }
+            boost(scene.screen)
+            let center = NotificationCenter.default
+            observers = [
+                center.addObserver(forName: UIScene.willDeactivateNotification, object: scene, queue: .main) { [weak self] _ in
+                    self?.restore()
+                },
+                center.addObserver(forName: UIScene.didActivateNotification, object: scene, queue: .main) { [weak self, weak scene] _ in
+                    guard let scene else { return }
+                    self?.boost(scene.screen)
+                },
+            ]
+        }
+
+        private func boost(_ screen: UIScreen) {
+            if savedBrightness == nil {
+                savedBrightness = screen.brightness
+            }
+            self.screen = screen
+            screen.brightness = 1
+        }
+
+        private func restore() {
+            guard let saved = savedBrightness else { return }
+            screen?.brightness = saved
+            savedBrightness = nil
+        }
+
+        private func stopObserving() {
+            observers.forEach { NotificationCenter.default.removeObserver($0) }
+            observers = []
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func zoomTransitionSource(id: String, in namespace: Namespace.ID) -> some View {
+        if #available(iOS 18.0, *) {
+            matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func zoomTransition(sourceID: String, in namespace: Namespace.ID) -> some View {
+        if #available(iOS 18.0, *) {
+            navigationTransition(.zoom(sourceID: sourceID, in: namespace))
+        } else {
+            self
+        }
+    }
+}
+
 #Preview {
     QRCodeView(content: "monero:888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H")
         .frame(width: 200, height: 200)
         .padding()
         .background(Color.white)
+}
+
+#Preview("Full screen") {
+    QRFullscreenView(
+        content: "monero:888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H?tx_amount=0.5",
+        title: "Subaddress #1",
+        address: "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H",
+        amount: 0.5
+    )
 }

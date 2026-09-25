@@ -1496,35 +1496,23 @@ class WalletManager: ObservableObject {
             height = UInt64(RestoreHeight.getHeight(date: date))
         }
 
-        // Pre-flight validation — open a throwaway wallet2 instance to prove
-        // the view key matches the address. wallet2 throws here instead of
-        // silently producing an empty wallet, which would mislead the user
-        // into thinking their funds are gone.
-        //
-        // The validator writes its cache under the same stable id the real
-        // unlock path uses, and MoneroKit reopens an existing cache as-is:
-        // wallet2's stored refresh height wins over the one passed in. This
-        // used to validate with `restoreHeight: 0`, so every view-only and
-        // Trezor wallet restored with a creation date silently rescanned
-        // from genesis (a Trezor view wallet paired with height 3759455 sat
-        // at 634k blocks after seven minutes, showing "Connecting…" — the
-        // kit reports `.connecting` until walletHeight reaches the height
-        // it was told). Give the validator the real height, and wipe its
-        // cache anyway so unlock starts from a clean, correctly-keyed one.
-        let validator = MoneroWallet()
-        do {
-            try await validator.createWatchOnly(
-                address: trimmedAddress,
-                viewKey: trimmedViewKey,
-                restoreHeight: height,
-                networkType: networkType
-            )
-        } catch {
-            await validator.stopAsync()
-            wipeWalletCache(walletId: candidateDerivedId)
+        // Prove the view key belongs to the address, so a wrong key fails
+        // here instead of producing an empty wallet that reads as lost funds.
+        // This is key arithmetic, not a wallet: the throwaway validator
+        // wallet it replaces started a second kit, and MoneroKit runs one kit
+        // at a time. With another wallet open that kit waited for it to
+        // stop, which only happens after this restore, so Add Wallet sat on
+        // "Restoring wallet…" for good. It also never caught a wrong key:
+        // wallet2 reports that on the kit's queue, not to the caller.
+        guard MoneroWallet.isValidViewKey(trimmedViewKey, for: trimmedAddress, networkType: networkType) else {
             throw WalletError.invalidViewKey
         }
-        await validator.stopAsync()
+
+        // MoneroKit reopens an existing cache as-is, and wallet2's stored
+        // refresh height wins over the one passed in (a Trezor view wallet
+        // paired at 3759455 once rescanned from genesis that way). A cache
+        // left under this id by an earlier attempt goes, so unlock starts
+        // from a clean, correctly keyed one.
         wipeWalletCache(walletId: candidateDerivedId)
 
         // See `addWallet` — snapshot prior active so its balance doesn't

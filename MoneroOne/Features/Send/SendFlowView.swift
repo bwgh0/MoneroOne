@@ -21,7 +21,10 @@ struct SendFlowView: View {
     // UI state
     @State private var showScanner = false
     @State private var sendInProgress = false
-    @State private var amountPrefilledFromQR = false
+    @State private var amountPrefill: SendAmountStep.AmountPrefill?
+    /// The `monero:` link this flow shows, released when the user confirms
+    /// or closes Send.
+    @State private var shownPaymentRequest: WalletManager.PaymentRequest?
 
     @StateObject private var biometricAuth = BiometricAuthManager()
     /// Re-authenticate before broadcasting. On by default: every unlocked
@@ -99,14 +102,40 @@ struct SendFlowView: View {
                     recipientAddress = scannedAddress
                     if let amount = scannedAmount {
                         amountString = amount
-                        amountPrefilledFromQR = true
+                        amountPrefill = .qrCode
                     }
                 }
             }
         }
         .interactiveDismissDisabled(phase.isSendingState)
         .onAppear {
+            walletManager.isSendFlowPresented = true
             handlePrefill()
+        }
+        .onChange(of: walletManager.pendingPaymentRequest) { _, newRequest in
+            // A link tapped while Send is open replaces what is on screen.
+            // Once the user has confirmed, it must not touch this flow, and
+            // holding it would fill the next Send the user opens on purpose,
+            // so it is refused with a message instead.
+            guard let request = newRequest, request != shownPaymentRequest else { return }
+            guard phase.acceptsPaymentRequest else {
+                walletManager.refusePaymentRequest(
+                    request,
+                    message: String(localized: "Send is still showing another payment. Close it, then open the link again.")
+                )
+                return
+            }
+            apply(request, animated: true)
+        }
+        .onChange(of: phase) { _, newPhase in
+            // Confirmed: this link must never open Send again.
+            guard newPhase.isSendingState, let shownPaymentRequest else { return }
+            walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: true)
+        }
+        .onDisappear {
+            walletManager.isSendFlowPresented = false
+            guard let shownPaymentRequest else { return }
+            walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: false)
         }
         .sheet(item: $hardwareSheetIntent, onDismiss: handleHardwareSheetDismiss) { intent in
             HardwareSessionSheet(
@@ -114,6 +143,20 @@ struct SendFlowView: View {
                 trezorManager: walletManager.trezorManager
             )
             .environmentObject(walletManager)
+        }
+        // A refused link shows its alert here while Send is open: from the
+        // app root it would close this sheet, even mid-send. It waits while
+        // the scanner or the hardware sheet is up.
+        .alert(
+            "Can't Open Payment Link",
+            isPresented: Binding(
+                get: { walletManager.paymentLinkError != nil && !showScanner && hardwareSheetIntent == nil },
+                set: { if !$0 { walletManager.paymentLinkError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(walletManager.paymentLinkError ?? "")
         }
     }
 
@@ -201,7 +244,7 @@ struct SendFlowView: View {
                 recipientAddress: recipientAddress,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
-                amountPrefilledFromQR: amountPrefilledFromQR,
+                amountPrefill: amountPrefill,
                 onContinue: {
                     HapticFeedback.shared.buttonPress()
                     goForward(to: .review)
@@ -326,6 +369,11 @@ struct SendFlowView: View {
     // MARK: - Prefill
 
     private func handlePrefill() {
+        if let request = walletManager.currentPaymentRequest() {
+            apply(request, animated: false)
+            return
+        }
+
         if let addr = walletManager.prefillSendAddress {
             recipientAddress = addr
             walletManager.prefillSendAddress = nil
@@ -337,6 +385,27 @@ struct SendFlowView: View {
             } else {
                 phase = .amount
             }
+        }
+    }
+
+    /// Fills the flow from a `monero:` link and stops on the amount step,
+    /// never the review: the link is someone else's text, so the user
+    /// confirms the amount before Send is one tap away.
+    private func apply(_ request: WalletManager.PaymentRequest, animated: Bool) {
+        shownPaymentRequest = request
+        recipientAddress = request.address
+        amountString = request.amount ?? ""
+        amountPrefill = request.amount == nil ? nil : .paymentLink
+        isSendingAll = false
+        estimatedFee = nil
+
+        guard phase != .amount else { return }
+        if !animated {
+            phase = .amount
+        } else if phase == .review {
+            goBack(to: .amount)
+        } else {
+            goForward(to: .amount)
         }
     }
 
@@ -433,6 +502,44 @@ extension SendFlowPhase {
     var isSendingState: Bool {
         if case .sending = self { return true }
         return false
+    }
+
+    /// True before the user confirms. From `.sending` on, a new payment link
+    /// must not touch the flow.
+    var acceptsPaymentRequest: Bool {
+        switch self {
+        case .address, .amount, .review: return true
+        case .sending, .success, .error: return false
+        }
+    }
+}
+
+// MARK: - Presenting
+
+/// Opens the send sheet when something outside the dashboard asks for it:
+/// Donate, or a `monero:` link. It reads the request on appear as well as on
+/// change, because a link that arrives with the unlock builds the dashboard
+/// with the flag already set, and `onChange` only sees later changes.
+struct SendRequestPresenter: ViewModifier {
+    @ObservedObject var walletManager: WalletManager
+    @Binding var showSend: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear(perform: present)
+            .onChange(of: walletManager.shouldShowSendView) { _, _ in present() }
+    }
+
+    private func present() {
+        guard walletManager.shouldShowSendView else { return }
+        walletManager.shouldShowSendView = false
+        showSend = true
+    }
+}
+
+extension View {
+    func presentsSendRequests(from walletManager: WalletManager, showSend: Binding<Bool>) -> some View {
+        modifier(SendRequestPresenter(walletManager: walletManager, showSend: showSend))
     }
 }
 

@@ -29,6 +29,15 @@ struct MainTabView: View {
                 selectedTab = .wallet
             }
         }
+        // A `monero:` link waits in the manager until this view is on screen,
+        // which is also after the PIN when the link woke a locked app.
+        .onAppear(perform: routePaymentRequest)
+        .onChange(of: walletManager.pendingPaymentRequest) { _, _ in routePaymentRequest() }
+    }
+
+    private func routePaymentRequest() {
+        guard walletManager.currentPaymentRequest() != nil else { return }
+        walletManager.shouldShowSendView = true
     }
 
     // MARK: - iPad Layout

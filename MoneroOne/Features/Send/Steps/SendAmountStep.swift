@@ -7,8 +7,14 @@ struct SendAmountStep: View {
     let recipientAddress: String
     let unlockedBalance: Decimal
     let priceService: PriceService
-    var amountPrefilledFromQR: Bool = false
+    /// Where a filled-in amount came from; the step says so above the amount.
+    var amountPrefill: AmountPrefill? = nil
     let onContinue: () -> Void
+
+    enum AmountPrefill {
+        case qrCode
+        case paymentLink
+    }
 
     @State private var showContent = false
     @State private var showMemo = false
@@ -22,15 +28,20 @@ struct SendAmountStep: View {
                 VStack(spacing: 16) {
                     Spacer(minLength: 12)
 
-                    if amountPrefilledFromQR {
+                    if let amountPrefill {
                         HStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.yellow)
                                 .font(.caption2)
-                            Text("Amount pre-filled from QR code")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            switch amountPrefill {
+                            case .qrCode:
+                                Text("Amount pre-filled from QR code")
+                            case .paymentLink:
+                                Text("Amount pre-filled from payment link")
+                            }
                         }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
 
                     // Amount display

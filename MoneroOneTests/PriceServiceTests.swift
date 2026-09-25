@@ -664,4 +664,25 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertEqual(merged.last?.type, .outgoing)
         XCTAssertEqual(WalletManager.mergedByHash(snapshot, view).last?.type, .outgoing, "whichever side it came from")
     }
+
+    // MARK: - VoiceOver summary
+
+    func testChartSummaryRoundsTheChangeLikeTheHeader() {
+        let speech = ChartSpeech(title: "Portfolio", span: "past week", currencyCode: "usd", note: "2 transactions")
+        XCTAssertEqual(
+            speech.summary(first: 1000, last: 1089.87),
+            "From \(speech.format(1000)) to \(speech.format(1089.87)), up 8.99%, 2 transactions"
+        )
+        XCTAssertEqual(ChartSpeech.spokenChange(-1.2), "down 1.20%")
+        XCTAssertEqual(ChartSpeech.spokenChange(-0.004), "unchanged", "the header shows 0.00%")
+        XCTAssertFalse(speech.summary(first: 0, last: 10).contains("up"), "no change from nothing, as in the header")
+    }
+
+    func testChartSummaryCountsTheTransactionsOnTheChart() {
+        let prices = hourlyPrices(5)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: twoTransactionLedger(prices))
+        XCTAssertEqual(PortfolioHistory.spokenCount(in: points), "2 transactions")
+        XCTAssertEqual(PortfolioHistory.spokenCount(in: Array(points.prefix(3))), "1 transaction")
+        XCTAssertNil(PortfolioHistory.spokenCount(in: Array(points.prefix(2))))
+    }
 }

@@ -3,10 +3,10 @@ import SwiftUI
 import Accessibility
 @testable import MoneroOne
 
-/// What VoiceOver gets from the wallet rows, read from the accessibility
-/// tree SwiftUI builds for it. Moving one modifier changes this tree
-/// without changing the screen, and XCUITest cannot see rotor actions, so
-/// the tree is checked here.
+/// What VoiceOver gets from the wallet rows and the charts, read from the
+/// accessibility tree SwiftUI builds for it. Moving one modifier changes
+/// this tree without changing the screen, and XCUITest cannot see rotor
+/// actions, so the tree is checked here.
 @MainActor
 final class VoiceOverTests: XCTestCase {
     private var window: UIWindow?
@@ -74,6 +74,79 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertEqual(elements[0].accessibilityCustomActions?.map(\.name), ["Rename", "Move down"])
     }
 
+    // MARK: - Charts
+
+    /// The chart is one adjustable element: its value sums the line up, a
+    /// swipe up or down steps through the markers and stops at the ends,
+    /// each step pins the sample like a tap, and the rotor has an Audio
+    /// Graph of every sample.
+    func testChartStepsThroughItsMarkers() {
+        let points = samples(price: { 1000 + Double($0) * 5 })
+        let markers = [5, 20, 40].map { i in
+            ChartMarker(
+                timestamp: points[i].timestamp, value: points[i].price, style: i == 20 ? .sent : .received,
+                accessibilityLabel: i == 20 ? "Sent 0.5000 XMR" : "Received 1.0000 XMR",
+                accessibilityValue: "sample \(i)"
+            )
+        }
+        let speech = ChartSpeech(
+            title: "Portfolio", span: "past week", currencyCode: "usd",
+            note: "3 transactions", markerHint: "Moves between transactions"
+        )
+        var selected: [Date?] = []
+        let chart = SampledLineChart(
+            points: points, domain: 950...1300, timestamp: \.timestamp, value: \.price,
+            axes: .init(time: .week, currencyCode: "USD"), markers: markers, speech: speech,
+            onSelect: { selected.append($0?.timestamp) }
+        )
+        let root = host(chart.frame(height: 240), height: 260)
+
+        let elements = accessibilityElements(in: root)
+        XCTAssertEqual(elements.count, 1, "one stop, not one per day")
+        guard let element = elements.first else { return }
+        XCTAssertEqual(element.accessibilityLabel, "Portfolio chart, past week")
+        XCTAssertEqual(element.accessibilityValue, speech.summary(first: 1000, last: 1245))
+        XCTAssertTrue(element.accessibilityTraits.contains(.adjustable))
+        XCTAssertEqual(element.accessibilityHint, "Moves between transactions")
+
+        let graph = (element as? AXChart)?.accessibilityChartDescriptor
+        XCTAssertEqual(graph?.series.first?.dataPoints.count, points.count, "every sample")
+        XCTAssertEqual(graph?.series.first?.dataPoints.compactMap(\.label).count, 3, "the markers' words")
+
+        var heard: [String] = []
+        for up in [true, true, true, true, false, false, false] {
+            if up { element.accessibilityIncrement() } else { element.accessibilityDecrement() }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            heard.append(accessibilityElements(in: root).first?.accessibilityValue ?? "")
+        }
+        XCTAssertEqual(heard, [
+            "Received 1.0000 XMR, sample 5, 1 of 3",
+            "Sent 0.5000 XMR, sample 20, 2 of 3",
+            "Received 1.0000 XMR, sample 40, 3 of 3",
+            "Received 1.0000 XMR, sample 40, 3 of 3",
+            "Sent 0.5000 XMR, sample 20, 2 of 3",
+            "Received 1.0000 XMR, sample 5, 1 of 3",
+            "Received 1.0000 XMR, sample 5, 1 of 3",
+        ])
+        XCTAssertEqual(selected.last, points[5].timestamp, "the header shows the pinned sample")
+    }
+
+    /// Without markers there is nothing to step to.
+    func testChartWithoutMarkersIsNotAdjustable() {
+        let points = samples(price: { 500 + Double($0) })
+        let chart = SampledLineChart(
+            points: points, domain: 450...600, timestamp: \.timestamp, value: \.price,
+            axes: nil, speech: ChartSpeech(title: "Monero price", span: "past week", currencyCode: "eur"),
+            onSelect: { _ in }
+        )
+
+        let elements = accessibilityElements(in: host(chart.frame(height: 200), height: 220))
+
+        XCTAssertEqual(elements.count, 1)
+        XCTAssertEqual(elements.first?.accessibilityLabel, "Monero price chart, past week")
+        XCTAssertFalse(elements.first?.accessibilityTraits.contains(.adjustable) ?? true)
+    }
+
     // MARK: - Helpers
 
     private func wallet(_ name: String, emoji: String = "💰", source: WalletSource, address: String) -> WalletInfo {
@@ -89,6 +162,12 @@ final class VoiceOverTests: XCTestCase {
             onTap: {}, onRename: {}, onDelete: active ? nil : {},
             onMoveUp: first ? nil : {}, onMoveDown: {}, isLifted: false
         )
+    }
+
+    /// 50 samples, 3.5 hours apart, across the past week.
+    private func samples(price: (Int) -> Double) -> [PriceDataPoint] {
+        let start = Date().addingTimeInterval(-7 * 24 * 3600)
+        return (0..<50).map { PriceDataPoint(timestamp: start.addingTimeInterval(Double($0) * 3.5 * 3600), price: price($0)) }
     }
 
     private func host<V: View>(_ view: V, height: CGFloat) -> UIView {

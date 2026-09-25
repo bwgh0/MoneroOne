@@ -161,8 +161,6 @@ struct ChartSwitcherCard: View {
                 // instead of a strip with empty space under it.
                 .frame(minHeight: 100, maxHeight: .infinity)
                 .clipped()
-                .accessibilityLabel("\(chartMode.rawValue) chart for \(selectedTimeRange.rawValue)")
-                .accessibilityHint("Shows \(chartMode == .price ? "XMR price" : "portfolio value") trend")
         }
         .padding(16)
         .dashboardCard()
@@ -266,6 +264,7 @@ struct ChartSwitcherCard: View {
                         timestamp: \.timestamp,
                         value: \.price,
                         axes: nil,
+                        speech: ChartSpeech(title: "Monero price", span: spokenSpan, currencyCode: priceService.selectedCurrency),
                         onSelect: { selectedPricePoint = $0 }
                     )
                     .equatable()
@@ -278,6 +277,13 @@ struct ChartSwitcherCard: View {
                         value: \.value,
                         axes: nil,
                         markers: series.markers,
+                        speech: ChartSpeech(
+                            title: "Portfolio",
+                            span: spokenSpan,
+                            currencyCode: priceService.selectedCurrency,
+                            note: PortfolioHistory.spokenCount(in: series.points),
+                            markerHint: "Moves between transactions"
+                        ),
                         onSelect: { selectedPortfolioPoint = $0 }
                     )
                     .equatable()
@@ -287,6 +293,11 @@ struct ChartSwitcherCard: View {
     }
 
     // MARK: - Helpers
+
+    /// "past week", for the chart's VoiceOver label.
+    private var spokenSpan: String {
+        (ChartTimeAxis(rawValue: selectedTimeRange.apiRange) ?? .week).spokenSpan
+    }
 
     private func formatPrice(_ price: Double) -> String {
         let formatter = FiatCurrency.formatter(for: priceService.selectedCurrency)

@@ -69,6 +69,16 @@ enum PortfolioHistory {
         }
     }
 
+    /// "3 transactions" on the chart, for its VoiceOver summary; nil for none.
+    static func spokenCount(in points: [PortfolioDataPoint]) -> String? {
+        let count = points.reduce(0) { $0 + $1.changes.count }
+        switch count {
+        case 0: return nil
+        case 1: return "1 transaction"
+        default: return "\(count) transactions"
+        }
+    }
+
     /// "Received 1.25 XMR", "Sent 0.5 XMR" or "3 transactions"; nil for none.
     static func summary(of changes: [BalanceChange]) -> String? {
         guard let first = changes.first else { return nil }
@@ -299,6 +309,7 @@ struct PortfolioChartView: View {
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.1), value: value)
+                    .accessibilityLabel("Portfolio value, \(formatCurrency(value))")
 
                 // One slot for both states so the chart never moves on scrub.
                 ZStack {
@@ -319,14 +330,19 @@ struct PortfolioChartView: View {
                             .padding(.vertical, 4)
                             .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
                             .cornerRadius(6)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Change, \(timeAxis.spokenSpan)")
+                            .accessibilityValue(ChartSpeech.spokenChange(change))
                         } else if priceService.isLoadingChart {
                             ProgressView()
                                 .scaleEffect(0.6)
                         }
 
+                        // The change's label names the range.
                         Text(selectedTimeRange.rawValue)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .accessibilityHidden(true)
                     }
                     .opacity(selectedPoint == nil ? 1 : 0)
                     .accessibilityHidden(selectedPoint != nil)
@@ -380,6 +396,9 @@ struct PortfolioChartView: View {
                         )
                         .cornerRadius(8)
                 }
+                // "1 week", not "1W", and which one is on.
+                .accessibilityLabel((ChartTimeAxis(rawValue: range.apiRange) ?? .week).spokenName)
+                .accessibilityAddTraits(selectedTimeRange == range ? .isSelected : [])
             }
         }
         .padding(4)
@@ -403,6 +422,13 @@ struct PortfolioChartView: View {
                     value: \.value,
                     axes: .init(time: tickAxis(for: data), currencyCode: priceService.selectedCurrency.uppercased()),
                     markers: markers,
+                    speech: ChartSpeech(
+                        title: "Portfolio",
+                        span: timeAxis.spokenSpan,
+                        currencyCode: priceService.selectedCurrency,
+                        note: PortfolioHistory.spokenCount(in: data),
+                        markerHint: "Moves between transactions"
+                    ),
                     onSelect: { selectedPoint = $0 }
                 )
                 .equatable()

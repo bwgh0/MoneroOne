@@ -145,3 +145,20 @@ final class OrphanCacheSweepTests: XCTestCase {
         XCTAssertTrue(WalletManager.orphanedCacheDirNames(entries: [], knownIds: [], allWalletIdsKnown: true).isEmpty)
     }
 }
+
+/// The view-key check on restore is key arithmetic, not a wallet: a wallet
+/// opened for the check waited for the running one to stop, and Add Wallet
+/// hung on "Restoring wallet…".
+final class ViewKeyCheckTests: XCTestCase {
+    /// The Monero General Fund's view-only pair, published for anyone to
+    /// audit at getmonero.org/get-started/contributing. The simulator's
+    /// wallet2 cannot derive keys from a seed, so a public pair stands in.
+    private let address = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
+    private let viewKey = "f359631075708155cc3d92a32b75a7d02a5dcf27756707b47a2b31b21c389501"
+
+    func testViewKeyMatchesOnlyItsOwnAddress() {
+        XCTAssertTrue(MoneroOne.MoneroWallet.isValidViewKey(viewKey, for: address))
+        XCTAssertFalse(MoneroOne.MoneroWallet.isValidViewKey("0" + viewKey.dropFirst(), for: address), "one digit off is another key")
+        XCTAssertFalse(MoneroOne.MoneroWallet.isValidViewKey(viewKey, for: address, networkType: .testnet), "a mainnet address on testnet")
+    }
+}

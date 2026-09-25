@@ -650,6 +650,13 @@ class MoneroWallet: ObservableObject {
         MoneroKit.Kit.isValid(address: address, networkType: networkType)
     }
 
+    /// True when `viewKey` is the private view key of `address`: wallet2's
+    /// `keyValid` derives the public view key and compares it with the one
+    /// in the address. No wallet is opened.
+    nonisolated static func isValidViewKey(_ viewKey: String, for address: String, networkType: MoneroKit.NetworkType = .mainnet) -> Bool {
+        MoneroKit.Kit.isValid(viewKey: viewKey, address: address, isViewKey: true, networkType: networkType)
+    }
+
     // MARK: - Restore Height
 
     static func restoreHeight(for date: Date) -> UInt64 {

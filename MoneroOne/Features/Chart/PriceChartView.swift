@@ -26,6 +26,9 @@ struct PriceChartView: View {
             case .all: return "All"
             }
         }
+
+        /// The button label, in the user's language ("1W").
+        var title: String { ChartRangeTitle.title(for: rawValue) }
     }
 
     var body: some View {
@@ -129,13 +132,13 @@ struct PriceChartView: View {
                             .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
                             .cornerRadius(8)
                             .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Price change \(selectedTimeRange.rawValue), \(change >= 0 ? "up" : "down") \(formatChartPriceChange(change))")
+                            .accessibilityLabel("Price change \(selectedTimeRange.title), \(change >= 0 ? String(localized: "up", comment: "Price went up") : String(localized: "down", comment: "Price went down")) \(formatChartPriceChange(change))")
                         } else if priceService.isLoadingChart {
                             ProgressView()
                                 .scaleEffect(0.8)
                         }
 
-                        Text(selectedTimeRange.rawValue)
+                        Text(selectedTimeRange.title)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -166,7 +169,7 @@ struct PriceChartView: View {
 
     private var timeRangeSelector: some View {
         GlassSegmentedPicker(selection: $selectedTimeRange) { range in
-            range.rawValue
+            range.title
         }
     }
 
@@ -191,7 +194,7 @@ struct PriceChartView: View {
                     timestamp: \.timestamp,
                     value: \.price,
                     axes: .init(time: timeAxis, currencyCode: priceService.selectedCurrency.uppercased()),
-                    speech: ChartSpeech(title: "Monero price", span: timeAxis.spokenSpan, currencyCode: priceService.selectedCurrency),
+                    speech: ChartSpeech(title: String(localized: "Monero price"), span: timeAxis.spokenSpan, currencyCode: priceService.selectedCurrency),
                     onSelect: { selectedPoint = $0 }
                 )
                 .equatable()
@@ -251,13 +254,13 @@ struct PriceChartView: View {
                     GridItem(.flexible())
                 ], spacing: 12) {
                     StatCard(
-                        title: "\(selectedTimeRange.rawValue) High",
+                        title: String(localized: "\(selectedTimeRange.title) High", comment: "Highest price in the chart range, e.g. 1W High"),
                         value: formatPrice(range.max),
                         color: .green
                     )
 
                     StatCard(
-                        title: "\(selectedTimeRange.rawValue) Low",
+                        title: String(localized: "\(selectedTimeRange.title) Low", comment: "Lowest price in the chart range, e.g. 1W Low"),
                         value: formatPrice(range.min),
                         color: .red
                     )
@@ -279,6 +282,23 @@ struct PriceChartView: View {
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: price)) ?? "\(price)"
+    }
+}
+
+// MARK: - Range titles
+
+/// Chart range button labels, shared by the price, portfolio and dashboard
+/// charts. The raw values ("1W") stay the API and cache keys.
+enum ChartRangeTitle {
+    static func title(for rawValue: String) -> String {
+        switch rawValue {
+        case "24H": return String(localized: "24H", comment: "Chart range button: 24 hours")
+        case "1W": return String(localized: "1W", comment: "Chart range button: 1 week")
+        case "1M": return String(localized: "1M", comment: "Chart range button: 1 month")
+        case "1Y": return String(localized: "1Y", comment: "Chart range button: 1 year")
+        case "All": return String(localized: "All", comment: "Chart range button: all time")
+        default: return rawValue
+        }
     }
 }
 
@@ -375,22 +395,22 @@ enum ChartTimeAxis: String, Equatable {
     /// The range as VoiceOver says it on a range button: "1 week".
     var spokenName: String {
         switch self {
-        case .day: return "24 hours"
-        case .week: return "1 week"
-        case .month: return "1 month"
-        case .year: return "1 year"
-        case .all: return "All time"
+        case .day: return String(localized: "24 hours", comment: "VoiceOver: chart range button")
+        case .week: return String(localized: "1 week", comment: "VoiceOver: chart range button")
+        case .month: return String(localized: "1 month", comment: "VoiceOver: chart range button")
+        case .year: return String(localized: "1 year", comment: "VoiceOver: chart range button")
+        case .all: return String(localized: "All time", comment: "VoiceOver: chart range button")
         }
     }
 
     /// The time a chart on this range covers, as VoiceOver says it: "past week".
     var spokenSpan: String {
         switch self {
-        case .day: return "past 24 hours"
-        case .week: return "past week"
-        case .month: return "past month"
-        case .year: return "past year"
-        case .all: return "all time"
+        case .day: return String(localized: "past 24 hours", comment: "VoiceOver: time a chart covers")
+        case .week: return String(localized: "past week", comment: "VoiceOver: time a chart covers")
+        case .month: return String(localized: "past month", comment: "VoiceOver: time a chart covers")
+        case .year: return String(localized: "past year", comment: "VoiceOver: time a chart covers")
+        case .all: return String(localized: "all time", comment: "VoiceOver: time a chart covers")
         }
     }
 
@@ -673,7 +693,7 @@ struct ChartSpeech: Equatable {
     var markerHint: String? = nil
 
     /// "Portfolio chart, past week".
-    var label: String { "\(title) chart, \(span)" }
+    var label: String { String(localized: "\(title) chart, \(span)", comment: "VoiceOver: chart name, then the time it covers") }
 
     /// A value on the line: "$1,234.56".
     func format(_ amount: Double) -> String {
@@ -686,7 +706,7 @@ struct ChartSpeech: Equatable {
     /// "From $504.46 to $550.29, up 8.99%, 3 transactions". No change is
     /// given from zero, as the headers give none.
     func summary(first: Double, last: Double) -> String {
-        var parts = ["From \(format(first)) to \(format(last))"]
+        var parts = [String(localized: "From \(format(first)) to \(format(last))", comment: "VoiceOver: first and last value on a chart")]
         if first > 0 {
             parts.append(Self.spokenChange((last - first) / first * 100))
         }
@@ -698,8 +718,10 @@ struct ChartSpeech: Equatable {
     /// "unchanged".
     static func spokenChange(_ percent: Double) -> String {
         let size = String(format: "%.2f", abs(percent))
-        if size == "0.00" { return "unchanged" }
-        return "\(percent > 0 ? "up" : "down") \(size)%"
+        if size == "0.00" { return String(localized: "unchanged", comment: "VoiceOver: no price change") }
+        return percent > 0
+            ? String(localized: "up \(size)%", comment: "VoiceOver: percent change")
+            : String(localized: "down \(size)%", comment: "VoiceOver: percent change")
     }
 }
 
@@ -721,10 +743,10 @@ struct ChartAudioGraph: AXChartDescriptorRepresentable {
         let labels = Dictionary(markers.map { ($0.timestamp, $0.accessibilityLabel) }) { first, _ in first }
         let start = samples.first?.date.timeIntervalSince1970 ?? 0
         let end = max(samples.last?.date.timeIntervalSince1970 ?? 0, start)
-        let time = AXNumericDataAxisDescriptor(title: "Time", range: start...end, gridlinePositions: []) { seconds in
+        let time = AXNumericDataAxisDescriptor(title: String(localized: "Time", comment: "Audio Graph axis"), range: start...end, gridlinePositions: []) { seconds in
             Date(timeIntervalSince1970: seconds).formatted(date: .abbreviated, time: .shortened)
         }
-        let value = AXNumericDataAxisDescriptor(title: "Value", range: domain, gridlinePositions: [], valueDescriptionProvider: speech.format)
+        let value = AXNumericDataAxisDescriptor(title: String(localized: "Value", comment: "Audio Graph axis"), range: domain, gridlinePositions: [], valueDescriptionProvider: speech.format)
         let series = AXDataSeriesDescriptor(
             name: speech.title,
             isContinuous: true,
@@ -838,7 +860,7 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     /// 2.0000 XMR, Sep 20, 2026 at 3:05 PM, portfolio $1,234.56, 2 of 5".
     private var spokenValue: String {
         guard let pinned, let index = markers.firstIndex(of: pinned) else { return summary }
-        return "\(pinned.accessibilityLabel), \(pinned.accessibilityValue), \(index + 1) of \(markers.count)"
+        return String(localized: "\(pinned.accessibilityLabel), \(pinned.accessibilityValue), \(index + 1) of \(markers.count)", comment: "VoiceOver: marker, its value, then position like 2 of 5")
     }
 
     /// Up is the next marker in time, down the one before. From none, up

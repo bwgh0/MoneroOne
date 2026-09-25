@@ -77,13 +77,15 @@ struct TransactionDetailView: View {
                         .foregroundColor(transaction.type == .incoming ? .green : .primary)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Amount: \(transaction.type == .incoming ? "plus" : "minus") \(XMRFormatter.format(transaction.amount)) XMR")
+                .accessibilityLabel(transaction.type == .incoming
+                    ? String(localized: "Amount: plus \(XMRFormatter.format(transaction.amount)) XMR", comment: "VoiceOver: amount received")
+                    : String(localized: "Amount: minus \(XMRFormatter.format(transaction.amount)) XMR", comment: "VoiceOver: amount sent"))
 
                 // Fiat value at the time it happened, from price history;
                 // hidden until the history has loaded.
                 if let valueAtTime = priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
                     .map({ priceService.formatFiat($0) }) {
-                    let label = transaction.type == .incoming ? "Value when received" : "Value when sent"
+                    let label = transaction.type == .incoming ? String(localized: "Value when received") : String(localized: "Value when sent")
                     HStack {
                         Text(label)
                         Spacer()
@@ -170,14 +172,14 @@ struct TransactionDetailView: View {
                 .accessibilityLabel("Date: \(formattedDate)")
 
                 copyableRow(
-                    label: "Transaction ID",
+                    label: String(localized: "Transaction ID"),
                     value: transaction.id,
                     field: .txId
                 )
 
                 if transaction.type == .incoming, let receivingAddress {
                     copyableRow(
-                        label: "Received on",
+                        label: String(localized: "Received on"),
                         trailingLabel: receivingSubaddressLabel,
                         value: receivingAddress,
                         field: .address
@@ -235,7 +237,7 @@ struct TransactionDetailView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("View in block explorer\(isTestnet ? ", testnet" : "")")
+                    .accessibilityLabel("View in block explorer\(isTestnet ? String(localized: ", testnet") : "")")
                     .accessibilityHint("Opens the transaction in an in-app browser")
                 }
 
@@ -275,7 +277,7 @@ struct TransactionDetailView: View {
     @ViewBuilder
     private var txKeyRow: some View {
         if let key = txKey, !key.isEmpty {
-            copyableRow(label: "Transaction Key", value: key, field: .txKey)
+            copyableRow(label: String(localized: "Transaction Key"), value: key, field: .txKey)
         } else if txKeyLookedUp {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Transaction Key")
@@ -444,7 +446,7 @@ enum TransactionDetailLogic {
         if let match = subaddresses.first(where: { $0.address == address }) {
             return SubaddressName.display(index: match.index, label: match.label)
         }
-        return "Subaddress"
+        return String(localized: "Subaddress")
     }
 
     /// The address to show for "Received on": the row's own address,
@@ -472,14 +474,14 @@ enum TransactionDetailLogic {
     ) -> [SentToRow] {
         if destinations.isEmpty {
             guard !fallbackAddress.isEmpty else { return [] }
-            return [SentToRow(label: "Sent to", amountLabel: nil, address: fallbackAddress)]
+            return [SentToRow(label: String(localized: "Sent to"), amountLabel: nil, address: fallbackAddress)]
         }
         if destinations.count == 1 {
-            return [SentToRow(label: "Sent to", amountLabel: nil, address: destinations[0].address)]
+            return [SentToRow(label: String(localized: "Sent to"), amountLabel: nil, address: destinations[0].address)]
         }
         return destinations.enumerated().map { position, destination in
             SentToRow(
-                label: "Sent to (\(position + 1) of \(destinations.count))",
+                label: String(localized: "Sent to (\(position + 1) of \(destinations.count))"),
                 amountLabel: "\(XMRFormatter.format(destination.amount)) XMR",
                 address: destination.address
             )
@@ -507,26 +509,26 @@ enum TransactionDetailLogic {
         }
 
         let incoming = transaction.type == .incoming
-        add("Type", incoming ? "Received" : "Sent")
-        add("Amount", "\(incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount)) XMR")
+        add(String(localized: "Type"), incoming ? String(localized: "Received") : String(localized: "Sent"))
+        add(String(localized: "Amount"), "\(incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount)) XMR")
         if !incoming {
-            add("Fee", "\(XMRFormatter.format(transaction.fee)) XMR")
+            add(String(localized: "Fee"), "\(XMRFormatter.format(transaction.fee)) XMR")
         }
-        add(incoming ? "Value when received" : "Value when sent", valueAtTime)
-        add("Value today", valueToday)
-        add("Status", transaction.displayStatusText)
+        add(incoming ? String(localized: "Value when received") : String(localized: "Value when sent"), valueAtTime)
+        add(String(localized: "Value today"), valueToday)
+        add(String(localized: "Status"), transaction.displayStatusText)
         if let confirmations = transaction.confirmations {
-            add("Confirmations", "\(confirmations)")
+            add(String(localized: "Confirmations"), "\(confirmations)")
         }
-        add("Date", dateText)
-        add("Memo", transaction.memo)
-        add("Transaction ID", transaction.id)
+        add(String(localized: "Date"), dateText)
+        add(String(localized: "Memo"), transaction.memo)
+        add(String(localized: "Transaction ID"), transaction.id)
 
         if incoming {
-            let label = receivedOnLabel.map { "Received on (\($0))" } ?? "Received on"
+            let label = receivedOnLabel.map { String(localized: "Received on (\($0))") } ?? String(localized: "Received on")
             add(label, receivedOnAddress)
         } else if sentTo.isEmpty {
-            add("Recipient", "Not available for transactions sent before this wallet was restored")
+            add(String(localized: "Recipient"), String(localized: "Not available for transactions sent before this wallet was restored"))
         } else {
             for row in sentTo {
                 let label = row.amountLabel.map { "\(row.label), \($0)" } ?? row.label
@@ -534,8 +536,8 @@ enum TransactionDetailLogic {
             }
         }
 
-        add("Transaction Key", txKey, secret: true)
-        add("Block Explorer", explorerURL?.absoluteString)
+        add(String(localized: "Transaction Key"), txKey, secret: true)
+        add(String(localized: "Block Explorer"), explorerURL?.absoluteString)
 
         return lines
     }

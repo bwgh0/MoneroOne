@@ -241,7 +241,7 @@ struct WalletSwitcherButton: View {
             VStack(spacing: 2) {
                 Text(walletManager.activeWallet?.emoji ?? "\u{1F4B0}")
                     .font(.system(size: 22))
-                Text(walletManager.activeWallet?.name ?? "Wallet")
+                Text(walletManager.activeWallet?.name ?? String(localized: "Wallet"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -402,9 +402,9 @@ struct WalletRow: View {
     private var spokenLabel: String {
         var parts = [wallet.name, "\(XMRFormatter.format(balance)) XMR"]
         if wallet.requiresHardwareSession {
-            parts.append("hardware wallet")
+            parts.append(String(localized: "hardware wallet", comment: "VoiceOver: wallet kind after name and balance"))
         } else if wallet.isViewOnly {
-            parts.append("view-only")
+            parts.append(String(localized: "view-only", comment: "VoiceOver: wallet kind after name and balance"))
         }
         return parts.joined(separator: ", ")
     }
@@ -793,7 +793,7 @@ struct WalletManagerRows: View {
         withAnimation(Self.slide) {
             walletManager.moveWallet(id: id, to: from + delta)
         }
-        UIAccessibility.post(notification: .announcement, argument: delta < 0 ? "Moved up" : "Moved down")
+        UIAccessibility.post(notification: .announcement, argument: delta < 0 ? String(localized: "Moved up") : String(localized: "Moved down"))
     }
 }
 

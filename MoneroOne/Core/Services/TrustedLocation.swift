@@ -82,19 +82,19 @@ extension TrustedLocation {
 
         var displayName: String {
             switch self {
-            case .small: return "200m"
-            case .medium: return "500m"
-            case .large: return "1km"
-            case .extraLarge: return "2km"
+            case .small: return String(localized: "200m", comment: "Radius preset: 200 meters")
+            case .medium: return String(localized: "500m", comment: "Radius preset: 500 meters")
+            case .large: return String(localized: "1km", comment: "Radius preset: 1 kilometer")
+            case .extraLarge: return String(localized: "2km", comment: "Radius preset: 2 kilometers")
             }
         }
 
         var description: String {
             switch self {
-            case .small: return "Apartment"
-            case .medium: return "Home"
-            case .large: return "Campus"
-            case .extraLarge: return "District"
+            case .small: return String(localized: "Apartment", comment: "Radius preset size hint")
+            case .medium: return String(localized: "Home", comment: "Radius preset size hint")
+            case .large: return String(localized: "Campus", comment: "Radius preset size hint")
+            case .extraLarge: return String(localized: "District", comment: "Radius preset size hint")
             }
         }
     }

@@ -51,7 +51,7 @@ struct ReceiveView: View {
 
     private var addressLabel: String {
         if effectiveAddressIndex == 0 {
-            return "Main Address"
+            return String(localized: "Main Address")
         } else {
             let subaddresses = walletManager.subaddresses.filter { $0.index > 0 && !$0.address.isEmpty }
             if let subaddr = subaddresses.first(where: { $0.index == effectiveAddressIndex }),
@@ -59,16 +59,28 @@ struct ReceiveView: View {
                 return subaddr.label
             }
             if let position = subaddresses.firstIndex(where: { $0.index == effectiveAddressIndex }) {
-                return "Subaddress #\(position + 1)"
+                return String(localized: "Subaddress #\(position + 1)")
             }
-            return "Subaddress #\(effectiveAddressIndex)"
+            return String(localized: "Subaddress #\(effectiveAddressIndex)")
         }
+    }
+
+    /// The request amount as a number. Comma-decimal regions type "1,5" on
+    /// the decimal pad, and `Decimal(string: "1,5")` reads 1: the QR code
+    /// would ask for less than the user typed.
+    private var requestedXMR: Decimal? {
+        Decimal(string: requestAmount.replacingOccurrences(of: ",", with: "."))
+    }
+
+    /// The fiat request amount as a number; `Double("1,5")` is nil.
+    private var requestedFiat: Double? {
+        Double(requestFiatAmount.replacingOccurrences(of: ",", with: "."))
     }
 
     private var qrContent: String {
         let addr = currentAddress
         if addr.isEmpty || addr == "Loading..." { return "" }
-        if let amount = Decimal(string: requestAmount), amount > 0 {
+        if let amount = requestedXMR, amount > 0 {
             return "monero:\(addr)?tx_amount=\(amount)"
         }
         // A monero: URI rather than the bare address, so the Camera app and
@@ -97,9 +109,9 @@ struct ReceiveView: View {
         }
 
         // Create share message
-        var message = "Send me Monero (XMR) at this address:\n\n\(currentAddress)"
-        if let amount = Decimal(string: requestAmount), amount > 0 {
-            message = "Send me \(requestAmount) XMR at this address:\n\n\(currentAddress)"
+        var message = String(localized: "Send me Monero (XMR) at this address:\n\n\(currentAddress)")
+        if let amount = requestedXMR, amount > 0 {
+            message = String(localized: "Send me \(requestAmount) XMR at this address:\n\n\(currentAddress)")
         }
         items.append(message)
 
@@ -237,13 +249,13 @@ struct ReceiveView: View {
 
                         // Show converted amount
                         if isFiatMode {
-                            if !requestAmount.isEmpty, let amt = Decimal(string: requestAmount), amt > 0 {
+                            if !requestAmount.isEmpty, let amt = requestedXMR, amt > 0 {
                                 Text("≈ \(requestAmount) XMR")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .padding(.horizontal, 4)
                             }
-                        } else if let amt = Decimal(string: requestAmount), amt > 0,
+                        } else if let amt = requestedXMR, amt > 0,
                                   let fiat = priceService.formatFiatValue(amt) {
                             Text("≈ \(fiat)")
                                 .font(.caption)
@@ -317,7 +329,7 @@ struct ReceiveView: View {
                         .padding()
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     }
-                    .accessibilityLabel("\(addressLabel), \(formatAddress(currentAddress))\(rotateReceiveAddress ? ", new address after each payment" : "")")
+                    .accessibilityLabel("\(addressLabel), \(formatAddress(currentAddress))\(rotateReceiveAddress ? String(localized: ", new address after each payment") : "")")
                     .accessibilityHint("Opens address picker to change receiving address")
                     .padding(.horizontal)
 
@@ -393,6 +405,8 @@ struct ReceiveView: View {
     }
 
     private func formatAddress(_ addr: String) -> String {
+        // "Loading..." is a sentinel inside currentAddress; translate it only here.
+        if addr == "Loading..." { return String(localized: "Loading...") }
         guard addr.count > 24 else { return addr }
         return "\(addr.prefix(12))...\(addr.suffix(8))"
     }
@@ -402,7 +416,7 @@ struct ReceiveView: View {
         if isFiatMode {
             // Sync fiat from current XMR
             if let price = priceService.xmrPrice,
-               let xmr = Double(requestAmount), xmr > 0 {
+               let xmr = requestedXMR.map({ NSDecimalNumber(decimal: $0).doubleValue }), xmr > 0 {
                 let fiat = xmr * price
                 requestFiatAmount = String(format: "%.2f", fiat)
             } else {
@@ -418,7 +432,7 @@ struct ReceiveView: View {
         // price is inflated), and the QR encodes it.
         guard let price = priceService.xmrPrice,
               PriceService.isPlausiblePrice(price),
-              let fiat = Double(requestFiatAmount), fiat > 0 else {
+              let fiat = requestedFiat, fiat > 0 else {
             requestAmount = ""
             return
         }
@@ -500,7 +514,7 @@ struct AddressPickerView: View {
             LazyVStack(spacing: 12) {
                 // Main Address Card
                 AddressCard(
-                    label: "Main Address",
+                    label: String(localized: "Main Address"),
                     address: walletManager.primaryAddress,
                     index: 0,
                     isSelected: selectedIndex == 0,
@@ -562,7 +576,7 @@ struct AddressPickerView: View {
                     .padding(.vertical, 32)
                 } else {
                     ForEach(Array(actualSubaddresses.enumerated()), id: \.element.index) { position, subaddr in
-                        let displayLabel = subaddr.label.isEmpty ? "Subaddress #\(position + 1)" : subaddr.label
+                        let displayLabel = subaddr.label.isEmpty ? String(localized: "Subaddress #\(position + 1)") : subaddr.label
                         AddressCard(
                             label: displayLabel,
                             address: subaddr.address,
@@ -728,7 +742,7 @@ struct AddressCard: View {
         }
         .buttonStyle(AddressCardButtonStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label), \(isSelected ? "selected" : "not selected")\(showWarning ? ", warning: links all transactions together" : "")")
+        .accessibilityLabel("\(label), \(isSelected ? String(localized: "selected") : String(localized: "not selected"))\(showWarning ? String(localized: ", warning: links all transactions together") : "")")
         .accessibilityHint("Double tap to select this address")
     }
 
@@ -822,10 +836,10 @@ final class PhotoSaveResponder: NSObject {
     @objc func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer?) {
         if error == nil {
             HapticFeedback.shared.softTick()
-            UIAccessibility.post(notification: .announcement, argument: "QR code saved to Photos")
+            UIAccessibility.post(notification: .announcement, argument: String(localized: "QR code saved to Photos"))
         } else {
             HapticFeedback.shared.error()
-            UIAccessibility.post(notification: .announcement, argument: "Couldn't save the QR code. Allow Photos access in Settings.")
+            UIAccessibility.post(notification: .announcement, argument: String(localized: "Couldn't save the QR code. Allow Photos access in Settings."))
         }
     }
 }

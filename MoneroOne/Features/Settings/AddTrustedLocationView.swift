@@ -291,9 +291,9 @@ struct AddTrustedLocationView: View {
 
     private var radiusText: String {
         if selectedRadius >= 1000 {
-            return String(format: "%.1f km", selectedRadius / 1000)
+            return String(localized: "\(selectedRadius / 1000, specifier: "%.1f") km")
         } else {
-            return "\(Int(selectedRadius))m"
+            return String(localized: "\(Int(selectedRadius))m", comment: "Distance in meters, e.g. 500m")
         }
     }
 

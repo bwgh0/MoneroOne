@@ -224,7 +224,7 @@ class PriceService: ObservableObject {
             // Don't update error state if this task was cancelled -
             // a newer task is handling the fetch
             guard !Task.isCancelled else { return }
-            self.error = "Price unavailable"
+            self.error = String(localized: "Price unavailable")
         }
 
         // Don't update loading state if this task was cancelled
@@ -568,13 +568,13 @@ enum PriceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .implausiblePrice:
-            return "Received an implausible XMR price. Keeping the last known value."
+            return String(localized: "Received an implausible XMR price. Keeping the last known value.")
         case .implausibleDeviation:
-            return "XMR price moved implausibly far in one update. Keeping the last known value."
+            return String(localized: "XMR price moved implausibly far in one update. Keeping the last known value.")
         case .staleResponse:
-            return "Received an out-of-date price response. Keeping the last known value."
+            return String(localized: "Received an out-of-date price response. Keeping the last known value.")
         case .missingQuote(let currency):
-            return "The price feed has no \(currency.uppercased()) quote."
+            return String(localized: "The price feed has no \(currency.uppercased()) quote.", comment: "Currency code, e.g. EUR")
         }
     }
 }

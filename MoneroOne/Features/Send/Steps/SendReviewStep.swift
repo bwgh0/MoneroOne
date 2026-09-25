@@ -118,7 +118,7 @@ struct SendReviewStep: View {
                         .font(.subheadline)
                         .padding()
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel(estimatedFee.map { "Network fee: \(XMRFormatter.format($0)) XMR" } ?? "Network fee: loading")
+                        .accessibilityLabel(estimatedFee.map { String(localized: "Network fee: \(XMRFormatter.format($0)) XMR") } ?? String(localized: "Network fee: loading"))
 
                         // Total
                         if let total = total {

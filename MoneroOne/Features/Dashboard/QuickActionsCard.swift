@@ -10,6 +10,7 @@ struct QuickActionsCard: View {
         HStack(spacing: 12) {
             QuickActionButton(
                 title: "Send",
+                hint: "Double tap to send Monero",
                 icon: "arrow.up.circle.fill",
                 color: .orange,
                 isDisabled: isSendDisabled,
@@ -18,6 +19,7 @@ struct QuickActionsCard: View {
 
             QuickActionButton(
                 title: "Receive",
+                hint: "Double tap to receive Monero",
                 icon: "arrow.down.circle.fill",
                 color: .green,
                 action: onReceive
@@ -28,7 +30,9 @@ struct QuickActionsCard: View {
 
 /// Individual quick action button
 struct QuickActionButton: View {
-    let title: String
+    let title: LocalizedStringResource
+    /// VoiceOver hint, a full sentence per button so it translates whole.
+    let hint: LocalizedStringResource
     let icon: String
     let color: Color
     var isDisabled: Bool = false
@@ -49,8 +53,8 @@ struct QuickActionButton: View {
         .glassButtonStyle()
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.55 : 1)
-        .accessibilityLabel(isDisabled ? "\(title), disabled for view-only wallet" : title)
-        .accessibilityHint(isDisabled ? "This wallet is view-only and cannot send" : "Double tap to \(title.lowercased()) Monero")
+        .accessibilityLabel(isDisabled ? String(localized: "\(String(localized: title)), disabled for view-only wallet") : String(localized: title))
+        .accessibilityHint(isDisabled ? String(localized: "This wallet is view-only and cannot send") : String(localized: hint))
     }
 }
 

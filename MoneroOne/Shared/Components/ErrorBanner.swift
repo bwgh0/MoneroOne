@@ -57,7 +57,7 @@ struct ErrorBanner: View {
         .background(type.color.opacity(0.1))
         .cornerRadius(12)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(type == .error ? "Error" : type == .warning ? "Warning" : "Offline"): \(message)")
+        .accessibilityLabel("\(type == .error ? String(localized: "Error") : type == .warning ? String(localized: "Warning") : String(localized: "Offline")): \(message)")
     }
 }
 
@@ -67,7 +67,7 @@ struct OfflineBanner: View {
     var body: some View {
         if !networkMonitor.isConnected {
             ErrorBanner(
-                message: "No internet connection",
+                message: String(localized: "No internet connection"),
                 type: .offline
             )
             .transition(.move(edge: .top).combined(with: .opacity))
@@ -120,7 +120,7 @@ struct SyncErrorBanner: View {
     var body: some View {
         if case .error(let message) = syncState {
             ErrorBanner(
-                message: "Sync error: \(message)",
+                message: String(localized: "Sync error: \(message)"),
                 type: .error,
                 retryAction: retryAction
             )

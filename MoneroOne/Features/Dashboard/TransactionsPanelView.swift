@@ -119,6 +119,9 @@ struct TransactionPanelRow: View {
                     Text(transaction.type == .incoming ? "Received" : "Sent")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        // Whole: next to a long amount, "Получено" broke with a
+                        // hyphen; the amount column gives way instead.
+                        .fixedSize()
                         .foregroundColor(.primary)
 
                     Text(formattedDate)
@@ -139,7 +142,7 @@ struct TransactionPanelRow: View {
         }
         .glassButtonStyle()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
     }
 
     private var amount: TransactionAmountText {

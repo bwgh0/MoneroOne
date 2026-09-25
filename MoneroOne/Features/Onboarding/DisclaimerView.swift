@@ -141,8 +141,8 @@ struct DisclaimerView: View {
 struct DisclaimerItem: View {
     let icon: String
     let iconColor: Color
-    let title: String
-    let description: String
+    let title: LocalizedStringResource
+    let description: LocalizedStringResource
     @Binding var isChecked: Bool
 
     var body: some View {

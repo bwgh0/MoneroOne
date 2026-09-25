@@ -275,19 +275,19 @@ class WalletManager: ObservableObject {
         onSent: ((String) -> Void)? = nil
     ) async {
         guard let active = activeWallet, isHardwareWallet else {
-            hardwareSessionState = .failed(message: "Active wallet is not hardware-backed.")
+            hardwareSessionState = .failed(message: String(localized: "Active wallet is not hardware-backed."))
             return
         }
         guard let deviceWalletId = active.deviceWalletId else {
-            hardwareSessionState = .failed(message: "Wallet missing device cache identifier — re-pair to fix.")
+            hardwareSessionState = .failed(message: String(localized: "Wallet missing device cache identifier — re-pair to fix."))
             return
         }
         guard let pin = currentPin else {
-            hardwareSessionState = .failed(message: "Wallet is locked.")
+            hardwareSessionState = .failed(message: String(localized: "Wallet is locked."))
             return
         }
         guard let viewKeys = try? keychain.getViewOnly(pin: pin, walletId: active.id) else {
-            hardwareSessionState = .failed(message: "Couldn't read wallet keys.")
+            hardwareSessionState = .failed(message: String(localized: "Couldn't read wallet keys."))
             return
         }
 
@@ -373,7 +373,7 @@ class WalletManager: ObservableObject {
             } catch {
                 TrezorLog.log("[Session] FULL open FAILED: %@", error.localizedDescription)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: "Couldn't open device wallet: \(error.localizedDescription)", viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Couldn't open device wallet: \(error.localizedDescription)"), viewKeys: viewKeys)
                 return
             }
 
@@ -407,7 +407,7 @@ class WalletManager: ObservableObject {
                     continue
                 }
 
-                await failSessionAndRestoreView(message: "Device wallet sync failed: \(error.localizedDescription)", viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Device wallet sync failed: \(error.localizedDescription)"), viewKeys: viewKeys)
                 return
             }
         }
@@ -440,10 +440,10 @@ class WalletManager: ObservableObject {
                 // finish the export — most often the confirmation on the
                 // Trezor wasn't given in time — so the string is empty.
                 let raw = fullWallet.latestErrorString
-                let err = raw.isEmpty ? "Trezor didn't complete the key-image export. Confirm the prompt on the device and try again." : raw
+                let err = raw.isEmpty ? String(localized: "Trezor didn't complete the key-image export. Confirm the prompt on the device and try again.") : raw
                 TrezorLog.log("[Session] coldKeyImageSync FAILED: %@", err)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: "Key image sync failed: \(err)", viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Key image sync failed: \(err)"), viewKeys: viewKeys)
                 return
             }
         }
@@ -465,7 +465,7 @@ class WalletManager: ObservableObject {
                               String(describing: type(of: error)),
                               walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)", viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys)
                 return
             }
         case .all(let to, let memo):
@@ -481,7 +481,7 @@ class WalletManager: ObservableObject {
                               String(describing: type(of: error)),
                               walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)", viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys)
                 return
             }
         }
@@ -525,7 +525,7 @@ class WalletManager: ObservableObject {
             try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)
         } catch {
             TrezorLog.log("[Session] VIEW restore FAILED: %@", error.localizedDescription)
-            hardwareSessionState = .failed(message: "Couldn't restore view-only wallet — relaunch the app.")
+            hardwareSessionState = .failed(message: String(localized: "Couldn't restore view-only wallet — relaunch the app."))
             return
         }
 
@@ -540,10 +540,10 @@ class WalletManager: ObservableObject {
         if let txId = sentTxId {
             lastHardwareSessionOutcome = .sentTransaction(txId: txId)
             onSent?(txId)
-            hardwareSessionState = .complete(message: "Transaction broadcast.")
+            hardwareSessionState = .complete(message: String(localized: "Transaction broadcast."))
         } else {
             lastHardwareSessionOutcome = .syncedOnly
-            hardwareSessionState = .complete(message: "Sent transactions are up to date.")
+            hardwareSessionState = .complete(message: String(localized: "Sent transactions are up to date."))
         }
         TrezorLog.log("[Session] session complete (warm window started)")
         DiagnosticLog.shared.log("Trezor session complete")
@@ -623,7 +623,7 @@ class WalletManager: ObservableObject {
             }
             try await Task.sleep(nanoseconds: 500_000_000)
         }
-        throw NSError(domain: "HardwareSession", code: -11, userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for device wallet to sync."])
+        throw NSError(domain: "HardwareSession", code: -11, userInfo: [NSLocalizedDescriptionKey: String(localized: "Timed out waiting for device wallet to sync.")])
     }
 
     private func bindFullWalletSyncProgress(_ wallet: MoneroWallet) {
@@ -1254,7 +1254,7 @@ class WalletManager: ObservableObject {
         let walletId = UUID()
         let info = WalletInfo(
             id: walletId,
-            name: "Personal Wallet",
+            name: String(localized: "Personal Wallet", comment: "Default name of a wallet migrated from an older version"),
             source: source,
             createdAt: Date(),
             restoreHeight: restoreH,
@@ -2920,7 +2920,7 @@ class WalletManager: ObservableObject {
                 self.startConnectionTracking()
             } catch {
                 if !Task.isCancelled {
-                    self.syncState = .error("Failed to reconnect: \(error.localizedDescription)")
+                    self.syncState = .error(String(localized: "Failed to reconnect: \(error.localizedDescription)"))
                 }
             }
         }
@@ -3032,7 +3032,7 @@ class WalletManager: ObservableObject {
 
     func resetSyncData() {
         guard let seed = currentSeed, var info = activeWallet else {
-            syncState = .error("No wallet to reset")
+            syncState = .error(String(localized: "No wallet to reset"))
             return
         }
 
@@ -3082,7 +3082,7 @@ class WalletManager: ObservableObject {
                 self.moneroWallet = wallet
                 self.bindToWallet(wallet)
             } catch {
-                self.syncState = .error("Failed to restart wallet: \(error.localizedDescription)")
+                self.syncState = .error(String(localized: "Failed to restart wallet: \(error.localizedDescription)"))
             }
         }
     }
@@ -3437,7 +3437,7 @@ class WalletManager: ObservableObject {
     /// Switch networks without clearing sync cache - each network maintains separate sync state
     func switchNetwork() {
         guard let seed = currentSeed else {
-            syncState = .error("No wallet to switch")
+            syncState = .error(String(localized: "No wallet to switch"))
             return
         }
 
@@ -3471,7 +3471,7 @@ class WalletManager: ObservableObject {
                 self.moneroWallet = wallet
                 self.bindToWallet(wallet)
             } catch {
-                self.syncState = .error("Failed to switch network: \(error.localizedDescription)")
+                self.syncState = .error(String(localized: "Failed to switch network: \(error.localizedDescription)"))
             }
         }
     }
@@ -3494,17 +3494,17 @@ enum WalletError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .invalidMnemonic: return "Invalid seed phrase"
-        case .invalidPin: return "Invalid PIN"
-        case .saveFailed: return "Failed to save wallet"
-        case .notUnlocked: return "Wallet is locked"
-        case .biometricFailed: return "Biometric authentication failed"
-        case .seedMismatch: return "Seed phrase doesn't match current wallet"
-        case .duplicateWallet(let name): return "This seed phrase is already used by \"\(name)\""
-        case .invalidViewKey: return "View key doesn't match this address"
-        case .walletMismatch: return "Active wallet changed — please retry"
-        case .viewOnlyCannotSend: return "View-only wallets cannot send transactions"
-        case .hardwareSessionRequired: return "Connect your hardware device to sign this transaction."
+        case .invalidMnemonic: return String(localized: "Invalid seed phrase")
+        case .invalidPin: return String(localized: "Invalid PIN")
+        case .saveFailed: return String(localized: "Failed to save wallet")
+        case .notUnlocked: return String(localized: "Wallet is locked")
+        case .biometricFailed: return String(localized: "Biometric authentication failed")
+        case .seedMismatch: return String(localized: "Seed phrase doesn't match current wallet")
+        case .duplicateWallet(let name): return String(localized: "This seed phrase is already used by \"\(name)\"", comment: "Wallet name in quotes")
+        case .invalidViewKey: return String(localized: "View key doesn't match this address")
+        case .walletMismatch: return String(localized: "Active wallet changed — please retry")
+        case .viewOnlyCannotSend: return String(localized: "View-only wallets cannot send transactions")
+        case .hardwareSessionRequired: return String(localized: "Connect your hardware device to sign this transaction.")
         }
     }
 }
@@ -3523,13 +3523,13 @@ enum ConnectionStage: Equatable {
 
     var displayText: String {
         switch self {
-        case .noNetwork: return "No network"
-        case .reachingNode: return "Reaching node..."
-        case .connecting: return "Connecting..."
+        case .noNetwork: return String(localized: "No network", comment: "Connection stage")
+        case .reachingNode: return String(localized: "Reaching node...", comment: "Connection stage")
+        case .connecting: return String(localized: "Connecting...", comment: "Connection stage")
         case .loadingBlocks(let wallet, let daemon):
-            return "Loading... \(Self.formatHeight(wallet)) / \(Self.formatHeight(daemon))"
-        case .syncing: return "Scanning..."
-        case .synced: return "Synced"
+            return String(localized: "Loading... \(Self.formatHeight(wallet)) / \(Self.formatHeight(daemon))", comment: "Connection stage: wallet height / node height, e.g. 1.2M / 3.4M")
+        case .syncing: return String(localized: "Scanning...", comment: "Connection stage")
+        case .synced: return String(localized: "Synced", comment: "Wallet sync status")
         }
     }
 

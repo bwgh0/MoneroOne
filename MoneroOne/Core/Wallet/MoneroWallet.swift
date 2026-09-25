@@ -340,28 +340,28 @@ class MoneroWallet: ObservableObject {
         // Check for common MoneroKit errors
         if errorString.contains("WalletStateError") {
             if errorString.contains("error 1") {
-                return "Unable to connect to node. Please try a different node in Settings."
+                return String(localized: "Unable to connect to node. Please try a different node in Settings.")
             } else if errorString.contains("error 2") {
-                return "Node returned invalid response. Try another node."
+                return String(localized: "Node returned invalid response. Try another node.")
             } else if errorString.contains("error 3") {
-                return "Connection timeout. Check your internet connection."
+                return String(localized: "Connection timeout. Check your internet connection.")
             }
         }
 
         if errorString.lowercased().contains("timeout") || errorString.lowercased().contains("timed out") {
-            return "Connection timed out. Try again or switch nodes."
+            return String(localized: "Connection timed out. Try again or switch nodes.")
         }
 
         if errorString.lowercased().contains("network") || errorString.lowercased().contains("internet") {
-            return "Network error. Check your connection."
+            return String(localized: "Network error. Check your connection.")
         }
 
         if errorString.lowercased().contains("refused") || errorString.lowercased().contains("unreachable") {
-            return "Node unavailable. Try a different node."
+            return String(localized: "Node unavailable. Try a different node.")
         }
 
         // Fallback to a cleaner message
-        return "Sync failed. Tap Retry or try a different node."
+        return String(localized: "Sync failed. Tap Retry or try a different node.")
     }
 
     // MARK: - Transactions
@@ -491,7 +491,7 @@ class MoneroWallet: ObservableObject {
             break // wallet has a connection, safe to call C++
         default:
             writeDebugLog("estimateFee: wallet not synced (state: \(syncState)), refusing to call C++")
-            throw MoneroCoreError.transactionEstimationFailed("Wallet is not synced. Please wait for sync to complete.")
+            throw MoneroCoreError.transactionEstimationFailed(String(localized: "Wallet is not synced. Please wait for sync to complete."))
         }
 
         let piconero = Int((amount * coinRate) as NSDecimalNumber)

@@ -15,6 +15,36 @@ struct TransactionListView: View {
         case incoming = "Received"
         case outgoing = "Sent"
         case pending = "Pending"
+
+        /// The menu and empty-state name, in the user's language.
+        var title: String {
+            switch self {
+            case .all: return String(localized: "All", comment: "Transaction filter")
+            case .incoming: return String(localized: "Received", comment: "Transaction filter")
+            case .outgoing: return String(localized: "Sent", comment: "Transaction filter")
+            case .pending: return String(localized: "Pending", comment: "Transaction filter")
+            }
+        }
+
+        /// VoiceOver hint for the filter menu, a full sentence per filter.
+        var showingHint: String {
+            switch self {
+            case .all: return String(localized: "Currently showing all transactions")
+            case .incoming: return String(localized: "Currently showing received transactions")
+            case .outgoing: return String(localized: "Currently showing sent transactions")
+            case .pending: return String(localized: "Currently showing pending transactions")
+            }
+        }
+
+        /// Empty-state line when this filter leaves no rows.
+        var emptyTitle: String {
+            switch self {
+            case .all: return String(localized: "No transactions yet")
+            case .incoming: return String(localized: "No received transactions")
+            case .outgoing: return String(localized: "No sent transactions")
+            case .pending: return String(localized: "No pending transactions")
+            }
+        }
     }
 
     // For hardware-backed wallets, raw `transactions` is just
@@ -107,7 +137,7 @@ struct TransactionListView: View {
                     filterType = type
                 } label: {
                     HStack {
-                        Text(type.rawValue)
+                        Text(type.title)
                         if filterType == type {
                             Image(systemName: "checkmark")
                         }
@@ -144,7 +174,7 @@ struct TransactionListView: View {
             } label: {
                 Label {
                     Text("Receiving address")
-                    Text(receivingFilterName ?? "Any")
+                    Text(receivingFilterName ?? String(localized: "Any"))
                 } icon: {
                     Image(systemName: "arrow.down.left")
                 }
@@ -158,9 +188,9 @@ struct TransactionListView: View {
     }
 
     private var filterAccessibilityHint: String {
-        var hint = "Currently showing \(filterType.rawValue.lowercased()) transactions"
+        var hint = filterType.showingHint
         if let receivingFilterName {
-            hint += " on \(receivingFilterName)"
+            hint += String(localized: " on \(receivingFilterName)", comment: "VoiceOver: receiving subaddress name after the amount")
         }
         return hint
     }
@@ -184,7 +214,7 @@ struct TransactionListView: View {
 
             HStack(alignment: .top, spacing: 16) {
                 totalColumn(
-                    title: "Received",
+                    title: String(localized: "Received"),
                     sign: "+",
                     amount: totals.received,
                     fiatAtTime: fiatTotals?.received,
@@ -195,7 +225,7 @@ struct TransactionListView: View {
                 // total would be meaningless; hide it under that filter.
                 if receivingIndex == nil {
                     totalColumn(
-                        title: "Sent",
+                        title: String(localized: "Sent"),
                         sign: "-",
                         amount: totals.sent,
                         fiatAtTime: fiatTotals?.sent,
@@ -240,6 +270,10 @@ struct TransactionListView: View {
                     .foregroundStyle(tint)
                     .monospacedDigit()
                     .contentTransition(.numericText())
+                    // One line: a 12-decimal total pushed "XMR" onto a
+                    // line of its own in the half-width column.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 if let fiat = priceService.formatFiatValue(amount) {
                     Text("≈ \(fiat)")
                         .font(.caption)
@@ -259,21 +293,21 @@ struct TransactionListView: View {
             receivingName: receivingFilterName
         )]
         if let fiatTotals {
-            parts.append("received \(priceService.formatFiat(fiatTotals.received)) at the time, \(XMRFormatter.format(totals.received)) XMR")
+            parts.append(String(localized: "received \(priceService.formatFiat(fiatTotals.received)) at the time, \(XMRFormatter.format(totals.received)) XMR", comment: "VoiceOver: Fiat Mode total received in the list, fiat at each transaction's date, then XMR"))
             if receivingIndex == nil {
-                parts.append("sent \(priceService.formatFiat(fiatTotals.sent)) at the time, \(XMRFormatter.format(totals.sent)) XMR including fees")
+                parts.append(String(localized: "sent \(priceService.formatFiat(fiatTotals.sent)) at the time, \(XMRFormatter.format(totals.sent)) XMR including fees", comment: "VoiceOver: Fiat Mode total sent in the list, fiat at each transaction's date, then XMR"))
             }
             return parts.joined(separator: ", ")
         }
-        var received = "received \(XMRFormatter.format(totals.received)) XMR"
+        var received = String(localized: "received \(XMRFormatter.format(totals.received)) XMR", comment: "VoiceOver: total received in the list")
         if let fiat = priceService.formatFiatValue(totals.received) {
-            received += ", about \(fiat)"
+            received += String(localized: ", about \(fiat)", comment: "VoiceOver: approximate fiat value after an amount")
         }
         parts.append(received)
         if receivingIndex == nil {
-            var sent = "sent \(XMRFormatter.format(totals.sent)) XMR including fees"
+            var sent = String(localized: "sent \(XMRFormatter.format(totals.sent)) XMR including fees", comment: "VoiceOver: total sent in the list")
             if let fiat = priceService.formatFiatValue(totals.sent) {
-                sent += ", about \(fiat)"
+                sent += String(localized: ", about \(fiat)", comment: "VoiceOver: approximate fiat value after an amount")
             }
             parts.append(sent)
         }
@@ -303,7 +337,7 @@ struct TransactionListView: View {
                 Image(systemName: "line.3.horizontal.decrease.circle")
                     .font(.largeTitle)
                     .foregroundColor(.secondary)
-                Text("No \(filterType.rawValue.lowercased()) transactions")
+                Text(filterType.emptyTitle)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             } else {
@@ -378,9 +412,9 @@ enum SubaddressName {
     /// for index 0, else the user's label with its emoji kept in front,
     /// else "Subaddress #n".
     static func display(index: Int, label: String) -> String {
-        if index == 0 { return "Main Address" }
+        if index == 0 { return String(localized: "Main Address") }
         let parts = splitSubaddressLabel(label)
-        let name = parts.name.isEmpty ? "Subaddress #\(index)" : parts.name
+        let name = parts.name.isEmpty ? String(localized: "Subaddress #\(index)") : parts.name
         return joinSubaddressLabel(emoji: parts.emoji, name: name)
     }
 }
@@ -519,16 +553,16 @@ enum TransactionListLogic {
         type: TransactionListView.FilterType,
         receivingName: String?
     ) -> String {
-        let noun = count == 1 ? "transaction" : "transactions"
+        // Plural forms live in the string catalog ("1 transaction").
         var title: String
         switch type {
-        case .all: title = "\(count) \(noun)"
-        case .incoming: title = "\(count) received \(noun)"
-        case .outgoing: title = "\(count) sent \(noun)"
-        case .pending: title = "\(count) pending \(noun)"
+        case .all: title = String(localized: "\(count) transactions")
+        case .incoming: title = String(localized: "\(count) received transactions")
+        case .outgoing: title = String(localized: "\(count) sent transactions")
+        case .pending: title = String(localized: "\(count) pending transactions")
         }
         if let receivingName {
-            title += " on \(receivingName)"
+            title = String(localized: "\(title) on \(receivingName)", comment: "Transaction count, then the receiving address name")
         }
         return title
     }
@@ -561,6 +595,9 @@ struct TransactionRow: View {
                 Text(transaction.type == .incoming ? "Received" : "Sent")
                     .font(.subheadline)
                     .fontWeight(.medium)
+                    // Whole: next to a long amount, "Получено" broke with a
+                    // hyphen; the amount column gives way instead.
+                    .fixedSize()
 
                 Text(formattedDate)
                     .font(.caption)
@@ -574,7 +611,7 @@ struct TransactionRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
     }
 
     private var amount: TransactionAmountText {
@@ -628,18 +665,18 @@ struct TransactionAmountText: Equatable {
     init(isIncoming: Bool, xmr: Decimal, fiatAtTime: String?, fiatFirst: Bool, receivedOn: String? = nil) {
         let sign = isIncoming ? "+" : "-"
         let xmrText = XMRFormatter.format(xmr)
-        let on = receivedOn.map { " on \($0)" } ?? ""
+        let on = receivedOn.map { String(localized: " on \($0)", comment: "VoiceOver: receiving subaddress name after the amount") } ?? ""
         if fiatFirst, let fiatAtTime {
             let compact = XMRFormatter.formatCompact(xmr)
             isFiatFirst = true
             primary = sign + fiatAtTime
             secondary = "\(compact) XMR"
-            spoken = "\(fiatAtTime) at the time, \(compact) XMR\(on)"
+            spoken = String(localized: "\(fiatAtTime) at the time, \(compact) XMR", comment: "VoiceOver: Fiat Mode row amount, the fiat value when the transaction happened, then XMR") + on
         } else {
             isFiatFirst = false
             primary = sign + xmrText
             secondary = fiatAtTime
-            spoken = "\(xmrText) XMR\(on)\(fiatAtTime.map { ", worth \($0) at the time" } ?? "")"
+            spoken = "\(xmrText) XMR" + on + (fiatAtTime.map { String(localized: ", worth \($0) at the time", comment: "VoiceOver: fiat value when the transaction happened") } ?? "")
         }
     }
 
@@ -655,10 +692,10 @@ struct TransactionAmountText: Equatable {
 }
 
 /// The trailing column of a transaction row: the amount on top, then the
-/// status and the other currency on one line, so the row keeps its height
-/// whether or not the fiat value has loaded yet. In Fiat Mode the XMR
-/// amount is too long to share that line with the status, so it gets a
-/// line of its own under it.
+/// status and the other currency on one line where they fit, so the row
+/// keeps its height whether or not the fiat value has loaded yet. In Fiat
+/// Mode the XMR amount is too long to share that line with the status, so
+/// it gets a line of its own under it.
 struct TransactionAmountColumn: View {
     let transaction: MoneroTransaction
     let amount: TransactionAmountText
@@ -669,6 +706,10 @@ struct TransactionAmountColumn: View {
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundColor(transaction.type == .incoming ? .green : .primary)
+                // One line: a 12-decimal amount in the narrow iPad panel
+                // wrapped its last digit onto a line of its own.
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
             if amount.isFiatFirst {
                 VStack(alignment: .trailing, spacing: 2) {
@@ -676,12 +717,24 @@ struct TransactionAmountColumn: View {
                     secondary
                 }
             } else {
-                HStack(spacing: 8) {
-                    status
-                    secondary
+                // One line when both fit whole; else the value goes under
+                // the status. Squeezed on one line, "Подтверждена" broke
+                // with a hyphen or the value shrank to "…".
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        status
+                        secondary
+                    }
+                    VStack(alignment: .trailing, spacing: 2) {
+                        status
+                        secondary
+                    }
                 }
             }
         }
+        // Sized before the row's spacer, which otherwise took an even
+        // share and cut a 12-decimal amount to "…".
+        .layoutPriority(1)
     }
 
     private var status: some View {
@@ -697,6 +750,8 @@ struct TransactionAmountColumn: View {
                 Text(transaction.displayStatusText)
                     .font(.caption2)
                     .foregroundColor(transaction.displayStatusColor)
+                    .lineLimit(1)
+                    .fixedSize()
             }
         }
     }
@@ -707,6 +762,8 @@ struct TransactionAmountColumn: View {
             Text(secondary)
                 .font(.caption2)
                 .foregroundColor(.secondary)
+                .lineLimit(1)
+                .fixedSize()
         }
     }
 }

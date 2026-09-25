@@ -52,8 +52,8 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        view.accessibilityLabel = "QR code scanner camera preview"
-        view.accessibilityHint = "Point your camera at a Monero QR code to scan it"
+        view.accessibilityLabel = String(localized: "QR code scanner camera preview")
+        view.accessibilityHint = String(localized: "Point your camera at a Monero QR code to scan it")
         setupCamera()
         setupOverlay()
     }
@@ -183,13 +183,13 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
 
         // Instruction label
         let label = UILabel()
-        label.text = "Scan Monero Address"
+        label.text = String(localized: "Scan Monero Address")
         label.textColor = .white
         label.font = .systemFont(ofSize: 16, weight: .medium)
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.accessibilityLabel = "Scan Monero Address"
-        label.accessibilityHint = "Position a QR code within the scanning area"
+        label.accessibilityLabel = String(localized: "Scan Monero Address")
+        label.accessibilityHint = String(localized: "Position a QR code within the scanning area")
         view.addSubview(label)
 
         NSLayoutConstraint.activate([
@@ -230,11 +230,11 @@ enum ScannerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noCameraAvailable:
-            return "No camera available on this device"
+            return String(localized: "No camera available on this device")
         case .inputNotSupported:
-            return "Camera input not supported"
+            return String(localized: "Camera input not supported")
         case .outputNotSupported:
-            return "QR scanning not supported"
+            return String(localized: "QR scanning not supported")
         }
     }
 }

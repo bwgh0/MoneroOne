@@ -12,15 +12,15 @@ enum TrustedLocationMode: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .warnOnly: return "Warn Only"
-        case .blockSync: return "Block Sync"
+        case .warnOnly: return String(localized: "Warn Only", comment: "Trusted locations sync mode")
+        case .blockSync: return String(localized: "Block Sync", comment: "Trusted locations sync mode")
         }
     }
 
     var description: String {
         switch self {
-        case .warnOnly: return "Sync everywhere, notify when outside trusted zones"
-        case .blockSync: return "Only sync when inside a trusted zone"
+        case .warnOnly: return String(localized: "Sync everywhere, notify when outside trusted zones")
+        case .blockSync: return String(localized: "Only sync when inside a trusted zone")
         }
     }
 }
@@ -220,8 +220,8 @@ class TrustedLocationsManager: NSObject, ObservableObject {
         lastWarningTime = Date()
 
         let content = UNMutableNotificationContent()
-        content.title = "Syncing Outside Trusted Zone"
-        content.body = "Your wallet is syncing from an untrusted location. Add this location as trusted in Settings if this is intentional."
+        content.title = String(localized: "Syncing Outside Trusted Zone")
+        content.body = String(localized: "Your wallet is syncing from an untrusted location. Add this location as trusted in Settings if this is intentional.")
         content.sound = .default
 
         let request = UNNotificationRequest(

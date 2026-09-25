@@ -129,7 +129,7 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
                         self.beginScan()
                     } else {
                         TrezorLog.log("[BLE] Fallback 2: STILL not powered on - Bluetooth may be disabled or permission denied")
-                        self.updateOnMain { self.connectionState = .error("Bluetooth unavailable. Check Settings → Bluetooth and app permissions.") }
+                        self.updateOnMain { self.connectionState = .error(String(localized: "Bluetooth unavailable. Check Settings → Bluetooth and app permissions.")) }
                     }
                 }
             }
@@ -210,7 +210,7 @@ class TrezorBleTransport: NSObject, ObservableObject, TrezorTransport {
                           pending.identifier.uuidString, pending.state.rawValue)
             self.connectedPeripheral = nil
             self.centralManager.cancelPeripheralConnection(pending)
-            self.connectionState = .error("Trezor didn't respond. Make sure it's unlocked and nearby, then try again.")
+            self.connectionState = .error(String(localized: "Trezor didn't respond. Make sure it's unlocked and nearby, then try again."))
         }
         connectTimeoutWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.connectTimeout, execute: work)
@@ -700,13 +700,13 @@ extension TrezorBleTransport: CBCentralManagerDelegate {
             }
         case .poweredOff:
             TrezorLog.log("[BLE] Bluetooth is powered OFF")
-            updateOnMain { self.connectionState = .error("Bluetooth is turned off") }
+            updateOnMain { self.connectionState = .error(String(localized: "Bluetooth is turned off")) }
         case .unauthorized:
             TrezorLog.log("[BLE] Bluetooth UNAUTHORIZED - check app permissions")
-            updateOnMain { self.connectionState = .error("Bluetooth permission denied. Go to Settings → MoneroOne → Bluetooth.") }
+            updateOnMain { self.connectionState = .error(String(localized: "Bluetooth permission denied. Go to Settings → MoneroOne → Bluetooth.")) }
         case .unsupported:
             TrezorLog.log("[BLE] Bluetooth UNSUPPORTED on this device")
-            updateOnMain { self.connectionState = .error("Bluetooth not supported") }
+            updateOnMain { self.connectionState = .error(String(localized: "Bluetooth not supported")) }
         case .resetting:
             TrezorLog.log("[BLE] Bluetooth is RESETTING")
         case .unknown:
@@ -765,7 +765,7 @@ extension TrezorBleTransport: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         cancelConnectTimeout()
         TrezorLog.log("[BLE] Failed to connect: %@", error?.localizedDescription ?? "unknown")
-        updateOnMain { self.connectionState = .error("Failed to connect: \(error?.localizedDescription ?? "unknown")") }
+        updateOnMain { self.connectionState = .error(String(localized: "Failed to connect: \(error?.localizedDescription ?? "unknown")")) }
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
@@ -902,13 +902,13 @@ enum TrezorError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConnected: return "Trezor is not connected"
-        case .disconnected: return "Trezor disconnected during operation"
-        case .invalidResponse: return "Invalid response from Trezor"
-        case .timeout: return "Trezor BLE write timed out"
-        case .bridgeError(let msg): return "Bridge error: \(msg)"
-        case .deviceError(let msg): return "Device error: \(msg)"
-        case .bluetoothUnavailable: return "Bluetooth is not available"
+        case .notConnected: return String(localized: "Trezor is not connected")
+        case .disconnected: return String(localized: "Trezor disconnected during operation")
+        case .invalidResponse: return String(localized: "Invalid response from Trezor")
+        case .timeout: return String(localized: "Trezor BLE write timed out")
+        case .bridgeError(let msg): return String(localized: "Bridge error: \(msg)")
+        case .deviceError(let msg): return String(localized: "Device error: \(msg)")
+        case .bluetoothUnavailable: return String(localized: "Bluetooth is not available")
         }
     }
 }

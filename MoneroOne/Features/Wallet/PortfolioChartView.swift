@@ -74,15 +74,15 @@ enum PortfolioHistory {
         let count = points.reduce(0) { $0 + $1.changes.count }
         switch count {
         case 0: return nil
-        case 1: return "1 transaction"
-        default: return "\(count) transactions"
+        // Plural forms live in the string catalog ("1 transaction").
+        default: return String(localized: "\(count) transactions")
         }
     }
 
     /// "Received 1.25 XMR", "Sent 0.5 XMR" or "3 transactions"; nil for none.
     static func summary(of changes: [BalanceChange]) -> String? {
         guard let first = changes.first else { return nil }
-        guard changes.count == 1 else { return "\(changes.count) transactions" }
+        guard changes.count == 1 else { return String(localized: "\(changes.count) transactions") }
         return describe(first.type, first.amount)
     }
 
@@ -99,7 +99,7 @@ enum PortfolioHistory {
                 value: point.value,
                 style: net >= 0 ? .received : .sent,
                 accessibilityLabel: spokenSummary(of: point.changes),
-                accessibilityValue: "\(when.formatted(date: .abbreviated, time: .shortened)), portfolio \(formatValue(point.value))"
+                accessibilityValue: String(localized: "\(when.formatted(date: .abbreviated, time: .shortened)), portfolio \(formatValue(point.value))", comment: "VoiceOver: date, then the portfolio value then")
             )
         }
     }
@@ -111,14 +111,16 @@ enum PortfolioHistory {
         }
         let received = changes.filter { $0.type == .incoming }.reduce(Decimal(0)) { $0 + $1.amount }
         let sent = changes.filter { $0.type == .outgoing }.reduce(Decimal(0)) { $0 + $1.amount }
-        var parts = ["\(changes.count) transactions"]
-        if received > 0 { parts.append("received \(XMRFormatter.format(received)) XMR") }
-        if sent > 0 { parts.append("sent \(XMRFormatter.format(sent)) XMR") }
+        var parts = [String(localized: "\(changes.count) transactions")]
+        if received > 0 { parts.append(String(localized: "received \(XMRFormatter.format(received)) XMR", comment: "VoiceOver: total received")) }
+        if sent > 0 { parts.append(String(localized: "sent \(XMRFormatter.format(sent)) XMR", comment: "VoiceOver: total sent")) }
         return parts.joined(separator: ", ")
     }
 
     private static func describe(_ type: MoneroTransaction.TransactionType, _ amount: Decimal) -> String {
-        "\(type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(amount)) XMR"
+        type == .incoming
+            ? String(localized: "Received \(XMRFormatter.format(amount)) XMR")
+            : String(localized: "Sent \(XMRFormatter.format(amount)) XMR")
     }
 }
 
@@ -183,6 +185,9 @@ struct PortfolioChartView: View {
             case .all: return "All"
             }
         }
+
+        /// The button label, in the user's language ("1W").
+        var title: String { ChartRangeTitle.title(for: rawValue) }
     }
 
     private var balanceDouble: Double {
@@ -339,7 +344,7 @@ struct PortfolioChartView: View {
                         }
 
                         // The change's label names the range.
-                        Text(selectedTimeRange.rawValue)
+                        Text(selectedTimeRange.title)
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .accessibilityHidden(true)
@@ -385,7 +390,7 @@ struct PortfolioChartView: View {
                         selectedTimeRange = range
                     }
                 } label: {
-                    Text(range.rawValue)
+                    Text(range.title)
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(selectedTimeRange == range ? .white : .secondary)
                         .frame(maxWidth: .infinity)
@@ -423,11 +428,11 @@ struct PortfolioChartView: View {
                     axes: .init(time: tickAxis(for: data), currencyCode: priceService.selectedCurrency.uppercased()),
                     markers: markers,
                     speech: ChartSpeech(
-                        title: "Portfolio",
+                        title: String(localized: "Portfolio"),
                         span: timeAxis.spokenSpan,
                         currencyCode: priceService.selectedCurrency,
                         note: PortfolioHistory.spokenCount(in: data),
-                        markerHint: "Moves between transactions"
+                        markerHint: String(localized: "Moves between transactions", comment: "VoiceOver hint: swipe up or down on the chart")
                     ),
                     onSelect: { selectedPoint = $0 }
                 )
@@ -485,13 +490,13 @@ struct PortfolioChartView: View {
                     GridItem(.flexible())
                 ], spacing: 12) {
                     StatCard(
-                        title: "\(selectedTimeRange.rawValue) High",
+                        title: String(localized: "\(selectedTimeRange.title) High", comment: "Highest price in the chart range, e.g. 1W High"),
                         value: formatCurrency(range.max),
                         color: .green
                     )
 
                     StatCard(
-                        title: "\(selectedTimeRange.rawValue) Low",
+                        title: String(localized: "\(selectedTimeRange.title) Low", comment: "Lowest price in the chart range, e.g. 1W Low"),
                         value: formatCurrency(range.min),
                         color: .red
                     )

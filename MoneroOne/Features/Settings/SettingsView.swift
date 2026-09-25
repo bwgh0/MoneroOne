@@ -7,9 +7,9 @@ enum AppearanceMode: Int, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .system: return "System"
-        case .light: return "Light"
-        case .dark: return "Dark"
+        case .system: return String(localized: "System", comment: "Appearance setting: follow the system")
+        case .light: return String(localized: "Light", comment: "Appearance setting")
+        case .dark: return String(localized: "Dark", comment: "Appearance setting")
         }
     }
 
@@ -36,11 +36,11 @@ struct SettingsView: View {
 
     private var syncStatusText: String {
         switch walletManager.syncState {
-        case .synced: return "Synced"
+        case .synced: return String(localized: "Synced", comment: "Wallet sync status")
         case .syncing(let progress, _): return "\(Int(progress))%"
-        case .connecting: return "Connecting"
-        case .error: return "Error"
-        case .idle: return "Idle"
+        case .connecting: return String(localized: "Connecting", comment: "Wallet sync status")
+        case .error: return String(localized: "Error", comment: "Wallet sync status")
+        case .idle: return String(localized: "Idle", comment: "Wallet sync status")
         }
     }
 
@@ -194,6 +194,11 @@ struct SettingsView: View {
                             Spacer()
                             Text(syncStatusText)
                                 .foregroundColor(.secondary)
+                                // Keeps its width so the title wraps
+                                // instead: squeezed, "Синхронизировано"
+                                // broke with a hyphen.
+                                .lineLimit(1)
+                                .fixedSize()
                         }
                         .accessibilityElement(children: .combine)
                         .accessibilityLabel("Sync Settings, status \(syncStatusText)")
@@ -341,7 +346,7 @@ struct SettingsView: View {
 
 struct SettingsRow: View {
     let icon: String
-    let title: String
+    let title: LocalizedStringResource
     let color: Color
 
     var body: some View {
@@ -356,7 +361,7 @@ struct SettingsRow: View {
             Text(title)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+        .accessibilityLabel(Text(title))
     }
 }
 

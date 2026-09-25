@@ -14,7 +14,7 @@ struct AddPriceAlertView: View {
     }
 
     private var isValidPrice: Bool {
-        guard let price = Double(targetPriceText), price > 0 else { return false }
+        guard let price = Double(targetPriceText.replacingOccurrences(of: ",", with: ".")), price > 0 else { return false }
         return true
     }
 
@@ -110,7 +110,8 @@ struct AddPriceAlertView: View {
     }
 
     private func saveAlert() {
-        guard let targetPrice = Double(targetPriceText), targetPrice > 0 else { return }
+        // Comma-decimal regions type "150,50" on the decimal pad.
+        guard let targetPrice = Double(targetPriceText.replacingOccurrences(of: ",", with: ".")), targetPrice > 0 else { return }
 
         priceAlertService.addAlert(
             type: alertType,

@@ -34,10 +34,10 @@ public struct WidgetData: Codable {
 
         public var displayText: String {
             switch self {
-            case .synced: return "Synced"
-            case .syncing: return "Syncing..."
-            case .connecting: return "Connecting..."
-            case .offline: return "Offline"
+            case .synced: return String(localized: "Synced", comment: "Wallet sync status")
+            case .syncing: return String(localized: "Syncing...", comment: "Wallet sync status")
+            case .connecting: return String(localized: "Connecting...", comment: "Connection stage")
+            case .offline: return String(localized: "Offline", comment: "Wallet sync status")
             }
         }
 

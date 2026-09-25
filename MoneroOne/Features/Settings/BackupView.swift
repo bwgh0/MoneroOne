@@ -27,10 +27,10 @@ struct BackupView: View {
     private var alternateFormats: [(label: String, words: [String])] {
         var formats: [(String, [String])] = []
         if let poly = polyseedWords, poly != seedPhrase {
-            formats.append(("Polyseed (\(poly.count) words)", poly))
+            formats.append((String(localized: "Polyseed (\(poly.count) words)"), poly))
         }
         if let legacy = legacySeed, legacy != seedPhrase {
-            formats.append(("Legacy (\(legacy.count) words)", legacy))
+            formats.append((String(localized: "Legacy (\(legacy.count) words)"), legacy))
         }
         return formats
     }
@@ -208,7 +208,7 @@ struct BackupView: View {
 
     private func unlockSeed() {
         guard let boundId = boundWalletId ?? walletManager.activeWallet?.id else {
-            errorMessage = "No wallet"
+            errorMessage = String(localized: "No wallet")
             return
         }
         do {
@@ -219,7 +219,7 @@ struct BackupView: View {
                 isUnlocked = true
                 errorMessage = nil
             } else {
-                errorMessage = "Invalid PIN"
+                errorMessage = String(localized: "Invalid PIN")
             }
         } catch WalletError.walletMismatch {
             dismiss()

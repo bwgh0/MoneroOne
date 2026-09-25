@@ -13,12 +13,10 @@ struct SyncSettingsView: View {
     private var trustedLocationsCount: String {
         let count = trustedLocationsManager.trustedLocations.count
         if count == 0 {
-            return "None"
-        } else if count == 1 {
-            return "1 location"
-        } else {
-            return "\(count) locations"
+            return String(localized: "None", comment: "No trusted locations")
         }
+        // Plural forms live in the string catalog ("1 location").
+        return String(localized: "\(count) locations")
     }
 
     var body: some View {
@@ -207,25 +205,25 @@ struct SyncSettingsView: View {
 
     private var statusText: String {
         switch walletManager.syncState {
-        case .synced: return "Synced"
-        case .syncing(let progress, _): return "Scanning \(Int(progress))%"
-        case .connecting: return "Connecting..."
+        case .synced: return String(localized: "Synced", comment: "Wallet sync status")
+        case .syncing(let progress, _): return String(localized: "Scanning \(Int(progress))%", comment: "Sync status with percent")
+        case .connecting: return String(localized: "Connecting...", comment: "Connection stage")
         case .error(let msg): return msg
-        case .idle: return "Idle"
+        case .idle: return String(localized: "Idle", comment: "Wallet sync status")
         }
     }
 
     private var permissionStatus: String {
         if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
-            return "Needs Precise Location"
+            return String(localized: "Needs Precise Location")
         }
         switch syncManager.authorizationStatus {
-        case .authorizedAlways: return "Enabled"
-        case .authorizedWhenInUse: return "Needs Always Permission"
-        case .denied: return "Permission Denied"
-        case .restricted: return "Restricted"
-        case .notDetermined: return "Not Configured"
-        @unknown default: return "Unknown"
+        case .authorizedAlways: return String(localized: "Enabled", comment: "Location permission status")
+        case .authorizedWhenInUse: return String(localized: "Needs Always Permission")
+        case .denied: return String(localized: "Permission Denied")
+        case .restricted: return String(localized: "Restricted", comment: "Location permission status")
+        case .notDetermined: return String(localized: "Not Configured")
+        @unknown default: return String(localized: "Unknown", comment: "Location permission status")
         }
     }
 
@@ -242,19 +240,19 @@ struct SyncSettingsView: View {
 
     private var permissionWarningText: String {
         if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
-            return "Trusted Locations requires Precise Location to accurately determine if you're inside a trusted zone. Go to Settings > Location and enable \"Precise Location\"."
+            return String(localized: "Trusted Locations requires Precise Location to accurately determine if you're inside a trusted zone. Go to Settings > Location and enable \"Precise Location\".")
         }
         switch syncManager.authorizationStatus {
         case .authorizedWhenInUse:
-            return "Trusted Locations requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable trusted zone monitoring."
+            return String(localized: "Trusted Locations requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable trusted zone monitoring.")
         case .denied:
-            return "Location access was denied. Go to Settings > Location and enable location access, then select \"Always\"."
+            return String(localized: "Location access was denied. Go to Settings > Location and enable location access, then select \"Always\".")
         case .restricted:
-            return "Location access is restricted on this device. Check your device settings or parental controls."
+            return String(localized: "Location access is restricted on this device. Check your device settings or parental controls.")
         case .notDetermined:
-            return "Location permission hasn't been granted yet. Go to Settings > Location and select \"Always\"."
+            return String(localized: "Location permission hasn't been granted yet. Go to Settings > Location and select \"Always\".")
         default:
-            return "Please enable \"Always\" location access in Settings to use Trusted Locations."
+            return String(localized: "Please enable \"Always\" location access in Settings to use Trusted Locations.")
         }
     }
 

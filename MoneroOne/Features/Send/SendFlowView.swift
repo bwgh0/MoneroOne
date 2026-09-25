@@ -270,7 +270,7 @@ struct SendFlowView: View {
                         // before it will sign — so only gate software wallets.
                         if requireAuthForSend, !walletManager.requiresHardwareSession {
                             let approved = await biometricAuth.authenticateForTransaction(
-                                reason: "Confirm sending \(amountString) XMR"
+                                reason: String(localized: "Confirm sending \(amountString) XMR")
                             )
                             guard approved else {
                                 sendInProgress = false
@@ -299,7 +299,7 @@ struct SendFlowView: View {
                     Task {
                         if requireAuthForSend, !walletManager.requiresHardwareSession {
                             let approved = await biometricAuth.authenticateForTransaction(
-                                reason: "Confirm sending \(amountString) XMR"
+                                reason: String(localized: "Confirm sending \(amountString) XMR")
                             )
                             guard approved else {
                                 sendInProgress = false
@@ -432,7 +432,7 @@ struct SendFlowView: View {
                 // Release the guard before showing the error, or Retry on the
                 // error screen is swallowed by `guard !sendInProgress`.
                 sendInProgress = false
-                phase = .error(message: "Invalid amount")
+                phase = .error(message: String(localized: "Invalid amount"))
             }
             return
         }
@@ -448,7 +448,7 @@ struct SendFlowView: View {
                 } else {
                     guard let amountDecimal = Decimal(string: amountString) else {
                         sendInProgress = false
-                        phase = .error(message: "Invalid amount")
+                        phase = .error(message: String(localized: "Invalid amount"))
                         return
                     }
                     txHash = try await walletManager.send(
@@ -479,17 +479,17 @@ struct SendFlowView: View {
         if let coreError = error as? MoneroCoreError {
             switch coreError {
             case .walletNotInitialized:
-                return "Wallet not ready. Please wait for sync to complete."
+                return String(localized: "Wallet not ready. Please wait for sync to complete.")
             case .walletStatusError(let msg):
-                return msg ?? "Wallet error occurred."
+                return msg ?? String(localized: "Wallet error occurred.")
             case .insufficientFunds(let balance):
-                return "Not enough unlocked funds. Available: \(balance) XMR"
+                return String(localized: "Not enough unlocked funds. Available: \(balance) XMR")
             case .transactionEstimationFailed(let msg):
                 return msg
             case .transactionSendFailed(let msg):
                 return msg
             case .transactionCommitFailed(let msg):
-                return "Broadcast failed: \(msg)"
+                return String(localized: "Broadcast failed: \(msg)")
             }
         }
         return error.localizedDescription

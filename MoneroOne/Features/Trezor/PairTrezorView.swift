@@ -111,7 +111,7 @@ struct PairTrezorView: View {
         .alert("Pair Failed", isPresented: $showErrorAlert) {
             Button("OK") {}
         } message: {
-            Text(errorMessage ?? "Unknown error")
+            Text(errorMessage ?? String(localized: "Unknown error"))
         }
         .onAppear {
             trezorManager.startScanning()
@@ -179,24 +179,24 @@ struct PairTrezorView: View {
 
     private var stepTitle: String {
         switch trezorManager.state {
-        case .idle, .scanning:                   return "Searching for Trezor"
-        case .connecting:                        return "Connecting…"
-        case .connected, .allocatingTHP, .handshaking: return "Encrypted Channel"
-        case .pairing:                           return "Enter Pairing Code"
-        case .bridgeRunning:                     return "Trezor Ready"
-        case .error:                             return "Couldn't Connect"
+        case .idle, .scanning:                   return String(localized: "Searching for Trezor")
+        case .connecting:                        return String(localized: "Connecting…")
+        case .connected, .allocatingTHP, .handshaking: return String(localized: "Encrypted Channel")
+        case .pairing:                           return String(localized: "Enter Pairing Code")
+        case .bridgeRunning:                     return String(localized: "Trezor Ready")
+        case .error:                             return String(localized: "Couldn't Connect")
         }
     }
 
     private var stepSubtitle: String {
         switch trezorManager.state {
-        case .idle, .scanning:        return "Unlock your Trezor and turn on Bluetooth."
-        case .connecting:             return "Establishing connection over Bluetooth."
+        case .idle, .scanning:        return String(localized: "Unlock your Trezor and turn on Bluetooth.")
+        case .connecting:             return String(localized: "Establishing connection over Bluetooth.")
         case .connected, .allocatingTHP, .handshaking:
-            return "Setting up encrypted communication."
-        case .pairing:                return "Type the 6-digit code shown on the Trezor screen."
-        case .bridgeRunning:          return "Now exporting your view key from the device."
-        case .error:                  return "See the message below and try again."
+            return String(localized: "Setting up encrypted communication.")
+        case .pairing:                return String(localized: "Type the 6-digit code shown on the Trezor screen.")
+        case .bridgeRunning:          return String(localized: "Now exporting your view key from the device.")
+        case .error:                  return String(localized: "See the message below and try again.")
         }
     }
 
@@ -230,7 +230,7 @@ struct PairTrezorView: View {
         }
     }
 
-    private func progressContent(text: String) -> some View {
+    private func progressContent(text: LocalizedStringResource) -> some View {
         VStack(spacing: 12) {
             ProgressView().scaleEffect(1.2)
             Text(text)
@@ -579,7 +579,7 @@ struct PairTrezorView: View {
             if Date() >= pollDeadline {
                 TrezorLog.log("[Pair] extractKeys: TIMEOUT after %d polls — primaryAddress still empty", pollIterations)
                 await wallet.stopAsync()
-                await failPair("Trezor didn't respond. Reconnect and try again.")
+                await failPair(String(localized: "Trezor didn't respond. Reconnect and try again."))
                 return
             }
             if pollIterations % 4 == 0 {
@@ -599,7 +599,7 @@ struct PairTrezorView: View {
         TrezorLog.log("[Pair] extractKeys: stopAsync done")
 
         guard !address.isEmpty, viewKey.count == 64 else {
-            await failPair("Couldn't read keys from Trezor.")
+            await failPair(String(localized: "Couldn't read keys from Trezor."))
             return
         }
 

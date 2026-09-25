@@ -462,7 +462,7 @@ class KeychainStorage {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: biometricPinKey,
             kSecReturnData as String: true,
-            kSecUseOperationPrompt as String: "Unlock your Monero wallet"
+            kSecUseOperationPrompt as String: String(localized: "Unlock your Monero wallet")
         ]
 
         var result: AnyObject?
@@ -1018,16 +1018,16 @@ enum KeychainError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .saveFailed: return "Failed to save to keychain"
-        case .encryptionFailed: return "Encryption failed"
-        case .notFound: return "Item not found in keychain"
+        case .saveFailed: return String(localized: "Failed to save to keychain")
+        case .encryptionFailed: return String(localized: "Encryption failed")
+        case .notFound: return String(localized: "Item not found in keychain")
         case .lockedOut(let seconds):
             let minutes = seconds / 60
             let secs = seconds % 60
             if minutes > 0 {
-                return "Too many failed attempts. Try again in \(minutes)m \(secs)s"
+                return String(localized: "Too many failed attempts. Try again in \(minutes)m \(secs)s", comment: "Lockout: minutes and seconds left, e.g. 4m 30s")
             } else {
-                return "Too many failed attempts. Try again in \(secs)s"
+                return String(localized: "Too many failed attempts. Try again in \(secs)s", comment: "Lockout: seconds left, e.g. 30s")
             }
         }
     }

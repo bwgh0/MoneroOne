@@ -6,11 +6,11 @@ struct DynamicGreeting: View {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
         case 5..<12:
-            return "Good Morning"
+            return String(localized: "Good Morning")
         case 12..<17:
-            return "Good Afternoon"
+            return String(localized: "Good Afternoon")
         default:
-            return "Good Evening"
+            return String(localized: "Good Evening")
         }
     }
 

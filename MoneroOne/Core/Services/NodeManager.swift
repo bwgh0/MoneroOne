@@ -243,7 +243,7 @@ class NodeManager: ObservableObject {
             selectedNode = node
         } else {
             // Check custom nodes
-            selectedNode = MoneroNode(name: "Custom", url: savedURL)
+            selectedNode = MoneroNode(name: String(localized: "Custom", comment: "Name of a node the user added"), url: savedURL)
         }
 
         // Load custom nodes

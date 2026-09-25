@@ -4,6 +4,7 @@ import MoneroKit
 struct TransactionListView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
+    @EnvironmentObject var priceHistoryService: PriceHistoryService
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
     /// Minor index of the receiving subaddress to show, nil for any.
@@ -54,6 +55,10 @@ struct TransactionListView: View {
     var body: some View {
         let filtered = filteredTransactions
         let totals = TransactionListLogic.totals(of: filtered)
+        // Fiat Mode leads with fiat totals priced like the rows below them.
+        let fiatTotals = priceService.showFiatFirst
+            ? TransactionListLogic.fiatTotals(of: filtered, priceAt: priceHistoryService.price(at:))
+            : nil
 
         List {
             if filtered.isEmpty {
@@ -61,7 +66,7 @@ struct TransactionListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } else {
-                summaryCard(totals)
+                summaryCard(totals, fiatTotals: fiatTotals)
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -164,8 +169,9 @@ struct TransactionListView: View {
 
     /// Totals for the rows on screen. Review-card style (radius 16,
     /// `secondarySystemBackground`) like the send review, since it is a
-    /// table of amounts, not a hero.
-    private func summaryCard(_ totals: TransactionTotals) -> some View {
+    /// table of amounts, not a hero. `fiatTotals` (Fiat Mode, every row
+    /// priced) puts fiat on top of each column.
+    private func summaryCard(_ totals: TransactionTotals, fiatTotals: FiatTotals?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(TransactionListLogic.summaryTitle(
                 count: totals.count,
@@ -181,6 +187,7 @@ struct TransactionListView: View {
                     title: "Received",
                     sign: "+",
                     amount: totals.received,
+                    fiatAtTime: fiatTotals?.received,
                     tint: .green
                 )
 
@@ -191,6 +198,7 @@ struct TransactionListView: View {
                         title: "Sent",
                         sign: "-",
                         amount: totals.sent,
+                        fiatAtTime: fiatTotals?.sent,
                         tint: .primary
                     )
                 }
@@ -202,37 +210,61 @@ struct TransactionListView: View {
         .cornerRadius(16)
         .animation(.easeInOut(duration: 0.2), value: totals)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(summaryAccessibilityLabel(totals))
+        .accessibilityLabel(summaryAccessibilityLabel(totals, fiatTotals: fiatTotals))
     }
 
-    private func totalColumn(title: String, sign: String, amount: Decimal, tint: Color) -> some View {
+    /// One column of the summary card. XMR on top with today's fiat value
+    /// under it; with `fiatAtTime` (Fiat Mode) the fiat total moves to the
+    /// top and the XMR total under it.
+    private func totalColumn(title: String, sign: String, amount: Decimal, fiatAtTime: Decimal?, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("\(sign)\(XMRFormatter.format(amount)) XMR")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(tint)
-                .monospacedDigit()
-                .contentTransition(.numericText())
-            if let fiat = priceService.formatFiatValue(amount) {
-                Text("≈ \(fiat)")
+            if let fiatAtTime {
+                Text("\(sign)\(priceService.formatFiat(fiatAtTime))")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(tint)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text("\(XMRFormatter.format(amount)) XMR")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .contentTransition(.numericText())
+            } else {
+                Text("\(sign)\(XMRFormatter.format(amount)) XMR")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(tint)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                if let fiat = priceService.formatFiatValue(amount) {
+                    Text("≈ \(fiat)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func summaryAccessibilityLabel(_ totals: TransactionTotals) -> String {
+    private func summaryAccessibilityLabel(_ totals: TransactionTotals, fiatTotals: FiatTotals?) -> String {
         var parts = [TransactionListLogic.summaryTitle(
             count: totals.count,
             type: filterType,
             receivingName: receivingFilterName
         )]
+        if let fiatTotals {
+            parts.append("received \(priceService.formatFiat(fiatTotals.received)) at the time, \(XMRFormatter.format(totals.received)) XMR")
+            if receivingIndex == nil {
+                parts.append("sent \(priceService.formatFiat(fiatTotals.sent)) at the time, \(XMRFormatter.format(totals.sent)) XMR including fees")
+            }
+            return parts.joined(separator: ", ")
+        }
         var received = "received \(XMRFormatter.format(totals.received)) XMR"
         if let fiat = priceService.formatFiatValue(totals.received) {
             received += ", about \(fiat)"
@@ -333,6 +365,14 @@ struct TransactionTotals: Equatable {
     static let empty = TransactionTotals(count: 0, received: 0, sent: 0)
 }
 
+/// Received and sent totals in fiat, each transaction priced on its own
+/// date, so they add up to what the rows show in Fiat Mode.
+struct FiatTotals: Equatable {
+    let received: Decimal
+    /// Amount plus fee of every outgoing transaction.
+    let sent: Decimal
+}
+
 enum SubaddressName {
     /// The name the receive picker gives a subaddress: "Main Address"
     /// for index 0, else the user's label with its emoji kept in front,
@@ -424,6 +464,27 @@ enum TransactionListLogic {
         return TransactionTotals(count: count, received: received, sent: sent)
     }
 
+    /// `totals(of:)` in fiat, each transaction at `priceAt` its own date.
+    /// Nil when a counted transaction has no price yet: a sum with gaps
+    /// would read as a real total.
+    static func fiatTotals(
+        of transactions: [MoneroTransaction],
+        priceAt: (Date) -> Double?
+    ) -> FiatTotals? {
+        var received: Decimal = 0
+        var sent: Decimal = 0
+        for tx in transactions where tx.status != .failed {
+            guard let price = priceAt(tx.timestamp) else { return nil }
+            switch tx.type {
+            case .incoming:
+                received += tx.amount * Decimal(price)
+            case .outgoing:
+                sent += (tx.amount + tx.fee) * Decimal(price)
+            }
+        }
+        return FiatTotals(received: received, sent: sent)
+    }
+
     /// "Main Address" first, then every real subaddress that has a
     /// label, a transaction count, or a transaction in the list. The
     /// unused unlabeled spares wallet2 pre-generates are left out.
@@ -509,42 +570,20 @@ struct TransactionRow: View {
             Spacer()
 
             // Amount & Status
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(transaction.type == .incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount))")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(transaction.type == .incoming ? .green : .primary)
-
-                // Status and fiat share one line under the amount, so the
-                // row keeps its height whether or not the fiat value has
-                // loaded yet.
-                HStack(spacing: 8) {
-                    HStack(spacing: 4) {
-                        if transaction.isStatusLoading {
-                            ProgressView()
-                                .scaleEffect(0.5)
-                                .frame(width: 6, height: 6)
-                        } else {
-                            Circle()
-                                .fill(transaction.displayStatusColor)
-                                .frame(width: 6, height: 6)
-                            Text(transaction.displayStatusText)
-                                .font(.caption2)
-                                .foregroundColor(transaction.displayStatusColor)
-                        }
-                    }
-
-                    if let fiatAtTime {
-                        Text(fiatAtTime)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
+            TransactionAmountColumn(transaction: transaction, amount: amount)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(XMRFormatter.format(transaction.amount)) XMR\(receivedOn.map { " on \($0)" } ?? "")\(fiatAtTime.map { ", worth \($0) at the time" } ?? ""), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel("\(transaction.type == .incoming ? "Received" : "Sent") \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+    }
+
+    private var amount: TransactionAmountText {
+        TransactionAmountText(
+            transaction: transaction,
+            fiatAtTime: fiatAtTime,
+            fiatFirst: priceService.showFiatFirst,
+            receivedOn: receivedOn
+        )
     }
 
     private var formattedDate: String {
@@ -565,6 +604,110 @@ struct TransactionRow: View {
     private var fiatAtTime: String? {
         priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
             .map { priceService.formatFiat($0) }
+    }
+}
+
+// MARK: - Transaction amount (shared by every transaction row)
+
+/// The amount lines of a transaction row: XMR on top and its fiat value
+/// at the time under it, or the other way round in Fiat Mode. A row whose
+/// price has not loaded keeps XMR on top in both modes.
+struct TransactionAmountText: Equatable {
+    /// "+1.2345", or "+$150.23" in Fiat Mode.
+    let primary: String
+    /// "$150.23", or "1.2345 XMR" in Fiat Mode, where it is the short
+    /// form (the detail sheet shows every digit). Nil with no price.
+    let secondary: String?
+    /// True when fiat leads (Fiat Mode with a price loaded).
+    let isFiatFirst: Bool
+    /// The amount as VoiceOver reads it, in the order the row shows it:
+    /// "1.2345 XMR on Savings, worth $150.23 at the time", or
+    /// "$150.23 at the time, 1.2345 XMR on Savings".
+    let spoken: String
+
+    init(isIncoming: Bool, xmr: Decimal, fiatAtTime: String?, fiatFirst: Bool, receivedOn: String? = nil) {
+        let sign = isIncoming ? "+" : "-"
+        let xmrText = XMRFormatter.format(xmr)
+        let on = receivedOn.map { " on \($0)" } ?? ""
+        if fiatFirst, let fiatAtTime {
+            let compact = XMRFormatter.formatCompact(xmr)
+            isFiatFirst = true
+            primary = sign + fiatAtTime
+            secondary = "\(compact) XMR"
+            spoken = "\(fiatAtTime) at the time, \(compact) XMR\(on)"
+        } else {
+            isFiatFirst = false
+            primary = sign + xmrText
+            secondary = fiatAtTime
+            spoken = "\(xmrText) XMR\(on)\(fiatAtTime.map { ", worth \($0) at the time" } ?? "")"
+        }
+    }
+
+    init(transaction: MoneroTransaction, fiatAtTime: String?, fiatFirst: Bool, receivedOn: String?) {
+        self.init(
+            isIncoming: transaction.type == .incoming,
+            xmr: transaction.amount,
+            fiatAtTime: fiatAtTime,
+            fiatFirst: fiatFirst,
+            receivedOn: receivedOn
+        )
+    }
+}
+
+/// The trailing column of a transaction row: the amount on top, then the
+/// status and the other currency on one line, so the row keeps its height
+/// whether or not the fiat value has loaded yet. In Fiat Mode the XMR
+/// amount is too long to share that line with the status, so it gets a
+/// line of its own under it.
+struct TransactionAmountColumn: View {
+    let transaction: MoneroTransaction
+    let amount: TransactionAmountText
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(amount.primary)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(transaction.type == .incoming ? .green : .primary)
+
+            if amount.isFiatFirst {
+                VStack(alignment: .trailing, spacing: 2) {
+                    status
+                    secondary
+                }
+            } else {
+                HStack(spacing: 8) {
+                    status
+                    secondary
+                }
+            }
+        }
+    }
+
+    private var status: some View {
+        HStack(spacing: 4) {
+            if transaction.isStatusLoading {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 6, height: 6)
+            } else {
+                Circle()
+                    .fill(transaction.displayStatusColor)
+                    .frame(width: 6, height: 6)
+                Text(transaction.displayStatusText)
+                    .font(.caption2)
+                    .foregroundColor(transaction.displayStatusColor)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var secondary: some View {
+        if let secondary = amount.secondary {
+            Text(secondary)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
     }
 }
 

@@ -616,6 +616,29 @@ final class XMRFormattingRegressionTests: XCTestCase {
         XCTAssertEqual(MoneroOne.XMRFormatter.format(0), "0.0000")
     }
 
+    func testFormatCompactKeepsFourDecimalsAndFourSignificantDigits() {
+        let cases: [(String, String)] = [
+            ("0", "0.0000"),
+            ("3.119", "3.1190"),
+            ("1234.56789", "1,234.5678"),
+            ("0.0025", "0.0025"),
+            ("0.09974088", "0.09974"),
+            ("0.00185092", "0.00185"),
+            ("0.000580526955", "0.0005805"),
+            ("0.00000834", "0.00000834"),
+            ("0.000000000001", "0.000000000001"),
+        ]
+        for (input, expected) in cases {
+            XCTAssertEqual(MoneroOne.XMRFormatter.formatCompact(Decimal(string: input)!), expected, input)
+        }
+    }
+
+    func testFormatCompactRoundsTowardZero() {
+        // Never shows more than the real amount.
+        XCTAssertEqual(MoneroOne.XMRFormatter.formatCompact(Decimal(string: "1.999999999999")!), "1.9999")
+        XCTAssertEqual(MoneroOne.XMRFormatter.formatCompact(Decimal(string: "0.000999999")!), "0.0009999")
+    }
+
     func testFormatOneXMR() {
         XCTAssertEqual(MoneroOne.XMRFormatter.format(1), "1.0000")
     }
@@ -1177,11 +1200,12 @@ final class TransactionScreenLogicTests: XCTestCase {
         confirmations: Int? = 12,
         memo: String? = nil,
         destinations: [MoneroTransactionDestination] = [],
-        subaddressIndex: Int? = nil
+        subaddressIndex: Int? = nil,
+        timestamp: TimeInterval = 1_700_000_000
     ) -> MoneroTransaction {
         MoneroTransaction(
             id: id, type: type, amount: amount, fee: fee,
-            address: address, timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+            address: address, timestamp: Date(timeIntervalSince1970: timestamp),
             confirmations: confirmations, status: status, memo: memo,
             blockHeight: nil, destinations: destinations,
             subaddressIndex: subaddressIndex
@@ -1291,6 +1315,70 @@ final class TransactionScreenLogicTests: XCTestCase {
         XCTAssertEqual(totals.count, 2)
         XCTAssertEqual(totals.received, Decimal(string: "0.75"))
         XCTAssertEqual(totals.sent, 0)
+    }
+
+    // MARK: Fiat totals (Fiat Mode)
+
+    func testFiatTotalsPriceEachTransactionOnItsOwnDate() {
+        let day1: TimeInterval = 1_700_000_000
+        let day2 = day1 + 86_400
+        let prices: [TimeInterval: Double] = [day1: 100, day2: 200]
+        let fiat = TransactionListLogic.fiatTotals(of: [
+            tx("a", .incoming, amount: 1, timestamp: day1),
+            tx("b", .incoming, amount: 0.5, timestamp: day2),
+            tx("c", .outgoing, amount: 0.25, fee: 0.125, timestamp: day2),
+            tx("f", .outgoing, amount: 9, fee: 1, status: .failed, confirmations: 0, timestamp: day1)
+        ], priceAt: { prices[$0.timeIntervalSince1970] })
+        // 1 x 100 + 0.5 x 200 received; (0.25 + 0.125) x 200 sent; the
+        // failed send is skipped, as in `totals(of:)`.
+        XCTAssertEqual(fiat, FiatTotals(received: 200, sent: 75))
+    }
+
+    func testFiatTotalsAreNilWhenACountedTransactionHasNoPrice() {
+        let priced: TimeInterval = 1_700_000_000
+        let priceAt: (Date) -> Double? = { $0.timeIntervalSince1970 == priced ? 150 : nil }
+        XCTAssertNil(TransactionListLogic.fiatTotals(of: [
+            tx("a", .incoming, amount: 1, timestamp: priced),
+            tx("b", .incoming, amount: 1, timestamp: priced + 60)
+        ], priceAt: priceAt))
+        // A failed transaction moved nothing, so its missing price is fine.
+        XCTAssertEqual(TransactionListLogic.fiatTotals(of: [
+            tx("a", .incoming, amount: 1, timestamp: priced),
+            tx("f", .incoming, amount: 1, status: .failed, confirmations: 0, timestamp: priced + 60)
+        ], priceAt: priceAt), FiatTotals(received: 150, sent: 0))
+    }
+
+    // MARK: Row amount lines (Fiat Mode)
+
+    func testRowAmountShowsXMRFirstByDefault() {
+        let amount = TransactionAmountText(isIncoming: true, xmr: 1.5, fiatAtTime: "$150.00", fiatFirst: false, receivedOn: "Savings")
+        XCTAssertEqual(amount.primary, "+1.5000")
+        XCTAssertEqual(amount.secondary, "$150.00")
+        XCTAssertFalse(amount.isFiatFirst)
+        XCTAssertEqual(amount.spoken, "1.5000 XMR on Savings, worth $150.00 at the time")
+    }
+
+    func testRowAmountInFiatModeShowsFiatFirst() {
+        let amount = TransactionAmountText(isIncoming: false, xmr: 1.5, fiatAtTime: "$150.00", fiatFirst: true, receivedOn: "Savings")
+        XCTAssertEqual(amount.primary, "-$150.00")
+        XCTAssertEqual(amount.secondary, "1.5000 XMR")
+        XCTAssertTrue(amount.isFiatFirst)
+        XCTAssertEqual(amount.spoken, "$150.00 at the time, 1.5000 XMR on Savings")
+    }
+
+    func testRowAmountInFiatModeShortensTheXMRCaption() {
+        let amount = TransactionAmountText(isIncoming: true, xmr: Decimal(string: "0.000580526955")!, fiatAtTime: "$0.32", fiatFirst: true)
+        XCTAssertEqual(amount.primary, "+$0.32")
+        XCTAssertEqual(amount.secondary, "0.0005805 XMR")
+        XCTAssertEqual(amount.spoken, "$0.32 at the time, 0.0005805 XMR")
+    }
+
+    func testRowAmountInFiatModeKeepsXMRFirstWithoutAPrice() {
+        let amount = TransactionAmountText(isIncoming: true, xmr: 1.5, fiatAtTime: nil, fiatFirst: true)
+        XCTAssertEqual(amount.primary, "+1.5000")
+        XCTAssertNil(amount.secondary)
+        XCTAssertFalse(amount.isFiatFirst)
+        XCTAssertEqual(amount.spoken, "1.5000 XMR")
     }
 
     // MARK: Receiving-address options

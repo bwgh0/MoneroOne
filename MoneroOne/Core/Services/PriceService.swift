@@ -49,6 +49,16 @@ class PriceService: ObservableObject {
     @Published private(set) var loadingChartRanges: Set<String> = []
     @Published var usdToSelectedRate: Double = 1.0
 
+    /// UserDefaults key for Fiat Mode.
+    nonisolated static let fiatFirstKey = "showFiatFirst"
+
+    /// Fiat Mode: the balance card and the transaction rows show the fiat
+    /// value on top and the XMR amount under it. A view with no price to
+    /// show keeps XMR on top.
+    @Published var showFiatFirst: Bool = UserDefaults.standard.bool(forKey: PriceService.fiatFirstKey) {
+        didSet { UserDefaults.standard.set(showFiatFirst, forKey: Self.fiatFirstKey) }
+    }
+
     /// True while a fetch is running for the range on screen.
     var isLoadingChart: Bool { loadingChartRanges.contains(currentChartRange) }
 

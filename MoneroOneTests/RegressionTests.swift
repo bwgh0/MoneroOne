@@ -1465,6 +1465,23 @@ final class TransactionScreenLogicTests: XCTestCase {
 
     // MARK: Subaddress naming
 
+    func testReceiveNamesUseTheIndexNotTheListPosition() {
+        // Index 2 is missing from the list. The picker used to name the
+        // address at index 3 "Subaddress #2" (its position) while the
+        // transaction screens called it "Subaddress #3".
+        let list = [
+            SubaddressSummary(index: 1, address: "a1", label: ""),
+            SubaddressSummary(index: 3, address: "a3", label: ""),
+            SubaddressSummary(index: 4, address: "a4", label: "🎁"),
+        ]
+        XCTAssertEqual(SubaddressName.display(index: 3, in: list), "Subaddress #3")
+        // An emoji-only label keeps the number, the same on every screen.
+        XCTAssertEqual(SubaddressName.display(index: 4, in: list), "🎁 Subaddress #4")
+        // Selected before the kit lists it: still named by its index.
+        XCTAssertEqual(SubaddressName.display(index: 7, in: list), "Subaddress #7")
+        XCTAssertEqual(SubaddressName.display(index: 0, in: list), "Main Address")
+    }
+
     func testSubaddressDisplayNameMatchesThePicker() {
         XCTAssertEqual(SubaddressName.display(index: 0, label: "ignored"), "Main Address")
         XCTAssertEqual(SubaddressName.display(index: 3, label: ""), "Subaddress #3")

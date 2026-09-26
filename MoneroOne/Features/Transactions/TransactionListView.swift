@@ -417,6 +417,14 @@ enum SubaddressName {
         let name = parts.name.isEmpty ? String(localized: "Subaddress #\(index)") : parts.name
         return joinSubaddressLabel(emoji: parts.emoji, name: name)
     }
+
+    /// The name of `index` in the wallet's list: its label, else
+    /// "Subaddress #index". Never its position in the list, which drifts
+    /// from the index when the list has a gap or has not listed a new
+    /// address yet.
+    static func display(index: Int, in subaddresses: [SubaddressSummary]) -> String {
+        display(index: index, label: subaddresses.first { $0.index == index }?.label ?? "")
+    }
 }
 
 extension WalletManager {

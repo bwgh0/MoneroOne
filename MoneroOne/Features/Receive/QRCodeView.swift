@@ -198,29 +198,82 @@ struct QRFocusItem: Equatable {
     var amount: Decimal? = nil
 }
 
-/// A screen's focus mode as its views see it.
-struct QRFocus {
+/// A screen's focus mode: what its views read to step back, and what the
+/// code they tap opens. Observable, so a change redraws only the views that
+/// read it (the code, the parts that step back, the presentation), never
+/// the whole screen: a screen that redraws as the grow starts drops the
+/// grow's first frames.
+@MainActor @Observable
+final class QRFocus {
     /// True while the code is large; the rest of the screen steps back.
-    let isFocused: Bool
+    private(set) var isFocused = false
     /// True while the large copy of the code is on screen: the code on the
     /// screen hides and keeps its place, so only one code moves.
-    let hidesSource: Bool
-    /// False with Reduce Motion: the code cross-fades instead of growing.
-    let grows: Bool
-    /// Opens focus mode from a code at `frame` (global coordinates).
-    let open: (QRFocusItem, CGRect) -> Void
-    /// Where the code on the screen is now, so the copy shrinks back to it
-    /// (an iPad may turn while focus mode is open).
-    let trackSource: (CGRect) -> Void
+    private(set) var hidesSource = false
+    fileprivate var presented: QRFocusPresentation?
+    /// Where the code on the screen sits, in global coordinates: the copy
+    /// grows from it and shrinks back to it. Not observed, so following
+    /// the code redraws nothing.
+    @ObservationIgnored fileprivate var sourceFrame: CGRect = .zero
 
     /// The grow and its reverse: one spring, the same path both ways.
     static let grow = Animation.spring(response: 0.5, dampingFraction: 0.86)
+
+    /// Opens focus mode from a code at `frame` (global coordinates).
+    func open(_ item: QRFocusItem, from frame: CGRect) {
+        guard presented == nil else { return }
+        HapticFeedback.shared.softTick()
+        // End editing (the Receive amount field), so the keyboard does not
+        // stay up under the code.
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
+        sourceFrame = frame
+        withoutAnimation { presented = QRFocusPresentation(item: item) }
+    }
+
+    /// Where the code on the screen is now, so the copy shrinks back to it
+    /// (an iPad may turn while focus mode is open).
+    func trackSource(_ frame: CGRect) {
+        sourceFrame = frame
+    }
+
+    /// The large copy is on screen over the code: hide the code, and step
+    /// the screen back.
+    fileprivate func shown(grows: Bool) {
+        withoutAnimation { hidesSource = grows }
+        withAnimation(Self.animation(grows: grows)) { isFocused = true }
+    }
+
+    fileprivate func closeStarted(grows: Bool) {
+        withAnimation(Self.animation(grows: grows)) { isFocused = false }
+    }
+
+    /// The copy is back on top of the code: show the code, then drop the
+    /// presentation.
+    fileprivate func closed() {
+        withoutAnimation {
+            hidesSource = false
+            presented = nil
+        }
+    }
+
+    /// The grow, or a cross-fade with Reduce Motion.
+    fileprivate static func animation(grows: Bool) -> Animation {
+        grows ? grow : .easeInOut(duration: 0.25)
+    }
+
+    private func withoutAnimation(_ change: () -> Void) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, change)
+    }
 }
 
-/// Where the code on the screen sits. A reference, so following it does not
-/// redraw the screen.
-final class QRFocusSource {
-    var frame: CGRect = .zero
+fileprivate struct QRFocusPresentation: Identifiable {
+    let id = UUID()
+    let item: QRFocusItem
 }
 
 /// A screen whose QR code grows in place into focus mode, as Cake Wallet's
@@ -239,79 +292,27 @@ final class QRFocusSource {
 struct QRFocusContainer<Content: View>: View {
     @ViewBuilder let content: (QRFocus) -> Content
 
-    private struct Presentation: Identifiable {
-        let id = UUID()
-        let item: QRFocusItem
-    }
-
-    @State private var presented: Presentation?
-    @State private var isFocused = false
-    @State private var hidesSource = false
-    @State private var source = QRFocusSource()
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Held, not read here: opening and closing focus mode never runs
+    /// `content` again.
+    @State private var focus = QRFocus()
 
     var body: some View {
-        content(QRFocus(
-            isFocused: isFocused,
-            hidesSource: hidesSource,
-            grows: !reduceMotion,
-            open: { open($0, from: $1) },
-            trackSource: { [source] in source.frame = $0 }
-        ))
-        .fullScreenCover(item: $presented) { presentation in
-            QRFocusView(
-                item: presentation.item,
-                source: source,
-                grows: !reduceMotion,
-                onShown: shown,
-                onCloseStart: closeStarted,
-                onClosed: closed
-            )
-            .presentationBackground(.clear)
+        content(focus)
+            .modifier(QRFocusPresenter(focus: focus))
+    }
+}
+
+/// The presentation, in its own modifier so presenting and dismissing
+/// redraw only this.
+private struct QRFocusPresenter: ViewModifier {
+    @Bindable var focus: QRFocus
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.fullScreenCover(item: $focus.presented) { presentation in
+            QRFocusView(item: presentation.item, focus: focus, grows: !reduceMotion)
+                .presentationBackground(.clear)
         }
-    }
-
-    private var animation: Animation {
-        reduceMotion ? .easeInOut(duration: 0.25) : QRFocus.grow
-    }
-
-    private func open(_ item: QRFocusItem, from frame: CGRect) {
-        guard presented == nil else { return }
-        HapticFeedback.shared.softTick()
-        // End editing (the Receive amount field), so the keyboard does not
-        // stay up under the code.
-        UIApplication.shared.sendAction(
-            #selector(UIResponder.resignFirstResponder),
-            to: nil, from: nil, for: nil
-        )
-        source.frame = frame
-        withoutAnimation { presented = Presentation(item: item) }
-    }
-
-    /// The large copy is on screen over the code: hide the code, and step
-    /// the screen back.
-    private func shown() {
-        withoutAnimation { hidesSource = !reduceMotion }
-        withAnimation(animation) { isFocused = true }
-    }
-
-    private func closeStarted() {
-        withAnimation(animation) { isFocused = false }
-    }
-
-    /// The copy is back on top of the code: show the code, then drop the
-    /// presentation.
-    private func closed() {
-        withoutAnimation {
-            hidesSource = false
-            presented = nil
-        }
-    }
-
-    private func withoutAnimation(_ change: () -> Void) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction, change)
     }
 }
 
@@ -319,8 +320,21 @@ extension View {
     /// Steps out of the way while focus mode is open: fades, and moves
     /// toward `edge` unless Reduce Motion is on.
     func qrFocusRecede(_ focus: QRFocus, toward edge: VerticalEdge) -> some View {
-        opacity(focus.isFocused ? 0 : 1)
-            .offset(y: focus.isFocused && focus.grows ? (edge == .top ? -24 : 32) : 0)
+        modifier(QRFocusRecede(focus: focus, edge: edge))
+    }
+}
+
+/// Reads `isFocused` in its own body, so focus mode redraws only this, not
+/// the view it steps back.
+private struct QRFocusRecede: ViewModifier {
+    let focus: QRFocus
+    let edge: VerticalEdge
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(focus.isFocused ? 0 : 1)
+            .offset(y: focus.isFocused && !reduceMotion ? (edge == .top ? -24 : 32) : 0)
     }
 }
 
@@ -346,11 +360,11 @@ struct FocusableQRPlate: View {
                 if focus.hidesSource { focus.trackSource(newFrame) }
             }
             .contentShape(Rectangle())
-            .onTapGesture { focus.open(item, frame) }
+            .onTapGesture { focus.open(item, from: frame) }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
             .accessibilityAddTraits([.isButton, .isImage])
-            .accessibilityAction(.default) { focus.open(item, frame) }
+            .accessibilityAction(.default) { focus.open(item, from: frame) }
     }
 }
 
@@ -361,11 +375,8 @@ struct FocusableQRPlate: View {
 /// address.
 struct QRFocusView: View {
     let item: QRFocusItem
-    let source: QRFocusSource
+    let focus: QRFocus
     let grows: Bool
-    let onShown: () -> Void
-    let onCloseStart: () -> Void
-    let onClosed: () -> Void
 
     @State private var expanded = false
     @State private var closing = false
@@ -376,9 +387,7 @@ struct QRFocusView: View {
     fileprivate static let amountHeight: CGFloat = 44
     fileprivate static let spacing: CGFloat = 24
 
-    private var animation: Animation {
-        grows ? QRFocus.grow : .easeInOut(duration: 0.25)
-    }
+    private var animation: Animation { QRFocus.animation(grows: grows) }
 
     /// How long the shrink takes to land on the code on the screen: the
     /// grow spring is within 1% of its end by then. Timed, not a completion
@@ -418,12 +427,11 @@ struct QRFocusView: View {
         .accessibilityAction(.escape, close)
         .background(FullBrightness())
         .onAppear {
-            // The copy sits on top of the code while the code hides; the
-            // grow starts a beat later, so the two never show at once.
-            onShown()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
-                withAnimation(animation) { expanded = true }
-            }
+            // The copy starts on top of the code, the code hides in the
+            // same frame, and the grow starts at once: a wait here reads
+            // as lag.
+            focus.shown(grows: grows)
+            withAnimation(animation) { expanded = true }
         }
         .task {
             // After the grow settles: VoiceOver would otherwise stay where
@@ -436,10 +444,10 @@ struct QRFocusView: View {
     private func close() {
         guard expanded, !closing else { return }
         closing = true
-        onCloseStart()
+        focus.closeStarted(grows: grows)
         withAnimation(animation) { expanded = false }
         DispatchQueue.main.asyncAfter(deadline: .now() + settleTime) {
-            onClosed()
+            focus.closed()
         }
     }
 
@@ -449,7 +457,7 @@ struct QRFocusView: View {
     /// the global coordinates the code on the screen reported.
     private func plate(layout: FocusLayout, size: CGSize, origin: CGPoint) -> some View {
         let large = expanded || !grows
-        let from = source.frame
+        let from = focus.sourceFrame
         let side = large ? layout.side : from.width
         let center = large
             ? CGPoint(x: size.width / 2, y: layout.plateCenterY)

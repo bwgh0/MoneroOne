@@ -203,36 +203,24 @@ final class SecurityAuditTests: XCTestCase {
 
     // MARK: - HIGH #4: Subaddress Index Validation Tests
 
-    /// Test that selectedSubaddressIndex persists in AppStorage
+    /// The Receive selection persists per wallet.
     func testSubaddressIndexPersistence() {
-        // Set a subaddress index
-        UserDefaults.standard.set(5, forKey: "selectedSubaddressIndex")
+        let store = ReceiveSelectionStore(defaults: .standard)
+        let walletId = UUID()
+        defer { store.removeAll(for: walletId) }
 
-        // Read it back
-        let index = UserDefaults.standard.integer(forKey: "selectedSubaddressIndex")
-        XCTAssertEqual(index, 5, "Subaddress index should persist")
+        store.setIndex(5, for: walletId)
 
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "selectedSubaddressIndex")
+        XCTAssertEqual(ReceiveSelectionStore(defaults: .standard).index(for: walletId), 5, "Subaddress index should persist")
     }
 
-    /// Test that invalid subaddress index is handled gracefully
-    /// The ReceiveView should reset to index 0 if selected index doesn't exist
+    /// A wallet with no stored selection shows the main address; an index
+    /// the wallet does not have is repaired by `reconcileReceiveAddress`
+    /// and, with rotation off, by ReceiveView on appear.
     func testInvalidSubaddressIndexResetsToMain() {
-        // Simulate having selected a high index previously
-        UserDefaults.standard.set(10, forKey: "selectedSubaddressIndex")
-
-        // Verify it was set
-        let storedIndex = UserDefaults.standard.integer(forKey: "selectedSubaddressIndex")
-        XCTAssertEqual(storedIndex, 10, "Index should be stored")
-
-        // In a real scenario, ReceiveView would detect this and reset
-        // We test the expected behavior: if subaddress doesn't exist, reset to 0
-        // The actual reset happens in ReceiveView's currentAddress computed property
-        // which we can't easily test without the view
-
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "selectedSubaddressIndex")
+        let store = ReceiveSelectionStore(defaults: .standard)
+        XCTAssertEqual(store.index(for: UUID()), 0)
+        XCTAssertEqual(WalletManager.nextReceiveIndex(selected: 10, subaddresses: [], rotate: false), 0)
     }
 
     // MARK: - HIGH #5: Balance UInt64 Overflow Tests

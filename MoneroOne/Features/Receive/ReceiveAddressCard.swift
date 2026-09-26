@@ -42,8 +42,11 @@ struct ReceiveAddressCard: View {
     /// Content at the bottom of the card; short screens put Copy and Share
     /// here so they stay on screen.
     var footer: AnyView?
-    /// The amount the code requests, for the full-screen page.
+    /// The amount the code requests, for focus mode.
     let requestAmount: Decimal?
+    /// The screen's QR focus mode: the plate opens it, and the rest of the
+    /// card steps back while it is open.
+    let focus: QRFocus
     /// Inserted and removed with this when the shown address changes.
     var faceTransition: AnyTransition = .opacity
     var infoFocus: AccessibilityFocusState<Bool>.Binding
@@ -65,6 +68,7 @@ struct ReceiveAddressCard: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             deckEdges
+                .opacity(focus.isFocused ? 0 : 1)
             face
                 .id(row?.index ?? -1)
                 .transition(faceTransition)
@@ -110,19 +114,24 @@ struct ReceiveAddressCard: View {
     private var face: some View {
         VStack(alignment: .leading, spacing: compact ? 12 : 16) {
             header
+                .qrFocusRecede(focus, toward: .top)
             qrSlot
                 .frame(maxWidth: .infinity)
-            addressSlot
-            statusSlot
-            if let footer {
-                footer
+            Group {
+                addressSlot
+                statusSlot
+                if let footer {
+                    footer
+                }
             }
+            .qrFocusRecede(focus, toward: .bottom)
         }
         .padding(compact ? 16 : 24)
         .background {
             RoundedRectangle(cornerRadius: Self.cornerRadius)
                 .fill(cardFill)
                 .shadow(color: .black.opacity(colorScheme == .light ? 0.08 : 0), radius: 12, y: 4)
+                .opacity(focus.isFocused ? 0 : 1)
         }
     }
 
@@ -245,30 +254,31 @@ struct ReceiveAddressCard: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Wallet keys unavailable. No receive address can be shown.")
         } else if let row, !qrContent.isEmpty {
-            qrPlate
-                .contextMenu {
-                    Button(action: onSaveToPhotos) {
-                        Label("Save to Photos", systemImage: "square.and.arrow.down")
-                    }
-                    if let image = QRCodeRenderer.renderToImage(content: qrContent) {
-                        ShareLink(
-                            item: Image(uiImage: image),
-                            preview: SharePreview("Monero receive QR code", image: Image(uiImage: image))
-                        ) {
-                            Label("Share QR Code", systemImage: "square.and.arrow.up")
-                        }
+            FocusableQRPlate(
+                item: QRFocusItem(content: qrContent, title: row.name, amount: requestAmount),
+                side: plateSide,
+                focus: focus,
+                label: String(localized: "QR code for receiving Monero")
+            )
+            .contextMenu {
+                Button(action: onSaveToPhotos) {
+                    Label("Save to Photos", systemImage: "square.and.arrow.down")
+                }
+                if let image = QRCodeRenderer.renderToImage(content: qrContent) {
+                    ShareLink(
+                        item: Image(uiImage: image),
+                        preview: SharePreview("Monero receive QR code", image: Image(uiImage: image))
+                    ) {
+                        Label("Share QR Code", systemImage: "square.and.arrow.up")
                     }
                 }
-                // The id goes after accessibilityElement: set before it,
-                // the id sat on the ignored child and UI tests could not
-                // find the code.
-                .accessibilityElement(children: .ignore)
-                .accessibilityIdentifier("receive.qrCode")
-                .accessibilityLabel("QR code for receiving Monero")
-                .accessibilityAddTraits(.isImage)
-                .accessibilityHint("Shows the code full screen. Actions available: save to Photos, or share")
-                .accessibilityAction(named: "Save to Photos", onSaveToPhotos)
-                .opensQRFullscreen(content: qrContent, title: row.name, amount: requestAmount)
+            }
+            // After the plate's own accessibility element: set before it,
+            // the id sat on an ignored child and UI tests could not find
+            // the code.
+            .accessibilityIdentifier("receive.qrCode")
+            .accessibilityHint("Shows the code full screen. Actions available: save to Photos, or share")
+            .accessibilityAction(named: "Save to Photos", onSaveToPhotos)
         } else {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.secondarySystemBackground))
@@ -301,21 +311,6 @@ struct ReceiveAddressCard: View {
                 }
                 .animation(.easeInOut(duration: 0.25), value: onRetry == nil)
         }
-    }
-
-    /// The code on a white plate with a four-module quiet zone in both
-    /// modes: CoreImage draws one module of margin, the plate adds three.
-    private var qrPlate: some View {
-        let modules = CGFloat(QRCodeView.qrImage(for: qrContent)?.cgImage?.width ?? 49)
-        let quietZone = plateSide * 3 / (modules + 6)
-        return QRCodeView(content: qrContent)
-            .padding(quietZone)
-            .frame(width: plateSide, height: plateSide)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.black.opacity(colorScheme == .light ? 0.06 : 0))
-            }
     }
 
     // MARK: Address and status

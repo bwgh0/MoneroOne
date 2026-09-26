@@ -485,8 +485,8 @@ final class QRCodeRegressionTests: XCTestCase {
 
     /// The QR as `QRCodeView` draws it, with the flat mark on its white disc
     /// in the center, still decodes to the full text at every size the app
-    /// uses: Donation 240, Receive 280, full screen 338 on a 402pt phone,
-    /// the share and save image 400, and full screen on a wide display 448.
+    /// uses: Donation 240, Receive 280, focus mode 338 on a 402pt phone,
+    /// the share and save image 400, and focus mode on a wide display 448.
     @MainActor
     func testQRCodeViewWithLogoDecodesAtAppSizes() throws {
         let contents = [
@@ -501,7 +501,7 @@ final class QRCodeRegressionTests: XCTestCase {
         }
     }
 
-    /// Full screen turns the screen to full brightness and puts the old level
+    /// Focus mode turns the screen to full brightness and puts the old level
     /// back when it goes away.
     @MainActor
     func testFullscreenBrightnessBoostsAndRestores() throws {
@@ -1811,5 +1811,173 @@ final class ReceiveAddressLogicTests: XCTestCase {
         XCTAssertEqual(ReceiveAddressLogic.shortAddress(address), "8aaaaaaaaaaa…Z1kqWXYZ")
         XCTAssertEqual(ReceiveAddressLogic.shortAddress(address, head: 8, tail: 6), "8aaaaaaa…kqWXYZ")
         XCTAssertEqual(ReceiveAddressLogic.shortAddress("short"), "short")
+    }
+}
+
+// MARK: - Receive selection per wallet
+
+final class ReceiveSelectionStoreTests: XCTestCase {
+    private var suiteName = ""
+    private var defaults: UserDefaults!
+
+    override func setUp() {
+        super.setUp()
+        suiteName = "ReceiveSelectionStoreTests.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)
+    }
+
+    override func tearDown() {
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults = nil
+        super.tearDown()
+    }
+
+    /// The old app-wide pick, as it was stored.
+    private struct LegacyBaseline: Codable {
+        let walletId: UUID?
+        let index: Int
+        let transactionsCount: Int
+    }
+
+    func testEachWalletKeepsItsOwnSelection() {
+        let store = ReceiveSelectionStore(defaults: defaults)
+        let a = UUID(), b = UUID()
+        store.setIndex(5, for: a)
+        store.setIndex(9, for: b)
+        store.setBaseline(.init(index: 5, transactionsCount: 2), for: a)
+
+        XCTAssertEqual(store.index(for: a), 5)
+        XCTAssertEqual(store.index(for: b), 9)
+        XCTAssertEqual(store.baseline(for: a), .init(index: 5, transactionsCount: 2))
+        XCTAssertNil(store.baseline(for: b), "a pick in one wallet is not a pick in the other")
+        XCTAssertEqual(store.index(for: UUID()), 0, "a wallet with no pick starts on the main address")
+    }
+
+    func testOldAppWideValueMovesToTheActiveWalletOnce() throws {
+        let store = ReceiveSelectionStore(defaults: defaults)
+        let active = UUID(), owner = UUID()
+        defaults.set(7, forKey: ReceiveSelectionStore.legacyIndexKey)
+        let legacy = try JSONEncoder().encode(LegacyBaseline(walletId: owner, index: 3, transactionsCount: 1))
+        defaults.set(legacy, forKey: ReceiveSelectionStore.legacyBaselineKey)
+
+        store.migrateLegacy(activeWalletId: active)
+
+        XCTAssertEqual(store.index(for: active), 7, "the index belonged to the wallet that was open")
+        XCTAssertEqual(store.baseline(for: owner), .init(index: 3, transactionsCount: 1), "the pick names its own wallet")
+        XCTAssertNil(defaults.object(forKey: ReceiveSelectionStore.legacyIndexKey))
+        XCTAssertNil(defaults.object(forKey: ReceiveSelectionStore.legacyBaselineKey))
+
+        // A later switch to another wallet finds nothing left to move.
+        store.migrateLegacy(activeWalletId: owner)
+        XCTAssertEqual(store.index(for: owner), 0)
+        XCTAssertEqual(store.index(for: active), 7)
+    }
+
+    func testMigrationKeepsAWalletsOwnValue() {
+        let store = ReceiveSelectionStore(defaults: defaults)
+        let active = UUID()
+        store.setIndex(3, for: active)
+        defaults.set(7, forKey: ReceiveSelectionStore.legacyIndexKey)
+
+        store.migrateLegacy(activeWalletId: active)
+
+        XCTAssertEqual(store.index(for: active), 3)
+        XCTAssertNil(defaults.object(forKey: ReceiveSelectionStore.legacyIndexKey))
+    }
+
+    func testDeletingAWalletForgetsItsSelection() {
+        let store = ReceiveSelectionStore(defaults: defaults)
+        let a = UUID(), b = UUID()
+        store.setIndex(4, for: a)
+        store.setBaseline(.init(index: 4, transactionsCount: 0), for: a)
+        store.setIndex(6, for: b)
+
+        store.removeAll(for: a)
+
+        XCTAssertEqual(store.index(for: a), 0)
+        XCTAssertNil(store.baseline(for: a))
+        XCTAssertEqual(store.index(for: b), 6)
+    }
+
+    /// Switching wallets shows each wallet's own last address on Receive,
+    /// and the pick in one wallet is no pick in the other.
+    @MainActor
+    func testSwitchingWalletsShowsEachWalletsOwnSelection() {
+        let manager = WalletManager()
+        let a = wallet("Spending"), b = wallet("Savings")
+        let store = ReceiveSelectionStore(defaults: .standard)
+        defer {
+            store.removeAll(for: a.id)
+            store.removeAll(for: b.id)
+        }
+
+        manager.activeWallet = a
+        manager.noteManualReceiveSelection(index: 5)
+        XCTAssertEqual(manager.selectedReceiveIndex, 5)
+        XCTAssertTrue(manager.isManualReceiveSelection(index: 5))
+
+        manager.activeWallet = b
+        XCTAssertEqual(manager.selectedReceiveIndex, 0, "the other wallet starts on its own address")
+        XCTAssertFalse(manager.isManualReceiveSelection(index: 5))
+        manager.setReceiveSelection(9)
+
+        manager.activeWallet = a
+        XCTAssertEqual(manager.selectedReceiveIndex, 5)
+        XCTAssertTrue(manager.isManualReceiveSelection(index: 5))
+
+        manager.activeWallet = b
+        XCTAssertEqual(manager.selectedReceiveIndex, 9)
+    }
+
+    private func wallet(_ name: String) -> WalletInfo {
+        WalletInfo(
+            id: UUID(), name: name, emoji: "💰", source: .seed(.polyseed), createdAt: Date(), restoreHeight: 0,
+            syncResetCount: 0, userCreatedSubaddressIndices: [], cachedPrimaryAddress: "", cachedBalance: 0
+        )
+    }
+}
+
+// MARK: - App language
+
+final class AppLanguageTests: XCTestCase {
+    func testPickerListsEnglishAndTheFifteenTranslationsInTheirOwnNames() {
+        XCTAssertEqual(AppLanguage.all.map(\.name), [
+            "English", "Deutsch", "Español", "Français", "Italiano", "Nederlands", "Polski",
+            "Português (Brasil)", "Română", "Türkçe", "Русский", "Українська",
+            "简体中文", "繁體中文", "日本語", "한국어",
+        ])
+        let bundled = Set(Bundle.main.localizations.filter { $0 != "Base" })
+        for language in AppLanguage.all {
+            XCTAssertTrue(bundled.contains(language.code), "\(language.code) ships in the app")
+        }
+    }
+
+    func testCodesMatchTheirLanguage() {
+        XCTAssertEqual(AppLanguage.matching("de")?.name, "Deutsch")
+        XCTAssertEqual(AppLanguage.matching("de-CH")?.name, "Deutsch")
+        XCTAssertEqual(AppLanguage.matching("pt-BR")?.name, "Português (Brasil)")
+        XCTAssertEqual(AppLanguage.matching("pt_BR")?.name, "Português (Brasil)")
+        XCTAssertEqual(AppLanguage.matching("zh-Hans-US")?.name, "简体中文")
+        XCTAssertEqual(AppLanguage.matching("zh-Hant")?.name, "繁體中文")
+        XCTAssertEqual(AppLanguage.matching("en-GB")?.name, "English")
+        XCTAssertNil(AppLanguage.matching("sv"))
+    }
+
+    /// The choice is the app's own `AppleLanguages`, the value iOS writes
+    /// for its per-app language setting; System removes it.
+    func testChoiceIsTheAppsOwnAppleLanguages() {
+        let suiteName = "AppLanguageTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let setting = AppLanguageSetting(defaults: defaults, domainName: suiteName)
+
+        XCTAssertNil(setting.choice, "System until the user picks a language")
+        setting.set(AppLanguage.matching("ja"))
+        XCTAssertEqual(setting.choice?.name, "日本語")
+        XCTAssertEqual(defaults.persistentDomain(forName: suiteName)?["AppleLanguages"] as? [String], ["ja"])
+
+        setting.set(nil)
+        XCTAssertNil(setting.choice)
+        XCTAssertNil(defaults.persistentDomain(forName: suiteName)?["AppleLanguages"])
     }
 }

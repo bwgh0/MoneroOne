@@ -33,6 +33,8 @@ struct SettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var showResetSyncConfirmation = false
     @State private var showDiagnosticShare = false
+    /// The Language row's value; nil for System.
+    @State private var languageChoice = AppLanguageSetting.standard.choice
 
     private var syncStatusText: String {
         switch walletManager.syncState {
@@ -114,6 +116,23 @@ struct SettingsView: View {
                             color: .indigo
                         )
                     }
+
+                    NavigationLink {
+                        LanguageSettingsView(choice: $languageChoice)
+                    } label: {
+                        HStack {
+                            SettingsRow(
+                                icon: "globe",
+                                title: "Language",
+                                color: .blue
+                            )
+                            Spacer()
+                            Text((languageChoice ?? AppLanguageSetting.current).spokenName)
+                                .foregroundColor(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    .accessibilityIdentifier("settings.languageRow")
 
                     NavigationLink {
                         CurrencySettingsView(priceService: priceService)

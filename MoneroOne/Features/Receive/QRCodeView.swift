@@ -11,7 +11,7 @@ struct QRCodeView: View {
 
             ZStack {
                 // One pixel per module, scaled up with interpolation off, so
-                // the modules keep sharp edges at any size (full screen too).
+                // the modules keep sharp edges at any size (focus mode too).
                 if let qrImage = Self.qrImage(for: content) {
                     Image(uiImage: qrImage)
                         .interpolation(.none)
@@ -150,194 +150,380 @@ struct QRCodeRenderer {
     }
 }
 
-// MARK: - Full Screen
+// MARK: - Plate
 
-extension View {
-    /// Tapping this view shows `content` full screen in `QRFullscreenView`.
-    /// On iOS 18 and later the page zooms out of this view and back into
-    /// it, and a swipe down closes it.
-    func opensQRFullscreen(content: String, title: String, amount: Decimal?) -> some View {
-        modifier(QRFullscreenPresenter(qrContent: content, title: title, amount: amount))
+/// A QR code on a white plate with a four-module quiet zone, in light and
+/// dark mode: CoreImage draws one module of margin, the plate adds three.
+/// The same plate sits on the Receive card, on Donate and in focus mode.
+struct QRPlate: View {
+    let content: String
+    let side: CGFloat
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Rounder as it grows: 12 pt on the card, up to 20 pt in focus mode.
+    private var cornerRadius: CGFloat { min(20, max(12, side * 0.045)) }
+
+    var body: some View {
+        let modules = CGFloat(QRCodeView.qrImage(for: content)?.cgImage?.width ?? 49)
+        let quietZone = side * 3 / (modules + 6)
+        QRCodeView(content: content)
+            .padding(quietZone)
+            .frame(width: side, height: side)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(Color.black.opacity(colorScheme == .light ? 0.06 : 0))
+            }
     }
 }
 
-private struct QRFullscreenPresenter: ViewModifier {
-    let qrContent: String
-    let title: String
-    let amount: Decimal?
-    @State private var isPresented = false
-    @Namespace private var zoomNamespace
-    private let zoomID = "qrFullscreen"
+// MARK: - Focus mode
 
-    func body(content: Content) -> some View {
-        content
-            .contentShape(Rectangle())
-            .onTapGesture(perform: open)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction(.default, open)
-            .zoomTransitionSource(id: zoomID, in: zoomNamespace)
-            .fullScreenCover(isPresented: $isPresented) {
-                QRFullscreenView(content: qrContent, title: title, amount: amount)
-                    .zoomTransition(sourceID: zoomID, in: zoomNamespace)
-            }
+/// What focus mode shows: the code, what it points at (VoiceOver reads it
+/// with the code; the screen does not show it) and the requested amount.
+struct QRFocusItem: Equatable {
+    let content: String
+    let title: String
+    var amount: Decimal? = nil
+}
+
+/// A screen's focus mode as its views see it.
+struct QRFocus {
+    /// True while the code is large; the rest of the screen steps back.
+    let isFocused: Bool
+    /// True while the large copy of the code is on screen: the code on the
+    /// screen hides and keeps its place, so only one code moves.
+    let hidesSource: Bool
+    /// False with Reduce Motion: the code cross-fades instead of growing.
+    let grows: Bool
+    /// Opens focus mode from a code at `frame` (global coordinates).
+    let open: (QRFocusItem, CGRect) -> Void
+    /// Where the code on the screen is now, so the copy shrinks back to it
+    /// (an iPad may turn while focus mode is open).
+    let trackSource: (CGRect) -> Void
+
+    /// The grow and its reverse: one spring, the same path both ways.
+    static let grow = Animation.spring(response: 0.5, dampingFraction: 0.86)
+}
+
+/// Where the code on the screen sits. A reference, so following it does not
+/// redraw the screen.
+final class QRFocusSource {
+    var frame: CGRect = .zero
+}
+
+/// A screen whose QR code grows in place into focus mode, as Cake Wallet's
+/// does: the code grows from where it sits to the width of the screen, the
+/// Monero One lockup slides in above it, the rest of the screen steps back
+/// behind the page color, and the screen goes to full brightness. A tap
+/// anywhere, a swipe down or VoiceOver's escape shrinks it back along the
+/// same path. The screen's views read `QRFocus` to step back;
+/// `FocusableQRPlate` is the code they tap.
+///
+/// Focus mode is a clear full screen presentation that appears without an
+/// animation of its own: its code starts on top of the one on the screen
+/// and does all the moving. It covers the navigation bar, the tab bar and a
+/// sheet's edges without changing the layout under them (hiding a bar moves
+/// the whole screen mid-grow), and nothing behind it takes a touch.
+struct QRFocusContainer<Content: View>: View {
+    @ViewBuilder let content: (QRFocus) -> Content
+
+    private struct Presentation: Identifiable {
+        let id = UUID()
+        let item: QRFocusItem
     }
 
-    private func open() {
+    @State private var presented: Presentation?
+    @State private var isFocused = false
+    @State private var hidesSource = false
+    @State private var source = QRFocusSource()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        content(QRFocus(
+            isFocused: isFocused,
+            hidesSource: hidesSource,
+            grows: !reduceMotion,
+            open: { open($0, from: $1) },
+            trackSource: { [source] in source.frame = $0 }
+        ))
+        .fullScreenCover(item: $presented) { presentation in
+            QRFocusView(
+                item: presentation.item,
+                source: source,
+                grows: !reduceMotion,
+                onShown: shown,
+                onCloseStart: closeStarted,
+                onClosed: closed
+            )
+            .presentationBackground(.clear)
+        }
+    }
+
+    private var animation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.25) : QRFocus.grow
+    }
+
+    private func open(_ item: QRFocusItem, from frame: CGRect) {
+        guard presented == nil else { return }
         HapticFeedback.shared.softTick()
-        // End editing first (the Receive amount field), so the keyboard
-        // does not stay up over the page.
+        // End editing (the Receive amount field), so the keyboard does not
+        // stay up under the code.
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder),
             to: nil, from: nil, for: nil
         )
-        isPresented = true
+        source.frame = frame
+        withoutAnimation { presented = Presentation(item: item) }
+    }
+
+    /// The large copy is on screen over the code: hide the code, and step
+    /// the screen back.
+    private func shown() {
+        withoutAnimation { hidesSource = !reduceMotion }
+        withAnimation(animation) { isFocused = true }
+    }
+
+    private func closeStarted() {
+        withAnimation(animation) { isFocused = false }
+    }
+
+    /// The copy is back on top of the code: show the code, then drop the
+    /// presentation.
+    private func closed() {
+        withoutAnimation {
+            hidesSource = false
+            presented = nil
+        }
+    }
+
+    private func withoutAnimation(_ change: () -> Void) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, change)
     }
 }
 
-/// A receive QR code as large as the screen allows, on a white card with the
-/// Monero One lockup, so a payer can scan it from arm's length. The screen
-/// goes to full brightness while it shows, the way Wallet shows a pass. Like
-/// Cake's page it shows no address: the code is the address.
-struct QRFullscreenView: View {
-    let content: String
-    /// What the code points at: "Main Address", a label, or "Subaddress #n".
-    /// VoiceOver reads it with the code; the page does not show it.
-    let title: String
-    /// The amount the code requests, nil for none.
-    var amount: Decimal? = nil
-    /// VoiceOver starts on the code, not on Close, so the escape gesture
-    /// (two-finger Z) closes the page right away: the page takes escape,
-    /// and the Close button sits outside the page in the navigation bar.
-    @AccessibilityFocusState private var codeFocused: Bool
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+extension View {
+    /// Steps out of the way while focus mode is open: fades, and moves
+    /// toward `edge` unless Reduce Motion is on.
+    func qrFocusRecede(_ focus: QRFocus, toward edge: VerticalEdge) -> some View {
+        opacity(focus.isFocused ? 0 : 1)
+            .offset(y: focus.isFocused && focus.grows ? (edge == .top ? -24 : 32) : 0)
+    }
+}
+
+/// The code where it sits on a screen, and the tap that opens focus mode.
+/// One VoiceOver element: a button that opens focus mode; callers add their
+/// hint and actions after it. While focus mode is open the code hides and
+/// keeps its place; its large copy is in `QRFocusView`.
+struct FocusableQRPlate: View {
+    let item: QRFocusItem
+    let side: CGFloat
+    let focus: QRFocus
+    var label = String(localized: "QR code for Monero address")
+
+    @State private var frame: CGRect = .zero
 
     var body: some View {
-        NavigationStack {
-            card
-                .padding(16)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background { Color(.systemGroupedBackground).ignoresSafeArea() }
-                // No input on this page. After the Receive amount field has
-                // been edited, turning the phone raises a keyboard inset
-                // behind the page; ignore it so the card stays centered.
-                // Inside the stack: its UIKit container does not pass the
-                // modifier down.
-                .ignoresSafeArea(.keyboard)
-                // VoiceOver's escape (two-finger Z) looks for this among
-                // the focused element's ancestors. The stack's UIKit
-                // container sits between the page and anything outside
-                // it, so the action goes on the page itself.
-                .accessibilityAction(.escape) { dismiss() }
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        closeButton
-                    }
-                }
-                .navigationBarTitleDisplayMode(.inline)
-                .horizontalBarsOnDuo()
-                // After the zoom settles: VoiceOver puts focus on the first
-                // element of a new screen when the presentation ends, which
-                // would override a focus set on appear.
-                .task {
-                    try? await Task.sleep(for: .milliseconds(700))
-                    codeFocused = true
-                }
-        }
-        .background(FullBrightness())
+        QRPlate(content: item.content, side: side)
+            .opacity(focus.hidesSource ? 0 : 1)
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { newFrame in
+                frame = newFrame
+                if focus.hidesSource { focus.trackSource(newFrame) }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { focus.open(item, frame) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(label)
+            .accessibilityAddTraits([.isButton, .isImage])
+            .accessibilityAction(.default) { focus.open(item, frame) }
+    }
+}
+
+/// Focus mode itself: the Monero One lockup, the code as large as the
+/// screen allows (16 pt margins, 448 pt at most) and the requested amount,
+/// over the page color. The code starts on top of the one on the screen
+/// and grows from there. Like Cake's, it shows no address: the code is the
+/// address.
+struct QRFocusView: View {
+    let item: QRFocusItem
+    let source: QRFocusSource
+    let grows: Bool
+    let onShown: () -> Void
+    let onCloseStart: () -> Void
+    let onClosed: () -> Void
+
+    @State private var expanded = false
+    @State private var closing = false
+    /// VoiceOver starts on the code, so the escape gesture works at once.
+    @AccessibilityFocusState private var codeFocused: Bool
+
+    fileprivate static let lockupHeight: CGFloat = 28
+    fileprivate static let amountHeight: CGFloat = 44
+    fileprivate static let spacing: CGFloat = 24
+
+    private var animation: Animation {
+        grows ? QRFocus.grow : .easeInOut(duration: 0.25)
     }
 
-    /// Lockup, code and captions stacked; side by side when the screen is
-    /// short (landscape), so the code keeps most of the height. Side by
-    /// side, the card hugs the code instead of stretching to the width cap.
-    private var card: some View {
-        Group {
-            if verticalSizeClass == .compact {
-                HStack(spacing: 24) {
-                    code
-                    VStack(alignment: .leading, spacing: 16) {
-                        lockup
-                        amountCaption
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                }
-            } else {
-                VStack(spacing: 16) {
+    /// How long the shrink takes to land on the code on the screen: the
+    /// grow spring is within 1% of its end by then. Timed, not a completion
+    /// handler, which fired before the shrink ended here.
+    private var settleTime: TimeInterval { grows ? 0.5 : 0.3 }
+
+    var body: some View {
+        // The layout keeps to the safe area (the Duo's sensor column, the
+        // status bar, the home indicator); only the background fills the
+        // screen, and it takes the taps there too.
+        ZStack {
+            Color(.systemBackground)
+                .opacity(expanded ? 1 : 0)
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+            GeometryReader { geo in
+                let layout = FocusLayout(size: geo.size, hasAmount: item.amount != nil)
+                ZStack {
                     lockup
-                    code
-                    amountCaption
+                        .position(x: geo.size.width / 2, y: layout.lockupCenterY)
+                    plate(layout: layout, size: geo.size, origin: geo.frame(in: .global).origin)
+                    amountPill
+                        .position(x: geo.size.width / 2, y: layout.amountCenterY)
                 }
-                .frame(maxWidth: 448)
             }
         }
-        .padding(16)
-        .background {
-            // White in dark mode too: a QR code needs dark modules on a
-            // light field to scan.
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white)
-                .shadow(
-                    color: colorScheme == .light ? Color.black.opacity(0.08) : Color.clear,
-                    radius: 12,
-                    x: 0,
-                    y: 4
-                )
+        .contentShape(Rectangle())
+        // One gesture for a tap anywhere and a swipe down.
+        .gesture(
+            DragGesture(minimumDistance: 0).onEnded { value in
+                let moved = hypot(value.translation.width, value.translation.height)
+                if moved < 10 || value.translation.height > 60 {
+                    close()
+                }
+            }
+        )
+        .accessibilityAction(.escape, close)
+        .background(FullBrightness())
+        .onAppear {
+            // The copy sits on top of the code while the code hides; the
+            // grow starts a beat later, so the two never show at once.
+            onShown()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                withAnimation(animation) { expanded = true }
+            }
         }
-        // Text on the white card takes its light-mode colors.
-        .environment(\.colorScheme, .light)
+        .task {
+            // After the grow settles: VoiceOver would otherwise stay where
+            // the presentation put it.
+            try? await Task.sleep(for: .milliseconds(600))
+            codeFocused = true
+        }
     }
 
-    private var code: some View {
-        QRCodeView(content: content)
-            .aspectRatio(1, contentMode: .fit)
+    private func close() {
+        guard expanded, !closing else { return }
+        closing = true
+        onCloseStart()
+        withAnimation(animation) { expanded = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + settleTime) {
+            onClosed()
+        }
+    }
+
+    /// Large and centered when open; on top of the code on the screen
+    /// before it grows and after it shrinks back. With Reduce Motion it
+    /// stays large and fades. `origin` is where the safe area starts, in
+    /// the global coordinates the code on the screen reported.
+    private func plate(layout: FocusLayout, size: CGSize, origin: CGPoint) -> some View {
+        let large = expanded || !grows
+        let from = source.frame
+        let side = large ? layout.side : from.width
+        let center = large
+            ? CGPoint(x: size.width / 2, y: layout.plateCenterY)
+            : CGPoint(x: from.midX - origin.x, y: from.midY - origin.y)
+        let amount = item.amount.map { "\(XMRFormatter.format($0)) XMR" }
+        return QRPlate(content: item.content, side: side)
+            .opacity(grows || expanded ? 1 : 0)
+            .position(center)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("QR code for Monero address")
-            .accessibilityValue(title)
-            .accessibilityIdentifier("qrFullscreen.qrCode")
+            .accessibilityValue([item.title, amount].compactMap { $0 }.joined(separator: ", "))
+            .accessibilityAddTraits(.isImage)
+            .accessibilityHint(String(localized: "Double tap to make it small again.", comment: "VoiceOver hint: the QR code in focus mode"))
+            .accessibilityAction(.default, close)
+            .accessibilityIdentifier("qrFocus.code")
             .accessibilityFocused($codeFocused)
     }
 
+    /// Slides down from the top a beat after the code starts to grow.
     private var lockup: some View {
         HStack(spacing: 8) {
             Image("MoneroLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 28, height: 28)
+                .frame(width: Self.lockupHeight, height: Self.lockupHeight)
             Text(verbatim: "Monero One")
                 .font(.headline.bold())
         }
+        .frame(height: Self.lockupHeight)
+        .opacity(expanded ? 1 : 0)
+        .offset(y: expanded || !grows ? 0 : -20)
+        .animation(
+            grows
+                ? .easeOut(duration: expanded ? 0.4 : 0.2).delay(expanded ? 0.1 : 0)
+                : .easeInOut(duration: 0.25),
+            value: expanded
+        )
         .accessibilityHidden(true)
     }
 
     @ViewBuilder
-    private var amountCaption: some View {
-        if let amount {
+    private var amountPill: some View {
+        if let amount = item.amount {
             Text("\(XMRFormatter.format(amount)) XMR")
-                .font(.title2.weight(.semibold))
+                .font(.title3.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+                .padding(.horizontal, 16)
+                .frame(height: Self.amountHeight)
+                .background(Color(.secondarySystemBackground), in: Capsule())
+                .opacity(expanded ? 1 : 0)
+                .scaleEffect(expanded || !grows ? 1 : 0.9)
+                .animation(
+                    grows
+                        ? .easeOut(duration: expanded ? 0.3 : 0.15).delay(expanded ? 0.15 : 0)
+                        : .easeInOut(duration: 0.25),
+                    value: expanded
+                )
+                .accessibilityHidden(true)
         }
     }
+}
 
-    @ViewBuilder
-    private var closeButton: some View {
-        if #available(iOS 26.0, *) {
-            Button(role: .close) {
-                dismiss()
-            }
-            .accessibilityIdentifier("qrFullscreen.close")
-        } else {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-            }
-            .accessibilityLabel("Close")
-            .accessibilityIdentifier("qrFullscreen.close")
-        }
+/// Where focus mode puts the lockup, the code and the amount in the safe
+/// area: the largest code that fits with 16 pt margins and 32 pt above and
+/// below, 448 pt at most, the group centered.
+private struct FocusLayout {
+    let side: CGFloat
+    let lockupCenterY: CGFloat
+    let plateCenterY: CGFloat
+    let amountCenterY: CGFloat
+
+    init(size: CGSize, hasAmount: Bool) {
+        let lockup = QRFocusView.lockupHeight, amount = QRFocusView.amountHeight, gap = QRFocusView.spacing
+        var reserved = lockup + gap + 2 * 32
+        if hasAmount { reserved += gap + amount }
+        side = max(160, min(size.width - 32, 448, size.height - reserved))
+        var total = lockup + gap + side
+        if hasAmount { total += gap + amount }
+        let top = (size.height - total) / 2
+        lockupCenterY = top + lockup / 2
+        plateCenterY = top + lockup + gap + side / 2
+        amountCenterY = plateCenterY + side / 2 + gap + amount / 2
     }
 }
 
@@ -394,26 +580,6 @@ struct FullBrightness: UIViewRepresentable {
     }
 }
 
-private extension View {
-    @ViewBuilder
-    func zoomTransitionSource(id: String, in namespace: Namespace.ID) -> some View {
-        if #available(iOS 18.0, *) {
-            matchedTransitionSource(id: id, in: namespace)
-        } else {
-            self
-        }
-    }
-
-    @ViewBuilder
-    func zoomTransition(sourceID: String, in namespace: Namespace.ID) -> some View {
-        if #available(iOS 18.0, *) {
-            navigationTransition(.zoom(sourceID: sourceID, in: namespace))
-        } else {
-            self
-        }
-    }
-}
-
 #Preview {
     QRCodeView(content: "monero:888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H")
         .frame(width: 200, height: 200)
@@ -421,10 +587,16 @@ private extension View {
         .background(Color.white)
 }
 
-#Preview("Full screen") {
-    QRFullscreenView(
-        content: "monero:888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H?tx_amount=0.5",
-        title: "Subaddress #1",
-        amount: 0.5
-    )
+#Preview("Focus mode") {
+    QRFocusContainer { focus in
+        FocusableQRPlate(
+            item: QRFocusItem(
+                content: "monero:888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H?tx_amount=0.5",
+                title: "Subaddress #1",
+                amount: 0.5
+            ),
+            side: 240,
+            focus: focus
+        )
+    }
 }

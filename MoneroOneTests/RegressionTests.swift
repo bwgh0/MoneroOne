@@ -501,24 +501,51 @@ final class QRCodeRegressionTests: XCTestCase {
         }
     }
 
-    /// Focus mode turns the screen to full brightness and puts the old level
-    /// back when it goes away.
+    /// Focus mode eases the screen up to full brightness as it opens and
+    /// back down as it closes, and puts the old level back at once when it
+    /// goes away mid-way.
     @MainActor
     func testFullscreenBrightnessBoostsAndRestores() throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let screen = scene.screen
-        let original = screen.brightness
-        defer { screen.brightness = original }
+        // The simulator's screen keeps its level, so a stand-in takes it.
+        let screen = TestScreen()
         screen.brightness = 0.3
-        try XCTSkipIf(abs(screen.brightness - 0.3) > 0.01, "This screen does not take brightness changes")
 
         let window = UIWindow(windowScene: scene)
         let view = FullBrightness.BrightnessView()
+        view.testScreen = screen
         window.addSubview(view)
-        XCTAssertEqual(screen.brightness, 1, accuracy: 0.01)
+        XCTAssertEqual(screen.brightness, 0.3, accuracy: 0.01, "Full brightness waits for focus mode to open")
 
+        view.setOn(true)
+        XCTAssertLessThan(screen.brightness, 0.5, "The level eases up, it does not jump")
+        XCTAssertTrue(spin(until: { abs(screen.brightness - 1) < 0.01 }), "Level \(screen.brightness), expected 1")
+
+        view.setOn(false)
+        XCTAssertGreaterThan(screen.brightness, 0.8, "The level eases down, it does not jump")
+        XCTAssertTrue(spin(until: { abs(screen.brightness - 0.3) < 0.01 }), "Level \(screen.brightness), expected 0.3")
+
+        // Gone mid-way up: the old level at once, and the ramp stops.
+        view.setOn(true)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         view.removeFromSuperview()
         XCTAssertEqual(screen.brightness, 0.3, accuracy: 0.01)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(screen.brightness, 0.3, accuracy: 0.01)
+    }
+
+    private final class TestScreen: BrightnessScreen {
+        var brightness: CGFloat = 0.5
+    }
+
+    /// Runs the main run loop until `condition` holds, for at most `timeout`.
+    @MainActor
+    private func spin(until condition: () -> Bool, timeout: TimeInterval = 2) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        return condition()
     }
 
     private func decodedMessages(in image: UIImage) -> [String] {

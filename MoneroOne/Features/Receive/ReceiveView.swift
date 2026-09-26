@@ -209,7 +209,6 @@ struct ReceiveView: View {
                             focus: focus,
                             label: String(localized: "QR code for receiving Monero")
                         )
-                        .shadow(color: .black.opacity(0.1), radius: 10)
                         // A new address (New, or rotation after a
                         // payment) cross-fades the code in place.
                         .animation(.easeInOut(duration: 0.25), value: currentAddress)

@@ -631,8 +631,9 @@ func joinSubaddressLabel(emoji: String, name: String) -> String {
 
 /// Select Address: the wallet's addresses as a Settings-style grouped list.
 /// The main address has its own section; subaddresses follow newest first
-/// under New Address, with runs of unused spares folded into one row. A tap
-/// shows that address on Receive; swipe or long-press to copy or rename.
+/// under New Address, every one on its own row. A tap shows that address on
+/// Receive; swipe or long-press to copy or rename. Edit puts a pencil on
+/// each subaddress, and a tap then renames it.
 struct AddressPickerView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
@@ -641,8 +642,8 @@ struct AddressPickerView: View {
     @State private var renameIndex: Int? = nil
     @State private var renameText: String = ""
     @State private var renameEmoji: String = ""
-    /// Folded runs the user opened, by their newest index.
-    @State private var expandedRuns: Set<Int> = []
+    /// Edit mode: a tap on a subaddress renames it instead of showing it.
+    @State private var isEditing = false
 
     /// The index Receive shows, kept per wallet by the manager.
     private var selectedIndex: Int { walletManager.selectedReceiveIndex }
@@ -667,13 +668,8 @@ struct AddressPickerView: View {
 
             Section {
                 newAddressRow(canCreate: canCreate(limit))
-                ForEach(ReceiveAddressLogic.listItems(rows, selectedIndex: selectedIndex, expandedRuns: expandedRuns)) { item in
-                    switch item {
-                    case .address(let row):
-                        addressRow(row)
-                    case .unusedRun(let run):
-                        foldedRun(run)
-                    }
+                ForEach(rows) { row in
+                    addressRow(row)
                 }
             } header: {
                 Text("Subaddresses")
@@ -691,6 +687,18 @@ struct AddressPickerView: View {
         .navigationTitle("Select Address")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation(.snappy(duration: 0.3)) { isEditing.toggle() }
+                } label: {
+                    isEditing
+                        ? Text("Done")
+                        : Text("Edit", comment: "Select Address: puts a pencil on each subaddress so a tap renames it")
+                }
+                .disabled(rows.isEmpty && !isEditing)
+            }
+        }
         .alert("Couldn't Create Address", isPresented: $showCreateError) {
             Button("OK") {}
         } message: {
@@ -734,14 +742,22 @@ struct AddressPickerView: View {
 
     // MARK: Rows
 
-    /// One address. A tap shows it on Receive; swipe or long-press to copy
-    /// it or rename it (subaddresses only).
+    /// One address. A tap shows it on Receive, or in edit mode renames it;
+    /// swipe or long-press to copy it or rename it (subaddresses only).
     private func addressRow(_ row: ReceiveAddressRow) -> some View {
-        Button {
-            select(row.index)
+        let renames = isEditing && !row.isMain
+        return Button {
+            if renames {
+                beginRename(row)
+            } else {
+                select(row.index)
+            }
         } label: {
-            AddressListRow(row: row, isSelected: row.index == selectedIndex)
+            AddressListRow(row: row, isSelected: row.index == selectedIndex, isEditing: isEditing)
         }
+        // The main address has no name to edit.
+        .disabled(isEditing && row.isMain)
+        .opacity(isEditing && row.isMain ? 0.4 : 1)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
                 copy(row)
@@ -773,7 +789,9 @@ struct AddressPickerView: View {
             }
         }
         .accessibilityLabel(ReceiveAddressLogic.spokenRow(row))
-        .accessibilityHint("Double tap to select this address")
+        .accessibilityHint(renames
+            ? Text("Double tap to rename this address", comment: "VoiceOver hint: a subaddress in Select Address edit mode")
+            : Text("Double tap to select this address"))
         .accessibilityAddTraits(row.index == selectedIndex ? .isSelected : [])
     }
 
@@ -795,51 +813,13 @@ struct AddressPickerView: View {
             .foregroundColor(.orange)
             .contentShape(Rectangle())
         }
-        .disabled(isCreating || !canCreate)
-        .opacity(canCreate || isCreating ? 1 : 0.4)
+        .disabled(isCreating || !canCreate || isEditing)
+        .opacity((canCreate && !isEditing) || isCreating ? 1 : 0.4)
         .accessibilityIdentifier("addresses.newButton")
         .accessibilityLabel(isCreating
             ? Text("Creating subaddress")
             : Text("New Address", comment: "Creates a new subaddress and shows it"))
         .accessibilityHint("Creates a new subaddress for receiving Monero")
-    }
-
-    /// A run of unused spares as one row; a tap opens it in place.
-    private func foldedRun(_ run: [ReceiveAddressRow]) -> some View {
-        let low = run.map(\.index).min() ?? 0
-        let high = run.map(\.index).max() ?? 0
-        let title = String(localized: "\(run.count) unused addresses", comment: "Address list: a folded run of unused subaddresses")
-        let range = String(localized: "#\(low) to #\(high)", comment: "Address list: the numbers a folded run covers")
-        return Button {
-            HapticFeedback.shared.softTick()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                _ = expandedRuns.insert(run.first?.index ?? high)
-            }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "rectangle.stack")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.primary)
-                    Text(range)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(Color(.tertiaryLabel))
-            }
-            .contentShape(Rectangle())
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title + ", " + range)
-        .accessibilityHint(String(localized: "Shows these addresses", comment: "VoiceOver hint: unfolds a run of unused addresses"))
-        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: Actions
@@ -892,20 +872,26 @@ struct AddressPickerView: View {
 
 // MARK: - Address Row
 
-/// One address in Select Address: a check on the one Receive shows, the
-/// name (and its number when it has a label), the first and last eight
-/// characters, and what the address has taken in.
+/// One address in Select Address: a check on the one Receive shows (in edit
+/// mode, a pencil on each subaddress), the name (and its number when it has
+/// a label), the first and last eight characters, and what the address has
+/// taken in.
 struct AddressListRow: View {
     let row: ReceiveAddressRow
     let isSelected: Bool
+    var isEditing = false
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "checkmark")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.orange)
-                .opacity(isSelected ? 1 : 0)
-                .frame(width: 20)
+            ZStack {
+                Image(systemName: "checkmark")
+                    .opacity(isSelected && !isEditing ? 1 : 0)
+                Image(systemName: "pencil")
+                    .opacity(isEditing && !row.isMain ? 1 : 0)
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(.orange)
+            .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -938,7 +924,7 @@ struct AddressListRow: View {
 // MARK: - Address Usage
 
 /// What an address has taken in, on the trailing side of its row: the
-/// total in orange over the number of payments, or Unused.
+/// total in green over the number of payments, or Unused.
 struct AddressUsageSummary: View {
     let usage: ReceiveAddressUsage
 
@@ -948,7 +934,7 @@ struct AddressUsageSummary: View {
                 Text(verbatim: "\(XMRFormatter.formatCompact(usage.received)) XMR")
                     .font(.callout.weight(.medium))
                     .monospacedDigit()
-                    .foregroundColor(.orange)
+                    .foregroundColor(.green)
                 Text(ReceiveAddressLogic.paymentCount(usage.payments))
                     .font(.caption)
                     .foregroundColor(.secondary)

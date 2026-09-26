@@ -1662,3 +1662,154 @@ final class TransactionScreenLogicTests: XCTestCase {
         XCTAssertEqual(text, "Type: Sent\nTransaction ID: abc")
     }
 }
+
+// MARK: - Receive address card and list
+
+final class ReceiveAddressLogicTests: XCTestCase {
+
+    private func row(_ index: Int, payments: Int = 0, label: String = "") -> ReceiveAddressRow {
+        ReceiveAddressRow(
+            index: index,
+            address: "8addr\(index)",
+            label: label,
+            usage: ReceiveAddressUsage(payments: payments, received: Decimal(payments))
+        )
+    }
+
+    private func ids(_ items: [ReceiveAddressListItem]) -> [String] {
+        items.map(\.id)
+    }
+
+    func testRowsAreNewestFirstWithoutTheMainAddressOrEmptyEntries() {
+        let summaries = [
+            SubaddressSummary(index: 0, address: "4main", label: ""),
+            SubaddressSummary(index: 1, address: "8a1", label: ""),
+            SubaddressSummary(index: 3, address: "8a3", label: "Gifts"),
+            SubaddressSummary(index: 2, address: "", label: ""),
+            SubaddressSummary(index: 3, address: "8a3", label: "Gifts"),
+        ]
+        let rows = ReceiveAddressLogic.subaddressRows(
+            summaries,
+            usage: ["8a1": ReceiveAddressUsage(payments: 2, received: Decimal(string: "1.5")!)]
+        )
+        XCTAssertEqual(rows.map(\.index), [3, 1])
+        XCTAssertEqual(rows.last?.usage, ReceiveAddressUsage(payments: 2, received: Decimal(string: "1.5")!))
+        XCTAssertEqual(ReceiveAddressLogic.mainRow(primaryAddress: "4main", usage: [:])?.index, 0)
+        XCTAssertNil(ReceiveAddressLogic.mainRow(primaryAddress: "", usage: [:]))
+    }
+
+    func testUsageSumsIncomingPaymentsPoolIncludedFailedExcluded() {
+        func tx(_ type: MoneroTransaction.TransactionType, _ status: MoneroTransaction.TransactionStatus, _ address: String, _ amount: Decimal) -> MoneroTransaction {
+            MoneroTransaction(id: UUID().uuidString, type: type, amount: amount, fee: 0, address: address, timestamp: Date(),
+                              confirmations: nil, status: status, memo: nil, blockHeight: nil)
+        }
+        let usage = ReceiveAddressLogic.usage(transactions: [
+            tx(.incoming, .confirmed, "8a", 1),
+            tx(.incoming, .pending, "8a", Decimal(string: "0.5")!),
+            tx(.incoming, .failed, "8a", 7),
+            tx(.outgoing, .confirmed, "8a", 3),
+            tx(.incoming, .confirmed, "", 2),
+        ])
+        XCTAssertEqual(usage, ["8a": ReceiveAddressUsage(payments: 2, received: Decimal(string: "1.5")!)])
+    }
+
+    func testUnusedSparesBetweenPaymentsFoldIntoOneRow() {
+        // 13 is new (shown), 12 is paid, 11...3 are spares, 2 and 1 are paid.
+        let rows = [row(13), row(12, payments: 3)] + (3...11).reversed().map { row($0) } + [row(2, payments: 1), row(1, payments: 1)]
+        let items = ReceiveAddressLogic.listItems(rows, selectedIndex: 13)
+        XCTAssertEqual(ids(items), ["address-13", "address-12", "run-11", "address-2", "address-1"])
+        guard case .unusedRun(let run) = items[2] else { return XCTFail("expected a folded run") }
+        XCTAssertEqual(run.map(\.index), Array((3...11).reversed()))
+
+        let expanded = ReceiveAddressLogic.listItems(rows, selectedIndex: 13, expandedRuns: [11])
+        XCTAssertEqual(expanded.count, rows.count)
+    }
+
+    func testNewAddressesAboveTheLastPaymentStayUnfolded() {
+        // Five addresses made after the newest paid one: all visible.
+        let rows = (6...10).reversed().map { row($0) } + [row(5, payments: 1)]
+        let items = ReceiveAddressLogic.listItems(rows, selectedIndex: 10)
+        XCTAssertEqual(ids(items), ["address-10", "address-9", "address-8", "address-7", "address-6", "address-5"])
+    }
+
+    func testTheSelectedOrANamedAddressBreaksARunAndShortRunsStay() {
+        // 9...7 fold; 6 is named; 5 alone stays; 4 is selected; 3 and 2 are
+        // only two, so they stay.
+        let rows = [row(10, payments: 1)]
+            + (2...9).reversed().map { $0 == 6 ? row($0, label: "Rent") : row($0) }
+            + [row(1, payments: 1)]
+        let items = ReceiveAddressLogic.listItems(rows, selectedIndex: 4)
+        XCTAssertEqual(ids(items), ["address-10", "run-9", "address-6", "address-5", "address-4", "address-3", "address-2", "address-1"])
+    }
+
+    func testSearchMatchesNameNumberAndAddress() {
+        let gifts = ReceiveAddressRow(index: 12, address: "8BNm4Pq2Za7kW1xY", label: "🎁 Gifts")
+        XCTAssertTrue(ReceiveAddressLogic.matches(gifts, search: "gifts"))
+        XCTAssertTrue(ReceiveAddressLogic.matches(gifts, search: "#12"))
+        XCTAssertTrue(ReceiveAddressLogic.matches(gifts, search: "12"))
+        XCTAssertTrue(ReceiveAddressLogic.matches(gifts, search: "pq2za"))
+        XCTAssertTrue(ReceiveAddressLogic.matches(gifts, search: "  "))
+        XCTAssertFalse(ReceiveAddressLogic.matches(gifts, search: "rent"))
+        XCTAssertFalse(ReceiveAddressLogic.matches(gifts, search: "#1"))
+        XCTAssertTrue(ReceiveAddressLogic.matches(row(4), search: "Subaddress #4"))
+    }
+
+    func testUnusedAfterLastUsedCountsFromTheNewestPayment() {
+        XCTAssertEqual(ReceiveAddressLogic.unusedAfterLastUsed([]), 0)
+        // Nothing paid yet: counted from the main address.
+        XCTAssertEqual(ReceiveAddressLogic.unusedAfterLastUsed([row(3), row(2), row(1)]), 3)
+        // Gaps count: a seed restore looks across indices, not listed rows.
+        XCTAssertEqual(ReceiveAddressLogic.unusedAfterLastUsed([row(9), row(5, payments: 1), row(2)]), 4)
+        XCTAssertEqual(ReceiveAddressLogic.unusedAfterLastUsed([row(5, payments: 1)]), 0)
+    }
+
+    func testNewAddressWarnsAt150AndStopsAt190() {
+        XCTAssertEqual(ReceiveAddressLogic.creationLimit(unusedAfterLastUsed: 149), .allowed)
+        XCTAssertEqual(ReceiveAddressLogic.creationLimit(unusedAfterLastUsed: 150), .warn(unused: 150))
+        XCTAssertEqual(ReceiveAddressLogic.creationLimit(unusedAfterLastUsed: 189), .warn(unused: 189))
+        XCTAssertEqual(ReceiveAddressLogic.creationLimit(unusedAfterLastUsed: 190), .stop(unused: 190))
+        XCTAssertEqual(ReceiveAddressLogic.creationLimit(unusedAfterLastUsed: 400), .stop(unused: 400))
+        XCTAssertNil(ReceiveAddressLogic.limitText(.allowed))
+        XCTAssertNotNil(ReceiveAddressLogic.limitText(.warn(unused: 150)))
+        XCTAssertNotNil(ReceiveAddressLogic.limitText(.stop(unused: 190)))
+        XCTAssertLessThan(ReceiveAddressLogic.unusedStopThreshold, ReceiveAddressLogic.seedRestoreLookahead)
+    }
+
+    func testStatusSaysWhatHappensAfterTheNextPayment() {
+        let main = ReceiveAddressRow(index: 0, address: "4main", label: "")
+        let unused = row(4)
+        let used = row(4, payments: 2)
+        XCTAssertEqual(ReceiveAddressLogic.status(for: main, rotate: true, isManualPick: true), .mainAddress)
+        XCTAssertEqual(ReceiveAddressLogic.status(for: unused, rotate: true, isManualPick: false), .unusedRotates)
+        XCTAssertEqual(ReceiveAddressLogic.status(for: unused, rotate: true, isManualPick: true), .unusedShownUntilPaid)
+        XCTAssertEqual(ReceiveAddressLogic.status(for: used, rotate: true, isManualPick: true), .usedShownUntilNextPayment(payments: 2))
+        XCTAssertEqual(ReceiveAddressLogic.status(for: used, rotate: true, isManualPick: false), .usedRotates)
+        XCTAssertEqual(ReceiveAddressLogic.status(for: unused, rotate: false, isManualPick: false), .stays(payments: 0))
+        XCTAssertEqual(ReceiveAddressLogic.status(for: used, rotate: false, isManualPick: true), .stays(payments: 2))
+
+        XCTAssertEqual(ReceiveAddressLogic.statusText(.mainAddress), "Payments to your main address can be linked together.")
+        XCTAssertEqual(ReceiveAddressLogic.statusText(.unusedRotates), "Unused. After a payment, Receive shows a new address.")
+        XCTAssertEqual(ReceiveAddressLogic.statusText(.unusedShownUntilPaid), "Unused. Shown until it gets paid.")
+        XCTAssertEqual(ReceiveAddressLogic.statusText(.usedShownUntilNextPayment(payments: 2)), "2 payments so far. Shown until the next one.")
+        XCTAssertEqual(ReceiveAddressLogic.statusText(.stays(payments: 0)), "Unused. Receive stays on this address.")
+        XCTAssertEqual(ReceiveAddressLogic.statusText(.stays(payments: 3)), "3 payments so far. Receive stays on this address.")
+    }
+
+    func testVoiceOverNamesTheNumberForALabelAndReadsTheTotal() {
+        let gifts = ReceiveAddressRow(index: 12, address: "8BNm4Pq2Za7kW1xYZ1kq", label: "Gifts",
+                                      usage: ReceiveAddressUsage(payments: 3, received: Decimal(string: "1.5")!))
+        XCTAssertEqual(ReceiveAddressLogic.spokenRow(gifts), "Gifts, subaddress 12, received 1.5000 XMR, 3 payments")
+        XCTAssertEqual(ReceiveAddressLogic.spokenRow(row(4)), "Subaddress #4, unused")
+        XCTAssertEqual(
+            ReceiveAddressLogic.spokenSummary(for: gifts, status: "Unused."),
+            "Gifts, subaddress 12. Unused. Address starts 8BNm4P, ends Z1kq."
+        )
+    }
+
+    func testShortAddressKeepsTwelveThenEightCharacters() {
+        let address = "8" + String(repeating: "a", count: 86) + "Z1kqWXYZ"
+        XCTAssertEqual(ReceiveAddressLogic.shortAddress(address), "8aaaaaaaaaaa…Z1kqWXYZ")
+        XCTAssertEqual(ReceiveAddressLogic.shortAddress(address, head: 8, tail: 6), "8aaaaaaa…kqWXYZ")
+        XCTAssertEqual(ReceiveAddressLogic.shortAddress("short"), "short")
+    }
+}

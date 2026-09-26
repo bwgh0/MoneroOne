@@ -1141,8 +1141,9 @@ class WalletManager: ObservableObject {
     internal private(set) var currentPin: String?
     private var isRefreshing = false
     private var widgetReloadTask: Task<Void, Never>?
-    /// Index of the subaddress that receive-address rotation just derived
-    /// and selected; cleared once the kit lists it. See `reconcileReceiveAddress`.
+    /// Index of the subaddress that receive-address rotation or New Address
+    /// just derived and selected; cleared once the kit lists it. See
+    /// `reconcileReceiveAddress`.
     private var pendingRotatedIndex: Int?
 
     // MARK: - Init
@@ -2562,11 +2563,40 @@ class WalletManager: ObservableObject {
         return nil
     }
 
+    /// Derives the next subaddress and makes it the address Receive shows
+    /// until it gets paid (New Address). Retries once after half a second:
+    /// wallet2 can fail right after a node switch. Keys only, no sync
+    /// needed, so view-only and hardware wallets work the same.
+    /// - Parameter willSelect: runs with the new address just before it
+    ///   becomes the selection, so a screen can show it before the kit
+    ///   lists it.
+    /// - Returns: the new address, or nil if both tries failed.
+    func createAndSelectSubaddress(willSelect: (MoneroKit.SubAddress) -> Void = { _ in }) async -> MoneroKit.SubAddress? {
+        var created = await createSubaddress()
+        if created == nil {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            created = await createSubaddress()
+        }
+        guard let created else { return nil }
+        // The kit lists it on its next update; until then reconciling would
+        // not find it and would pick another address.
+        pendingRotatedIndex = created.index
+        willSelect(created)
+        noteManualReceiveSelection(index: created.index)
+        return created
+    }
+
     /// Rename a subaddress. Label is persisted via wallet2's `.keys` cache on disk.
     @discardableResult
     func setSubaddressLabel(index: Int, label: String) -> Bool {
-        guard let wallet = moneroWallet else { return false }
-        return wallet.setSubaddressLabel(index: index, label: label)
+        guard let wallet = moneroWallet, wallet.setSubaddressLabel(index: index, label: label) else { return false }
+        // wallet2 has the label now, but the kit republishes its list only
+        // on its next update: show the new name at once.
+        if let entry = subaddresses.first(where: { $0.index == index }) {
+            entry.label = label
+            subaddresses = subaddresses
+        }
+        return true
     }
 
     // MARK: - User-Created Subaddress Persistence
@@ -2702,6 +2732,13 @@ class WalletManager: ObservableObject {
         if let data = try? JSONEncoder().encode(baseline) {
             defaults.set(data, forKey: Self.receiveSelectionBaselineKey)
         }
+    }
+
+    /// True when `index` is the user's own pick in this wallet (New Address
+    /// or the address list), which rotation keeps until it gets paid.
+    func isManualReceiveSelection(index: Int) -> Bool {
+        guard let baseline = loadReceiveSelectionBaseline() else { return false }
+        return baseline.walletId == activeWallet?.id && baseline.index == index
     }
 
     private func loadReceiveSelectionBaseline() -> ReceiveSelectionBaseline? {

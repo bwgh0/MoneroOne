@@ -16,9 +16,6 @@ struct ReceiveView: View {
     @State private var created: MoneroKit.SubAddress?
     @AppStorage(WalletManager.rotateReceiveAddressKey) private var rotateReceiveAddress: Bool = true
     @EnvironmentObject var priceService: PriceService
-    /// One height for the action buttons' icons, so their titles line up:
-    /// the plus is shorter than the other two.
-    @ScaledMetric(relativeTo: .title3) private var actionIconHeight: CGFloat = 24
 
     /// The index Receive shows, kept per wallet by the manager.
     private var selectedAddressIndex: Int { walletManager.selectedReceiveIndex }
@@ -333,59 +330,79 @@ struct ReceiveView: View {
                     }
                 }
 
-                // Selected Address Card - Tap to change
-                NavigationLink {
-                    AddressPickerView()
-                } label: {
-                    VStack(spacing: 8) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(addressLabel)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
+                // The address the code shows, and New beside it.
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        // Selected Address Card - Tap to change
+                        NavigationLink {
+                            AddressPickerView()
+                        } label: {
+                            VStack(spacing: 8) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(addressLabel)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.primary)
 
-                                CodeText(formatAddress(currentAddress))
-                            }
+                                        if !currentAddress.isEmpty && currentAddress != "Loading..." {
+                                            AddressUsageLine(usage: currentUsage)
+                                        }
 
-                            Spacer()
+                                        CodeText(formatAddress(currentAddress))
+                                    }
 
-                            VStack(spacing: 2) {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
+                                    Spacer()
+
+                                    VStack(spacing: 2) {
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+
+                                if rotateReceiveAddress {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.caption2)
+                                        Text("New address after each payment")
+                                            .font(.caption2)
+                                    }
                                     .foregroundColor(.secondary)
-                            }
-                        }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
 
-                        if rotateReceiveAddress {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .font(.caption2)
-                                Text("New address after each payment")
-                                    .font(.caption2)
+                                if selectedAddressIndex == 0 {
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.caption2)
+                                        Text("Main address links all transactions. Use subaddresses for privacy.")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundColor(.orange)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityLabel("Privacy warning: Main address links all transactions. Use subaddresses for privacy.")
+                                }
                             }
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                         }
+                        .accessibilityLabel(addressRowSpokenLabel)
+                        .accessibilityHint("Opens address picker to change receiving address")
 
-                        if selectedAddressIndex == 0 {
-                            HStack {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.caption2)
-                                Text("Main address links all transactions. Use subaddresses for privacy.")
-                                    .font(.caption2)
-                            }
+                        newAddressButton
+                    }
+                    // The row sets the height; New stretches to it.
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    if let note = ReceiveAddressLogic.limitText(creationLimit) {
+                        Text(note)
+                            .font(.caption)
                             .foregroundColor(.orange)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Privacy warning: Main address links all transactions. Use subaddresses for privacy.")
-                        }
                     }
-                    .padding()
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                 }
-                .accessibilityLabel("\(addressLabel), \(formatAddress(currentAddress))\(rotateReceiveAddress ? String(localized: ", new address after each payment") : "")")
-                .accessibilityHint("Opens address picker to change receiving address")
                 .padding(.horizontal)
                 .qrFocusRecede(focus, toward: .bottom)
 
@@ -398,7 +415,6 @@ struct ReceiveView: View {
                         VStack(spacing: 8) {
                             Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
                                 .font(.title3)
-                                .frame(height: actionIconHeight)
                             Text(copied ? "Copied!" : "Copy")
                                 .font(.callout.weight(.medium))
                         }
@@ -418,7 +434,6 @@ struct ReceiveView: View {
                         VStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.title3)
-                                .frame(height: actionIconHeight)
                             Text("Share")
                                 .font(.callout.weight(.medium))
                         }
@@ -429,48 +444,10 @@ struct ReceiveView: View {
                     .glassButtonStyle()
                     .accessibilityLabel("Share address")
                     .accessibilityHint("Opens share sheet with QR code and address")
-
-                    // New Address Button
-                    Button {
-                        createNewAddress()
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: "plus")
-                                .font(.title3)
-                                .frame(height: actionIconHeight)
-                                .opacity(isCreating ? 0 : 1)
-                                .overlay {
-                                    if isCreating {
-                                        ProgressView()
-                                    }
-                                }
-                            Text("New")
-                                .font(.callout.weight(.medium))
-                        }
-                        .foregroundStyle(Color.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                    }
-                    .glassButtonStyle()
-                    .disabled(isCreating || !canCreateAddress)
-                    .accessibilityIdentifier("receive.newButton")
-                    .accessibilityLabel(isCreating
-                        ? Text("Creating subaddress")
-                        : Text("New address", comment: "VoiceOver: the Receive screen's New button"))
-                    .accessibilityHint("Creates a new subaddress for receiving Monero")
                 }
                 .padding(.horizontal)
                 .disabled(currentAddress.isEmpty || currentAddress == "Loading..." || keysUnavailable)
                 .qrFocusRecede(focus, toward: .bottom)
-
-                if let note = ReceiveAddressLogic.limitText(creationLimit) {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-                        .qrFocusRecede(focus, toward: .bottom)
-                }
 
                 Spacer(minLength: 40)
             }
@@ -536,6 +513,58 @@ struct ReceiveView: View {
             subaddresses: walletManager.subaddresses.map(SubaddressSummary.init),
             transactions: walletManager.transactions
         )
+    }
+
+    /// What the shown address has taken in.
+    private var currentUsage: ReceiveAddressUsage {
+        ReceiveAddressLogic.usage(of: currentAddress, transactions: walletManager.transactions)
+    }
+
+    /// The address row for VoiceOver: name, what it has taken in, how the
+    /// address starts and ends, and rotation.
+    private var addressRowSpokenLabel: String {
+        var spoken = [addressLabel, formatAddress(currentAddress)]
+        if !currentAddress.isEmpty && currentAddress != "Loading..." {
+            spoken.insert(ReceiveAddressLogic.spokenUsage(currentUsage), at: 1)
+        }
+        return spoken.joined(separator: ", ")
+            + (rotateReceiveAddress ? String(localized: ", new address after each payment") : "")
+    }
+
+    /// New, beside the address it replaces: derives the next subaddress
+    /// and shows it here. A tile as tall as the address row.
+    private var newAddressButton: some View {
+        Button {
+            createNewAddress()
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.title3.weight(.semibold))
+                Text("New")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(Color.orange)
+            // Keeps the tile's size while the spinner shows.
+            .opacity(isCreating ? 0 : 1)
+            .overlay {
+                if isCreating {
+                    ProgressView()
+                        .tint(.orange)
+                }
+            }
+            .frame(minWidth: 64, maxHeight: .infinity)
+            .padding(.horizontal, 4)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(AddressCardButtonStyle())
+        .disabled(isCreating || !canCreateAddress)
+        .opacity(canCreateAddress || isCreating ? 1 : 0.4)
+        .accessibilityIdentifier("receive.newButton")
+        .accessibilityLabel(isCreating
+            ? Text("Creating subaddress")
+            : Text("New address", comment: "VoiceOver: the Receive screen's New button"))
+        .accessibilityHint("Creates a new subaddress for receiving Monero")
     }
 
     /// New needs only the wallet's keys, not a synced wallet.
@@ -640,6 +669,7 @@ struct AddressPickerView: View {
     }
 
     var body: some View {
+        let usage = ReceiveAddressLogic.usage(transactions: walletManager.transactions)
         ScrollView {
             LazyVStack(spacing: 12) {
                 // Main Address Card
@@ -648,7 +678,8 @@ struct AddressPickerView: View {
                     address: walletManager.primaryAddress,
                     index: 0,
                     isSelected: selectedIndex == 0,
-                    showWarning: true
+                    showWarning: true,
+                    usage: usage[walletManager.primaryAddress] ?? ReceiveAddressUsage()
                 ) {
                     walletManager.noteManualReceiveSelection(index: 0)
                     dismiss()
@@ -720,6 +751,7 @@ struct AddressPickerView: View {
                             index: subaddr.index,
                             isSelected: selectedIndex == subaddr.index,
                             showWarning: false,
+                            usage: usage[subaddr.address] ?? ReceiveAddressUsage(),
                             onSelect: {
                                 walletManager.noteManualReceiveSelection(index: subaddr.index)
                                 dismiss()
@@ -808,6 +840,8 @@ struct AddressCard: View {
     let index: Int
     let isSelected: Bool
     let showWarning: Bool
+    /// What the address has taken in, shown under its name.
+    let usage: ReceiveAddressUsage
     let onSelect: () -> Void
     var onRename: (() -> Void)? = nil
 
@@ -833,6 +867,8 @@ struct AddressCard: View {
                                     .cornerRadius(4)
                             }
                         }
+
+                        AddressUsageLine(usage: usage)
 
                         CodeText(formatAddress(address))
                     }
@@ -884,13 +920,49 @@ struct AddressCard: View {
         }
         .buttonStyle(AddressCardButtonStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label), \(isSelected ? String(localized: "selected") : String(localized: "not selected"))\(showWarning ? String(localized: ", warning: links all transactions together") : "")")
+        .accessibilityLabel(spokenLabel)
         .accessibilityHint("Double tap to select this address")
+    }
+
+    /// "Gifts, received 1.5000 XMR, 3 payments, selected".
+    private var spokenLabel: String {
+        [
+            label,
+            ReceiveAddressLogic.spokenUsage(usage),
+            isSelected ? String(localized: "selected") : String(localized: "not selected"),
+        ].joined(separator: ", ")
+            + (showWarning ? String(localized: ", warning: links all transactions together") : "")
     }
 
     private func formatAddress(_ addr: String) -> String {
         guard addr.count > 24 else { return addr }
         return "\(addr.prefix(16))...\(addr.suffix(8))"
+    }
+}
+
+// MARK: - Address Usage
+
+/// What an address has taken in, under its name the way a wallet row shows
+/// its balance: the total in orange and the number of payments, or Unused.
+struct AddressUsageLine: View {
+    let usage: ReceiveAddressUsage
+
+    var body: some View {
+        if usage.payments > 0 {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(verbatim: "\(XMRFormatter.formatCompact(usage.received)) XMR")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.orange)
+                Text(ReceiveAddressLogic.paymentCount(usage.payments))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .lineLimit(1)
+        } else {
+            Text("Unused", comment: "Address list: an address with no payments yet")
+                .font(.callout)
+                .foregroundColor(.secondary)
+        }
     }
 }
 

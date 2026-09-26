@@ -3,8 +3,9 @@ import SwiftUI
 
 /// Receive: one address card (name, QR, the whole address, and what
 /// happens after the next payment), the optional request amount, and Copy
-/// and Share. New Address derives a subaddress in place; the full list is
-/// a push away on iPhone and beside the card on iPad and the unfolded Duo.
+/// and Share. New Address derives a subaddress in place. On iPhone the
+/// card's name fans every address out as cards over the screen; on iPad and
+/// the unfolded Duo the cards sit beside it.
 struct ReceiveView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
@@ -20,7 +21,8 @@ struct ReceiveView: View {
     @State private var requestFiatAmount = ""
     @State private var isFiatMode = false
     @State private var showShareSheet = false
-    @State private var path: [Route] = []
+    /// iPhone: the address cards are fanned out over Receive.
+    @State private var showsStack = false
     @State private var isCreating = false
     @State private var creationFailed = false
     /// New Address's result, shown until the kit lists it.
@@ -30,9 +32,6 @@ struct ReceiveView: View {
     @State private var displayedIndex: Int?
     @State private var nextSwap: Swap = .rotation
     @State private var faceTransition: AnyTransition = .opacity
-    @State private var renameIndex: Int?
-    @State private var renameText = ""
-    @State private var renameEmoji = ""
     @State private var isSquat = false
     @State private var showsRequestField = false
     @State private var loadTimedOut = false
@@ -40,14 +39,13 @@ struct ReceiveView: View {
     @State private var width: CGFloat = 0
     @AccessibilityFocusState private var cardInfoFocused: Bool
 
-    private enum Route: Hashable { case addresses }
-
-    /// Why the shown address is about to change.
+    /// Why the shown address is about to change. Every change happens in
+    /// place: nothing slides sideways, so nothing suggests a swipe.
     private enum Swap {
-        /// New Address: the new card slides in over the old one.
+        /// New Address: the new card settles in where the old one was.
         case newAddress
-        /// A pick in the list: slide toward the higher or lower number.
-        case list
+        /// A pick among the address cards: the code cross-fades.
+        case pick
         /// Rotation after a payment, or anything else: cross-fade.
         case rotation
     }
@@ -71,7 +69,8 @@ struct ReceiveView: View {
     /// Everything the screen reads from the wallet, worked out once per
     /// render.
     private struct Snapshot {
-        /// Subaddresses, newest first.
+        /// Subaddresses, newest first, with New Address's result on top
+        /// until the kit lists it.
         let rows: [ReceiveAddressRow]
         let mainRow: ReceiveAddressRow?
         /// What the card shows; nil while the wallet has no address yet.
@@ -81,10 +80,13 @@ struct ReceiveView: View {
 
     private var snapshot: Snapshot {
         let usage = ReceiveAddressLogic.usage(transactions: walletManager.transactions)
-        let rows = ReceiveAddressLogic.subaddressRows(
+        var rows = ReceiveAddressLogic.subaddressRows(
             walletManager.subaddresses.map(SubaddressSummary.init),
             usage: usage
         )
+        if let created, !rows.contains(where: { $0.index == created.index }) {
+            rows.insert(created, at: 0)
+        }
         let main = keysUnavailable
             ? nil
             : ReceiveAddressLogic.mainRow(primaryAddress: walletManager.primaryAddress, usage: usage)
@@ -95,8 +97,6 @@ struct ReceiveView: View {
                 shown = main
             } else if let row = rows.first(where: { $0.index == index }) {
                 shown = row
-            } else if let created, created.index == index {
-                shown = created
             }
             // Otherwise an index the kit has not listed yet: the card waits
             // rather than flash the main address and its warning.
@@ -151,7 +151,7 @@ struct ReceiveView: View {
 
     var body: some View {
         let s = snapshot
-        NavigationStack(path: $path) {
+        NavigationStack {
             // Inside the stack: the code grows from the card into focus
             // mode, and both have to share one hosting view.
             QRFocusContainer { focus in
@@ -161,21 +161,41 @@ struct ReceiveView: View {
                     oneColumn(s, focus: focus)
                 }
             }
-            .navigationTitle(String(localized: "Receive"))
+            .navigationTitle(showsStack
+                ? String(localized: "Addresses", comment: "Title of the receiving address list")
+                : String(localized: "Receive"))
             .navigationBarTitleDisplayMode(.inline)
             .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
+                    if showsStack {
+                        Button(action: closeStack) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .fontWeight(.semibold)
+                                Text("Receive")
+                            }
+                        }
+                        .accessibilityLabel(String(localized: "Back to Receive", comment: "VoiceOver: closes the address cards without changing the address"))
+                        .accessibilityIdentifier("receive.stack.back")
+                    } else {
+                        Button("Done") {
+                            dismiss()
+                        }
                     }
                 }
-                if !isTwoColumn {
+                if showsStack {
                     ToolbarItem(placement: .primaryAction) {
-                        Button(action: openList) {
-                            Label(String(localized: "Addresses", comment: "Title of the receiving address list"), systemImage: "list.bullet")
+                        Button(action: createAddress) {
+                            if isCreating {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "plus")
+                            }
                         }
-                        .accessibilityIdentifier("receive.addressesButton")
+                        .disabled(!canCreate(s) || isCreating)
+                        .accessibilityLabel(String(localized: "New address", comment: "VoiceOver: the Receive card's New button"))
+                        .accessibilityIdentifier("addresses.newButton")
                     }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
@@ -184,9 +204,6 @@ struct ReceiveView: View {
                         endEditing()
                     }
                 }
-            }
-            .navigationDestination(for: Route.self) { _ in
-                addressList(snapshot, mode: .pushed)
             }
         }
         .onGeometryChange(for: CGFloat.self) { proxy in
@@ -198,18 +215,6 @@ struct ReceiveView: View {
         .receiveSheetSizing()
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: shareItems(for: s.shown))
-        }
-        .sheet(isPresented: Binding(
-            get: { renameIndex != nil },
-            set: { if !$0 { renameIndex = nil } }
-        )) {
-            RenameSubaddressSheet(
-                name: $renameText,
-                emoji: $renameEmoji,
-                onSave: saveRename,
-                onCancel: { renameIndex = nil }
-            )
-            .presentationDetents([.medium])
         }
         .onAppear {
             displayedIndex = selectedAddressIndex
@@ -227,9 +232,9 @@ struct ReceiveView: View {
             showSelection(from: old, to: new)
         }
         .onChange(of: isTwoColumn) { _, twoColumns in
-            // Unfolding the Duo with the list pushed: the list now sits
-            // beside the card, so the pushed copy goes.
-            if twoColumns { path.removeAll() }
+            // Unfolding the Duo with the cards fanned out: they now sit
+            // beside the Receive card instead.
+            if twoColumns { showsStack = false }
         }
         .task(id: "\(s.shown == nil)-\(loadAttempt)") {
             // A card still waiting after 15 seconds says so and offers a
@@ -246,23 +251,49 @@ struct ReceiveView: View {
     // MARK: Layouts
 
     /// Short screens keep Copy and Share inside the card, so the card and
-    /// its actions fit without scrolling; the amount pill follows.
+    /// its actions fit without scrolling; the amount pill follows. The
+    /// address cards wait above it all, closed, until the name opens them:
+    /// Receive then steps back and fades while they fan in.
     private func oneColumn(_ s: Snapshot, focus: QRFocus) -> some View {
-        ScrollView {
-            VStack(spacing: isSquat ? 12 : 24) {
-                card(s, focus: focus, onOpenList: openList, footer: isSquat ? AnyView(actionButtons(s)) : nil)
-                Group {
-                    requestSection
-                    if !isSquat {
-                        actionButtons(s)
+        let steppedBack = showsStack && !reduceMotion
+        return ZStack(alignment: .top) {
+            ScrollView {
+                VStack(spacing: isSquat ? 12 : 24) {
+                    card(s, focus: focus, onShowAddresses: openStack, footer: isSquat ? AnyView(actionButtons(s)) : nil)
+                    Group {
+                        requestSection
+                        if !isSquat {
+                            actionButtons(s)
+                        }
                     }
+                    .qrFocusRecede(focus, toward: .bottom)
                 }
-                .qrFocusRecede(focus, toward: .bottom)
+                .padding(.horizontal, 16)
+                .padding(.vertical, isSquat ? 12 : 16)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, isSquat ? 12 : 16)
+            .scrollDismissesKeyboard(.interactively)
+            .scaleEffect(steppedBack ? 0.92 : 1, anchor: .top)
+            .offset(y: steppedBack ? -24 : 0)
+            .animation(stackAnimation, value: showsStack)
+            .opacity(showsStack ? 0 : 1)
+            .animation(receiveFade, value: showsStack)
+            .allowsHitTesting(!showsStack)
+            .accessibilityHidden(showsStack)
+
+            addressCards(s, layout: .stack(isOpen: showsStack))
         }
-        .scrollDismissesKeyboard(.interactively)
+    }
+
+    /// The step-back and fan-in share one spring; Reduce Motion fades.
+    private var stackAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.86)
+    }
+
+    /// Receive fades out at once as the cards fan in, and back in a beat
+    /// after they close, so a picked card is seen rising into it.
+    private var receiveFade: Animation {
+        if reduceMotion { return .easeInOut(duration: 0.2) }
+        return showsStack ? .easeOut(duration: 0.2) : .easeInOut(duration: 0.3).delay(0.15)
     }
 
     /// iPad and the unfolded Duo: the card on the left; the amount, the
@@ -271,7 +302,7 @@ struct ReceiveView: View {
     private func twoColumns(_ s: Snapshot, focus: QRFocus) -> some View {
         HStack(alignment: .top, spacing: 16) {
             ScrollView {
-                card(s, focus: focus, onOpenList: nil)
+                card(s, focus: focus, onShowAddresses: nil)
                     .padding(.bottom, 16)
             }
             .scrollIndicators(.hidden)
@@ -280,8 +311,7 @@ struct ReceiveView: View {
             VStack(spacing: 16) {
                 requestSection
                 actionButtons(s)
-                addressList(s, mode: .inline)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                addressCards(s, layout: .column)
             }
             .frame(maxWidth: .infinity)
             .qrFocusRecede(focus, toward: .bottom)
@@ -329,10 +359,9 @@ struct ReceiveView: View {
         return StatusLine(text: ReceiveAddressLogic.statusText(status), tone: row.isUsed ? .used : .unused)
     }
 
-    private func card(_ s: Snapshot, focus: QRFocus, onOpenList: (() -> Void)?, footer: AnyView? = nil) -> some View {
+    private func card(_ s: Snapshot, focus: QRFocus, onShowAddresses: (() -> Void)?, footer: AnyView? = nil) -> some View {
         let line = statusLine(s)
         let content = qrContent(for: s.shown)
-        let addressCount = s.rows.count + (s.mainRow == nil ? 0 : 1)
         return ReceiveAddressCard(
             row: s.shown,
             qrContent: content,
@@ -343,8 +372,6 @@ struct ReceiveView: View {
             isCreating: isCreating,
             canCreate: canCreate(s),
             onRetry: loadTimedOut && s.shown == nil && !keysUnavailable ? retryOpen : nil,
-            otherCount: s.shown == nil ? 0 : max(0, addressCount - 1),
-            maxEdges: isSquat ? 1 : 2,
             plateSide: plateSide,
             compact: isSquat,
             footer: footer,
@@ -352,26 +379,24 @@ struct ReceiveView: View {
             focus: focus,
             faceTransition: faceTransition,
             infoFocus: $cardInfoFocused,
-            onNew: { createAddress(popFirst: false) },
-            onRename: {
-                if let row = s.shown { startRename(row) }
-            },
+            onNew: createAddress,
             onSaveToPhotos: { saveQRToPhotos(content: content) },
-            onOpenList: onOpenList
+            onShowAddresses: onShowAddresses
         )
     }
 
-    private func addressList(_ s: Snapshot, mode: AddressListView.Mode) -> some View {
-        AddressListView(
-            mode: mode,
+    private func addressCards(_ s: Snapshot, layout: AddressCardsView.Layout) -> some View {
+        AddressCardsView(
+            layout: layout,
             mainRow: s.mainRow,
             rows: s.rows,
             selectedIndex: s.shown?.index ?? selectedAddressIndex,
             isCreating: isCreating,
             canCreate: canCreate(s),
-            onSelect: { select($0, pop: mode == .pushed) },
-            onRename: startRename,
-            onCreate: { createAddress(popFirst: mode == .pushed) }
+            onUse: use,
+            onCreate: createAddress,
+            onSaveLabel: saveLabel,
+            onClose: layout == .column ? nil : closeStack
         )
     }
 
@@ -512,15 +537,27 @@ struct ReceiveView: View {
 
     // MARK: Actions
 
-    private func openList() {
+    private func openStack() {
         HapticFeedback.shared.softTick()
-        path.append(.addresses)
+        endEditing()
+        showsStack = true
+        // VoiceOver starts over on the cards.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            UIAccessibility.post(notification: .screenChanged, argument: nil)
+        }
     }
 
-    /// The card follows the selection with the motion its cause calls for:
-    /// New Address slides the new card in over the old one (`step-forward`),
-    /// a pick in the list slides toward the higher or lower number
-    /// (`slide-swap`), rotation cross-fades. Reduce Motion: a short fade.
+    private func closeStack() {
+        endEditing()
+        showsStack = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            UIAccessibility.post(notification: .screenChanged, argument: nil)
+        }
+    }
+
+    /// The card follows the selection with the motion its cause calls for,
+    /// always in place: New Address settles the new card in where the old
+    /// one was, a pick and rotation cross-fade. Reduce Motion: a short fade.
     private func showSelection(from old: Int, to new: Int) {
         creationFailed = false
         let swap = nextSwap
@@ -533,17 +570,13 @@ struct ReceiveView: View {
             switch swap {
             case .newAddress:
                 faceTransition = .asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .scale(scale: 0.94).combined(with: .offset(y: 12)).combined(with: .opacity)
+                    insertion: .scale(scale: 0.96).combined(with: .opacity),
+                    removal: .opacity
                 )
-                animation = .spring(response: 0.3, dampingFraction: 0.85)
-            case .list:
-                let forward = new > old
-                faceTransition = .asymmetric(
-                    insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
-                    removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)
-                )
-                animation = .snappy(duration: 0.35)
+                animation = .spring(response: 0.5, dampingFraction: 0.86)
+            case .pick:
+                faceTransition = .opacity
+                animation = .easeInOut(duration: 0.3)
             case .rotation:
                 faceTransition = .opacity
                 animation = .easeInOut(duration: 0.25)
@@ -557,31 +590,28 @@ struct ReceiveView: View {
         }
     }
 
-    private func select(_ index: Int, pop: Bool) {
+    /// A tap on an address card: it becomes the Receive card. On iPhone the
+    /// cards close onto it.
+    private func use(_ index: Int) {
         // Picking the address already shown changes nothing to animate.
         if index != (displayedIndex ?? selectedAddressIndex) {
-            nextSwap = .list
+            nextSwap = .pick
         }
         HapticFeedback.shared.softTick()
         walletManager.noteManualReceiveSelection(index: index)
-        if pop {
-            path.removeAll()
+        if showsStack {
+            closeStack()
         }
     }
 
-    private func createAddress(popFirst: Bool) {
+    private func createAddress() {
         // The buttons are off at the lookahead stop too; checked here as
         // well so no path can derive past it.
         guard !isCreating, canCreate(snapshot) else { return }
-        HapticFeedback.shared.buttonPress()
+        HapticFeedback.shared.softTick()
         isCreating = true
         creationFailed = false
         Task {
-            if popFirst, !path.isEmpty {
-                path.removeAll()
-                // Let the pop finish, so the new card is seen arriving.
-                try? await Task.sleep(for: .milliseconds(350))
-            }
             nextSwap = .newAddress
             let result = await walletManager.createAndSelectSubaddress { new in
                 created = ReceiveAddressRow(index: new.index, address: new.address, label: new.label)
@@ -613,29 +643,18 @@ struct ReceiveView: View {
         Task { await walletManager.refresh() }
     }
 
-    private func startRename(_ row: ReceiveAddressRow) {
-        guard !row.isMain else { return }
-        let parts = splitSubaddressLabel(row.label)
-        renameEmoji = parts.emoji
-        renameText = parts.name
-        renameIndex = row.index
-    }
-
-    private func saveRename() {
-        guard let index = renameIndex else { return }
-        let packed = joinSubaddressLabel(emoji: renameEmoji, name: renameText)
-        if walletManager.setSubaddressLabel(index: index, label: packed) {
-            if let created, created.index == index {
-                self.created = ReceiveAddressRow(index: index, address: created.address, label: packed)
-            }
-            // A name reserves the address. Naming the one on screen keeps
-            // it there until it gets paid, rather than rotation moving past
-            // the name the user just gave it.
-            if index == selectedAddressIndex && !walletManager.isManualReceiveSelection(index: index) {
-                walletManager.noteManualReceiveSelection(index: index)
-            }
+    /// Saves a name typed on an address card; an empty one clears it.
+    private func saveLabel(_ index: Int, _ label: String) {
+        guard index > 0, walletManager.setSubaddressLabel(index: index, label: label) else { return }
+        if let created, created.index == index {
+            self.created = ReceiveAddressRow(index: index, address: created.address, label: label)
         }
-        renameIndex = nil
+        // A name reserves the address. Naming the one on screen keeps it
+        // there until it gets paid, rather than rotation moving past the
+        // name the user just gave it.
+        if !label.isEmpty, index == selectedAddressIndex, !walletManager.isManualReceiveSelection(index: index) {
+            walletManager.noteManualReceiveSelection(index: index)
+        }
     }
 
     private func endEditing() {

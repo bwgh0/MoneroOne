@@ -1742,6 +1742,42 @@ final class ReceiveAddressLogicTests: XCTestCase {
         XCTAssertEqual(ids(items), ["address-10", "run-9", "address-6", "address-5", "address-4", "address-3", "address-2", "address-1"])
     }
 
+    func testAddressCardsPinTheMainAddressThenFoldSpares() {
+        let main = ReceiveAddressRow(index: 0, address: "4MainAddress", label: "")
+        let rows = [row(13), row(12, payments: 3)] + (3...11).reversed().map { row($0) } + [row(2, payments: 1), row(1, payments: 1)]
+        let items = ReceiveAddressLogic.stackItems(main: main, rows: rows, selectedIndex: 13)
+        XCTAssertEqual(ids(items), ["address-0", "address-13", "address-12", "run-11", "address-2", "address-1"])
+
+        // No main address yet: the subaddresses alone.
+        XCTAssertEqual(ids(ReceiveAddressLogic.stackItems(main: nil, rows: [row(2), row(1, payments: 1)], selectedIndex: 2)),
+                       ["address-2", "address-1"])
+    }
+
+    func testAddressCardSearchUnfoldsMatchesAndCanDropTheMainAddress() {
+        let main = ReceiveAddressRow(index: 0, address: "4MainAddress", label: "")
+        let rows = [row(13), row(12, payments: 3)] + (3...11).reversed().map { row($0) } + [row(2, payments: 1)]
+        // "#5" sits inside the folded run: search shows it on its own.
+        XCTAssertEqual(ids(ReceiveAddressLogic.stackItems(main: main, rows: rows, selectedIndex: 13, search: "#5")), ["address-5"])
+        XCTAssertEqual(ids(ReceiveAddressLogic.stackItems(main: main, rows: rows, selectedIndex: 13, search: "main")), ["address-0"])
+        XCTAssertTrue(ReceiveAddressLogic.stackItems(main: main, rows: rows, selectedIndex: 13, search: "nothing like this").isEmpty)
+    }
+
+    func testAddressCardSearchShowsFromNineAddresses() {
+        XCTAssertFalse(ReceiveAddressLogic.showsSearch(addressCount: 8))
+        XCTAssertTrue(ReceiveAddressLogic.showsSearch(addressCount: 9))
+    }
+
+    func testRenamingInPlaceSavesOnlyARealChange() {
+        // An unnamed address starts with an empty field: saving it untouched
+        // must not turn "Subaddress #n" into a label that reserves it.
+        XCTAssertNil(ReceiveAddressLogic.labelToSave(draft: "", current: ""))
+        XCTAssertNil(ReceiveAddressLogic.labelToSave(draft: "  Gifts ", current: "Gifts"))
+        XCTAssertEqual(ReceiveAddressLogic.labelToSave(draft: " Rent\n", current: ""), "Rent")
+        XCTAssertEqual(ReceiveAddressLogic.labelToSave(draft: "🎁 Gifts", current: "Gifts"), "🎁 Gifts")
+        // Clearing a name saves an empty label.
+        XCTAssertEqual(ReceiveAddressLogic.labelToSave(draft: "   ", current: "Rent"), "")
+    }
+
     func testSearchMatchesNameNumberAndAddress() {
         let gifts = ReceiveAddressRow(index: 12, address: "8BNm4Pq2Za7kW1xY", label: "🎁 Gifts")
         XCTAssertTrue(ReceiveAddressLogic.matches(gifts, search: "gifts"))

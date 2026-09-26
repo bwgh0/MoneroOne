@@ -14,9 +14,9 @@ enum ReceiveStatusTone {
 }
 
 /// The Receive screen's address card: name, QR, full address and a status
-/// line that says what happens after the next payment. Older addresses show
-/// as thin edges behind it, like a deck. Every slot keeps its size while
-/// the address changes or loads, so nothing below the card moves.
+/// line that says what happens after the next payment. On iPhone the name
+/// opens the address cards in place. Every slot keeps its size while the
+/// address changes or loads, so nothing below the card moves.
 struct ReceiveAddressCard: View {
     /// The shown address; nil while the wallet has none yet.
     let row: ReceiveAddressRow?
@@ -31,10 +31,6 @@ struct ReceiveAddressCard: View {
     /// Shown in the QR slot while the card waits, once waiting has gone on
     /// too long. Inside the slot, so the card keeps its height.
     var onRetry: (() -> Void)?
-    /// How many other addresses the wallet has: the deck edges stand for them.
-    let otherCount: Int
-    /// One edge on squat screens, two elsewhere.
-    var maxEdges = 2
     /// Side of the white plate the QR sits on, quiet zone included.
     let plateSide: CGFloat
     /// Short screens: 16pt padding and 12pt gaps instead of 24 and 16.
@@ -51,65 +47,24 @@ struct ReceiveAddressCard: View {
     var faceTransition: AnyTransition = .opacity
     var infoFocus: AccessibilityFocusState<Bool>.Binding
     let onNew: () -> Void
-    let onRename: () -> Void
     let onSaveToPhotos: () -> Void
-    /// A tap on the deck edges; nil where the list is already on screen.
-    var onOpenList: (() -> Void)?
+    /// The name opens the address cards; nil where they are already on
+    /// screen (iPad and the unfolded Duo).
+    var onShowAddresses: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
     /// Three lines of the address at the current text size.
     @ScaledMetric(relativeTo: .footnote) private var addressSlotHeight: CGFloat = 54
 
     private static let cornerRadius: CGFloat = 20
-    private static let edgeStep: CGFloat = 8
-
-    private var edges: Int { min(maxEdges, otherCount) }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            deckEdges
-                .opacity(focus.isFocused ? 0 : 1)
-            face
-                .id(row?.index ?? -1)
-                .transition(faceTransition)
-        }
-        .padding(.bottom, CGFloat(edges) * Self.edgeStep)
-    }
-
-    // MARK: Deck
-
-    /// Older addresses as the edges of cards behind this one. Decorative:
-    /// VoiceOver reaches the list through the Addresses button.
-    private var deckEdges: some View {
-        ZStack(alignment: .bottom) {
-            ForEach((1...max(edges, 1)).reversed(), id: \.self) { layer in
-                RoundedRectangle(cornerRadius: Self.cornerRadius)
-                    .fill(edgeFill(layer))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Self.cornerRadius)
-                            .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.06))
-                    }
-                    .shadow(color: .black.opacity(colorScheme == .light ? 0.06 : 0), radius: 8, y: 2)
-                    .padding(.horizontal, CGFloat(layer) * 12)
-                    .offset(y: CGFloat(layer) * Self.edgeStep)
-                    .opacity(edges == 0 ? 0 : 1)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { onOpenList?() }
-        .accessibilityHidden(true)
+        face
+            .id(row?.index ?? -1)
+            .transition(faceTransition)
     }
 
     // MARK: Face
-
-    /// A step darker per layer, so the cards behind read as a stack on a
-    /// white page too.
-    private func edgeFill(_ layer: Int) -> Color {
-        if colorScheme == .dark {
-            return Color(.secondarySystemGroupedBackground).opacity(layer == 1 ? 0.75 : 0.5)
-        }
-        return layer == 1 ? Color(.systemGray6) : Color(.systemGray5)
-    }
 
     private var face: some View {
         VStack(alignment: .leading, spacing: compact ? 12 : 16) {
@@ -141,27 +96,11 @@ struct ReceiveAddressCard: View {
 
     // MARK: Header
 
-    /// Name, the Name pill for an unnamed subaddress, and New. A narrow card
-    /// (a column on the unfolded Duo) drops the Name pill before it cuts the
-    /// name: the name itself opens Rename too.
+    /// The name, a button that opens the address cards on iPhone, and New.
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    nameView
-                    if let row, !row.isMain, !row.isLabeled {
-                        Button(action: onRename) {
-                            pill(String(localized: "Name", comment: "Receive card: pill that opens Rename for an unnamed subaddress"), systemImage: nil)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHidden(true)
-                    }
-                }
-                nameView
-            }
-
+            nameView
             Spacer(minLength: 8)
-
             newButton
         }
         .frame(minHeight: 28)
@@ -169,21 +108,31 @@ struct ReceiveAddressCard: View {
 
     @ViewBuilder
     private var nameView: some View {
-        if let row, !row.isMain {
-            Button(action: onRename) {
-                Text(row.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+        if let row, let onShowAddresses {
+            Button(action: onShowAddresses) {
+                HStack(spacing: 6) {
+                    Text(row.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Image(systemName: "chevron.down")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "Rename, \(row.name)", comment: "VoiceOver: the Receive card's name button"))
+            .padding(.vertical, -6)
+            .accessibilityLabel(String(localized: "Show all addresses", comment: "VoiceOver: the Receive card's address name, which opens every address"))
+            .accessibilityValue(row.name)
             .accessibilityIdentifier("receive.card.name")
         } else {
             Text(row?.name ?? String(localized: "Main Address"))
                 .font(.headline)
                 .lineLimit(1)
+                .truncationMode(.middle)
                 .accessibilityHidden(true)
                 .redacted(reason: row == nil ? .placeholder : [])
         }

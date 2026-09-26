@@ -23,21 +23,6 @@ struct ReceiveAddressRow: Identifiable, Equatable {
     var name: String { SubaddressName.display(index: index, label: label) }
 }
 
-/// An entry in Select Address: an address, or a run of unused spares
-/// folded into one row.
-enum ReceiveAddressListItem: Identifiable, Equatable {
-    case address(ReceiveAddressRow)
-    /// Newest first, like the list around it.
-    case unusedRun([ReceiveAddressRow])
-
-    var id: String {
-        switch self {
-        case .address(let row): return "address-\(row.index)"
-        case .unusedRun(let rows): return "run-\(rows.first?.index ?? 0)"
-        }
-    }
-}
-
 /// What each receiving address has taken in, and the seed-restore limit on
 /// New: how many unused subaddresses a wallet may run ahead of its last
 /// payment.
@@ -49,9 +34,6 @@ enum ReceiveAddressLogic {
     /// and stops at `unusedStopThreshold`.
     static let unusedWarningThreshold = 150
     static let unusedStopThreshold = 190
-    /// Shorter runs of unused spares stay unfolded: folding two rows into
-    /// one saves little and hides what is there.
-    static let minimumFoldedRun = 3
 
     /// Incoming payments and amounts per receiving address.
     static func usage(transactions: [MoneroTransaction]) -> [String: ReceiveAddressUsage] {
@@ -110,43 +92,6 @@ enum ReceiveAddressLogic {
     static func mainRow(primaryAddress: String, usage: [String: ReceiveAddressUsage]) -> ReceiveAddressRow? {
         guard !primaryAddress.isEmpty, !NullKeyAddress.isNullKey(primaryAddress) else { return nil }
         return ReceiveAddressRow(index: 0, address: primaryAddress, label: "", usage: usage[primaryAddress] ?? ReceiveAddressUsage())
-    }
-
-    /// The subaddress section of Select Address: newest first, with runs of
-    /// unused, unnamed addresses folded into one row. Only runs below the
-    /// newest used or named address fold: the spares wallet2 fills in
-    /// between payments. Addresses above it are the ones the user just
-    /// made, and the selected address always shows.
-    static func listItems(
-        _ rows: [ReceiveAddressRow],
-        selectedIndex: Int,
-        expandedRuns: Set<Int> = []
-    ) -> [ReceiveAddressListItem] {
-        let newestReserved = rows.first { $0.isUsed || $0.isLabeled }?.index ?? Int.max
-        var items: [ReceiveAddressListItem] = []
-        var run: [ReceiveAddressRow] = []
-
-        func flushRun() {
-            guard !run.isEmpty else { return }
-            if run.count >= minimumFoldedRun, let top = run.first, !expandedRuns.contains(top.index) {
-                items.append(.unusedRun(run))
-            } else {
-                items.append(contentsOf: run.map { .address($0) })
-            }
-            run = []
-        }
-
-        for row in rows {
-            let foldable = row.index < newestReserved && !row.isUsed && !row.isLabeled && row.index != selectedIndex
-            if foldable {
-                run.append(row)
-            } else {
-                flushRun()
-                items.append(.address(row))
-            }
-        }
-        flushRun()
-        return items
     }
 
     /// "86pBXYCQ…RJMUzQWi": the first and last eight characters.

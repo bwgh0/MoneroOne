@@ -84,6 +84,9 @@
 		CC10B0220529EEB60498C537 /* ChartSwitcherCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A361562E962BC3431AA9FD83 /* ChartSwitcherCard.swift */; };
 		CEF72F50673F6D89DA08FB52 /* NetworkMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5A1C5565C8122238D41E47 /* NetworkMonitorTests.swift */; };
 		D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67F51494AC5434F206AED5C /* ReceiveView.swift */; };
+		5AB0AD000000000000000B01 /* ReceiveAddressLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB0AD000000000000000F01 /* ReceiveAddressLogic.swift */; };
+		5AB0AD000000000000000B02 /* ReceiveAddressCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB0AD000000000000000F02 /* ReceiveAddressCard.swift */; };
+		5AB0AD000000000000000B03 /* AddressListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB0AD000000000000000F03 /* AddressListView.swift */; };
 		D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */; };
 		CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */; };
 		CAC4E1D0000000000000D10T /* AuditRemediationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */; };
@@ -291,6 +294,9 @@
 		E06460C0C64ADF867FDFD082 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		E494E802F7171F1946F2FA45 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		E67F51494AC5434F206AED5C /* ReceiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveView.swift; sourceTree = "<group>"; };
+		5AB0AD000000000000000F01 /* ReceiveAddressLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveAddressLogic.swift; sourceTree = "<group>"; };
+		5AB0AD000000000000000F02 /* ReceiveAddressCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveAddressCard.swift; sourceTree = "<group>"; };
+		5AB0AD000000000000000F03 /* AddressListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddressListView.swift; sourceTree = "<group>"; };
 		E9668237F8646D99314673EA /* MoneroOneUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneUITests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60001AAAA0002 /* UITestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestHelpers.swift; sourceTree = "<group>"; };
 		ED23DE61696E2D6C0C9D6DAC /* SeedPhraseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseView.swift; sourceTree = "<group>"; };
@@ -388,6 +394,9 @@
 			children = (
 				CF818FE69F2EC0B444D26754 /* QRCodeView.swift */,
 				E67F51494AC5434F206AED5C /* ReceiveView.swift */,
+				5AB0AD000000000000000F01 /* ReceiveAddressLogic.swift */,
+				5AB0AD000000000000000F02 /* ReceiveAddressCard.swift */,
+				5AB0AD000000000000000F03 /* AddressListView.swift */,
 			);
 			path = Receive;
 			sourceTree = "<group>";
@@ -1013,6 +1022,9 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				FB5F8533851FF83B35C4E6A6 /* QRScannerView.swift in Sources */,
 				AF18D865D24B46B2E5F6C410 /* QuickActionsCard.swift in Sources */,
 				D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */,
+				5AB0AD000000000000000B01 /* ReceiveAddressLogic.swift in Sources */,
+				5AB0AD000000000000000B02 /* ReceiveAddressCard.swift in Sources */,
+				5AB0AD000000000000000B03 /* AddressListView.swift in Sources */,
 				E2276935B7E0FA16D8904A2E /* RestoreWalletView.swift in Sources */,
 				E3AAAA2781637EFF950CCADE /* ScrambledText.swift in Sources */,
 				474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */,

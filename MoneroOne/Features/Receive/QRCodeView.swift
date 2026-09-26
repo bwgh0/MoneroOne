@@ -41,10 +41,18 @@ struct QRCodeView: View {
     }
 
     private static let context = CIContext()
+    /// One image per text. A new UIImage for the same code is new content
+    /// to SwiftUI, and inside an animation it cross-fades the old bitmap
+    /// into the new one: focus mode's grow and shrink showed two codes, the
+    /// old one pinned at its old size.
+    private static let cache = NSCache<NSString, UIImage>()
 
     /// The code at one pixel per module, error correction H so the logo can
     /// cover the center. Nil when the text does not fit in a QR code.
     static func qrImage(for string: String) -> UIImage? {
+        if let cached = cache.object(forKey: string as NSString) {
+            return cached
+        }
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
         filter.correctionLevel = "H"
@@ -52,7 +60,9 @@ struct QRCodeView: View {
               let cgImage = context.createCGImage(output, from: output.extent) else {
             return nil
         }
-        return UIImage(cgImage: cgImage)
+        let image = UIImage(cgImage: cgImage)
+        cache.setObject(image, forKey: string as NSString)
+        return image
     }
 
     private func isInFinderPattern(row: Int, col: Int, size: Int) -> Bool {

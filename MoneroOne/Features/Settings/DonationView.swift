@@ -44,7 +44,6 @@ struct DonationView: View {
                     side: 240,
                     focus: focus
                 )
-                .shadow(color: .black.opacity(0.1), radius: 10)
 
                 Group {
                     addressCard

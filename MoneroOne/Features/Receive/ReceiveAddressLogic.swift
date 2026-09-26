@@ -124,6 +124,43 @@ enum ReceiveAddressLogic {
         return items
     }
 
+    /// The address cards in order: the main address pinned first, then
+    /// `listItems`; while searching, every match unfolded.
+    static func stackItems(
+        main: ReceiveAddressRow?,
+        rows: [ReceiveAddressRow],
+        selectedIndex: Int,
+        expandedRuns: Set<Int> = [],
+        search: String = ""
+    ) -> [ReceiveAddressListItem] {
+        let query = search.trimmingCharacters(in: .whitespaces)
+        var items: [ReceiveAddressListItem] = []
+        if let main, matches(main, search: query) {
+            items.append(.address(main))
+        }
+        if query.isEmpty {
+            items += listItems(rows, selectedIndex: selectedIndex, expandedRuns: expandedRuns)
+        } else {
+            items += rows.filter { matches($0, search: query) }.map { .address($0) }
+        }
+        return items
+    }
+
+    /// The search field shows from nine addresses, the main one included.
+    static func showsSearch(addressCount: Int) -> Bool {
+        addressCount > searchThreshold
+    }
+
+    /// The label a rename saves, or nil when nothing changes. The field
+    /// starts with the current label, empty for an unnamed address, so
+    /// saving it untouched never turns "Subaddress #n" into a label (a
+    /// label reserves the address).
+    static func labelToSave(draft: String, current: String) -> String? {
+        let new = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let old = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        return new == old ? nil : new
+    }
+
     /// Search by name, "#index" or any part of the address.
     static func matches(_ row: ReceiveAddressRow, search: String) -> Bool {
         let query = search.trimmingCharacters(in: .whitespaces)

@@ -12,10 +12,6 @@ struct CodeText: View {
     var color: UIColor = .secondaryLabel
     var alignment: NSTextAlignment = .natural
     var selectable = false
-    /// Every other group of four characters in this color, so an address
-    /// is easy to compare by eye. Color only: the text stays one unbroken
-    /// string, so what Copy takes equals what is shown.
-    var groupTint: UIColor?
 
     init(
         _ text: String,
@@ -23,8 +19,7 @@ struct CodeText: View {
         monospaced: Bool = true,
         color: UIColor = .secondaryLabel,
         alignment: NSTextAlignment = .natural,
-        selectable: Bool = false,
-        groupTint: UIColor? = nil
+        selectable: Bool = false
     ) {
         self.text = text
         self.style = style
@@ -32,7 +27,6 @@ struct CodeText: View {
         self.color = color
         self.alignment = alignment
         self.selectable = selectable
-        self.groupTint = groupTint
     }
 
     var body: some View {
@@ -42,8 +36,7 @@ struct CodeText: View {
             monospaced: monospaced,
             color: color,
             alignment: alignment,
-            selectable: selectable,
-            groupTint: groupTint
+            selectable: selectable
         )
         // VoiceOver reads it as the Text it replaces.
         .accessibilityRepresentation { Text(verbatim: text) }
@@ -57,7 +50,6 @@ private struct CharacterWrappedText: UIViewRepresentable {
     let color: UIColor
     let alignment: NSTextAlignment
     let selectable: Bool
-    let groupTint: UIColor?
 
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
@@ -80,20 +72,11 @@ private struct CharacterWrappedText: UIViewRepresentable {
         paragraph.lineBreakMode = .byCharWrapping
         paragraph.hyphenationFactor = 0
         paragraph.alignment = alignment
-        let attributed = NSMutableAttributedString(string: text, attributes: [
+        view.attributedText = NSAttributedString(string: text, attributes: [
             .font: font,
             .foregroundColor: color,
             .paragraphStyle: paragraph,
         ])
-        if let groupTint {
-            let length = (text as NSString).length
-            var start = 4
-            while start < length {
-                attributed.addAttribute(.foregroundColor, value: groupTint, range: NSRange(location: start, length: min(4, length - start)))
-                start += 8
-            }
-        }
-        view.attributedText = attributed
     }
 
     /// Hugs the text on one line like `Text`, else takes the offered width

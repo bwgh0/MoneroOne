@@ -18,8 +18,9 @@ struct ReceiveAddressRow: Equatable {
     var isUsed: Bool { usage.payments > 0 }
 }
 
-/// The seed-restore limit on New: how many unused subaddresses a wallet
-/// may run ahead of its last payment.
+/// What each receiving address has taken in, and the seed-restore limit on
+/// New: how many unused subaddresses a wallet may run ahead of its last
+/// payment.
 enum ReceiveAddressLogic {
     /// A wallet restored from its seed finds payments only this many
     /// subaddresses past the last used one (wallet2's minor lookahead).
@@ -37,6 +38,34 @@ enum ReceiveAddressLogic {
             usage[tx.address, default: ReceiveAddressUsage()].received += tx.amount
         }
         return usage
+    }
+
+    /// What one address has taken in.
+    static func usage(of address: String, transactions: [MoneroTransaction]) -> ReceiveAddressUsage {
+        var usage = ReceiveAddressUsage()
+        guard !address.isEmpty else { return usage }
+        for tx in transactions where tx.type == .incoming && tx.status != .failed && tx.address == address {
+            usage.payments += 1
+            usage.received += tx.amount
+        }
+        return usage
+    }
+
+    /// "3 payments", pluralized per language.
+    static func paymentCount(_ payments: Int) -> String {
+        String(localized: "\(payments) payments", comment: "Address list: how many payments an address received")
+    }
+
+    /// An address's usage for VoiceOver: "received 1.5000 XMR, 3 payments",
+    /// or "unused".
+    static func spokenUsage(_ usage: ReceiveAddressUsage) -> String {
+        guard usage.payments > 0 else {
+            return String(localized: "unused", comment: "VoiceOver: an address with no payments yet")
+        }
+        return [
+            String(localized: "received \(XMRFormatter.formatCompact(usage.received)) XMR", comment: "VoiceOver: total received"),
+            paymentCount(usage.payments),
+        ].joined(separator: ", ")
     }
 
     /// The wallet's subaddresses (index above 0) with a real address,

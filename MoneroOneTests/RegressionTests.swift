@@ -1728,6 +1728,30 @@ final class ReceiveAddressLogicTests: XCTestCase {
         XCTAssertLessThan(ReceiveAddressLogic.unusedStopThreshold, ReceiveAddressLogic.seedRestoreLookahead)
     }
 
+    func testUsageOfOneAddressAndHowVoiceOverSaysIt() {
+        func tx(_ type: MoneroTransaction.TransactionType, _ status: MoneroTransaction.TransactionStatus, _ address: String, _ amount: Decimal) -> MoneroTransaction {
+            MoneroTransaction(id: UUID().uuidString, type: type, amount: amount, fee: 0, address: address, timestamp: Date(),
+                              confirmations: nil, status: status, memo: nil, blockHeight: nil)
+        }
+        let transactions = [
+            tx(.incoming, .confirmed, "8a", 1),
+            tx(.incoming, .pending, "8a", Decimal(string: "0.5")!),
+            tx(.incoming, .failed, "8a", 7),
+            tx(.outgoing, .confirmed, "8a", 3),
+            tx(.incoming, .confirmed, "8b", 2),
+        ]
+        XCTAssertEqual(ReceiveAddressLogic.usage(of: "8a", transactions: transactions), ReceiveAddressUsage(payments: 2, received: Decimal(string: "1.5")!))
+        XCTAssertEqual(ReceiveAddressLogic.usage(of: "8c", transactions: transactions), ReceiveAddressUsage())
+        XCTAssertEqual(ReceiveAddressLogic.usage(of: "", transactions: transactions), ReceiveAddressUsage())
+        XCTAssertEqual(ReceiveAddressLogic.paymentCount(1), "1 payment")
+        XCTAssertEqual(ReceiveAddressLogic.paymentCount(3), "3 payments")
+        XCTAssertEqual(ReceiveAddressLogic.spokenUsage(ReceiveAddressUsage()), "unused")
+        XCTAssertEqual(
+            ReceiveAddressLogic.spokenUsage(ReceiveAddressUsage(payments: 3, received: Decimal(string: "1.5")!)),
+            "received 1.5000 XMR, 3 payments"
+        )
+    }
+
     func testWalletLimitCountsFromTheLastPaidAddress() {
         func wallet(_ count: Int) -> [SubaddressSummary] {
             (0...count).map { SubaddressSummary(index: $0, address: "8a\($0)", label: "") }

@@ -1676,6 +1676,10 @@ final class ReceiveAddressLogicTests: XCTestCase {
         )
     }
 
+    private func ids(_ items: [ReceiveAddressListItem]) -> [String] {
+        items.map(\.id)
+    }
+
     func testRowsAreNewestFirstWithoutTheMainAddressOrEmptyEntries() {
         let summaries = [
             SubaddressSummary(index: 0, address: "4main", label: ""),
@@ -1690,6 +1694,50 @@ final class ReceiveAddressLogicTests: XCTestCase {
         )
         XCTAssertEqual(rows.map(\.index), [3, 1])
         XCTAssertEqual(rows.last?.usage, ReceiveAddressUsage(payments: 2, received: Decimal(string: "1.5")!))
+        XCTAssertEqual(ReceiveAddressLogic.mainRow(primaryAddress: "4main", usage: [:])?.index, 0)
+        XCTAssertNil(ReceiveAddressLogic.mainRow(primaryAddress: "", usage: [:]))
+    }
+
+    func testUnusedSparesBetweenPaymentsFoldIntoOneRow() {
+        // 13 is new (shown), 12 is paid, 11...3 are spares, 2 and 1 are paid.
+        let rows = [row(13), row(12, payments: 3)] + (3...11).reversed().map { row($0) } + [row(2, payments: 1), row(1, payments: 1)]
+        let items = ReceiveAddressLogic.listItems(rows, selectedIndex: 13)
+        XCTAssertEqual(ids(items), ["address-13", "address-12", "run-11", "address-2", "address-1"])
+        guard case .unusedRun(let run) = items[2] else { return XCTFail("expected a folded run") }
+        XCTAssertEqual(run.map(\.index), Array((3...11).reversed()))
+
+        let expanded = ReceiveAddressLogic.listItems(rows, selectedIndex: 13, expandedRuns: [11])
+        XCTAssertEqual(expanded.count, rows.count)
+    }
+
+    func testNewAddressesAboveTheLastPaymentStayUnfolded() {
+        // Five addresses made after the newest paid one: all visible.
+        let rows = (6...10).reversed().map { row($0) } + [row(5, payments: 1)]
+        let items = ReceiveAddressLogic.listItems(rows, selectedIndex: 10)
+        XCTAssertEqual(ids(items), ["address-10", "address-9", "address-8", "address-7", "address-6", "address-5"])
+    }
+
+    func testTheSelectedOrANamedAddressBreaksARunAndShortRunsStay() {
+        // 9...7 fold; 6 is named; 5 alone stays; 4 is selected; 3 and 2 are
+        // only two, so they stay.
+        let rows = [row(10, payments: 1)]
+            + (2...9).reversed().map { $0 == 6 ? row($0, label: "Rent") : row($0) }
+            + [row(1, payments: 1)]
+        let items = ReceiveAddressLogic.listItems(rows, selectedIndex: 4)
+        XCTAssertEqual(ids(items), ["address-10", "run-9", "address-6", "address-5", "address-4", "address-3", "address-2", "address-1"])
+    }
+
+    func testShortAddressKeepsEightAndEightCharacters() {
+        let address = "8" + String(repeating: "a", count: 86) + "Z1kqWXYZ"
+        XCTAssertEqual(ReceiveAddressLogic.shortAddress(address), "8aaaaaaa…Z1kqWXYZ")
+        XCTAssertEqual(ReceiveAddressLogic.shortAddress("short"), "short")
+    }
+
+    func testVoiceOverNamesTheNumberForALabelAndReadsTheTotal() {
+        let gifts = ReceiveAddressRow(index: 12, address: "8BNm4Pq2Za7kW1xYZ1kq", label: "Gifts",
+                                      usage: ReceiveAddressUsage(payments: 3, received: Decimal(string: "1.5")!))
+        XCTAssertEqual(ReceiveAddressLogic.spokenRow(gifts), "Gifts, subaddress 12, received 1.5000 XMR, 3 payments")
+        XCTAssertEqual(ReceiveAddressLogic.spokenRow(row(4)), "Subaddress #4, unused")
     }
 
     func testUsageSumsIncomingPaymentsPoolIncludedFailedExcluded() {

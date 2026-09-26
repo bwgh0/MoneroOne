@@ -137,6 +137,10 @@ struct ReceiveView: View {
             QRFocusContainer { focus in
                 content(focus: focus)
             }
+            // An inline title like Send's, so the code, the amount, the
+            // address block and its footer fit above Copy and Share.
+            .navigationTitle("Receive XMR")
+            .navigationBarTitleDisplayMode(.inline)
             .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -168,298 +172,318 @@ struct ReceiveView: View {
     }
 
     private func content(focus: QRFocus) -> some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                Text("Receive XMR")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .qrFocusRecede(focus, toward: .top)
-
-                // QR Code
-                if keysUnavailable {
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.octagon.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(.red)
-                        Text("Wallet keys unavailable")
-                            .font(.headline)
-                        Text("The wallet couldn't load its keys, so no receive address can be shown. Do not send funds to any address from this app until this is resolved. Force-quit and reopen the app; if this persists, restore the wallet from its seed.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 8)
-                    }
-                    .frame(width: 280, height: 280)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(20)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Wallet keys unavailable. No receive address can be shown.")
-                } else if !currentAddress.isEmpty && currentAddress != "Loading..." {
-                    // A tap grows the code into focus mode.
-                    FocusableQRPlate(
-                        item: QRFocusItem(
-                            content: qrContent,
-                            title: addressLabel,
-                            // The same lenient read as the code: "1,5" is 1.5.
-                            amount: requestedXMR.flatMap { $0 > 0 ? $0 : nil }
-                        ),
-                        side: 280,
-                        focus: focus,
-                        label: String(localized: "QR code for receiving Monero")
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 10)
-                    // A new address (New, or rotation after a
-                    // payment) cross-fades the code in place.
-                    .animation(.easeInOut(duration: 0.25), value: currentAddress)
-                    .contextMenu {
-                        Button {
-                            saveQRToPhotos()
-                        } label: {
-                            Label("Save to Photos", systemImage: "square.and.arrow.down")
+        // Copy and Share stay under the scrolling content, 16pt above the
+        // home indicator, like Continue in Send.
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // QR Code
+                    if keysUnavailable {
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.octagon.fill")
+                                .font(.largeTitle)
+                                .foregroundColor(.red)
+                            Text("Wallet keys unavailable")
+                                .font(.headline)
+                            Text("The wallet couldn't load its keys, so no receive address can be shown. Do not send funds to any address from this app until this is resolved. Force-quit and reopen the app; if this persists, restore the wallet from its seed.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 8)
                         }
-                        if let image = QRCodeRenderer.renderToImage(content: qrContent) {
-                            ShareLink(
-                                item: Image(uiImage: image),
-                                preview: SharePreview("Monero receive QR code", image: Image(uiImage: image))
-                            ) {
-                                Label("Share QR Code", systemImage: "square.and.arrow.up")
-                            }
-                        }
-                    }
-                    // After the plate's own accessibility element:
-                    // set before it, the id sat on an ignored child
-                    // and UI tests could not find the code.
-                    .accessibilityIdentifier("receive.qrCode")
-                    .accessibilityHint("Shows the code full screen. Actions available: save to Photos, or share")
-                    .accessibilityAction(named: "Save to Photos") {
-                        saveQRToPhotos()
-                    }
-                } else {
-                    Rectangle()
-                        .fill(Color(.secondarySystemBackground))
                         .frame(width: 280, height: 280)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(20)
-                        .overlay {
-                            ProgressView()
-                        }
-                }
-
-                // Request Amount (Optional)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Request Amount (optional)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        Spacer()
-
-                        if priceService.xmrPrice != nil {
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Wallet keys unavailable. No receive address can be shown.")
+                    } else if !currentAddress.isEmpty && currentAddress != "Loading..." {
+                        // A tap grows the code into focus mode.
+                        FocusableQRPlate(
+                            item: QRFocusItem(
+                                content: qrContent,
+                                title: addressLabel,
+                                // The same lenient read as the code: "1,5" is 1.5.
+                                amount: requestedXMR.flatMap { $0 > 0 ? $0 : nil }
+                            ),
+                            side: 280,
+                            focus: focus,
+                            label: String(localized: "QR code for receiving Monero")
+                        )
+                        .shadow(color: .black.opacity(0.1), radius: 10)
+                        // A new address (New, or rotation after a
+                        // payment) cross-fades the code in place.
+                        .animation(.easeInOut(duration: 0.25), value: currentAddress)
+                        .contextMenu {
                             Button {
-                                toggleReceiveFiatMode()
+                                saveQRToPhotos()
                             } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.up.arrow.down")
-                                        .font(.caption2.weight(.semibold))
-                                    Text(isFiatMode ? "XMR" : priceService.selectedCurrency.uppercased())
-                                        .font(.caption.weight(.semibold))
-                                }
-                                .foregroundStyle(.orange)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Color.orange.opacity(0.1))
-                                .clipShape(Capsule())
+                                Label("Save to Photos", systemImage: "square.and.arrow.down")
                             }
-                            .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
-                        }
-                    }
-
-                    HStack {
-                        if isFiatMode {
-                            Text(priceService.currencySymbol)
-                                .foregroundColor(.secondary)
-                            TextField("0.00", text: $requestFiatAmount)
-                                .font(.system(.body, design: .rounded))
-                                .keyboardType(.decimalPad)
-                                .accessibilityLabel("Request amount in \(priceService.selectedCurrency.uppercased())")
-                                .onChange(of: requestFiatAmount) { _ in
-                                    syncReceiveXMRFromFiat()
+                            if let image = QRCodeRenderer.renderToImage(content: qrContent) {
+                                ShareLink(
+                                    item: Image(uiImage: image),
+                                    preview: SharePreview("Monero receive QR code", image: Image(uiImage: image))
+                                ) {
+                                    Label("Share QR Code", systemImage: "square.and.arrow.up")
                                 }
-                        } else {
-                            TextField("0.0", text: $requestAmount)
-                                .font(.system(.body, design: .rounded))
-                                .keyboardType(.decimalPad)
-                                .accessibilityLabel("Request amount in XMR")
-                                .accessibilityHint("Enter an optional amount to embed in the QR code")
-
-                            Text("XMR")
-                                .foregroundColor(.secondary)
-                                .accessibilityHidden(true)
+                            }
                         }
+                        // After the plate's own accessibility element:
+                        // set before it, the id sat on an ignored child
+                        // and UI tests could not find the code.
+                        .accessibilityIdentifier("receive.qrCode")
+                        .accessibilityHint("Shows the code full screen. Actions available: save to Photos, or share")
+                        .accessibilityAction(named: "Save to Photos") {
+                            saveQRToPhotos()
+                        }
+                    } else {
+                        Rectangle()
+                            .fill(Color(.secondarySystemBackground))
+                            .frame(width: 280, height: 280)
+                            .cornerRadius(20)
+                            .overlay {
+                                ProgressView()
+                            }
                     }
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(12)
 
-                    // Show converted amount
-                    if isFiatMode {
-                        if !requestAmount.isEmpty, let amt = requestedXMR, amt > 0 {
-                            Text("≈ \(requestAmount) XMR")
+                    // Request Amount (Optional)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Request Amount (optional)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            if priceService.xmrPrice != nil {
+                                Button {
+                                    toggleReceiveFiatMode()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.up.arrow.down")
+                                            .font(.caption2.weight(.semibold))
+                                        Text(isFiatMode ? "XMR" : priceService.selectedCurrency.uppercased())
+                                            .font(.caption.weight(.semibold))
+                                    }
+                                    .foregroundStyle(.orange)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.orange.opacity(0.1))
+                                    .clipShape(Capsule())
+                                }
+                                .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
+                            }
+                        }
+
+                        HStack {
+                            if isFiatMode {
+                                Text(priceService.currencySymbol)
+                                    .foregroundColor(.secondary)
+                                TextField("0.00", text: $requestFiatAmount)
+                                    .font(.system(.body, design: .rounded))
+                                    .keyboardType(.decimalPad)
+                                    .accessibilityLabel("Request amount in \(priceService.selectedCurrency.uppercased())")
+                                    .onChange(of: requestFiatAmount) { _ in
+                                        syncReceiveXMRFromFiat()
+                                    }
+                            } else {
+                                TextField("0.0", text: $requestAmount)
+                                    .font(.system(.body, design: .rounded))
+                                    .keyboardType(.decimalPad)
+                                    .accessibilityLabel("Request amount in XMR")
+                                    .accessibilityHint("Enter an optional amount to embed in the QR code")
+
+                                Text("XMR")
+                                    .foregroundColor(.secondary)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+
+                        // Show converted amount
+                        if isFiatMode {
+                            if !requestAmount.isEmpty, let amt = requestedXMR, amt > 0 {
+                                Text("≈ \(requestAmount) XMR")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 4)
+                            }
+                        } else if let amt = requestedXMR, amt > 0,
+                                  let fiat = priceService.formatFiatValue(amt) {
+                            Text("≈ \(fiat)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .padding(.horizontal, 4)
                         }
-                    } else if let amt = requestedXMR, amt > 0,
-                              let fiat = priceService.formatFiatValue(amt) {
-                        Text("≈ \(fiat)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
                     }
-                }
-                .padding(.horizontal)
-                .qrFocusRecede(focus, toward: .bottom)
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            UIApplication.shared.sendAction(
-                                #selector(UIResponder.resignFirstResponder),
-                                to: nil, from: nil, for: nil
-                            )
-                        }
-                    }
-                }
-
-                // The address the code shows, and New beside it.
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        // Selected Address Card - Tap to change
-                        NavigationLink {
-                            AddressPickerView()
-                        } label: {
-                            VStack(spacing: 8) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(addressLabel)
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(.primary)
-
-                                        if !currentAddress.isEmpty && currentAddress != "Loading..." {
-                                            AddressUsageLine(usage: currentUsage)
-                                        }
-
-                                        CodeText(formatAddress(currentAddress))
-                                    }
-
-                                    Spacer()
-
-                                    VStack(spacing: 2) {
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-
-                                if rotateReceiveAddress {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                            .font(.caption2)
-                                        Text("New address after each payment")
-                                            .font(.caption2)
-                                    }
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-
-                                if selectedAddressIndex == 0 {
-                                    HStack {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .font(.caption2)
-                                        Text("Main address links all transactions. Use subaddresses for privacy.")
-                                            .font(.caption2)
-                                    }
-                                    .foregroundColor(.orange)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .accessibilityElement(children: .combine)
-                                    .accessibilityLabel("Privacy warning: Main address links all transactions. Use subaddresses for privacy.")
-                                }
+                    .padding(.horizontal)
+                    .qrFocusRecede(focus, toward: .bottom)
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") {
+                                UIApplication.shared.sendAction(
+                                    #selector(UIResponder.resignFirstResponder),
+                                    to: nil, from: nil, for: nil
+                                )
                             }
-                            .padding()
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                         }
-                        .accessibilityLabel(addressRowSpokenLabel)
-                        .accessibilityHint("Opens address picker to change receiving address")
-
-                        newAddressButton
                     }
-                    // The row sets the height; New stretches to it.
-                    .fixedSize(horizontal: false, vertical: true)
 
-                    if let note = ReceiveAddressLogic.limitText(creationLimit) {
-                        Text(note)
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    addressBlock(focus: focus)
                 }
-                .padding(.horizontal)
-                .qrFocusRecede(focus, toward: .bottom)
-
-                // Action Buttons
-                HStack(spacing: 16) {
-                    // Copy Button
-                    Button {
-                        copyAddress()
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
-                                .font(.title3)
-                            Text(copied ? "Copied!" : "Copy")
-                                .font(.callout.weight(.medium))
-                        }
-                        .foregroundStyle(copied ? Color.green : Color.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                    }
-                    .glassButtonStyle()
-                    .accessibilityIdentifier("receive.copyButton")
-                    .accessibilityLabel(copied ? "Address copied" : "Copy address")
-                    .accessibilityHint("Copies the Monero address to clipboard")
-
-                    // Share Button
-                    Button {
-                        showShareSheet = true
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.title3)
-                            Text("Share")
-                                .font(.callout.weight(.medium))
-                        }
-                        .foregroundStyle(Color.orange)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                    }
-                    .glassButtonStyle()
-                    .accessibilityLabel("Share address")
-                    .accessibilityHint("Opens share sheet with QR code and address")
-                }
-                .padding(.horizontal)
-                .disabled(currentAddress.isEmpty || currentAddress == "Loading..." || keysUnavailable)
-                .qrFocusRecede(focus, toward: .bottom)
-
-                Spacer(minLength: 40)
+                .padding(.top, 24)
+                .padding(.bottom, 8)
             }
-            .padding(.top, 24)
+
+            actionButtons
+                .qrFocusRecede(focus, toward: .bottom)
         }
     }
 
-    private func formatAddress(_ addr: String) -> String {
+    /// The address the code shows and New Address under it, one grouped
+    /// block like a Settings section; what happens next is its footer.
+    private func addressBlock(focus: QRFocus) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(spacing: 0) {
+                // Selected Address - Tap to change
+                NavigationLink {
+                    AddressPickerView()
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(addressLabel)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                            Text(verbatim: shortCurrentAddress)
+                                .font(.caption.monospaced())
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        if hasAddress {
+                            AddressUsageSummary(usage: currentUsage)
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(Color(.tertiaryLabel))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityLabel(addressRowSpokenLabel)
+                .accessibilityHint("Opens address picker to change receiving address")
+
+                Divider()
+                    .padding(.leading, 16)
+
+                Button(action: createNewAddress) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.body)
+                        Text("New Address", comment: "Creates a new subaddress and shows it")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer(minLength: 8)
+                        if isCreating {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 48)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isCreating || !canCreateAddress)
+                .opacity(canCreateAddress || isCreating ? 1 : 0.4)
+                .accessibilityIdentifier("receive.newButton")
+                .accessibilityLabel(isCreating
+                    ? Text("Creating subaddress")
+                    : Text("New Address", comment: "Creates a new subaddress and shows it"))
+                .accessibilityHint("Creates a new subaddress for receiving Monero")
+            }
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+
+            // Footer: what happens next.
+            VStack(alignment: .leading, spacing: 4) {
+                if selectedAddressIndex == 0 {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text("Main address links all transactions. Use subaddresses for privacy.")
+                    }
+                    .foregroundColor(.orange)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Privacy warning: Main address links all transactions. Use subaddresses for privacy.")
+                }
+
+                if rotateReceiveAddress {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                        Text("New address after each payment")
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                if let note = ReceiveAddressLogic.limitText(creationLimit) {
+                    Text(note)
+                        .foregroundColor(.orange)
+                }
+            }
+            .font(.caption)
+            .padding(.horizontal, 16)
+        }
+        .padding(.horizontal)
+        .qrFocusRecede(focus, toward: .bottom)
+    }
+
+    /// Copy and Share: the dashboard's pair of glass buttons.
+    private var actionButtons: some View {
+        let unavailable = !hasAddress || keysUnavailable
+        return HStack(spacing: 12) {
+            CompactActionButton(
+                title: copied ? LocalizedStringResource("Copied!") : LocalizedStringResource("Copy"),
+                icon: copied ? "checkmark.circle.fill" : "doc.on.doc",
+                color: copied ? .green : .primary,
+                isDisabled: unavailable,
+                action: copyAddress
+            )
+            .accessibilityIdentifier("receive.copyButton")
+            .accessibilityLabel(copied ? "Address copied" : "Copy address")
+            .accessibilityHint("Copies the Monero address to clipboard")
+
+            CompactActionButton(
+                title: "Share",
+                icon: "square.and.arrow.up",
+                color: .orange,
+                isDisabled: unavailable
+            ) {
+                showShareSheet = true
+            }
+            .accessibilityLabel("Share address")
+            .accessibilityHint("Opens share sheet with QR code and address")
+        }
+        .padding()
+    }
+
+    /// True once there is a real address to show.
+    private var hasAddress: Bool {
+        !currentAddress.isEmpty && currentAddress != "Loading..."
+    }
+
+    /// The address row's second line: the first and last eight characters.
+    private var shortCurrentAddress: String {
         // "Loading..." is a sentinel inside currentAddress; translate it only here.
-        if addr == "Loading..." { return String(localized: "Loading...") }
-        guard addr.count > 24 else { return addr }
-        return "\(addr.prefix(12))...\(addr.suffix(8))"
+        if currentAddress == "Loading..." { return String(localized: "Loading...") }
+        return ReceiveAddressLogic.shortAddress(currentAddress)
     }
 
     private func toggleReceiveFiatMode() {
@@ -520,51 +544,15 @@ struct ReceiveView: View {
         ReceiveAddressLogic.usage(of: currentAddress, transactions: walletManager.transactions)
     }
 
-    /// The address row for VoiceOver: name, what it has taken in, how the
-    /// address starts and ends, and rotation.
+    /// The address row for VoiceOver: name, what it has taken in, and
+    /// rotation.
     private var addressRowSpokenLabel: String {
-        var spoken = [addressLabel, formatAddress(currentAddress)]
-        if !currentAddress.isEmpty && currentAddress != "Loading..." {
-            spoken.insert(ReceiveAddressLogic.spokenUsage(currentUsage), at: 1)
+        var spoken = [addressLabel]
+        if hasAddress {
+            spoken.append(ReceiveAddressLogic.spokenUsage(currentUsage))
         }
         return spoken.joined(separator: ", ")
             + (rotateReceiveAddress ? String(localized: ", new address after each payment") : "")
-    }
-
-    /// New, beside the address it replaces: derives the next subaddress
-    /// and shows it here. A tile as tall as the address row.
-    private var newAddressButton: some View {
-        Button {
-            createNewAddress()
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                Text("New")
-                    .font(.caption.weight(.semibold))
-            }
-            .foregroundStyle(Color.orange)
-            // Keeps the tile's size while the spinner shows.
-            .opacity(isCreating ? 0 : 1)
-            .overlay {
-                if isCreating {
-                    ProgressView()
-                        .tint(.orange)
-                }
-            }
-            .frame(minWidth: 64, maxHeight: .infinity)
-            .padding(.horizontal, 4)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .contentShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(AddressCardButtonStyle())
-        .disabled(isCreating || !canCreateAddress)
-        .opacity(canCreateAddress || isCreating ? 1 : 0.4)
-        .accessibilityIdentifier("receive.newButton")
-        .accessibilityLabel(isCreating
-            ? Text("Creating subaddress")
-            : Text("New address", comment: "VoiceOver: the Receive screen's New button"))
-        .accessibilityHint("Creates a new subaddress for receiving Monero")
     }
 
     /// New needs only the wallet's keys, not a synced wallet.
@@ -641,6 +629,10 @@ func joinSubaddressLabel(emoji: String, name: String) -> String {
     return "\(emoji) \(trimmedName)"
 }
 
+/// Select Address: the wallet's addresses as a Settings-style grouped list.
+/// The main address has its own section; subaddresses follow newest first
+/// under New Address, with runs of unused spares folded into one row. A tap
+/// shows that address on Receive; swipe or long-press to copy or rename.
 struct AddressPickerView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
@@ -649,125 +641,53 @@ struct AddressPickerView: View {
     @State private var renameIndex: Int? = nil
     @State private var renameText: String = ""
     @State private var renameEmoji: String = ""
+    /// Folded runs the user opened, by their newest index.
+    @State private var expandedRuns: Set<Int> = []
 
     /// The index Receive shows, kept per wallet by the manager.
     private var selectedIndex: Int { walletManager.selectedReceiveIndex }
 
-    /// How far New may go before a seed restore would miss payments.
-    private var creationLimit: ReceiveAddressLogic.CreationLimit {
-        ReceiveAddressLogic.creationLimit(
-            subaddresses: walletManager.subaddresses.map(SubaddressSummary.init),
-            transactions: walletManager.transactions
-        )
-    }
-
-    /// Subaddress creation only needs the wallet pointer (key derivation), not daemon sync
-    private var canCreateSubaddress: Bool {
-        guard !walletManager.primaryAddress.isEmpty else { return false }
-        if case .stop = creationLimit { return false }
-        return true
-    }
-
     var body: some View {
         let usage = ReceiveAddressLogic.usage(transactions: walletManager.transactions)
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                // Main Address Card
-                AddressCard(
-                    label: String(localized: "Main Address"),
-                    address: walletManager.primaryAddress,
-                    index: 0,
-                    isSelected: selectedIndex == 0,
-                    showWarning: true,
-                    usage: usage[walletManager.primaryAddress] ?? ReceiveAddressUsage()
-                ) {
-                    walletManager.noteManualReceiveSelection(index: 0)
-                    dismiss()
-                }
-
-                // Section Header for Subaddresses
-                HStack {
-                    Text("Subaddresses")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
-
-                    Spacer()
-
-                    Button {
-                        createNewSubaddress()
-                    } label: {
-                        if isCreating {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        } else {
-                            Label("New", systemImage: "plus")
-                                .font(.subheadline)
-                        }
-                    }
-                    .disabled(isCreating || !canCreateSubaddress)
-                    .accessibilityLabel(isCreating ? "Creating subaddress" : "Create new subaddress")
-                    .accessibilityHint("Creates a new subaddress for receiving Monero")
-                }
-                .padding(.horizontal, 4)
-                .padding(.top, 8)
-
-                if let note = ReceiveAddressLogic.limitText(creationLimit) {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
-                }
-
-                // Show all subaddresses except index 0 (main address shown above)
-                let actualSubaddresses = walletManager.subaddresses.filter {
-                    $0.index > 0 && !$0.address.isEmpty
-                }
-
-                if actualSubaddresses.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "rectangle.stack.badge.plus")
-                            .font(.largeTitle)
-                            .foregroundColor(.secondary)
-
-                        Text("No subaddresses yet")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        Text("Create subaddresses for better privacy when receiving payments.")
-                            .font(.caption)
-                            .foregroundColor(.secondary.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
-                } else {
-                    ForEach(actualSubaddresses, id: \.index) { subaddr in
-                        let displayLabel = SubaddressName.display(index: subaddr.index, label: subaddr.label)
-                        AddressCard(
-                            label: displayLabel,
-                            address: subaddr.address,
-                            index: subaddr.index,
-                            isSelected: selectedIndex == subaddr.index,
-                            showWarning: false,
-                            usage: usage[subaddr.address] ?? ReceiveAddressUsage(),
-                            onSelect: {
-                                walletManager.noteManualReceiveSelection(index: subaddr.index)
-                                dismiss()
-                            },
-                            onRename: {
-                                let parts = splitSubaddressLabel(subaddr.label)
-                                renameEmoji = parts.emoji
-                                renameText = parts.name
-                                renameIndex = subaddr.index
-                            }
-                        )
-                    }
+        let rows = ReceiveAddressLogic.subaddressRows(
+            walletManager.subaddresses.map(SubaddressSummary.init),
+            usage: usage
+        )
+        let limit = ReceiveAddressLogic.creationLimit(
+            unusedAfterLastUsed: ReceiveAddressLogic.unusedAfterLastUsed(rows)
+        )
+        List {
+            if let main = ReceiveAddressLogic.mainRow(primaryAddress: walletManager.primaryAddress, usage: usage) {
+                Section {
+                    addressRow(main)
+                } footer: {
+                    Text("Payments to your main address can be linked together.", comment: "Select Address: footer under the main address")
                 }
             }
-            .padding(16)
+
+            Section {
+                newAddressRow(canCreate: canCreate(limit))
+                ForEach(ReceiveAddressLogic.listItems(rows, selectedIndex: selectedIndex, expandedRuns: expandedRuns)) { item in
+                    switch item {
+                    case .address(let row):
+                        addressRow(row)
+                    case .unusedRun(let run):
+                        foldedRun(run)
+                    }
+                }
+            } header: {
+                Text("Subaddresses")
+            } footer: {
+                if let note = ReceiveAddressLogic.limitText(limit) {
+                    Text(note)
+                } else if rows.isEmpty {
+                    Text("Create subaddresses for better privacy when receiving payments.")
+                }
+            }
         }
+        .listStyle(.insetGrouped)
+        // New Address and a kit update slide rows in instead of popping them.
+        .animation(.snappy(duration: 0.3), value: rows.count)
         .navigationTitle("Select Address")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
@@ -804,176 +724,243 @@ struct AddressPickerView: View {
         }
     }
 
+    /// Subaddress creation only needs the wallet pointer (key derivation),
+    /// not daemon sync; it stops before a seed restore would miss payments.
+    private func canCreate(_ limit: ReceiveAddressLogic.CreationLimit) -> Bool {
+        guard !walletManager.primaryAddress.isEmpty else { return false }
+        if case .stop = limit { return false }
+        return true
+    }
+
+    // MARK: Rows
+
+    /// One address. A tap shows it on Receive; swipe or long-press to copy
+    /// it or rename it (subaddresses only).
+    private func addressRow(_ row: ReceiveAddressRow) -> some View {
+        Button {
+            select(row.index)
+        } label: {
+            AddressListRow(row: row, isSelected: row.index == selectedIndex)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                copy(row)
+            } label: {
+                Label("Copy Address", systemImage: "doc.on.doc")
+            }
+            .tint(.gray)
+            if !row.isMain {
+                Button {
+                    beginRename(row)
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+                .tint(.orange)
+            }
+        }
+        .contextMenu {
+            Button {
+                copy(row)
+            } label: {
+                Label("Copy Address", systemImage: "doc.on.doc")
+            }
+            if !row.isMain {
+                Button {
+                    beginRename(row)
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+            }
+        }
+        .accessibilityLabel(ReceiveAddressLogic.spokenRow(row))
+        .accessibilityHint("Double tap to select this address")
+        .accessibilityAddTraits(row.index == selectedIndex ? .isSelected : [])
+    }
+
+    /// The first row of Subaddresses, its plus in the checkmark column.
+    private func newAddressRow(canCreate: Bool) -> some View {
+        Button(action: createNewSubaddress) {
+            HStack(spacing: 12) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.body)
+                    .frame(width: 20)
+                Text("New Address", comment: "Creates a new subaddress and shows it")
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: 8)
+                if isCreating {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .foregroundColor(.orange)
+            .contentShape(Rectangle())
+        }
+        .disabled(isCreating || !canCreate)
+        .opacity(canCreate || isCreating ? 1 : 0.4)
+        .accessibilityIdentifier("addresses.newButton")
+        .accessibilityLabel(isCreating
+            ? Text("Creating subaddress")
+            : Text("New Address", comment: "Creates a new subaddress and shows it"))
+        .accessibilityHint("Creates a new subaddress for receiving Monero")
+    }
+
+    /// A run of unused spares as one row; a tap opens it in place.
+    private func foldedRun(_ run: [ReceiveAddressRow]) -> some View {
+        let low = run.map(\.index).min() ?? 0
+        let high = run.map(\.index).max() ?? 0
+        let title = String(localized: "\(run.count) unused addresses", comment: "Address list: a folded run of unused subaddresses")
+        let range = String(localized: "#\(low) to #\(high)", comment: "Address list: the numbers a folded run covers")
+        return Button {
+            HapticFeedback.shared.softTick()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                _ = expandedRuns.insert(run.first?.index ?? high)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "rectangle.stack")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.primary)
+                    Text(range)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(Color(.tertiaryLabel))
+            }
+            .contentShape(Rectangle())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title + ", " + range)
+        .accessibilityHint(String(localized: "Shows these addresses", comment: "VoiceOver hint: unfolds a run of unused addresses"))
+        .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: Actions
+
+    /// Shows `index` on Receive and goes back to it.
+    private func select(_ index: Int) {
+        walletManager.noteManualReceiveSelection(index: index)
+        dismiss()
+    }
+
+    private func copy(_ row: ReceiveAddressRow) {
+        UIPasteboard.general.string = row.address
+        HapticFeedback.shared.softTick()
+        UIAccessibility.post(notification: .announcement, argument: String(localized: "Address copied"))
+    }
+
+    private func beginRename(_ row: ReceiveAddressRow) {
+        let parts = splitSubaddressLabel(row.label)
+        renameEmoji = parts.emoji
+        renameText = parts.name
+        renameIndex = row.index
+    }
+
+    /// New Address: derives the next subaddress and selects it; the new
+    /// row slides in at the top of the section with the check on it.
     private func createNewSubaddress() {
+        guard !isCreating else { return }
         isCreating = true
 
         Task {
-            var result = await walletManager.createSubaddress()
+            let result = await walletManager.createAndSelectSubaddress()
+            isCreating = false
 
-            // Retry once after short delay — wallet2 C++ can fail transiently after node switch
-            if result == nil {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                result = await walletManager.createSubaddress()
+            guard let result else {
+                showCreateError = true
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.error)
+                return
             }
-
-            await MainActor.run {
-                isCreating = false
-
-                if result != nil {
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                } else {
-                    showCreateError = true
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.error)
-                }
-            }
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            let name = SubaddressName.display(index: result.index, label: result.label)
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: String(localized: "Showing new address, \(name)", comment: "VoiceOver: announced after New Address")
+            )
         }
     }
 }
 
-// MARK: - Address Card (Liquid Glass Style)
+// MARK: - Address Row
 
-struct AddressCard: View {
-    let label: String
-    let address: String
-    let index: Int
+/// One address in Select Address: a check on the one Receive shows, the
+/// name (and its number when it has a label), the first and last eight
+/// characters, and what the address has taken in.
+struct AddressListRow: View {
+    let row: ReceiveAddressRow
     let isSelected: Bool
-    let showWarning: Bool
-    /// What the address has taken in, shown under its name.
-    let usage: ReceiveAddressUsage
-    let onSelect: () -> Void
-    var onRename: (() -> Void)? = nil
 
     var body: some View {
-        Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text(label)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.primary)
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.orange)
+                .opacity(isSelected ? 1 : 0)
+                .frame(width: 20)
 
-                            if index == 0 {
-                                Text("Primary")
-                                    .font(.caption2)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.orange)
-                                    .cornerRadius(4)
-                            }
-                        }
-
-                        AddressUsageLine(usage: usage)
-
-                        CodeText(formatAddress(address))
-                    }
-
-                    Spacer()
-
-                    if let onRename {
-                        Button(action: onRename) {
-                            Image(systemName: "pencil")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(8)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Rename \(label)")
-                    }
-
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(.green)
-                    } else {
-                        Circle()
-                            .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
-                            .frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(row.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    if row.isLabeled && !row.isMain {
+                        Text(verbatim: "#\(row.index)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize()
                     }
                 }
-
-                if showWarning {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption2)
-                        Text("Links all transactions together")
-                            .font(.caption2)
-                    }
-                    .foregroundColor(.orange)
-                }
+                Text(verbatim: ReceiveAddressLogic.shortAddress(row.address))
+                    .font(.caption.monospaced())
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.regularMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(isSelected ? Color.green.opacity(0.5) : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
-                    )
-            )
+
+            Spacer(minLength: 8)
+
+            AddressUsageSummary(usage: row.usage)
         }
-        .buttonStyle(AddressCardButtonStyle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(spokenLabel)
-        .accessibilityHint("Double tap to select this address")
-    }
-
-    /// "Gifts, received 1.5000 XMR, 3 payments, selected".
-    private var spokenLabel: String {
-        [
-            label,
-            ReceiveAddressLogic.spokenUsage(usage),
-            isSelected ? String(localized: "selected") : String(localized: "not selected"),
-        ].joined(separator: ", ")
-            + (showWarning ? String(localized: ", warning: links all transactions together") : "")
-    }
-
-    private func formatAddress(_ addr: String) -> String {
-        guard addr.count > 24 else { return addr }
-        return "\(addr.prefix(16))...\(addr.suffix(8))"
+        .contentShape(Rectangle())
     }
 }
 
 // MARK: - Address Usage
 
-/// What an address has taken in, under its name the way a wallet row shows
-/// its balance: the total in orange and the number of payments, or Unused.
-struct AddressUsageLine: View {
+/// What an address has taken in, on the trailing side of its row: the
+/// total in orange over the number of payments, or Unused.
+struct AddressUsageSummary: View {
     let usage: ReceiveAddressUsage
 
     var body: some View {
         if usage.payments > 0 {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(verbatim: "\(XMRFormatter.formatCompact(usage.received)) XMR")
                     .font(.callout.weight(.medium))
-                    .foregroundStyle(.orange)
+                    .monospacedDigit()
+                    .foregroundColor(.orange)
                 Text(ReceiveAddressLogic.paymentCount(usage.payments))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             .lineLimit(1)
+            .fixedSize()
         } else {
             Text("Unused", comment: "Address list: an address with no payments yet")
-                .font(.callout)
-                .foregroundColor(.secondary)
+                .font(.caption)
+                .foregroundColor(Color(.tertiaryLabel))
+                .fixedSize()
         }
-    }
-}
-
-// MARK: - Custom Button Style
-
-struct AddressCardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

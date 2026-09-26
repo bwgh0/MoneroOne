@@ -49,20 +49,13 @@ struct ReceiveView: View {
         }
     }
 
+    /// The same name the transaction screens give this address: its label,
+    /// else "Subaddress #index".
     private var addressLabel: String {
-        if effectiveAddressIndex == 0 {
-            return String(localized: "Main Address")
-        } else {
-            let subaddresses = walletManager.subaddresses.filter { $0.index > 0 && !$0.address.isEmpty }
-            if let subaddr = subaddresses.first(where: { $0.index == effectiveAddressIndex }),
-               !subaddr.label.isEmpty {
-                return subaddr.label
-            }
-            if let position = subaddresses.firstIndex(where: { $0.index == effectiveAddressIndex }) {
-                return String(localized: "Subaddress #\(position + 1)")
-            }
-            return String(localized: "Subaddress #\(effectiveAddressIndex)")
-        }
+        SubaddressName.display(
+            index: effectiveAddressIndex,
+            in: walletManager.subaddresses.map(SubaddressSummary.init)
+        )
     }
 
     /// The request amount as a number. Comma-decimal regions type "1,5" on
@@ -573,8 +566,8 @@ struct AddressPickerView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
                 } else {
-                    ForEach(Array(actualSubaddresses.enumerated()), id: \.element.index) { position, subaddr in
-                        let displayLabel = subaddr.label.isEmpty ? String(localized: "Subaddress #\(position + 1)") : subaddr.label
+                    ForEach(actualSubaddresses, id: \.index) { subaddr in
+                        let displayLabel = SubaddressName.display(index: subaddr.index, label: subaddr.label)
                         AddressCard(
                             label: displayLabel,
                             address: subaddr.address,

@@ -147,20 +147,27 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertFalse(elements.first?.accessibilityTraits.contains(.adjustable) ?? true)
     }
 
-    // MARK: - Full screen QR
+    // MARK: - QR focus mode
 
-    /// The Receive QR is a button: VoiceOver's double tap opens the full
-    /// screen page, and the escape gesture (two-finger Z) closes it.
-    func testQRFullscreenOpensOnDoubleTapAndClosesOnEscape() throws {
+    /// The Receive QR is a button: VoiceOver's double tap grows it into
+    /// focus mode (a clear full screen presentation over the screen, so the
+    /// screen behind leaves VoiceOver), and the escape gesture (two-finger
+    /// Z) shrinks it back.
+    func testQRFocusModeOpensOnDoubleTapAndClosesOnEscape() throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let address = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
-        // The same modifier order as ReceiveView.
-        let smallQR = QRCodeView(content: "monero:\(address)")
-            .frame(width: 280, height: 280)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("QR code for receiving Monero")
-            .opensQRFullscreen(content: "monero:\(address)", title: "Main Address", amount: nil)
-        let controller = UIHostingController(rootView: smallQR)
+        let screen = QRFocusContainer { focus in
+            VStack(spacing: 24) {
+                Text(verbatim: "Behind")
+                FocusableQRPlate(
+                    item: QRFocusItem(content: "monero:\(address)", title: "Main Address"),
+                    side: 280,
+                    focus: focus,
+                    label: "QR code for receiving Monero"
+                )
+            }
+        }
+        let controller = UIHostingController(rootView: screen)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
         window.rootViewController = controller
@@ -168,23 +175,25 @@ final class VoiceOverTests: XCTestCase {
         self.window = window
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
 
-        let small = try XCTUnwrap(accessibilityElements(in: controller.view).first)
-        XCTAssertEqual(small.accessibilityLabel, "QR code for receiving Monero")
+        let small = try XCTUnwrap(accessibilityElements(in: controller.view).first { $0.accessibilityLabel == "QR code for receiving Monero" })
         XCTAssertTrue(small.accessibilityTraits.contains(.button), "VoiceOver says it can be activated")
         XCTAssertTrue(small.accessibilityActivate())
-        RunLoop.main.run(until: Date().addingTimeInterval(1.5))
-        let presented = try XCTUnwrap(controller.presentedViewController, "double tap opens full screen")
+        RunLoop.main.run(until: Date().addingTimeInterval(1.2))
+        let presented = try XCTUnwrap(controller.presentedViewController, "double tap opens focus mode")
 
-        let page = accessibilityElements(in: presented.view)
-        XCTAssertTrue(page.contains { $0.accessibilityLabel == "Close" }, "a Close button")
-        // The page shows no address text; VoiceOver names the code instead,
-        // and the page moves VoiceOver focus there so escape works at once.
-        XCTAssertFalse(page.contains { $0.accessibilityLabel?.contains(address.prefix(8)) == true }, "no address on the page")
-        let code = try XCTUnwrap(page.first { $0.accessibilityLabel == "QR code for Monero address" }, "the code")
+        let focused = accessibilityElements(in: presented.view)
+        // No address text; VoiceOver names the code instead.
+        XCTAssertFalse(focused.contains { $0.accessibilityLabel?.contains(address.prefix(8)) == true }, "no address in focus mode")
+        XCTAssertFalse(focused.contains { $0.accessibilityLabel == "Behind" }, "the screen behind is not in focus mode")
+        let code = try XCTUnwrap(focused.first { $0.accessibilityLabel == "QR code for Monero address" }, "the large code")
         XCTAssertEqual(code.accessibilityValue, "Main Address")
-        XCTAssertTrue(performEscape(from: code), "escape from the code closes the page")
+        XCTAssertTrue(performEscape(from: code), "escape from the code closes focus mode")
         RunLoop.main.run(until: Date().addingTimeInterval(1.5))
-        XCTAssertNil(controller.presentedViewController, "escape closes full screen")
+
+        XCTAssertNil(controller.presentedViewController, "escape closes focus mode")
+        let after = accessibilityElements(in: controller.view)
+        XCTAssertTrue(after.contains { $0.accessibilityLabel == "QR code for receiving Monero" }, "the small code is back")
+        XCTAssertTrue(after.contains { $0.accessibilityLabel == "Behind" }, "the screen is back")
     }
 
     // MARK: - Helpers

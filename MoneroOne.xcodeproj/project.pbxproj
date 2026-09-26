@@ -81,6 +81,7 @@
 		C02CD290FCDCDEFC8A848C31 /* PriceAlertNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */; };
 		C0E85580EF176D61DF97BA87 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E06460C0C64ADF867FDFD082 /* ContentView.swift */; };
 		C4EE7FC3ED57B61F7C24C722 /* CurrencySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */; };
+		4C4E47000000000000000B01 /* LanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C4E47000000000000000F01 /* LanguageSettingsView.swift */; };
 		CC10B0220529EEB60498C537 /* ChartSwitcherCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A361562E962BC3431AA9FD83 /* ChartSwitcherCard.swift */; };
 		CEF72F50673F6D89DA08FB52 /* NetworkMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5A1C5565C8122238D41E47 /* NetworkMonitorTests.swift */; };
 		D40D4CFC8E56151C487AD612 /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67F51494AC5434F206AED5C /* ReceiveView.swift */; };
@@ -289,6 +290,7 @@
 		D5B417D8D6615D3C56F22085 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeManager.swift; sourceTree = "<group>"; };
 		DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencySettingsView.swift; sourceTree = "<group>"; };
+		4C4E47000000000000000F01 /* LanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageSettingsView.swift; sourceTree = "<group>"; };
 		DC58487C5764E22EA877B236 /* MoneroOneWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneroOneWidgetsBundle.swift; sourceTree = "<group>"; };
 		DEFDF397CD9F75684D51EA38 /* RestoreWalletView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreWalletView.swift; sourceTree = "<group>"; };
 		E06460C0C64ADF867FDFD082 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -411,6 +413,7 @@
 				39D836D865F70A7477790100 /* BackupView.swift */,
 				AA000000000000000000000F /* ExportViewKeyView.swift */,
 				DB3B52FF5EE354C27AE91F9C /* CurrencySettingsView.swift */,
+				4C4E47000000000000000F01 /* LanguageSettingsView.swift */,
 				A281E883F5B6D0C620D37A9C /* DonationView.swift */,
 				B03E2005118D429FE332C194 /* NodeSettingsView.swift */,
 				5BDCBAC09269EA2BCBDEDE3C /* PriceAlertsView.swift */,
@@ -997,6 +1000,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				C0E85580EF176D61DF97BA87 /* ContentView.swift in Sources */,
 				B7E8275313B16877F1E2B0CB /* CreateWalletView.swift in Sources */,
 				C4EE7FC3ED57B61F7C24C722 /* CurrencySettingsView.swift in Sources */,
+				4C4E47000000000000000B01 /* LanguageSettingsView.swift in Sources */,
 				DA18F80BA8998B9D71869B82 /* DonationView.swift in Sources */,
 				C0DE7E470000000000000002 /* CodeText.swift in Sources */,
 				E7106F3BC27599F634D24964 /* ErrorBanner.swift in Sources */,

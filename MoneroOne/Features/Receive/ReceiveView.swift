@@ -10,8 +10,10 @@ struct ReceiveView: View {
     @EnvironmentObject var priceService: PriceService
     @Environment(\.dismiss) var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(WalletManager.selectedSubaddressIndexKey) private var selectedAddressIndex: Int = 0
     @AppStorage(WalletManager.rotateReceiveAddressKey) private var rotateReceiveAddress: Bool = true
+
+    /// The index Receive shows, kept per wallet by the manager.
+    private var selectedAddressIndex: Int { walletManager.selectedReceiveIndex }
 
     @State private var copied = false
     @State private var requestAmount = ""
@@ -150,11 +152,13 @@ struct ReceiveView: View {
     var body: some View {
         let s = snapshot
         NavigationStack(path: $path) {
-            Group {
+            // Inside the stack: the code grows from the card into focus
+            // mode, and both have to share one hosting view.
+            QRFocusContainer { focus in
                 if isTwoColumn {
-                    twoColumns(s)
+                    twoColumns(s, focus: focus)
                 } else {
-                    oneColumn(s)
+                    oneColumn(s, focus: focus)
                 }
             }
             .navigationTitle(String(localized: "Receive"))
@@ -216,7 +220,7 @@ struct ReceiveView: View {
             // not listed yet, and resetting it here would undo that.
             if !rotateReceiveAddress && selectedAddressIndex > 0 &&
                !walletManager.subaddresses.contains(where: { $0.index == selectedAddressIndex && !$0.address.isEmpty }) {
-                selectedAddressIndex = 0
+                walletManager.setReceiveSelection(0)
             }
         }
         .onChange(of: selectedAddressIndex) { old, new in
@@ -243,14 +247,17 @@ struct ReceiveView: View {
 
     /// Short screens keep Copy and Share inside the card, so the card and
     /// its actions fit without scrolling; the amount pill follows.
-    private func oneColumn(_ s: Snapshot) -> some View {
+    private func oneColumn(_ s: Snapshot, focus: QRFocus) -> some View {
         ScrollView {
             VStack(spacing: isSquat ? 12 : 24) {
-                card(s, onOpenList: openList, footer: isSquat ? AnyView(actionButtons(s)) : nil)
-                requestSection
-                if !isSquat {
-                    actionButtons(s)
+                card(s, focus: focus, onOpenList: openList, footer: isSquat ? AnyView(actionButtons(s)) : nil)
+                Group {
+                    requestSection
+                    if !isSquat {
+                        actionButtons(s)
+                    }
                 }
+                .qrFocusRecede(focus, toward: .bottom)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, isSquat ? 12 : 16)
@@ -261,10 +268,10 @@ struct ReceiveView: View {
     /// iPad and the unfolded Duo: the card on the left; the amount, the
     /// buttons and the list on the right, so no push is needed. On the Duo
     /// the 16pt gutter lands on the fold.
-    private func twoColumns(_ s: Snapshot) -> some View {
+    private func twoColumns(_ s: Snapshot, focus: QRFocus) -> some View {
         HStack(alignment: .top, spacing: 16) {
             ScrollView {
-                card(s, onOpenList: nil)
+                card(s, focus: focus, onOpenList: nil)
                     .padding(.bottom, 16)
             }
             .scrollIndicators(.hidden)
@@ -277,6 +284,7 @@ struct ReceiveView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20))
             }
             .frame(maxWidth: .infinity)
+            .qrFocusRecede(focus, toward: .bottom)
         }
         .padding(16)
     }
@@ -321,7 +329,7 @@ struct ReceiveView: View {
         return StatusLine(text: ReceiveAddressLogic.statusText(status), tone: row.isUsed ? .used : .unused)
     }
 
-    private func card(_ s: Snapshot, onOpenList: (() -> Void)?, footer: AnyView? = nil) -> some View {
+    private func card(_ s: Snapshot, focus: QRFocus, onOpenList: (() -> Void)?, footer: AnyView? = nil) -> some View {
         let line = statusLine(s)
         let content = qrContent(for: s.shown)
         let addressCount = s.rows.count + (s.mainRow == nil ? 0 : 1)
@@ -341,6 +349,7 @@ struct ReceiveView: View {
             compact: isSquat,
             footer: footer,
             requestAmount: requestedXMR.flatMap { $0 > 0 ? $0 : nil },
+            focus: focus,
             faceTransition: faceTransition,
             infoFocus: $cardInfoFocused,
             onNew: { createAddress(popFirst: false) },

@@ -18,6 +18,9 @@ class WalletManager: ObservableObject {
             } else {
                 lastHardwareSentSyncAt = nil
             }
+            if activeWallet?.id != oldValue?.id {
+                loadReceiveSelection()
+            }
         }
     }
     var hasWallet: Bool { !wallets.isEmpty }
@@ -2615,13 +2618,16 @@ class WalletManager: ObservableObject {
 
     // MARK: - Receive Address Rotation
 
-    /// UserDefaults key of the subaddress index the Receive screen shows.
-    /// One global value, not per wallet, so `reconcileReceiveAddress`
-    /// repairs an index that the active wallet does not have.
-    nonisolated static let selectedSubaddressIndexKey = "selectedSubaddressIndex"
     /// UserDefaults key of the "Fresh Receive Address" setting. Default on.
     nonisolated static let rotateReceiveAddressKey = "rotateReceiveAddress"
-    private nonisolated static let receiveSelectionBaselineKey = "receiveSelectionBaseline"
+
+    /// The subaddress index the Receive screen shows, for the active
+    /// wallet. Each wallet keeps its own (`ReceiveSelectionStore`), so a
+    /// wallet switch shows that wallet's last address, not the index the
+    /// other wallet had.
+    @Published private(set) var selectedReceiveIndex: Int = 0
+
+    private let receiveSelection = ReceiveSelectionStore(defaults: .standard)
 
     /// One address the way the rotation rule sees it.
     struct ReceiveAddressSlot: Equatable {
@@ -2630,12 +2636,24 @@ class WalletManager: ObservableObject {
         let isLabeled: Bool
     }
 
-    /// A pick made in the address picker. Honored until that address
-    /// receives a payment, and only in the wallet it was picked in.
-    private struct ReceiveSelectionBaseline: Codable {
-        let walletId: UUID?
-        let index: Int
-        let transactionsCount: Int
+    /// Reads the active wallet's selection, after moving the old app-wide
+    /// value to it once.
+    private func loadReceiveSelection() {
+        guard let id = activeWallet?.id else {
+            selectedReceiveIndex = 0
+            return
+        }
+        receiveSelection.migrateLegacy(activeWalletId: id)
+        selectedReceiveIndex = receiveSelection.index(for: id)
+    }
+
+    /// Shows `index` on Receive for the active wallet.
+    func setReceiveSelection(_ index: Int) {
+        guard let id = activeWallet?.id else { return }
+        receiveSelection.setIndex(index, for: id)
+        if selectedReceiveIndex != index {
+            selectedReceiveIndex = index
+        }
     }
 
     /// The "Fresh Receive Address" setting; on unless the user turned it off.
@@ -2725,34 +2743,27 @@ class WalletManager: ObservableObject {
     /// Records a pick made in the address picker so rotation keeps it
     /// until that address receives a payment.
     func noteManualReceiveSelection(index: Int) {
-        let defaults = UserDefaults.standard
-        defaults.set(index, forKey: Self.selectedSubaddressIndexKey)
+        guard let id = activeWallet?.id else { return }
+        setReceiveSelection(index)
         let count = receiveAddressSlots().first { $0.index == index }?.transactionsCount ?? 0
-        let baseline = ReceiveSelectionBaseline(walletId: activeWallet?.id, index: index, transactionsCount: count)
-        if let data = try? JSONEncoder().encode(baseline) {
-            defaults.set(data, forKey: Self.receiveSelectionBaselineKey)
-        }
+        receiveSelection.setBaseline(.init(index: index, transactionsCount: count), for: id)
     }
 
     /// True when `index` is the user's own pick in this wallet (New Address
     /// or the address list), which rotation keeps until it gets paid.
     func isManualReceiveSelection(index: Int) -> Bool {
-        guard let baseline = loadReceiveSelectionBaseline() else { return false }
-        return baseline.walletId == activeWallet?.id && baseline.index == index
-    }
-
-    private func loadReceiveSelectionBaseline() -> ReceiveSelectionBaseline? {
-        guard let data = UserDefaults.standard.data(forKey: Self.receiveSelectionBaselineKey) else { return nil }
-        return try? JSONDecoder().decode(ReceiveSelectionBaseline.self, from: data)
+        guard let id = activeWallet?.id, let baseline = receiveSelection.baseline(for: id) else { return false }
+        return baseline.index == index
     }
 
     /// Applies `nextReceiveIndex` to the active wallet and writes the
-    /// result to `selectedSubaddressIndex`. Runs after every subaddress
+    /// result to `selectedReceiveIndex`. Runs after every subaddress
     /// and transaction update from the kit (one each per refresh), so a
     /// payment to the shown address moves Receive on within a refresh.
     /// Derives at most one new subaddress per update when the wallet has
     /// no fresh one.
     func reconcileReceiveAddress() {
+        guard let walletId = activeWallet?.id else { return }
         let slots = receiveAddressSlots()
         // Nothing to decide until the kit has listed the wallet's addresses.
         guard !slots.isEmpty else { return }
@@ -2764,12 +2775,9 @@ class WalletManager: ObservableObject {
             pendingRotatedIndex = nil
         }
 
-        let defaults = UserDefaults.standard
-        let selected = defaults.integer(forKey: Self.selectedSubaddressIndexKey)
+        let selected = receiveSelection.index(for: walletId)
         var baselineCount: Int?
-        if let baseline = loadReceiveSelectionBaseline(),
-           baseline.walletId == activeWallet?.id,
-           baseline.index == selected {
+        if let baseline = receiveSelection.baseline(for: walletId), baseline.index == selected {
             baselineCount = baseline.transactionsCount
         }
         let rotate = rotateReceiveAddress
@@ -2781,8 +2789,8 @@ class WalletManager: ObservableObject {
             rotate: rotate
         ) {
             if next != selected {
-                defaults.set(next, forKey: Self.selectedSubaddressIndexKey)
-                defaults.removeObject(forKey: Self.receiveSelectionBaselineKey)
+                setReceiveSelection(next)
+                receiveSelection.setBaseline(nil, for: walletId)
             }
             return
         }
@@ -2795,8 +2803,8 @@ class WalletManager: ObservableObject {
         guard rotate, !primaryAddress.isEmpty, let wallet = moneroWallet,
               let created = wallet.createSubaddress() else { return }
         pendingRotatedIndex = created.index
-        defaults.set(created.index, forKey: Self.selectedSubaddressIndexKey)
-        defaults.removeObject(forKey: Self.receiveSelectionBaselineKey)
+        setReceiveSelection(created.index)
+        receiveSelection.setBaseline(nil, for: walletId)
     }
 
     // MARK: - Validation
@@ -3174,6 +3182,7 @@ class WalletManager: ObservableObject {
         // deleteSeed wipes shared pinhash/salt as well.
         keychain.deleteViewOnly(walletId: id)
         keychain.deleteSeed(walletId: id)
+        receiveSelection.removeAll(for: id)
         walletStore.removeWallet(id: id)
         wallets = walletStore.loadWallets()
 
@@ -3727,5 +3736,85 @@ extension WalletManager {
     nonisolated static func freshPaymentRequest(_ request: PaymentRequest?, now: Date) -> PaymentRequest? {
         guard let request, now.timeIntervalSince(request.receivedAt) < paymentRequestLifetime else { return nil }
         return request
+    }
+}
+
+// MARK: - Receive selection
+
+/// The Receive screen's selection, kept per wallet: the subaddress index it
+/// shows, and the user's own pick (New Address or the address list), which
+/// rotation keeps until that address gets paid. Before this it was one
+/// app-wide value, so switching wallets carried one wallet's index into
+/// the other.
+struct ReceiveSelectionStore {
+    let defaults: UserDefaults
+
+    /// A pick: the address and its payment count when it was picked.
+    struct Baseline: Codable, Equatable {
+        let index: Int
+        let transactionsCount: Int
+    }
+
+    /// The app-wide keys used before the selection was per wallet.
+    static let legacyIndexKey = "selectedSubaddressIndex"
+    static let legacyBaselineKey = "receiveSelectionBaseline"
+    private static let indexPrefix = "one.monero.receiveIndex."
+    private static let baselinePrefix = "one.monero.receiveBaseline."
+
+    /// The shape of `legacyBaselineKey`: it named its own wallet.
+    private struct LegacyBaseline: Codable {
+        let walletId: UUID?
+        let index: Int
+        let transactionsCount: Int
+    }
+
+    func index(for walletId: UUID) -> Int {
+        defaults.integer(forKey: Self.indexPrefix + walletId.uuidString)
+    }
+
+    func setIndex(_ index: Int, for walletId: UUID) {
+        defaults.set(index, forKey: Self.indexPrefix + walletId.uuidString)
+    }
+
+    func baseline(for walletId: UUID) -> Baseline? {
+        guard let data = defaults.data(forKey: Self.baselinePrefix + walletId.uuidString) else { return nil }
+        return try? JSONDecoder().decode(Baseline.self, from: data)
+    }
+
+    func setBaseline(_ baseline: Baseline?, for walletId: UUID) {
+        let key = Self.baselinePrefix + walletId.uuidString
+        if let baseline, let data = try? JSONEncoder().encode(baseline) {
+            defaults.set(data, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    /// Forgets a deleted wallet's selection.
+    func removeAll(for walletId: UUID) {
+        defaults.removeObject(forKey: Self.indexPrefix + walletId.uuidString)
+        defaults.removeObject(forKey: Self.baselinePrefix + walletId.uuidString)
+    }
+
+    /// Moves the app-wide values into the per-wallet keys, once, then
+    /// deletes them. The index belonged to whichever wallet was open, which
+    /// on the first launch after the update is the active one; the pick
+    /// names its own wallet. A wallet that already has its own value keeps
+    /// it.
+    func migrateLegacy(activeWalletId: UUID) {
+        if defaults.object(forKey: Self.legacyIndexKey) != nil {
+            if defaults.object(forKey: Self.indexPrefix + activeWalletId.uuidString) == nil {
+                setIndex(defaults.integer(forKey: Self.legacyIndexKey), for: activeWalletId)
+            }
+            defaults.removeObject(forKey: Self.legacyIndexKey)
+        }
+        if let data = defaults.data(forKey: Self.legacyBaselineKey) {
+            if let legacy = try? JSONDecoder().decode(LegacyBaseline.self, from: data),
+               let owner = legacy.walletId,
+               defaults.object(forKey: Self.baselinePrefix + owner.uuidString) == nil {
+                setBaseline(Baseline(index: legacy.index, transactionsCount: legacy.transactionsCount), for: owner)
+            }
+            defaults.removeObject(forKey: Self.legacyBaselineKey)
+        }
     }
 }

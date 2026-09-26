@@ -9,6 +9,14 @@ struct DonationView: View {
     private let donationAddress = "86AWuSFkMKCNp4e7dWho3CBvFpvAzj8hnZNWM9fedD5LKb2mXVfnmH9XuDD9zYqzzR6LAFxUSsdGTVUDABzcgjMfFVfBHpP"
 
     var body: some View {
+        QRFocusContainer { focus in
+            content(focus: focus)
+        }
+        .navigationTitle("Donate")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func content(focus: QRFocus) -> some View {
         ScrollView {
             VStack(spacing: 24) {
                 // Header
@@ -28,80 +36,90 @@ struct DonationView: View {
                         .padding(.horizontal)
                 }
                 .padding(.top, 16)
+                .qrFocusRecede(focus, toward: .top)
 
-                // QR Code
-                QRCodeView(content: "monero:\(donationAddress)")
-                    .frame(width: 240, height: 240)
-                    .shadow(color: .black.opacity(0.1), radius: 10)
+                // QR Code: a tap grows it into focus mode.
+                FocusableQRPlate(
+                    item: QRFocusItem(content: "monero:\(donationAddress)", title: String(localized: "Donate")),
+                    side: 240,
+                    focus: focus
+                )
+                .shadow(color: .black.opacity(0.1), radius: 10)
 
-                // Address Card
-                VStack(spacing: 12) {
-                    Text("Monero Address")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    CodeText(donationAddress, color: .label, alignment: .center, selectable: true)
+                Group {
+                    addressCard
+                    actionButtons
                 }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(12)
-                .padding(.horizontal)
-
-                // Action Buttons
-                HStack(spacing: 16) {
-                    // Copy Button
-                    Button {
-                        copyAddress()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
-                            Text(copied ? "Copied!" : "Copy")
-                                .fontWeight(.medium)
-                        }
-                        .foregroundColor(copied ? .green : .primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(copied ? Color.green.opacity(0.2) : Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                    }
-
-                    // Send Button
-                    Button {
-                        walletManager.prefillSendAddress = donationAddress
-                        walletManager.prefillSendAmount = "0.25"
-                        walletManager.shouldShowSendView = true
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "arrow.up.circle.fill")
-                            Text("Send XMR")
-                                .fontWeight(.medium)
-                        }
-                        .foregroundColor(walletManager.isViewOnly ? Color.secondary.opacity(0.6) : .white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            LinearGradient(
-                                colors: [.pink, .orange, .yellow],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(12)
-                    }
-                    .disabled(walletManager.isViewOnly)
-                    .opacity(walletManager.isViewOnly ? 0.55 : 1)
-                    .accessibilityLabel(walletManager.isViewOnly ? "Send XMR, disabled for view-only wallet" : "Send XMR")
-                    .accessibilityHint(walletManager.isViewOnly ? "This wallet is view-only and cannot send" : "Prefills send screen with donation address")
-                }
-                .padding(.horizontal)
+                .qrFocusRecede(focus, toward: .bottom)
 
                 Spacer(minLength: 40)
             }
         }
-        .navigationTitle("Donate")
-        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var addressCard: some View {
+        VStack(spacing: 12) {
+            Text("Monero Address")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            CodeText(donationAddress, color: .label, alignment: .center, selectable: true)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 16) {
+            // Copy Button
+            Button {
+                copyAddress()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                    Text(copied ? "Copied!" : "Copy")
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(copied ? .green : .primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(copied ? Color.green.opacity(0.2) : Color(.secondarySystemBackground))
+                .cornerRadius(12)
+            }
+
+            // Send Button
+            Button {
+                walletManager.prefillSendAddress = donationAddress
+                walletManager.prefillSendAmount = "0.25"
+                walletManager.shouldShowSendView = true
+                dismiss()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.up.circle.fill")
+                    Text("Send XMR")
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(walletManager.isViewOnly ? Color.secondary.opacity(0.6) : .white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    LinearGradient(
+                        colors: [.pink, .orange, .yellow],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(12)
+            }
+            .disabled(walletManager.isViewOnly)
+            .opacity(walletManager.isViewOnly ? 0.55 : 1)
+            .accessibilityLabel(walletManager.isViewOnly ? "Send XMR, disabled for view-only wallet" : "Send XMR")
+            .accessibilityHint(walletManager.isViewOnly ? "This wallet is view-only and cannot send" : "Prefills send screen with donation address")
+        }
+        .padding(.horizontal)
     }
 
     private func copyAddress() {

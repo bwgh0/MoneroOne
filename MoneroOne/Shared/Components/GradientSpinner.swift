@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct GradientSpinner: View {
-    var color: Color = .orange
+    var color: Color = .brand
     var iconName: String = "paperplane.fill"
 
     @State private var outerRotation: Double = 0

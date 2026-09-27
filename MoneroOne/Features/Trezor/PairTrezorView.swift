@@ -166,7 +166,7 @@ struct PairTrezorView: View {
         VStack(spacing: 8) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 48))
-                .foregroundColor(.orange)
+                .foregroundColor(.brand)
             Text(stepTitle)
                 .font(.title3.weight(.semibold))
             Text(stepSubtitle)
@@ -212,7 +212,7 @@ struct PairTrezorView: View {
                     } label: {
                         HStack {
                             Image(systemName: "dot.radiowaves.left.and.right")
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(.brand)
                             Text(device.name)
                                 .font(.body.weight(.medium))
                             Spacer()
@@ -294,7 +294,7 @@ struct PairTrezorView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.label).font(.caption.weight(.medium))
                         if let detail = item.detail {
-                            Text(detail).font(.caption2).foregroundStyle(item.status == .failed ? .red : .orange)
+                            Text(detail).font(.caption2).foregroundStyle(item.status == .failed ? .red : .brand)
                         }
                     }
                     Spacer()
@@ -327,7 +327,7 @@ struct PairTrezorView: View {
             } label: {
                 Text("Try Again")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.brand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
@@ -391,7 +391,7 @@ struct PairTrezorView: View {
             } label: {
                 Text("Continue")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.brand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
@@ -450,7 +450,7 @@ struct PairTrezorView: View {
             } label: {
                 Text("Continue")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(canProceedPIN ? Color.orange : Color.gray)
+                    .foregroundStyle(canProceedPIN ? Color.brand : Color.gray)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
@@ -479,7 +479,7 @@ struct PairTrezorView: View {
                 .font(.subheadline)
                 .padding(12)
                 .background(Color(.secondarySystemBackground))
-                .cornerRadius(10)
+                .cornerRadius(12)
                 .padding(.horizontal)
 
             Button {
@@ -487,7 +487,7 @@ struct PairTrezorView: View {
             } label: {
                 Text("Pair Trezor")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.brand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }

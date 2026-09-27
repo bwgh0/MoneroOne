@@ -76,7 +76,7 @@ struct BackupView: View {
         VStack(spacing: 24) {
             Image(systemName: "lock.fill")
                 .font(.system(size: 60))
-                .foregroundColor(.orange)
+                .foregroundColor(.brand)
 
             Text("Enter PIN to view seed phrase")
                 .font(.headline)
@@ -101,13 +101,12 @@ struct BackupView: View {
                 unlockSeed()
             } label: {
                 Text("Unlock")
-                    .fontWeight(.semibold)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(pin.count >= preferredPINLength ? Color.brand : Color.gray)
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(pin.count >= preferredPINLength ? Color.orange : Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
+                    .padding(.vertical, 16)
             }
+            .glassButtonStyle()
             .disabled(pin.count < preferredPINLength)
             .padding(.horizontal)
 
@@ -151,13 +150,12 @@ struct BackupView: View {
                     Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
                     Text(showCopiedFeedback ? "Copied!" : "Copy Seed Phrase")
                 }
-                .fontWeight(.semibold)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.brand)
                 .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.orange)
-                .foregroundColor(.white)
-                .cornerRadius(14)
+                .padding(.vertical, 16)
             }
+            .glassButtonStyle()
             .padding(.horizontal)
 
             Spacer()

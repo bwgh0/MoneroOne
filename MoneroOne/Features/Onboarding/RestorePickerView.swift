@@ -72,7 +72,7 @@ struct RestorePickerView: View {
                     Image(systemName: "arrow.right")
                         .font(.callout.weight(.semibold))
                 }
-                .foregroundStyle(Color.orange)
+                .foregroundStyle(Color.brand)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }

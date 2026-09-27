@@ -93,13 +93,10 @@ struct PriceWidgetView: View {
 
     private var noDataView: some View {
         VStack(spacing: 8) {
-            Image("MoneroSymbol")
+            Image("MoneroMark")
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(width: 32, height: 32)
-                .clipShape(Circle())
-                .scaleEffect(1.15)
-                .clipShape(Circle())
 
             Text("XMR Price")
                 .font(.headline.weight(.semibold))
@@ -116,13 +113,10 @@ struct PriceWidgetView: View {
     private var smallView: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Logo
-            Image("MoneroSymbol")
+            Image("MoneroMark")
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(width: 36, height: 36)
-                .clipShape(Circle())
-                .scaleEffect(1.15)
-                .clipShape(Circle())
 
             // Name
             Text("Monero")
@@ -157,13 +151,10 @@ struct PriceWidgetView: View {
             // Left side - Price info
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Image("MoneroSymbol")
+                    Image("MoneroMark")
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                         .frame(width: 24, height: 24)
-                        .clipShape(Circle())
-                        .scaleEffect(1.15)
-                        .clipShape(Circle())
 
                     Text("Monero")
                         .font(.subheadline.weight(.semibold))
@@ -223,13 +214,10 @@ struct PriceWidgetView: View {
         VStack(alignment: .leading, spacing: 10) {
             // Header
             HStack {
-                Image("MoneroSymbol")
+                Image("MoneroMark")
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .frame(width: 28, height: 28)
-                    .clipShape(Circle())
-                    .scaleEffect(1.15)
-                    .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Monero")
@@ -277,8 +265,8 @@ struct PriceWidgetView: View {
                     .font(.caption2.weight(.medium))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.2))
-                    .foregroundColor(.orange)
+                    .background(Color.brand.opacity(0.2))
+                    .foregroundColor(.brand)
                     .cornerRadius(4)
 
                 Spacer()
@@ -311,7 +299,7 @@ struct PriceWidgetView: View {
     }
 
     private func sparklineChart(points: [Double]) -> some View {
-        let chartColor: Color = .orange
+        let chartColor: Color = .brand
 
         return Chart(points.indices, id: \.self) { index in
             AreaMark(
@@ -344,7 +332,7 @@ struct PriceWidgetView: View {
     }
 
     private func fullChart(points: [Double]) -> some View {
-        let chartColor: Color = .orange
+        let chartColor: Color = .brand
         let minVal = points.min() ?? 0
         let maxVal = points.max() ?? 1
         let range = maxVal - minVal

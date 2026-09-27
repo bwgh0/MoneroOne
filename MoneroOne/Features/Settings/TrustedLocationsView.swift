@@ -48,10 +48,10 @@ struct TrustedLocationsView: View {
                         } else {
                             HStack(spacing: 6) {
                                 Circle()
-                                    .fill(Color.orange)
+                                    .fill(Color.yellow)
                                     .frame(width: 8, height: 8)
                                 Text("Outside trusted zones")
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(.primary)
                             }
                         }
                     }
@@ -91,14 +91,14 @@ struct TrustedLocationsView: View {
                     showingAddLocation = true
                 } label: {
                     Label("Add Trusted Location", systemImage: "plus.circle.fill")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
                 }
             } header: {
                 Text("Trusted Locations")
             } footer: {
                 if locationsManager.trustedLocations.count >= 15 {
                     Text("iOS limits apps to 20 monitored regions. You have \(locationsManager.trustedLocations.count) trusted locations.")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.primary)
                 }
             }
 
@@ -128,7 +128,7 @@ struct TrustedLocationRow: View {
         HStack(spacing: 12) {
             Image(systemName: iconName)
                 .font(.title2)
-                .foregroundColor(.orange)
+                .foregroundColor(.brand)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {

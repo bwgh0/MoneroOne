@@ -150,7 +150,7 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         // Corner markers
         let cornerLength: CGFloat = 30
         let cornerWidth: CGFloat = 4
-        let cornerColor = UIColor.orange
+        let cornerColor = UIColor.brand
 
         let corners: [(CGPoint, CGFloat, CGFloat)] = [
             (CGPoint(x: scanRect.minX, y: scanRect.minY), 1, 1),   // Top-left

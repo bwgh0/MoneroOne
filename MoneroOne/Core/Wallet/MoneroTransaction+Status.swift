@@ -32,9 +32,9 @@ extension MoneroTransaction {
             return .secondary
         }
         if confirmations == 0 {
-            return .orange
+            return .brand
         } else if confirmations < 10 {
-            return .orange
+            return .brand
         } else {
             return .green
         }

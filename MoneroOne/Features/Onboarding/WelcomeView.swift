@@ -136,7 +136,7 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.white)
         }
         .glassProminentButtonStyle()
-        .tint(.orange)
+        .tint(.brand)
         .accessibilityLabel("Create New Wallet")
         .accessibilityHint("Double tap to create a new Monero wallet")
         .accessibilityIdentifier("welcome.createButton")

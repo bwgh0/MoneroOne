@@ -145,7 +145,7 @@ struct LanguageSettingsView: View {
                 if selected {
                     Image(systemName: "checkmark")
                         .fontWeight(.semibold)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.brand)
                         .accessibilityHidden(true)
                 }
             }

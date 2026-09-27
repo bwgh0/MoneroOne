@@ -12,7 +12,7 @@ struct QuickActionsCard: View {
                 title: "Send",
                 hint: "Double tap to send Monero",
                 icon: "arrow.up.circle.fill",
-                color: .orange,
+                color: .brand,
                 isDisabled: isSendDisabled,
                 action: onSend
             )

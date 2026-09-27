@@ -40,13 +40,13 @@ struct TrustedLocationMapView: View {
             Map(position: $cameraPosition) {
                 if let coord = coordinate {
                     MapCircle(center: coord, radius: selectedRadius)
-                        .foregroundStyle(Color.orange.opacity(0.2))
-                        .stroke(Color.orange, lineWidth: 2)
+                        .foregroundStyle(Color.brand.opacity(0.2))
+                        .stroke(Color.brand, lineWidth: 2)
 
                     Annotation("", coordinate: coord) {
                         Image(systemName: "mappin.circle.fill")
                             .font(.title)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                     }
                 }
             }
@@ -192,7 +192,7 @@ struct AddTrustedLocationView: View {
                     }
                     .padding()
                     .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10)
+                    .cornerRadius(12)
 
                     // Radius picker
                     VStack(alignment: .leading, spacing: 8) {
@@ -206,7 +206,7 @@ struct AddTrustedLocationView: View {
                         Slider(value: $selectedRadius, in: 100...2000, step: 100) {
                             Text("Radius")
                         }
-                        .tint(.orange)
+                        .tint(.brand)
 
                         // Preset buttons
                         HStack(spacing: 8) {
@@ -218,7 +218,7 @@ struct AddTrustedLocationView: View {
                                         .font(.caption)
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
-                                        .background(selectedRadius == preset.rawValue ? Color.orange : Color(.tertiarySystemBackground))
+                                        .background(selectedRadius == preset.rawValue ? Color.brand : Color(.tertiarySystemBackground))
                                         .foregroundColor(selectedRadius == preset.rawValue ? .white : .primary)
                                         .cornerRadius(8)
                                 }
@@ -227,20 +227,19 @@ struct AddTrustedLocationView: View {
                     }
                     .padding()
                     .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10)
+                    .cornerRadius(12)
 
                     // Save button
                     Button {
                         saveLocation()
                     } label: {
                         Text(isEditing ? "Update Location" : "Add Location")
-                            .fontWeight(.semibold)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(canSave ? Color.brand : Color.gray)
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(canSave ? Color.orange : Color.gray)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
+                            .padding(.vertical, 16)
                     }
+                    .glassButtonStyle()
                     .disabled(!canSave)
 
                     // Delete button (edit mode only)

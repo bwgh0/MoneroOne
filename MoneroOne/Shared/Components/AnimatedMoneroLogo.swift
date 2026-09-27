@@ -45,7 +45,7 @@ struct AnimatedMoneroLogo: View {
 
             // Orange glow below - stronger when logo is down
             Ellipse()
-                .fill(Color.orange)
+                .fill(Color.brand)
                 .frame(width: size * 0.7, height: size * 0.15)
                 .blur(radius: 25)
                 .opacity(floating ? 0.2 : 0.6)

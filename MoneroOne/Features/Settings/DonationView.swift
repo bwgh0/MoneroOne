@@ -23,7 +23,7 @@ struct DonationView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "heart.fill")
                         .font(.largeTitle)
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
 
                     Text("Support Development")
                         .font(.title2)
@@ -72,22 +72,21 @@ struct DonationView: View {
     }
 
     private var actionButtons: some View {
-        HStack(spacing: 16) {
-            // Copy Button
+        HStack(spacing: 12) {
+            // Copy Button (glass, so the pair matches)
             Button {
                 copyAddress()
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
                     Text(copied ? "Copied!" : "Copy")
-                        .fontWeight(.medium)
                 }
-                .foregroundColor(copied ? .green : .primary)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(copied ? Color.green : Color.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(copied ? Color.green.opacity(0.2) : Color(.secondarySystemBackground))
-                .cornerRadius(12)
             }
+            .glassButtonStyle()
 
             // Send Button
             Button {
@@ -99,22 +98,14 @@ struct DonationView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.up.circle.fill")
                     Text("Send XMR")
-                        .fontWeight(.medium)
                 }
-                .foregroundColor(walletManager.isViewOnly ? Color.secondary.opacity(0.6) : .white)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(walletManager.isViewOnly ? Color.gray : Color.brand)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(
-                    LinearGradient(
-                        colors: [.pink, .orange, .yellow],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .cornerRadius(12)
             }
+            .glassButtonStyle()
             .disabled(walletManager.isViewOnly)
-            .opacity(walletManager.isViewOnly ? 0.55 : 1)
             .accessibilityLabel(walletManager.isViewOnly ? "Send XMR, disabled for view-only wallet" : "Send XMR")
             .accessibilityHint(walletManager.isViewOnly ? "This wallet is view-only and cannot send" : "Prefills send screen with donation address")
         }

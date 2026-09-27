@@ -264,10 +264,10 @@ struct ReceiveView: View {
                                         Text(isFiatMode ? "XMR" : priceService.selectedCurrency.uppercased())
                                             .font(.caption.weight(.semibold))
                                     }
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(.brand)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
-                                    .background(Color.orange.opacity(0.1))
+                                    .background(Color.brand.opacity(0.1))
                                     .clipShape(Capsule())
                                 }
                                 .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
@@ -396,7 +396,7 @@ struct ReceiveView: View {
                                 .controlSize(.small)
                         }
                     }
-                    .foregroundColor(.orange)
+                    .foregroundColor(.brand)
                     .padding(.horizontal, 16)
                     .frame(minHeight: 48)
                     .contentShape(Rectangle())
@@ -417,9 +417,10 @@ struct ReceiveView: View {
                 if selectedAddressIndex == 0 {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.yellow)
                         Text("Main address links all transactions. Use subaddresses for privacy.")
                     }
-                    .foregroundColor(.orange)
+                    .foregroundColor(.primary)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("Privacy warning: Main address links all transactions. Use subaddresses for privacy.")
                 }
@@ -433,8 +434,13 @@ struct ReceiveView: View {
                 }
 
                 if let note = ReceiveAddressLogic.limitText(creationLimit) {
-                    Text(note)
-                        .foregroundColor(.orange)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.yellow)
+                            .accessibilityHidden(true)
+                        Text(note)
+                    }
+                    .foregroundColor(.primary)
                 }
             }
             .font(.caption)
@@ -462,7 +468,7 @@ struct ReceiveView: View {
             CompactActionButton(
                 title: "Share",
                 icon: "square.and.arrow.up",
-                color: .orange,
+                color: .brand,
                 isDisabled: unavailable
             ) {
                 showShareSheet = true
@@ -770,7 +776,7 @@ struct AddressPickerView: View {
                 } label: {
                     Label("Rename", systemImage: "pencil")
                 }
-                .tint(.orange)
+                .tint(.brand)
             }
         }
         .contextMenu {
@@ -809,7 +815,7 @@ struct AddressPickerView: View {
                         .controlSize(.small)
                 }
             }
-            .foregroundColor(.orange)
+            .foregroundColor(.brand)
             .contentShape(Rectangle())
         }
         .disabled(isCreating || !canCreate || isEditing)
@@ -889,7 +895,7 @@ struct AddressListRow: View {
                     .opacity(isEditing && !row.isMain ? 1 : 0)
             }
             .font(.subheadline.weight(.semibold))
-            .foregroundColor(.orange)
+            .foregroundColor(.brand)
             .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 3) {

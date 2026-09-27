@@ -73,13 +73,10 @@ struct BalanceWidgetView: View {
 
     private var disabledView: some View {
         VStack(spacing: 8) {
-            Image("MoneroSymbol")
+            Image("MoneroMark")
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(width: 32, height: 32)
-                .clipShape(Circle())
-                .scaleEffect(1.15)
-                .clipShape(Circle())
 
             Text("Monero One")
                 .font(.headline.weight(.semibold))
@@ -94,13 +91,10 @@ struct BalanceWidgetView: View {
         VStack(alignment: .leading, spacing: 6) {
             // Header
             HStack {
-                Image("MoneroSymbol")
+                Image("MoneroMark")
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .frame(width: 22, height: 22)
-                    .clipShape(Circle())
-                    .scaleEffect(1.15)
-                    .clipShape(Circle())
 
                 Spacer()
 
@@ -132,7 +126,7 @@ struct BalanceWidgetView: View {
             if entry.data.isTestnet {
                 Text("TESTNET")
                     .font(.system(size: 7, weight: .bold))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.brand)
             }
         }
     }
@@ -142,13 +136,10 @@ struct BalanceWidgetView: View {
             // Left side - Balance
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Image("MoneroSymbol")
+                    Image("MoneroMark")
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                         .frame(width: 26, height: 26)
-                        .clipShape(Circle())
-                        .scaleEffect(1.15)
-                        .clipShape(Circle())
 
                     Text("Monero One")
                         .font(.subheadline.weight(.semibold))
@@ -158,8 +149,8 @@ struct BalanceWidgetView: View {
                             .font(.system(size: 7, weight: .bold))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.2))
-                            .foregroundColor(.orange)
+                            .background(Color.brand.opacity(0.2))
+                            .foregroundColor(.brand)
                             .cornerRadius(4)
                     }
                 }
@@ -215,7 +206,7 @@ struct BalanceWidgetView: View {
     private var statusColor: Color {
         switch entry.data.syncStatus {
         case .synced: return .green
-        case .syncing, .connecting: return .orange
+        case .syncing, .connecting: return .brand
         case .offline: return .red
         }
     }

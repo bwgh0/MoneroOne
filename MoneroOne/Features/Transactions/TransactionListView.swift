@@ -181,7 +181,7 @@ struct TransactionListView: View {
             }
         } label: {
             Image(systemName: isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                .foregroundColor(isFilterActive ? .orange : .primary)
+                .foregroundColor(isFilterActive ? .brand : .primary)
         }
         .accessibilityLabel("Filter transactions")
         .accessibilityHint(filterAccessibilityHint)
@@ -590,10 +590,10 @@ struct TransactionRow: View {
             // Icon
             Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(transaction.type == .incoming ? .green : .orange)
+                .foregroundColor(transaction.type == .incoming ? .green : .brand)
                 .frame(width: 36, height: 36)
                 .background(
-                    (transaction.type == .incoming ? Color.green : Color.orange)
+                    (transaction.type == .incoming ? Color.green : Color.brand)
                         .opacity(0.15)
                 )
                 .cornerRadius(8)

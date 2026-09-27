@@ -397,7 +397,7 @@ struct PortfolioChartView: View {
                         .padding(.vertical, 10)
                         .background(
                             selectedTimeRange == range ?
-                            Color.orange : Color.clear
+                            Color.brand : Color.clear
                         )
                         .cornerRadius(8)
                 }

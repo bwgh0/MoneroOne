@@ -16,8 +16,8 @@ struct AnimatedWalletIcon: View {
     private var backgroundGradientColors: [Color] {
         if colorScheme == .dark {
             return [
-                Color.orange.opacity(0.25),
-                Color.orange.opacity(0.08),
+                Color.brand.opacity(0.25),
+                Color.brand.opacity(0.08),
                 Color.clear
             ]
         } else {
@@ -67,15 +67,15 @@ struct AnimatedWalletIcon: View {
                     .foregroundStyle(
                         LinearGradient(
                             colors: [
-                                Color(red: 1.0, green: 0.75, blue: 0.25),
-                                .orange,
-                                Color(red: 0.9, green: 0.45, blue: 0.15)
+                                .brandHighlight,
+                                .brand,
+                                .brandShade
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
-                    .shadow(color: .orange.opacity(0.4), radius: 12, y: 4)
+                    .shadow(color: .brand.opacity(0.4), radius: 12, y: 4)
             }
             .frame(width: size, height: size)
             .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
@@ -105,7 +105,7 @@ struct AnimatedWalletIcon: View {
             // gray in light mode so the shadow reads as depth rather than
             // peach tint.
             Ellipse()
-                .fill(colorScheme == .dark ? Color.orange : Color.black)
+                .fill(colorScheme == .dark ? Color.brand : Color.black)
                 .frame(width: size * 0.6, height: size * 0.06)
                 .blur(radius: 16)
                 .opacity(floating ? 0.15 : 0.45)

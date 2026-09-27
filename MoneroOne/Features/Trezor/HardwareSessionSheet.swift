@@ -158,7 +158,7 @@ struct HardwareSessionSheet: View {
         VStack(spacing: 16) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(.orange)
+                .foregroundStyle(.brand)
 
             switch trezorManager.state {
             case .idle, .scanning:
@@ -199,7 +199,7 @@ struct HardwareSessionSheet: View {
                 } label: {
                     HStack {
                         Image(systemName: "dot.radiowaves.left.and.right")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.brand)
                         Text(device.name)
                             .font(.body.weight(.medium))
                         Spacer()
@@ -280,7 +280,7 @@ struct HardwareSessionSheet: View {
         VStack(spacing: 16) {
             ProgressView(value: progress / 100)
                 .progressViewStyle(.linear)
-                .tint(.orange)
+                .tint(.brand)
                 .padding(.horizontal, 24)
             Text("Syncing device wallet")
                 .font(.headline)
@@ -353,22 +353,26 @@ struct HardwareSessionSheet: View {
             } label: {
                 Text("Done")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.brand)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.orange, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(.vertical, 16)
             }
+            .glassButtonStyle()
         case .failed:
             HStack(spacing: 12) {
+                // Pairs are equal: Cancel takes the same glass capsule as
+                // Try Again, in the label color because it dismisses.
                 Button {
                     walletManager.resetHardwareSessionState()
                     dismiss()
                 } label: {
                     Text("Cancel")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                        .padding(.vertical, 16)
                 }
+                .glassButtonStyle()
                 Button {
                     walletManager.resetHardwareSessionState()
                     sessionStarted = false
@@ -377,11 +381,11 @@ struct HardwareSessionSheet: View {
                 } label: {
                     Text("Try Again")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.brand)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.orange, in: RoundedRectangle(cornerRadius: 14))
+                        .padding(.vertical, 16)
                 }
+                .glassButtonStyle()
             }
         default:
             Button(role: .cancel) {

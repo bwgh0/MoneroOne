@@ -70,10 +70,10 @@ struct BalanceCard: View {
                     .fixedSize()
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.brand)
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(Capsule().fill(Color.orange))
+        .background(Capsule().fill(Color.brand.opacity(0.15)))
     }
 
     private var balanceAccessibilityLabel: String {
@@ -209,13 +209,10 @@ struct BalanceCard: View {
             }
 
             HStack(spacing: 16) {
-                Image("MoneroSymbol")
+                Image("MoneroMark")
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .frame(width: 48, height: 48)
-                    .clipShape(Circle())
-                    .scaleEffect(1.15)
-                    .clipShape(Circle())
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -286,7 +283,7 @@ struct BalanceCard: View {
                         Text("Locked until recent transactions confirm")
                             .font(.caption2)
                     }
-                    .foregroundColor(.orange)
+                    .foregroundColor(.brand)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(availableAccessibilityLabel)
@@ -329,7 +326,7 @@ struct BalanceCard: View {
             if !isSyncBlocked, case .syncing(let progress, let remaining) = syncState {
                 VStack(spacing: 4) {
                     ProgressView(value: progress / 100)
-                        .tint(.orange)
+                        .tint(.brand)
                         .accessibilityHidden(true)
                     if let remaining = remaining {
                         Text("\(Int(progress))% synced - \(formatBlockCount(remaining)) blocks remaining")
@@ -361,11 +358,11 @@ struct BalanceCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.caption)
+                        .foregroundColor(.yellow)
                         .accessibilityHidden(true)
                     Text("Syncing from untrusted location")
                         .font(.caption)
                 }
-                .foregroundColor(.orange)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Location status: warning, syncing from untrusted location")
             } else if isTrustedLocationEnabled, let name = trustedLocationName {
@@ -495,12 +492,12 @@ private struct ConnectionStepIndicator: View {
             if isCompleted || isFinal {
                 // Completed or final synced state - filled dot
                 Circle()
-                    .fill(isFinal ? Color.green : Color.orange)
+                    .fill(isFinal ? Color.green : Color.brand)
                     .frame(width: dotSize, height: dotSize)
             } else if isActive {
                 // Active state - pulsing dot
                 Circle()
-                    .fill(Color.orange)
+                    .fill(Color.brand)
                     .frame(width: dotSize, height: dotSize)
                     .modifier(PulsingModifier())
             } else {
@@ -514,7 +511,7 @@ private struct ConnectionStepIndicator: View {
 
     private func stepLine(for index: Int) -> some View {
         Rectangle()
-            .fill(index < stage.stageIndex ? Color.orange : Color.gray.opacity(0.3))
+            .fill(index < stage.stageIndex ? Color.brand : Color.gray.opacity(0.3))
             .frame(width: lineWidth, height: lineHeight)
     }
 

@@ -11,7 +11,7 @@ struct SyncLiveActivity: Widget {
             DynamicIsland {
                 // Expanded UI
                 DynamicIslandExpandedRegion(.leading) {
-                    Image("MoneroSymbol")
+                    Image("MoneroMark")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 28, height: 28)
@@ -28,12 +28,12 @@ struct SyncLiveActivity: Widget {
                             .font(.title2)
                     } else if context.state.isConnecting {
                         Image(systemName: "antenna.radiowaves.left.and.right")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                             .font(.title3)
                     } else {
                         Text("\(Int(context.state.progress))%")
                             .font(.title2.bold())
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                     }
                 }
 
@@ -83,7 +83,7 @@ struct SyncLiveActivity: Widget {
                     } else {
                         VStack(spacing: 8) {
                             ProgressView(value: context.state.progress, total: 100)
-                                .tint(.orange)
+                                .tint(.brand)
 
                             if let blocks = context.state.blocksRemaining, blocks > 0 {
                                 Text("\(formatBlockCount(blocks)) blocks remaining")
@@ -95,11 +95,10 @@ struct SyncLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Image("MoneroSymbol")
+                Image("MoneroMark")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 18, height: 18)
-                    .clipShape(Circle())
             } compactTrailing: {
                 if context.state.isBlocked {
                     Image(systemName: "location.slash")
@@ -111,17 +110,17 @@ struct SyncLiveActivity: Widget {
                         .font(.caption)
                 } else if context.state.isConnecting {
                     Image(systemName: "antenna.radiowaves.left.and.right")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
                         .font(.caption)
                 } else {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                             .font(.caption2)
 
                         Text("\(Int(context.state.progress))%")
                             .font(.caption.bold())
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                     }
                 }
             } minimal: {
@@ -133,10 +132,10 @@ struct SyncLiveActivity: Widget {
                         .foregroundColor(.green)
                 } else if context.state.isConnecting {
                     Image(systemName: "antenna.radiowaves.left.and.right")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
                 } else {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
                 }
             }
         }
@@ -160,7 +159,7 @@ struct LockScreenView: View {
     var body: some View {
         HStack(spacing: 16) {
             // Monero logo
-            Image("MoneroSymbol")
+            Image("MoneroMark")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 44, height: 44)
@@ -212,7 +211,7 @@ struct LockScreenView: View {
                     }
 
                     ProgressView(value: context.state.progress, total: 100)
-                        .tint(.orange)
+                        .tint(.brand)
 
                     if let blocks = context.state.blocksRemaining, blocks > 0 {
                         Text("\(formatBlockCount(blocks)) blocks remaining")
@@ -235,11 +234,11 @@ struct LockScreenView: View {
             } else if context.state.isConnecting {
                 Image(systemName: "antenna.radiowaves.left.and.right")
                     .font(.title2)
-                    .foregroundColor(.orange)
+                    .foregroundColor(.brand)
             } else {
                 Text("\(Int(context.state.progress))%")
                     .font(.title2.bold())
-                    .foregroundColor(.orange)
+                    .foregroundColor(.brand)
             }
         }
         .padding()

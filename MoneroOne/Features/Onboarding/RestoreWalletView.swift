@@ -135,14 +135,17 @@ struct RestoreWalletView: View {
             Button {
                 validateAndProceed()
             } label: {
-                Text("Continue")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(isValidSeedCount ? Color.orange : Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
+                HStack(spacing: 8) {
+                    Text("Continue")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(isValidSeedCount ? Color.brand : Color.gray)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
             }
+            .glassButtonStyle()
             .disabled(!isValidSeedCount)
             .accessibilityLabel("Continue")
             .accessibilityHint(isValidSeedCount ? "Double tap to proceed with your seed phrase" : "Enter a valid seed phrase to continue")
@@ -179,12 +182,12 @@ struct RestoreWalletView: View {
                             .font(.subheadline.weight(.medium))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(selectedPINLength == 4 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
-                            .foregroundColor(selectedPINLength == 4 ? .orange : .primary)
-                            .cornerRadius(10)
+                            .background(selectedPINLength == 4 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
+                            .foregroundColor(selectedPINLength == 4 ? .brand : .primary)
+                            .cornerRadius(12)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(selectedPINLength == 4 ? Color.orange : Color.clear, lineWidth: 1.5)
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(selectedPINLength == 4 ? Color.brand : Color.clear, lineWidth: 1.5)
                             )
                     }
                     .buttonStyle(.plain)
@@ -205,18 +208,18 @@ struct RestoreWalletView: View {
                                 .font(.caption2)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundColor(.orange)
+                                .background(Color.brand.opacity(0.2))
+                                .foregroundColor(.brand)
                                 .cornerRadius(4)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(selectedPINLength == 6 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
-                        .foregroundColor(selectedPINLength == 6 ? .orange : .primary)
-                        .cornerRadius(10)
+                        .background(selectedPINLength == 6 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
+                        .foregroundColor(selectedPINLength == 6 ? .brand : .primary)
+                        .cornerRadius(12)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(selectedPINLength == 6 ? Color.orange : Color.clear, lineWidth: 1.5)
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(selectedPINLength == 6 ? Color.brand : Color.clear, lineWidth: 1.5)
                         )
                     }
                     .buttonStyle(.plain)
@@ -274,7 +277,7 @@ struct RestoreWalletView: View {
                     Image(systemName: "arrow.right")
                         .font(.callout.weight(.semibold))
                 }
-                .foregroundStyle(canProceed ? Color.orange : Color.gray)
+                .foregroundStyle(canProceed ? Color.brand : Color.gray)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
@@ -299,7 +302,7 @@ struct RestoreWalletView: View {
 
             Image(systemName: biometricIcon)
                 .font(.system(size: 80))
-                .foregroundColor(.orange)
+                .foregroundColor(.brand)
                 .accessibilityHidden(true)
 
             Text("Enable \(biometricName)?")
@@ -322,7 +325,7 @@ struct RestoreWalletView: View {
                         Text("Enable \(biometricName)")
                             .font(.callout.weight(.semibold))
                     }
-                    .foregroundStyle(Color.orange)
+                    .foregroundStyle(Color.brand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 }
@@ -360,7 +363,7 @@ struct RestoreWalletView: View {
                 .submitLabel(.done)
                 .padding(12)
                 .background(Color(.secondarySystemBackground))
-                .cornerRadius(10)
+                .cornerRadius(12)
                 .padding(.horizontal, 40)
 
             Text("You can change this later")
@@ -379,7 +382,7 @@ struct RestoreWalletView: View {
                     Image(systemName: "arrow.right")
                         .font(.callout.weight(.semibold))
                 }
-                .foregroundStyle(Color.orange)
+                .foregroundStyle(Color.brand)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
@@ -560,14 +563,17 @@ struct RestoreWalletView: View {
             Button {
                 proceedFromCreationDate()
             } label: {
-                Text("Continue")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.orange)
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
+                HStack(spacing: 8) {
+                    Text("Continue")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(Color.brand)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
             }
+            .glassButtonStyle()
             .accessibilityLabel("Continue")
             .accessibilityHint("Double tap to proceed to PIN setup")
             .accessibilityIdentifier("restore.date.continueButton")

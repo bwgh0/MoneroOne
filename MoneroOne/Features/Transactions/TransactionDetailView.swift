@@ -219,7 +219,7 @@ struct TransactionDetailView: View {
                     } label: {
                         HStack {
                             Image(systemName: "safari")
-                                .foregroundColor(.accentColor)
+                                .foregroundColor(.brand)
                             Text("View in Block Explorer")
                                 .foregroundColor(.primary)
                             Spacer()
@@ -299,7 +299,7 @@ struct TransactionDetailView: View {
         } label: {
             HStack {
                 Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
-                    .foregroundStyle(copied ? Color.green : Color.accentColor)
+                    .foregroundStyle(copied ? Color.green : Color.brand)
                     .contentTransition(.symbolEffect(.replace))
                 Text(copied ? "Copied" : "Copy All Details")
                     .foregroundColor(.primary)
@@ -339,7 +339,7 @@ struct TransactionDetailView: View {
                 } label: {
                     Image(systemName: copiedField == field ? "checkmark.circle.fill" : "doc.on.doc")
                         .font(.body)
-                        .foregroundStyle(copiedField == field ? Color.green : Color.accentColor)
+                        .foregroundStyle(copiedField == field ? Color.green : Color.brand)
                         .symbolEffect(.bounce, value: copiedField == field)
                 }
                 .buttonStyle(.plain)

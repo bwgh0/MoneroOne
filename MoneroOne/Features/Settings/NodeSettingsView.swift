@@ -82,7 +82,7 @@ struct NodeSettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle.fill")
-                                .foregroundColor(.orange)
+                                .foregroundColor(.brand)
                             Text("Add Proxy")
                         }
                     }
@@ -166,7 +166,7 @@ struct NodeSettingsView: View {
         } label: {
             HStack {
                 Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.orange)
+                    .foregroundColor(.brand)
                 Text("Add Node")
             }
         }
@@ -211,7 +211,7 @@ struct NodeSettingsView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.orange)
+                                .background(Color.brand)
                                 .clipShape(Capsule())
                         }
 
@@ -281,7 +281,7 @@ struct NodeSettingsView: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
                 }
             }
         }
@@ -367,7 +367,7 @@ struct NodeSettingsView: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
                 }
             }
         }

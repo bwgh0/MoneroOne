@@ -26,11 +26,11 @@ struct WalletView: View {
     }
 
     private var actionButtons: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             CompactActionButton(
                 title: "Send",
                 icon: "arrow.up.circle.fill",
-                color: .orange,
+                color: .brand,
                 isDisabled: !walletManager.canSend
             ) {
                 showSend = true
@@ -242,7 +242,7 @@ struct RecentTransactionsSection: View {
                     } label: {
                         Text("See All")
                             .font(.subheadline)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                     }
                 }
             }
@@ -254,7 +254,7 @@ struct RecentTransactionsSection: View {
                     Group {
                         if isSyncing {
                             ProgressView()
-                                .tint(.orange)
+                                .tint(.brand)
                                 .accessibilityHidden(true)
                             Text("Syncing transactions...")
                                 .font(.subheadline)
@@ -363,7 +363,7 @@ struct RecentTransactionCard: View {
     }
 
     private var iconColor: Color {
-        transaction.type == .incoming ? .green : .orange
+        transaction.type == .incoming ? .green : .brand
     }
 
     /// The subaddress name an incoming transaction arrived on, spoken by

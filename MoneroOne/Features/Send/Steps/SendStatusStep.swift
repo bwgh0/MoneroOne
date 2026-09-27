@@ -122,7 +122,7 @@ struct SendStatusStep: View {
                     Button(action: onDone) {
                         Text("Done")
                             .font(.callout.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.brand)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                     }
@@ -136,7 +136,7 @@ struct SendStatusStep: View {
                             Text("Retry")
                         }
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.brand)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                     }

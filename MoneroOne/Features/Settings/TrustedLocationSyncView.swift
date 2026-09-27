@@ -32,7 +32,8 @@ struct TrustedLocationSyncView: View {
                             .fill(permissionColor)
                             .frame(width: 8, height: 8)
                         Text(permissionStatus)
-                            .foregroundColor(permissionColor)
+                            // Yellow is never a text color.
+                            .foregroundColor(permissionColor == .yellow ? .primary : permissionColor)
                     }
                 }
 
@@ -41,7 +42,7 @@ struct TrustedLocationSyncView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
+                                .foregroundColor(.yellow)
                             Text("Action Required")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
@@ -61,11 +62,12 @@ struct TrustedLocationSyncView: View {
                                 Image(systemName: "arrow.up.right")
                                     .font(.caption)
                             }
-                            .padding()
-                            .background(Color.orange)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.brand)
+                            .padding(.horizontal)
+                            .padding(.vertical, 16)
                         }
+                        .glassButtonStyle()
                     }
                     .padding(.vertical, 4)
                 }
@@ -81,7 +83,7 @@ struct TrustedLocationSyncView: View {
                                 ProgressView()
                                     .scaleEffect(0.8)
                                 Text("Syncing...")
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(.brand)
                             }
                         }
                     } else if let lastSync = syncManager.lastSyncTime {
@@ -143,13 +145,13 @@ struct TrustedLocationSyncView: View {
 
     private var permissionColor: Color {
         if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
-            return .orange
+            return .yellow
         }
         switch syncManager.authorizationStatus {
         case .authorizedAlways:
             return .green
         case .authorizedWhenInUse:
-            return .orange
+            return .yellow
         default:
             return .red
         }
@@ -219,7 +221,7 @@ struct TrustedLocationsExplanationView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Battery Impact", systemImage: "battery.75")
                             .font(.headline)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
 
                         Text("We use low-power location monitoring to minimize battery drain. You may notice slightly higher battery usage when enabled.")
                     }

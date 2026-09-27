@@ -22,8 +22,18 @@ struct ErrorBanner: View {
             switch self {
             case .offline: return .gray
             case .error: return .red
-            case .warning: return .orange
+            case .warning: return .yellow
             }
+        }
+
+        /// Caution yellow needs a stronger tint than gray or red to show.
+        var fill: Color {
+            color.opacity(self == .warning ? 0.15 : 0.1)
+        }
+
+        /// Yellow is never a text color, so a warning's Retry uses the label color.
+        var actionColor: Color {
+            self == .warning ? .primary : color
         }
     }
 
@@ -47,14 +57,14 @@ struct ErrorBanner: View {
                     Text("Retry")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .foregroundColor(type.color)
+                        .foregroundColor(type.actionColor)
                 }
                 .accessibilityLabel("Retry")
                 .accessibilityHint("Attempt to resolve: \(message)")
             }
         }
         .padding()
-        .background(type.color.opacity(0.1))
+        .background(type.fill)
         .cornerRadius(12)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(type == .error ? String(localized: "Error") : type == .warning ? String(localized: "Warning") : String(localized: "Offline")): \(message)")
@@ -84,7 +94,7 @@ struct RestoreHeightHintBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "clock.arrow.circlepath")
-                .foregroundStyle(.orange)
+                .foregroundStyle(.yellow)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -107,7 +117,7 @@ struct RestoreHeightHintBanner: View {
             .accessibilityLabel("Dismiss")
         }
         .padding()
-        .background(Color.orange.opacity(0.1))
+        .background(Color.yellow.opacity(0.15))
         .cornerRadius(12)
         .transition(.move(edge: .top).combined(with: .opacity))
     }

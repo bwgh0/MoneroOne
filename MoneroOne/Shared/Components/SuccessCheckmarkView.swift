@@ -46,7 +46,7 @@ struct SuccessCheckmarkView: View {
 struct ConfettiView: View {
     @State private var particles: [ConfettiParticle] = []
 
-    static let colors: [Color] = [.orange, .green, .blue, .pink, .purple, .yellow, .mint]
+    static let colors: [Color] = [.brand, .green, .blue, .pink, .purple, .yellow, .mint]
     private static let particleCount = 50
 
     var body: some View {
@@ -113,7 +113,7 @@ struct ConfettiParticle: Identifiable {
     var opacity: Double = 1
 
     init() {
-        color = ConfettiView.colors.randomElement() ?? .orange
+        color = ConfettiView.colors.randomElement() ?? .brand
         size = CGFloat.random(in: 4...10)
         shapeType = Int.random(in: 0...2)
     }

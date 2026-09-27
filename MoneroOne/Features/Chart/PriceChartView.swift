@@ -204,16 +204,7 @@ struct PriceChartView: View {
         }
         .frame(height: 280)
         .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemGroupedBackground))
-                .shadow(
-                    color: colorScheme == .light ? Color.black.opacity(0.08) : Color.clear,
-                    radius: 12,
-                    x: 0,
-                    y: 4
-                )
-        }
+        .dashboardCard()
     }
 
     private var chartPlaceholder: some View {
@@ -531,7 +522,7 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
 
     private static var fill: LinearGradient {
         LinearGradient(
-            colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.0)],
+            colors: [Color.brand.opacity(0.4), Color.brand.opacity(0.0)],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -584,7 +575,7 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                     x: .value("Time", point[keyPath: timestamp]),
                     y: .value("Value", point[keyPath: value])
                 )
-                .foregroundStyle(Color.orange)
+                .foregroundStyle(Color.brand)
                 .lineStyle(StrokeStyle(lineWidth: 2))
                 .interpolationMethod(.linear)
                 .accessibilityHidden(true)
@@ -772,7 +763,7 @@ private struct ChartMarkerBadge: View {
     let style: ChartMarker.Style
     var selected = false
 
-    private var tint: Color { style == .received ? .green : .orange }
+    private var tint: Color { style == .received ? .green : .brand }
 
     var body: some View {
         Image(systemName: style == .received ? "arrow.down.left" : "arrow.up.right")
@@ -930,7 +921,7 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                         .accessibilityHidden(true)
                 } else {
                     Circle()
-                        .fill(Color.orange)
+                        .fill(Color.brand)
                         .frame(width: 10, height: 10)
                         .position(x: px, y: py)
                 }

@@ -54,8 +54,8 @@ struct SelectableOptionCard<ID: Hashable>: View {
                                 .font(.caption)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundColor(.orange)
+                                .background(Color.brand.opacity(0.2))
+                                .foregroundColor(.brand)
                                 .cornerRadius(4)
                         }
                     }
@@ -78,16 +78,16 @@ struct SelectableOptionCard<ID: Hashable>: View {
                 Spacer()
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .orange : .gray)
+                    .foregroundColor(isSelected ? .brand : .gray)
                     .font(.title2)
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? Color.orange.opacity(0.1) : Color(.secondarySystemBackground))
+            .background(isSelected ? Color.brand.opacity(0.1) : Color(.secondarySystemBackground))
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(isSelected ? Color.orange : Color.clear, lineWidth: 1.5)
+                    .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)

@@ -73,7 +73,7 @@ struct SendAddressStep: View {
                                 Text("Scan QR")
                             }
                             .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.brand)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                         }
@@ -90,7 +90,7 @@ struct SendAddressStep: View {
                                 Text("Paste")
                             }
                             .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.brand)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                         }
@@ -111,7 +111,7 @@ struct SendAddressStep: View {
                     Image(systemName: "arrow.right")
                         .font(.callout.weight(.semibold))
                 }
-                .foregroundStyle(canContinue ? .orange : .gray)
+                .foregroundStyle(canContinue ? .brand : .gray)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }

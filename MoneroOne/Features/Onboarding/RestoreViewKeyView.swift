@@ -132,7 +132,7 @@ struct RestoreViewKeyView: View {
                             Text("Paste")
                         }
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.brand)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("restoreViewKey.pasteAddressButton")
@@ -144,7 +144,7 @@ struct RestoreViewKeyView: View {
                     .lineLimit(3, reservesSpace: true)
                     .padding(12)
                     .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10)
+                    .cornerRadius(12)
                     .accessibilityIdentifier("restoreViewKey.addressField")
 
                 if !addressInput.isEmpty && !isAddressValid {
@@ -168,7 +168,7 @@ struct RestoreViewKeyView: View {
                             Text("Paste")
                         }
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.brand)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("restoreViewKey.pasteViewKeyButton")
@@ -180,7 +180,7 @@ struct RestoreViewKeyView: View {
                     .lineLimit(3, reservesSpace: true)
                     .padding(12)
                     .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10)
+                    .cornerRadius(12)
                     .accessibilityIdentifier("restoreViewKey.viewKeyField")
 
                 if !viewKeyInput.isEmpty && !isViewKeyValid {
@@ -194,7 +194,7 @@ struct RestoreViewKeyView: View {
                 } label: {
                     Text("Continue")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(canContinueFromKeys ? Color.orange : Color.gray)
+                        .foregroundStyle(canContinueFromKeys ? Color.brand : Color.gray)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                 }
@@ -246,14 +246,17 @@ struct RestoreViewKeyView: View {
                     step = .setPIN
                 }
             } label: {
-                Text("Continue")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.orange)
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
+                HStack(spacing: 8) {
+                    Text("Continue")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(Color.brand)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
             }
+            .glassButtonStyle()
             .padding(.horizontal)
 
             Spacer()
@@ -310,7 +313,7 @@ struct RestoreViewKeyView: View {
             } label: {
                 Text("Continue")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(canProceedPIN ? Color.orange : Color.gray)
+                    .foregroundStyle(canProceedPIN ? Color.brand : Color.gray)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
@@ -338,7 +341,7 @@ struct RestoreViewKeyView: View {
                 .font(.subheadline)
                 .padding(12)
                 .background(Color(.secondarySystemBackground))
-                .cornerRadius(10)
+                .cornerRadius(12)
                 .padding(.horizontal)
 
             Button {
@@ -346,7 +349,7 @@ struct RestoreViewKeyView: View {
             } label: {
                 Text("Restore Wallet")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(Color.orange)
+                    .foregroundStyle(Color.brand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }

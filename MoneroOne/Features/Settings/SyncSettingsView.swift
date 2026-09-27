@@ -38,7 +38,7 @@ struct SyncSettingsView: View {
                 if case .syncing(let progress, let remaining) = walletManager.syncState {
                     VStack(spacing: 8) {
                         ProgressView(value: progress / 100)
-                            .tint(.orange)
+                            .tint(.brand)
                         HStack {
                             Text("\(Int(progress))% complete")
                                 .font(.caption)
@@ -128,7 +128,8 @@ struct SyncSettingsView: View {
                                     .fill(permissionColor)
                                     .frame(width: 8, height: 8)
                                 Text(permissionStatus)
-                                    .foregroundColor(permissionColor)
+                                    // Yellow is never a text color.
+                                    .foregroundColor(permissionColor == .yellow ? .primary : permissionColor)
                             }
                         }
 
@@ -147,11 +148,12 @@ struct SyncSettingsView: View {
                                     Image(systemName: "arrow.up.right")
                                         .font(.caption)
                                 }
-                                .padding()
-                                .background(Color.orange)
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(.brand)
+                                .padding(.horizontal)
+                                .padding(.vertical, 16)
                             }
+                            .glassButtonStyle()
                         }
                         .padding(.vertical, 4)
                     }
@@ -163,7 +165,7 @@ struct SyncSettingsView: View {
                             Text("Manage Locations")
                         } icon: {
                             Image(systemName: "mappin.and.ellipse")
-                                .foregroundColor(.orange)
+                                .foregroundColor(.brand)
                         }
                     }
                 }
@@ -196,8 +198,8 @@ struct SyncSettingsView: View {
     private var statusColor: Color {
         switch walletManager.syncState {
         case .synced: return .green
-        case .syncing: return .orange
-        case .connecting: return .yellow
+        case .syncing: return .brand
+        case .connecting: return .brand
         case .error: return .red
         case .idle: return .gray
         }
@@ -229,11 +231,11 @@ struct SyncSettingsView: View {
 
     private var permissionColor: Color {
         if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
-            return .orange
+            return .yellow
         }
         switch syncManager.authorizationStatus {
         case .authorizedAlways: return .green
-        case .authorizedWhenInUse: return .orange
+        case .authorizedWhenInUse: return .yellow
         default: return .red
         }
     }
@@ -331,15 +333,17 @@ struct RestoreHeightSheet: View {
                         Spacer()
                         if isUpdating {
                             ProgressView()
+                                .tint(.gray)
                                 .padding(.trailing, 8)
                         }
                         Text("Update Restore Height")
-                            .fontWeight(.semibold)
+                            .font(.callout.weight(.semibold))
                         Spacer()
                     }
-                    .padding(.vertical, 12)
+                    .foregroundStyle(isUpdating ? .gray : .brand)
+                    .padding(.vertical, 16)
                 }
-                .buttonStyle(.borderedProminent)
+                .glassButtonStyle()
                 .disabled(isUpdating)
                 .padding()
                 .background(.bar)

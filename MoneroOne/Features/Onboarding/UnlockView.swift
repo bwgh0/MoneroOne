@@ -61,7 +61,7 @@ struct UnlockView: View {
                     HStack(spacing: 8) {
                         if isUnlocking {
                             ProgressView()
-                                .tint(pin.count >= 4 ? Color.orange : Color.gray)
+                                .tint(pin.count >= 4 ? Color.brand : Color.gray)
                         } else {
                             Image(systemName: "lock.open.fill")
                                 .font(.callout.weight(.semibold))
@@ -69,7 +69,7 @@ struct UnlockView: View {
                                 .font(.callout.weight(.semibold))
                         }
                     }
-                    .foregroundStyle(pin.count >= 4 ? Color.orange : Color.gray)
+                    .foregroundStyle(pin.count >= 4 ? Color.brand : Color.gray)
                     .frame(width: 200)
                     .padding(.vertical, 12)
                 }
@@ -91,7 +91,7 @@ struct UnlockView: View {
                         Text("Use \(biometricAuth.biometricType.displayName)")
                             .font(.callout.weight(.medium))
                     }
-                    .foregroundStyle(Color.orange)
+                    .foregroundStyle(Color.brand)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
                 }

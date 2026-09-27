@@ -58,7 +58,7 @@ struct SettingsView: View {
                             SettingsRow(
                                 icon: "key.fill",
                                 title: "Backup Seed Phrase",
-                                color: .orange
+                                color: .brand
                             )
                         }
                         .accessibilityIdentifier("settings.backupRow")
@@ -208,7 +208,7 @@ struct SettingsView: View {
                             SettingsRow(
                                 icon: "arrow.triangle.2.circlepath",
                                 title: "Sync Settings",
-                                color: .orange
+                                color: .brand
                             )
                             Spacer()
                             Text(syncStatusText)
@@ -264,7 +264,7 @@ struct SettingsView: View {
                         SettingsRow(
                             icon: "globe",
                             title: "Website",
-                            color: .orange
+                            color: .brand
                         )
                     }
                     .accessibilityHint("Opens monero.one in your browser")
@@ -298,7 +298,7 @@ struct SettingsView: View {
                                 .font(.body)
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.pink, .orange, .yellow],
+                                        colors: [.pink, .brand, .yellow],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -308,7 +308,7 @@ struct SettingsView: View {
                                 .cornerRadius(6)
 
                             Text("Donate XMR")
-                                .foregroundColor(.orange)
+                                .foregroundColor(.brand)
                                 .fontWeight(.medium)
                         }
                         .accessibilityElement(children: .combine)
@@ -325,7 +325,7 @@ struct SettingsView: View {
                         SettingsRow(
                             icon: "arrow.counterclockwise",
                             title: "Reset Sync Data",
-                            color: .orange
+                            color: .brand
                         )
                     }
                     .accessibilityHint("Clears all sync progress and re-syncs from the beginning")

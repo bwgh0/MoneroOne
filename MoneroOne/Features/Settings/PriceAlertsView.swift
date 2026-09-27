@@ -12,7 +12,7 @@ struct PriceAlertsView: View {
                 Section {
                     HStack(spacing: 12) {
                         Image(systemName: "bell.slash")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.yellow)
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notifications Disabled")
                                 .font(.subheadline)
@@ -22,13 +22,19 @@ struct PriceAlertsView: View {
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
-                        Button("Enable") {
+                        // Compact capsule: an inline action inside a row.
+                        Button {
                             Task {
                                 hasNotificationPermission = await PriceAlertNotificationManager.shared.requestPermission()
                             }
+                        } label: {
+                            Text("Enable")
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(.brand)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
+                        .glassButtonStyle()
                     }
                     .padding(.vertical, 4)
                 }
@@ -77,7 +83,7 @@ struct PriceAlertsView: View {
                 } label: {
                     HStack {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                         Text("Add Alert")
                             .foregroundColor(.primary)
                     }

@@ -26,12 +26,12 @@ struct PINEntryView: View {
                     let isFilled = index < pin.count
                     let isNextDot = index == pin.count && isFocused
                     Circle()
-                        .fill(isFilled ? Color.orange : Color.gray.opacity(0.3))
+                        .fill(isFilled ? Color.brand : Color.gray.opacity(0.3))
                         .frame(width: 16, height: 16)
                         .overlay(
                             Circle()
                                 .strokeBorder(
-                                    isNextDot ? Color.orange : (isFilled ? Color.orange : Color.gray.opacity(0.5)),
+                                    isNextDot ? Color.brand : (isFilled ? Color.brand : Color.gray.opacity(0.5)),
                                     lineWidth: isNextDot ? 2 : 1
                                 )
                         )
@@ -120,12 +120,12 @@ struct PINEntryFieldView<Field: Hashable>: View {
                     let isFilled = index < pin.count
                     let isNextDot = index == pin.count && isFieldFocused
                     Circle()
-                        .fill(isFilled ? Color.orange : Color.gray.opacity(0.3))
+                        .fill(isFilled ? Color.brand : Color.gray.opacity(0.3))
                         .frame(width: 16, height: 16)
                         .overlay(
                             Circle()
                                 .strokeBorder(
-                                    isNextDot ? Color.orange : (isFilled ? Color.orange : Color.gray.opacity(0.5)),
+                                    isNextDot ? Color.brand : (isFilled ? Color.brand : Color.gray.opacity(0.5)),
                                     lineWidth: isNextDot ? 2 : 1
                                 )
                         )

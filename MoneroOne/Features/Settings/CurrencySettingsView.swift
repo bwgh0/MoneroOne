@@ -26,7 +26,7 @@ struct CurrencySettingsView: View {
 
                             if priceService.selectedCurrency == currency.code {
                                 Image(systemName: "checkmark")
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(.brand)
                                     .fontWeight(.semibold)
                             }
                         }
@@ -81,7 +81,7 @@ struct CurrencySettingsView: View {
                 } else if let error = priceService.error {
                     HStack {
                         Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.yellow)
                         Text(error)
                             .foregroundColor(.secondary)
                     }

@@ -326,7 +326,7 @@ struct SendFlowView: View {
 
             Image(systemName: "eye.slash.circle.fill")
                 .font(.system(size: 72))
-                .foregroundStyle(.orange)
+                .foregroundStyle(.brand)
 
             Text("View-Only Wallet")
                 .font(.title2.weight(.semibold))

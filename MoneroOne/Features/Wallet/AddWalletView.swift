@@ -30,7 +30,7 @@ struct AddWalletView: View {
                             Text("Create New Wallet")
                                 .font(.callout.weight(.semibold))
                         }
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.brand)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                     }
@@ -43,7 +43,7 @@ struct AddWalletView: View {
                             Text("Restore Wallet")
                                 .font(.callout.weight(.semibold))
                         }
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.brand)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                     }
@@ -56,7 +56,7 @@ struct AddWalletView: View {
                             Text("Connect Trezor")
                                 .font(.callout.weight(.semibold))
                         }
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.brand)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                     }

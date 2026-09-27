@@ -17,6 +17,7 @@
 		0D932221213145AEDB7B5083 /* AnimatedWalletIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7821313ACB80A039D75B32D5 /* AnimatedWalletIcon.swift */; };
 		186E1F281B45C7929D9F7CB7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FF6022942E141D54562F131E /* Assets.xcassets */; };
 		1BA4AE0A0A268DE7F27D1308 /* GlassButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D3AE9C07684C76F5645BB /* GlassButtonStyle.swift */; };
+		AD4621330561F02291F4AD65 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A733B636270D3215544068AE /* BrandColors.swift */; };
 		282C36ABD1B88FEEFDF153A6 /* SecurityAuditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28AE04350FBA393B5C0220F /* SecurityAuditTests.swift */; };
 		A1B2C3D4E5F60001DEADBEEF /* SecurityAuditFixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002DEADBEEF /* SecurityAuditFixTests.swift */; };
 		A1B2C3D4E5F60004DEADBEEF /* DiagnosticLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003DEADBEEF /* DiagnosticLog.swift */; };
@@ -104,6 +105,7 @@
 		EC48D2094BD359C95BB6B08E /* SyncLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B6DB1BCF707C6A91E194AF5 /* SyncLiveActivity.swift */; };
 		EDA400DA20EDD8E52EA9CC2C /* TransactionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A960D21BC3F24D2F556BE5C9 /* TransactionDetailView.swift */; };
 		EFFC6F8C42D7612A8DE76248 /* GlassButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D3AE9C07684C76F5645BB /* GlassButtonStyle.swift */; };
+		874F027EA6684CD62C03DB38 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A733B636270D3215544068AE /* BrandColors.swift */; };
 		F203826DEF4239A5D60CD9F9 /* BalanceWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50B87EA15DE9A6C8674D5669 /* BalanceWidget.swift */; };
 		F336976B66186C3C48D2922A /* BalanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A39B30F864DF425DCA258A4B /* BalanceCard.swift */; };
 		F65EECC001BAE93898D97CB6 /* WidgetSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41BC6A6608335755705B5E8A /* WidgetSettingsView.swift */; };
@@ -226,6 +228,7 @@
 		1DF250B2B46B35AB60356114 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		23FC248118281F12977CA025 /* QuickActionsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionsCard.swift; sourceTree = "<group>"; };
 		258D3AE9C07684C76F5645BB /* GlassButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassButtonStyle.swift; sourceTree = "<group>"; };
+		A733B636270D3215544068AE /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
 		2E2DBAD8B61B86205606D774 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		39D836D865F70A7477790100 /* BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
 		41BC6A6608335755705B5E8A /* WidgetSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSettingsView.swift; sourceTree = "<group>"; };
@@ -680,6 +683,7 @@
 		D8C6D910FBF41986F00A04C8 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				A733B636270D3215544068AE /* BrandColors.swift */,
 				EA3814BAB2E944A085268962 /* FiatCurrency.swift */,
 				258D3AE9C07684C76F5645BB /* GlassButtonStyle.swift */,
 				1472EECF60A5FACF05FB185C /* SyncActivityAttributes.swift */,
@@ -950,6 +954,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 			buildActionMask = 2147483647;
 			files = (
 				F203826DEF4239A5D60CD9F9 /* BalanceWidget.swift in Sources */,
+				AD4621330561F02291F4AD65 /* BrandColors.swift in Sources */,
 				03A2AAC563474919B05890E7 /* FiatCurrency.swift in Sources */,
 				1BA4AE0A0A268DE7F27D1308 /* GlassButtonStyle.swift in Sources */,
 				2DE69D71C831027842B0A4CA /* MoneroOneWidgetsBundle.swift in Sources */,
@@ -999,6 +1004,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				C0DE7E470000000000000002 /* CodeText.swift in Sources */,
 				E7106F3BC27599F634D24964 /* ErrorBanner.swift in Sources */,
 				EFFC6F8C42D7612A8DE76248 /* GlassButtonStyle.swift in Sources */,
+				874F027EA6684CD62C03DB38 /* BrandColors.swift in Sources */,
 				2A841431F06DE4BF09DCE55B /* GlassSegmentedPicker.swift in Sources */,
 				916B54FE617C739781D795D9 /* KeychainStorage.swift in Sources */,
 				53961F04EC40C1BB78F573E5 /* MainTabView.swift in Sources */,

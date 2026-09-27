@@ -38,7 +38,7 @@ struct SecurityView: View {
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "lock.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                         Text("Change PIN")
                     }
                 }
@@ -48,7 +48,7 @@ struct SecurityView: View {
                 Toggle(isOn: $requireAuthForSend) {
                     HStack(spacing: 12) {
                         Image(systemName: "paperplane.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                         Text("Confirm Sends")
                     }
                 }
@@ -186,12 +186,12 @@ struct ChangePINView: View {
                             .font(.subheadline.weight(.medium))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(selectedPINLength == 4 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
-                            .foregroundColor(selectedPINLength == 4 ? .orange : .primary)
-                            .cornerRadius(10)
+                            .background(selectedPINLength == 4 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
+                            .foregroundColor(selectedPINLength == 4 ? .brand : .primary)
+                            .cornerRadius(12)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(selectedPINLength == 4 ? Color.orange : Color.clear, lineWidth: 1.5)
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(selectedPINLength == 4 ? Color.brand : Color.clear, lineWidth: 1.5)
                             )
                     }
                     .buttonStyle(.plain)
@@ -206,12 +206,12 @@ struct ChangePINView: View {
                             .font(.subheadline.weight(.medium))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(selectedPINLength == 6 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
-                            .foregroundColor(selectedPINLength == 6 ? .orange : .primary)
-                            .cornerRadius(10)
+                            .background(selectedPINLength == 6 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
+                            .foregroundColor(selectedPINLength == 6 ? .brand : .primary)
+                            .cornerRadius(12)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(selectedPINLength == 6 ? Color.orange : Color.clear, lineWidth: 1.5)
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(selectedPINLength == 6 ? Color.brand : Color.clear, lineWidth: 1.5)
                             )
                     }
                     .buttonStyle(.plain)
@@ -256,7 +256,7 @@ struct ChangePINView: View {
                 HStack(spacing: 8) {
                     if isChanging {
                         ProgressView()
-                            .tint(canChange ? Color.orange : Color.gray)
+                            .tint(canChange ? Color.brand : Color.gray)
                     } else {
                         Image(systemName: "lock.rotation")
                             .font(.callout.weight(.semibold))
@@ -264,7 +264,7 @@ struct ChangePINView: View {
                             .font(.callout.weight(.semibold))
                     }
                 }
-                .foregroundStyle(canChange ? Color.orange : Color.gray)
+                .foregroundStyle(canChange ? Color.brand : Color.gray)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
@@ -329,7 +329,7 @@ struct BiometricPINSheet: View {
 
                 Image(systemName: biometricIcon)
                     .font(.system(size: 48))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.brand)
 
                 Text("Enter PIN to Enable \(biometricName)")
                     .font(.headline)
@@ -358,7 +358,7 @@ struct BiometricPINSheet: View {
                         Text("Enable \(biometricName)")
                             .font(.callout.weight(.semibold))
                     }
-                    .foregroundStyle(pin.count == pinLength ? Color.orange : Color.gray)
+                    .foregroundStyle(pin.count == pinLength ? Color.brand : Color.gray)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 }

@@ -73,13 +73,10 @@ struct TransactionsWidgetView: View {
 
     private var disabledView: some View {
         VStack(spacing: 8) {
-            Image("MoneroSymbol")
+            Image("MoneroMark")
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(width: 32, height: 32)
-                .clipShape(Circle())
-                .scaleEffect(1.15)
-                .clipShape(Circle())
 
             Text("Monero One")
                 .font(.headline.weight(.semibold))
@@ -94,13 +91,10 @@ struct TransactionsWidgetView: View {
         VStack(alignment: .leading, spacing: 6) {
             // Header with balance
             HStack {
-                Image("MoneroSymbol")
+                Image("MoneroMark")
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .frame(width: 22, height: 22)
-                    .clipShape(Circle())
-                    .scaleEffect(1.15)
-                    .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(entry.data.balanceFormatted)
@@ -158,13 +152,10 @@ struct TransactionsWidgetView: View {
         VStack(alignment: .leading, spacing: 10) {
             // Header
             HStack {
-                Image("MoneroSymbol")
+                Image("MoneroMark")
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .frame(width: 28, height: 28)
-                    .clipShape(Circle())
-                    .scaleEffect(1.15)
-                    .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
@@ -176,8 +167,8 @@ struct TransactionsWidgetView: View {
                                 .font(.system(size: 7, weight: .bold))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundColor(.orange)
+                                .background(Color.brand.opacity(0.2))
+                                .foregroundColor(.brand)
                                 .cornerRadius(4)
                         }
                     }
@@ -259,10 +250,10 @@ struct TransactionsWidgetView: View {
             // Icon
             Image(systemName: tx.isIncoming ? "arrow.down.left" : "arrow.up.right")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(tx.isIncoming ? .green : .orange)
+                .foregroundColor(tx.isIncoming ? .green : .brand)
                 .frame(width: 20, height: 20)
                 .background(
-                    (tx.isIncoming ? Color.green : Color.orange)
+                    (tx.isIncoming ? Color.green : Color.brand)
                         .opacity(0.15)
                 )
                 .cornerRadius(5)
@@ -287,7 +278,7 @@ struct TransactionsWidgetView: View {
                 if !tx.isConfirmed {
                     Text("Pending")
                         .font(.system(size: 7))
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
                 }
             }
         }
@@ -296,7 +287,7 @@ struct TransactionsWidgetView: View {
     private var statusColor: Color {
         switch entry.data.syncStatus {
         case .synced: return .green
-        case .syncing, .connecting: return .orange
+        case .syncing, .connecting: return .brand
         case .offline: return .red
         }
     }

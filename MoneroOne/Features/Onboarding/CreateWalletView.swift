@@ -133,7 +133,7 @@ struct CreateWalletView: View {
                     Image(systemName: "arrow.right")
                         .font(.callout.weight(.semibold))
                 }
-                .foregroundStyle(Color.orange)
+                .foregroundStyle(Color.brand)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
@@ -174,12 +174,12 @@ struct CreateWalletView: View {
                             .font(.subheadline.weight(.medium))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(selectedPINLength == 4 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
-                            .foregroundColor(selectedPINLength == 4 ? .orange : .primary)
-                            .cornerRadius(10)
+                            .background(selectedPINLength == 4 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
+                            .foregroundColor(selectedPINLength == 4 ? .brand : .primary)
+                            .cornerRadius(12)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(selectedPINLength == 4 ? Color.orange : Color.clear, lineWidth: 1.5)
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(selectedPINLength == 4 ? Color.brand : Color.clear, lineWidth: 1.5)
                             )
                     }
                     .buttonStyle(.plain)
@@ -200,18 +200,18 @@ struct CreateWalletView: View {
                                 .font(.caption2)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundColor(.orange)
+                                .background(Color.brand.opacity(0.2))
+                                .foregroundColor(.brand)
                                 .cornerRadius(4)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(selectedPINLength == 6 ? Color.orange.opacity(0.15) : Color(.secondarySystemBackground))
-                        .foregroundColor(selectedPINLength == 6 ? .orange : .primary)
-                        .cornerRadius(10)
+                        .background(selectedPINLength == 6 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
+                        .foregroundColor(selectedPINLength == 6 ? .brand : .primary)
+                        .cornerRadius(12)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(selectedPINLength == 6 ? Color.orange : Color.clear, lineWidth: 1.5)
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(selectedPINLength == 6 ? Color.brand : Color.clear, lineWidth: 1.5)
                         )
                     }
                     .buttonStyle(.plain)
@@ -269,7 +269,7 @@ struct CreateWalletView: View {
                     Image(systemName: "arrow.right")
                         .font(.callout.weight(.semibold))
                 }
-                .foregroundStyle(canProceed ? Color.orange : Color.gray)
+                .foregroundStyle(canProceed ? Color.brand : Color.gray)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
@@ -294,7 +294,7 @@ struct CreateWalletView: View {
 
             Image(systemName: biometricIcon)
                 .font(.system(size: 80))
-                .foregroundColor(.orange)
+                .foregroundColor(.brand)
                 .accessibilityHidden(true)
 
             Text("Enable \(biometricName)?")
@@ -317,7 +317,7 @@ struct CreateWalletView: View {
                         Text("Enable \(biometricName)")
                             .font(.callout.weight(.semibold))
                     }
-                    .foregroundStyle(Color.orange)
+                    .foregroundStyle(Color.brand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 }
@@ -375,10 +375,10 @@ struct CreateWalletView: View {
                     Text(copiedSeed ? "Copied" : "Copy to Clipboard")
                         .font(.caption.weight(.medium))
                 }
-                .foregroundStyle(.orange)
+                .foregroundStyle(.brand)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(Color.orange.opacity(0.15))
+                .background(Color.brand.opacity(0.15))
                 .clipShape(Capsule())
             }
             .accessibilityLabel(copiedSeed ? "Seed phrase copied" : "Copy seed phrase to clipboard")
@@ -398,7 +398,7 @@ struct CreateWalletView: View {
                     Image(systemName: "arrow.right")
                         .font(.callout.weight(.semibold))
                 }
-                .foregroundStyle(confirmed ? Color.orange : Color.gray)
+                .foregroundStyle(confirmed ? Color.brand : Color.gray)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
@@ -423,7 +423,7 @@ struct CreateWalletView: View {
                 .submitLabel(.done)
                 .padding(12)
                 .background(Color(.secondarySystemBackground))
-                .cornerRadius(10)
+                .cornerRadius(12)
                 .padding(.horizontal, 40)
 
             Text("You can change this later")
@@ -441,7 +441,7 @@ struct CreateWalletView: View {
                     Image(systemName: "arrow.right")
                         .font(.callout.weight(.semibold))
                 }
-                .foregroundStyle(Color.orange)
+                .foregroundStyle(Color.brand)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }

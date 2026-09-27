@@ -82,7 +82,7 @@ struct ViewOnlyAvatarBadge: View {
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: 18, height: 18)
-            .background(Circle().fill(Color.orange))
+            .background(Circle().fill(Color.brand))
             .overlay(
                 Circle().strokeBorder(Color(.systemBackground), lineWidth: 1.5)
             )
@@ -113,7 +113,7 @@ struct EmojiPickerCircle: View {
                     .background(Circle().fill(Color(.secondarySystemBackground)))
                     .clipShape(Circle())
                     .overlay(
-                        Circle().strokeBorder(isActive ? Color.orange : Color.clear, lineWidth: 2)
+                        Circle().strokeBorder(isActive ? Color.brand : Color.clear, lineWidth: 2)
                     )
             }
             .buttonStyle(.plain)
@@ -168,7 +168,7 @@ struct EmojiPickerSheet: View {
                                     .frame(width: 56, height: 56)
                                     .background(Circle().fill(Color(.secondarySystemBackground)))
                                     .overlay(
-                                        Circle().strokeBorder(choice == emoji ? Color.orange : Color.clear, lineWidth: 2)
+                                        Circle().strokeBorder(choice == emoji ? Color.brand : Color.clear, lineWidth: 2)
                                     )
                             }
                             .buttonStyle(.plain)
@@ -358,7 +358,7 @@ struct WalletRow: View {
         }
         .glassButtonStyle()
         .overlay {
-            WalletRowSurface.ring(.orange.opacity(isActive ? 0.7 : 0))
+            WalletRowSurface.ring(.brand.opacity(isActive ? 0.7 : 0))
         }
         .opacity(isActive ? 1 : 0.85)
         .accessibilityIdentifier(isActive ? "wallet.row.active" : "wallet.row")
@@ -456,7 +456,7 @@ struct WalletRow: View {
                         .layoutPriority(1)
                 }
                 .font(.callout.weight(.medium))
-                .foregroundStyle(.orange)
+                .foregroundStyle(.brand)
 
                 // Full address, truncated in the middle to whatever width is
                 // left: never wraps, shows more characters on wider rows.
@@ -599,7 +599,7 @@ struct WalletManagerRows: View {
             HStack(spacing: 8) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.brand)
                 Text("Add Wallet")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)

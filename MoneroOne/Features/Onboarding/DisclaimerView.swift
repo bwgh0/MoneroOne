@@ -20,7 +20,7 @@ struct DisclaimerView: View {
                 HStack(spacing: 14) {
                     Image(systemName: "exclamationmark.shield.fill")
                         .font(.system(size: 32))
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Important Information")
                             .font(.title3)
@@ -40,7 +40,7 @@ struct DisclaimerView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.shield.fill")
                         .font(.system(size: 48))
-                        .foregroundColor(.orange)
+                        .foregroundColor(.brand)
 
                     Text("Important Information")
                         .font(.title2)
@@ -60,7 +60,7 @@ struct DisclaimerView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     DisclaimerItem(
                         icon: "key.fill",
-                        iconColor: .orange,
+                        iconColor: .brand,
                         title: "You Control Your Keys",
                         description: "Monero One is a self-custody wallet. Your seed phrase is the only way to access your funds. We cannot recover it for you.",
                         isChecked: $checkboxes[0]
@@ -119,13 +119,13 @@ struct DisclaimerView: View {
                     }
                 } label: {
                     Text("I Understand, Continue")
-                        .fontWeight(.semibold)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(allChecked ? Color.white : Color.gray)
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(allChecked ? Color.orange : Color.gray.opacity(0.5))
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .padding(.vertical, 16)
                 }
+                .glassProminentButtonStyle()
+                .tint(.brand)
                 .disabled(!allChecked)
                 .padding(.horizontal)
                 .padding(.bottom)
@@ -153,7 +153,7 @@ struct DisclaimerItem: View {
                 // Checkbox
                 Image(systemName: isChecked ? "checkmark.square.fill" : "square")
                     .font(.title2)
-                    .foregroundColor(isChecked ? .orange : .secondary)
+                    .foregroundColor(isChecked ? .brand : .secondary)
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {

@@ -28,7 +28,7 @@ struct AddPriceAlertView: View {
                             Spacer()
                             Text("\(currencySymbol)\(String(format: "%.2f", currentPrice))")
                                 .fontWeight(.semibold)
-                                .foregroundColor(.orange)
+                                .foregroundColor(.brand)
                         }
                     }
                 }
@@ -73,7 +73,7 @@ struct AddPriceAlertView: View {
                         }
                     }
                     .disabled(!isValidPrice)
-                    .listRowBackground(isValidPrice ? Color.orange : Color.orange.opacity(0.3))
+                    .listRowBackground(isValidPrice ? Color.brand : Color.brand.opacity(0.3))
                     .foregroundColor(.white)
                 }
             }

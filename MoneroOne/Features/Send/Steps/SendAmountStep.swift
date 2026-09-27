@@ -111,11 +111,11 @@ struct SendAmountStep: View {
 
                                 Image(systemName: "arrow.up.arrow.down")
                                     .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(.brand)
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.orange.opacity(0.1))
+                            .background(Color.brand.opacity(0.1))
                             .clipShape(Capsule())
                         }
                         .disabled(priceService.xmrPrice == nil)
@@ -141,10 +141,10 @@ struct SendAmountStep: View {
                                 Text("Paste")
                             }
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.brand)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(Color.orange.opacity(0.15))
+                            .background(Color.brand.opacity(0.15))
                             .clipShape(Capsule())
                         }
                         .accessibilityLabel("Paste amount from clipboard")
@@ -157,10 +157,10 @@ struct SendAmountStep: View {
                             HapticFeedback.shared.softTick()
                         }
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.brand)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.orange.opacity(0.15))
+                        .background(Color.brand.opacity(0.15))
                         .clipShape(Capsule())
                         .accessibilityLabel("Send maximum amount")
                     }
@@ -190,7 +190,7 @@ struct SendAmountStep: View {
                                 .font(.subheadline)
                                 .padding(12)
                                 .background(Color(.secondarySystemBackground))
-                                .cornerRadius(10)
+                                .cornerRadius(12)
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
@@ -218,7 +218,7 @@ struct SendAmountStep: View {
                         Image(systemName: "arrow.right")
                             .font(.callout.weight(.semibold))
                     }
-                    .foregroundStyle(canContinue ? .orange : .gray)
+                    .foregroundStyle(canContinue ? .brand : .gray)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 }

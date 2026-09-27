@@ -221,13 +221,13 @@ fileprivate struct ViewKeyExportCard: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color.orange, Color.pink.opacity(0.85)],
+                            colors: [Color.brand, Color.pink.opacity(0.85)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 44, height: 44)
-                    .shadow(color: Color.orange.opacity(0.35), radius: 8, y: 3)
+                    .shadow(color: Color.brand.opacity(0.35), radius: 8, y: 3)
                 Image(systemName: "eye.fill")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
@@ -255,18 +255,11 @@ fileprivate struct ViewKeyExportCard: View {
                     Text(allCopied ? "Copied" : "Copy All")
                 }
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.brand)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(
-                    LinearGradient(
-                        colors: [Color.orange, Color.orange.opacity(0.85)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.vertical, 16)
             }
+            .glassButtonStyle()
             .accessibilityLabel("Copy address, view key, and restore height")
 
             ShareLink(item: sharePayload) {
@@ -275,9 +268,9 @@ fileprivate struct ViewKeyExportCard: View {
                     Text("Share")
                 }
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(Color.orange)
+                .foregroundStyle(Color.brand)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, 16)
             }
             .glassButtonStyle()
             .accessibilityLabel("Share view-only wallet keys")
@@ -338,7 +331,7 @@ fileprivate struct ViewKeyField: View {
                 Button(action: onCopy) {
                     Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
                         .font(.body)
-                        .foregroundStyle(copied ? Color.green : Color.orange)
+                        .foregroundStyle(copied ? Color.green : Color.brand)
                         .symbolEffect(.bounce, value: copied)
                 }
                 .buttonStyle(.plain)

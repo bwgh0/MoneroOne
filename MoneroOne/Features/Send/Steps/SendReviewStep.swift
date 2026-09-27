@@ -37,11 +37,11 @@ struct SendReviewStep: View {
                         HStack(spacing: 12) {
                             ZStack {
                                 Circle()
-                                    .fill(Color.orange.opacity(0.2))
+                                    .fill(Color.brand.opacity(0.2))
                                     .frame(width: 36, height: 36)
                                 Image(systemName: "person.fill")
                                     .font(.subheadline)
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(.brand)
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
@@ -130,7 +130,7 @@ struct SendReviewStep: View {
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text("\(XMRFormatter.format(total)) XMR")
                                         .fontWeight(.semibold)
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(.brand)
                                     if let fiatTotal = priceService.formatFiatValue(total) {
                                         Text("≈ \(fiatTotal)")
                                             .font(.caption)
@@ -182,7 +182,7 @@ struct SendReviewStep: View {
                         Text("Send")
                             .font(.callout.weight(.semibold))
                     }
-                    .foregroundStyle(estimatedFee != nil && !sendInProgress ? .orange : .gray)
+                    .foregroundStyle(estimatedFee != nil && !sendInProgress ? .brand : .gray)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                 }

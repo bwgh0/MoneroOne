@@ -28,7 +28,7 @@ struct TransactionsPanelView: View {
                     } label: {
                         Text("See All")
                             .font(.subheadline)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.brand)
                     }
                 }
             }
@@ -70,7 +70,7 @@ struct TransactionsPanelView: View {
         VStack(spacing: 12) {
             if isSyncing {
                 ProgressView()
-                    .tint(.orange)
+                    .tint(.brand)
                 Text("Syncing transactions...")
                     .font(.subheadline)
                     .fontWeight(.medium)
@@ -156,7 +156,7 @@ struct TransactionPanelRow: View {
     }
 
     private var iconColor: Color {
-        transaction.type == .incoming ? .green : .orange
+        transaction.type == .incoming ? .green : .brand
     }
 
     /// The subaddress name an incoming transaction arrived on, spoken by

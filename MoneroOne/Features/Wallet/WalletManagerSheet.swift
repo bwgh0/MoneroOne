@@ -390,9 +390,9 @@ struct WalletRow: View {
         // identifier.
         .overlay(alignment: .trailing) {
             // Same trailing slots as `rowContent`: pencil, 14pt gap, the
-            // 24pt check or circle, 18pt row padding.
+            // 24pt check or circle, 16pt row padding.
             renameButton
-                .padding(.trailing, 18 + 24 + 14)
+                .padding(.trailing, 16 + 24 + 14)
         }
     }
 

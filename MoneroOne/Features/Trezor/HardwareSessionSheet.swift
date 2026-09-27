@@ -318,7 +318,7 @@ struct HardwareSessionSheet: View {
 
     private func failureContent(message: String) -> some View {
         VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(.red)
             Text("Couldn't complete")

@@ -62,19 +62,21 @@ struct AddPriceAlertView: View {
                 }
 
                 Section {
+                    // The prominent capsule, as on the disclaimer screen.
                     Button {
                         saveAlert()
                     } label: {
-                        HStack {
-                            Spacer()
-                            Text("Save Alert")
-                                .fontWeight(.semibold)
-                            Spacer()
-                        }
+                        Text("Save Alert")
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(isValidPrice ? Color.white : Color.gray)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
                     }
+                    .glassProminentButtonStyle()
+                    .tint(.brand)
                     .disabled(!isValidPrice)
-                    .listRowBackground(isValidPrice ? Color.brand : Color.brand.opacity(0.4))
-                    .foregroundColor(.white)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
                 }
             }
             .navigationTitle("New Alert")

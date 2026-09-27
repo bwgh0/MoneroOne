@@ -207,7 +207,7 @@ struct BalanceWidgetView: View {
         switch entry.data.syncStatus {
         case .synced: return .green
         case .syncing, .connecting: return .brand
-        case .offline: return .red
+        case .offline: return .gray
         }
     }
 }

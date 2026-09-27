@@ -206,13 +206,11 @@ struct NodeSettingsView: View {
 
                         if isSelected && nodeManager.autoSelectEnabled {
                             Text("Auto")
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.brand)
-                                .clipShape(Capsule())
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.brand)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Color.brand.opacity(0.15)))
                         }
 
                         if node.hasCredentials {

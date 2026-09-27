@@ -352,8 +352,7 @@ struct WalletRow: View {
             }
         } label: {
             rowContent
-                .padding(.horizontal, 18)
-                .padding(.vertical, 18)
+                .padding(16)
                 .contentShape(Rectangle())
         }
         .glassButtonStyle()
@@ -458,13 +457,11 @@ struct WalletRow: View {
                 .font(.callout.weight(.medium))
                 .foregroundStyle(.brand)
 
-                // Full address, truncated in the middle to whatever width is
-                // left: never wraps, shows more characters on wider rows.
+                // The 8…8 short form, as in the Receive rows and on Android.
                 if let address, !address.isEmpty {
-                    Text(address)
+                    Text(verbatim: ReceiveAddressLogic.shortAddress(address))
                         .font(.caption2)
                         .lineLimit(1)
-                        .truncationMode(.middle)
                         .foregroundStyle(.secondary)
                         .monospaced()
                 }
@@ -601,8 +598,8 @@ struct WalletManagerRows: View {
                     .font(.title3)
                     .foregroundStyle(.brand)
                 Text("Add Wallet")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.brand)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)

@@ -310,7 +310,7 @@ struct PairTrezorView: View {
     private func errorContent(_ msg: String) -> some View {
         VStack(spacing: 12) {
             HStack {
-                Image(systemName: "exclamationmark.triangle.fill")
+                Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(.red)
                 Text(msg)
                     .font(.caption)

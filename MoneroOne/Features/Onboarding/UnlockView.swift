@@ -89,7 +89,7 @@ struct UnlockView: View {
                         Image(systemName: biometricAuth.biometricType.iconName)
                             .font(.system(size: 32))
                         Text("Use \(biometricAuth.biometricType.displayName)")
-                            .font(.callout.weight(.medium))
+                            .font(.callout.weight(.semibold))
                     }
                     .foregroundStyle(Color.brand)
                     .padding(.horizontal, 24)

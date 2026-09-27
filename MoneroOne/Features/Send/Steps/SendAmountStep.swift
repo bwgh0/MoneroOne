@@ -115,7 +115,7 @@ struct SendAmountStep: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.brand.opacity(0.1))
+                            .background(Color.brand.opacity(0.15))
                             .clipShape(Capsule())
                         }
                         .disabled(priceService.xmrPrice == nil)

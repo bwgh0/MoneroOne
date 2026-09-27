@@ -190,7 +190,7 @@ struct SyncSettingsView: View {
         case .synced: return "checkmark.circle.fill"
         case .syncing: return "arrow.triangle.2.circlepath"
         case .connecting: return "wifi"
-        case .error: return "exclamationmark.triangle.fill"
+        case .error: return "exclamationmark.circle.fill"
         case .idle: return "moon.fill"
         }
     }

@@ -267,7 +267,7 @@ struct ReceiveView: View {
                                     .foregroundStyle(.brand)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
-                                    .background(Color.brand.opacity(0.1))
+                                    .background(Color.brand.opacity(0.15))
                                     .clipShape(Capsule())
                                 }
                                 .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")

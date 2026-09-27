@@ -37,10 +37,10 @@ struct SendReviewStep: View {
                         HStack(spacing: 12) {
                             ZStack {
                                 Circle()
-                                    .fill(Color.brand.opacity(0.2))
-                                    .frame(width: 36, height: 36)
+                                    .fill(Color.brand.opacity(0.15))
+                                    .frame(width: 40, height: 40)
                                 Image(systemName: "person.fill")
-                                    .font(.subheadline)
+                                    .font(.system(size: 16, weight: .semibold))
                                     .foregroundStyle(.brand)
                             }
 
@@ -217,7 +217,6 @@ struct SendReviewStep: View {
     }
 
     private func formatAddress(_ addr: String) -> String {
-        guard addr.count > 20 else { return addr }
-        return "\(addr.prefix(12))...\(addr.suffix(8))"
+        ReceiveAddressLogic.shortAddress(addr)
     }
 }

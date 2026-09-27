@@ -15,7 +15,7 @@ struct GlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.AllCases: 
                     selection = item
                 } label: {
                     Text(label(item))
-                        .font(.subheadline.weight(.medium))
+                        .font(.subheadline.weight(selection == item ? .semibold : .medium))
                         .foregroundStyle(selection == item ? .primary : .secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -35,7 +35,7 @@ struct GlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.AllCases: 
             }
         }
         .padding(4)
-        .liquidGlassContainerIfAvailable(cornerRadius: 14)
+        .liquidGlassContainerIfAvailable()
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selection)
     }
 }
@@ -54,7 +54,7 @@ struct CompactGlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.All
                     selection = item
                 } label: {
                     Text(label(item))
-                        .font(.caption.weight(.medium))
+                        .font(.caption.weight(selection == item ? .semibold : .medium))
                         .foregroundStyle(selection == item ? .primary : .secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -74,7 +74,7 @@ struct CompactGlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.All
             }
         }
         .padding(3)
-        .liquidGlassContainerIfAvailable(cornerRadius: 10)
+        .liquidGlassContainerIfAvailable()
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selection)
     }
 }
@@ -92,13 +92,14 @@ private extension View {
         }
     }
 
-    /// Applies liquid glass container on iOS 26+, falls back to regular material on older versions
+    /// Applies a capsule liquid glass container on iOS 26+, falls back to regular material on older versions.
+    /// A capsule, so the capsule thumb nests inside it at an even inset.
     @ViewBuilder
-    func liquidGlassContainerIfAvailable(cornerRadius: CGFloat) -> some View {
+    func liquidGlassContainerIfAvailable() -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
+            self.glassEffect(.regular, in: Capsule())
         } else {
-            self.background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+            self.background(.regularMaterial, in: Capsule())
         }
     }
 }

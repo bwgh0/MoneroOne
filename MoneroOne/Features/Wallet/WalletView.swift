@@ -120,7 +120,7 @@ struct WalletView: View {
                 }
             }
             // Lets the wallet rows' swipe-to-delete work outside a List (iOS 27).
-            .animation(.snappy(duration: 0.4), value: showWalletManager)
+            .animation(.snappy(duration: 0.35), value: showWalletManager)
             // Viewport below the header bar and above the tab bar (background
             // content respects safe areas), used to size the activity card.
             .background {
@@ -163,23 +163,25 @@ struct WalletView: View {
     }
 }
 
+/// A caution banner like `ErrorBanner(type: .warning)`: yellow glyph,
+/// label-color text, yellow tint at 15%.
 struct TestnetBanner: View {
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Image(systemName: "flask.fill")
-                .foregroundStyle(.white)
+                .font(.body)
+                .foregroundStyle(.yellow)
             Text("Testnet Mode")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
             Spacer()
             Text("Test XMR only")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.cyan.gradient)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding()
+        .background(Color.yellow.opacity(0.15))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -314,7 +316,7 @@ struct RecentTransactionCard: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(iconColor.opacity(0.2))
+                        .fill(iconColor.opacity(0.15))
                         .frame(width: 40, height: 40)
 
                     Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")

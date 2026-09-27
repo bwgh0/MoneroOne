@@ -86,7 +86,7 @@ struct CommandCenterView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .animation(.snappy(duration: 0.4), value: showWalletManager)
+            .animation(.snappy(duration: 0.35), value: showWalletManager)
             .frame(minWidth: 280, idealWidth: 320, maxWidth: 400)
 
             // Column 2: Chart Switcher (Portfolio / Price)
@@ -119,7 +119,7 @@ struct CommandCenterView: View {
                         .frame(maxHeight: .infinity)
                 }
             }
-            .animation(.snappy(duration: 0.4), value: showWalletManager)
+            .animation(.snappy(duration: 0.35), value: showWalletManager)
             .frame(maxWidth: .infinity)
 
             // Column 2: Transactions

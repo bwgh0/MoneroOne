@@ -83,7 +83,7 @@ struct SelectableOptionCard<ID: Hashable>: View {
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? Color.brand.opacity(0.1) : Color(.secondarySystemBackground))
+            .background(isSelected ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)

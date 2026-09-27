@@ -101,12 +101,12 @@ struct BalanceCard: View {
             HStack {
                 if isSyncBlocked {
                     Circle()
-                        .fill(Color.red)
+                        .fill(Color.gray)
                         .frame(width: 8, height: 8)
                         .accessibilityHidden(true)
                     Text("Paused")
                         .font(.caption)
-                        .foregroundColor(.red)
+                        .foregroundColor(.secondary)
                         .accessibilityLabel("Sync status: paused")
                 } else if case .synced = syncState {
                     Circle()
@@ -143,7 +143,7 @@ struct BalanceCard: View {
                         onHardwareSyncTap?()
                     } label: {
                         HStack(spacing: 5) {
-                            // Two-state pill: capsule color is the
+                            // Two-state pill: its hue is the
                             // primary visual signal so connection
                             // state is impossible to miss at a
                             // glance. Green = device link is live
@@ -159,13 +159,11 @@ struct BalanceCard: View {
                                 .font(.caption2.weight(.semibold))
                                 .lineLimit(1)
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(isHardwareDeviceWarm ? Color.green : Color.gray)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
                         .background(
-                            Capsule().fill(isHardwareDeviceWarm
-                                           ? Color.green
-                                           : Color.gray.opacity(0.7))
+                            Capsule().fill((isHardwareDeviceWarm ? Color.green : Color.gray).opacity(0.15))
                         )
                         .padding(.leading, 6)
                     }
@@ -200,8 +198,7 @@ struct BalanceCard: View {
                         .foregroundColor(change >= 0 ? .green : .red)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background((change >= 0 ? Color.green : Color.red).opacity(0.1))
-                        .cornerRadius(8)
+                        .background(Capsule().fill((change >= 0 ? Color.green : Color.red).opacity(0.15)))
                     }
                     .accessibilityLabel("24 hour price change: \(formatPriceChange(change))")
                     .accessibilityHint("Opens the price chart")
@@ -351,7 +348,7 @@ struct BalanceCard: View {
                     Text("Sync paused — outside trusted zone")
                         .font(.caption)
                 }
-                .foregroundColor(.red)
+                .foregroundColor(.secondary)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Location status: sync paused, outside trusted zone")
             } else if isOutsideTrustedZone {

@@ -175,7 +175,6 @@ struct SendStatusStep: View {
     }
 
     private func formatHash(_ hash: String) -> String {
-        guard hash.count > 20 else { return hash }
-        return "\(hash.prefix(10))...\(hash.suffix(6))"
+        ReceiveAddressLogic.shortAddress(hash)
     }
 }

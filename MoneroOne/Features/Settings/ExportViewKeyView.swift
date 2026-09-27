@@ -295,9 +295,8 @@ fileprivate struct ViewKeyField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(String(localized: label).uppercased())
-                .font(.caption2.weight(.semibold))
-                .tracking(0.6)
+            Text(label)
+                .font(.caption)
                 .foregroundStyle(.secondary)
 
             HStack(alignment: .top, spacing: 10) {
@@ -325,7 +324,7 @@ fileprivate struct ViewKeyField: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(0.05))
+                    .fill(Color(.tertiarySystemGroupedBackground))
             )
         }
     }

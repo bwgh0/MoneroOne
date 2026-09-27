@@ -107,7 +107,7 @@ struct TransactionPanelRow: View {
                 // Icon
                 ZStack {
                     Circle()
-                        .fill(iconColor.opacity(0.2))
+                        .fill(iconColor.opacity(0.15))
                         .frame(width: 40, height: 40)
 
                     Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")

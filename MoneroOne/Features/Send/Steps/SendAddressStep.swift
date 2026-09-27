@@ -72,7 +72,7 @@ struct SendAddressStep: View {
                                 Image(systemName: "qrcode.viewfinder")
                                 Text("Scan QR")
                             }
-                            .font(.subheadline.weight(.medium))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.brand)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
@@ -89,7 +89,7 @@ struct SendAddressStep: View {
                                 Image(systemName: "doc.on.clipboard")
                                 Text("Paste")
                             }
-                            .font(.subheadline.weight(.medium))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.brand)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)

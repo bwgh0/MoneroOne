@@ -20,7 +20,7 @@ struct SyncLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     if context.state.isBlocked {
                         Image(systemName: "location.slash")
-                            .foregroundColor(.red)
+                            .foregroundColor(.gray)
                             .font(.title2)
                     } else if context.state.isSynced {
                         Image(systemName: "checkmark.circle.fill")
@@ -102,7 +102,7 @@ struct SyncLiveActivity: Widget {
             } compactTrailing: {
                 if context.state.isBlocked {
                     Image(systemName: "location.slash")
-                        .foregroundColor(.red)
+                        .foregroundColor(.gray)
                         .font(.caption)
                 } else if context.state.isSynced {
                     Image(systemName: "checkmark.circle.fill")
@@ -126,7 +126,7 @@ struct SyncLiveActivity: Widget {
             } minimal: {
                 if context.state.isBlocked {
                     Image(systemName: "location.slash")
-                        .foregroundColor(.red)
+                        .foregroundColor(.gray)
                 } else if context.state.isSynced {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
@@ -226,7 +226,7 @@ struct LockScreenView: View {
             if context.state.isBlocked {
                 Image(systemName: "location.slash")
                     .font(.title)
-                    .foregroundColor(.red)
+                    .foregroundColor(.gray)
             } else if context.state.isSynced {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title)

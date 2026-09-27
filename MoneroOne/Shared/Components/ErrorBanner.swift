@@ -13,8 +13,8 @@ struct ErrorBanner: View {
         var icon: String {
             switch self {
             case .offline: return "wifi.slash"
-            case .error: return "exclamationmark.triangle.fill"
-            case .warning: return "exclamationmark.circle.fill"
+            case .error: return "exclamationmark.circle.fill"
+            case .warning: return "exclamationmark.triangle.fill"
             }
         }
 

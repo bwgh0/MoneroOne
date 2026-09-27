@@ -26,8 +26,7 @@ struct DonationView: View {
                         .foregroundColor(.brand)
 
                     Text("Support Development")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                        .font(.title2.weight(.semibold))
 
                     Text("If you enjoy Monero One, consider donating to support continued development.")
                         .font(.subheadline)
@@ -82,7 +81,7 @@ struct DonationView: View {
                     Text(copied ? "Copied!" : "Copy")
                 }
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(copied ? Color.green : Color.primary)
+                .foregroundStyle(copied ? Color.green : Color.brand)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }

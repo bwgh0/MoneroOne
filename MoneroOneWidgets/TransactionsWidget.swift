@@ -167,9 +167,9 @@ struct TransactionsWidgetView: View {
                                 .font(.system(size: 7, weight: .bold))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
-                                .background(Color.brand.opacity(0.2))
+                                .background(Color.brand.opacity(0.15))
                                 .foregroundColor(.brand)
-                                .cornerRadius(4)
+                                .clipShape(Capsule())
                         }
                     }
 
@@ -256,7 +256,7 @@ struct TransactionsWidgetView: View {
                     (tx.isIncoming ? Color.green : Color.brand)
                         .opacity(0.15)
                 )
-                .cornerRadius(5)
+                .clipShape(Circle())
 
             // Details
             VStack(alignment: .leading, spacing: 1) {

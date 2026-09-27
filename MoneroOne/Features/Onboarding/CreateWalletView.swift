@@ -200,9 +200,9 @@ struct CreateWalletView: View {
                                 .font(.caption2)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.brand.opacity(0.2))
+                                .background(Color.brand.opacity(0.15))
                                 .foregroundColor(.brand)
-                                .cornerRadius(4)
+                                .clipShape(Capsule())
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)

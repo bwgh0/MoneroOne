@@ -15562,12 +15562,12 @@
         }
       }
     },
-    "Bluetooth permission denied. Go to Settings → MoneroOne → Bluetooth." : {
+    "Bluetooth permission denied. Go to Settings → Monero One → Bluetooth." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bluetooth-Zugriff verweigert. Öffne Einstellungen → MoneroOne → Bluetooth."
+            "value" : "Bluetooth-Zugriff verweigert. Öffne Einstellungen → Monero One → Bluetooth."
           }
         },
         "es" : {
@@ -38157,7 +38157,7 @@
         }
       }
     },
-    "If you enjoy MoneroOne, consider donating to support continued development." : {
+    "If you enjoy Monero One, consider donating to support continued development." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {

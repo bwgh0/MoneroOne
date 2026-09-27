@@ -29,7 +29,7 @@ struct DonationView: View {
                         .font(.title2)
                         .fontWeight(.bold)
 
-                    Text("If you enjoy MoneroOne, consider donating to support continued development.")
+                    Text("If you enjoy Monero One, consider donating to support continued development.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)

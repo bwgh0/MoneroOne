@@ -54,9 +54,9 @@ struct SelectableOptionCard<ID: Hashable>: View {
                                 .font(.caption)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 2)
-                                .background(Color.brand.opacity(0.2))
+                                .background(Color.brand.opacity(0.15))
                                 .foregroundColor(.brand)
-                                .cornerRadius(4)
+                                .clipShape(Capsule())
                         }
                     }
 

@@ -101,7 +101,7 @@ struct PriceWidgetView: View {
             Text("XMR Price")
                 .font(.headline.weight(.semibold))
 
-            Text("Open MoneroOne to load")
+            Text("Open Monero One to load")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -265,9 +265,9 @@ struct PriceWidgetView: View {
                     .font(.caption2.weight(.medium))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.brand.opacity(0.2))
+                    .background(Color.brand.opacity(0.15))
                     .foregroundColor(.brand)
-                    .cornerRadius(4)
+                    .clipShape(Capsule())
 
                 Spacer()
 
@@ -293,9 +293,9 @@ struct PriceWidgetView: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(isPositive ? Color.green.opacity(0.2) : Color.red.opacity(0.2))
+        .background(isPositive ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
         .foregroundColor(isPositive ? .green : .red)
-        .cornerRadius(6)
+        .clipShape(Capsule())
     }
 
     private func sparklineChart(points: [Double]) -> some View {

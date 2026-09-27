@@ -73,7 +73,7 @@ struct AddPriceAlertView: View {
                         }
                     }
                     .disabled(!isValidPrice)
-                    .listRowBackground(isValidPrice ? Color.brand : Color.brand.opacity(0.3))
+                    .listRowBackground(isValidPrice ? Color.brand : Color.brand.opacity(0.4))
                     .foregroundColor(.white)
                 }
             }

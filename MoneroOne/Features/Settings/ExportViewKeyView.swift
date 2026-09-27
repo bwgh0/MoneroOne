@@ -203,34 +203,19 @@ fileprivate struct ViewKeyExportCard: View {
 
             actionButtons
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.regularMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
-        )
+        .padding(16)
+        .dashboardCard()
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.brand, Color.pink.opacity(0.85)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-                    .shadow(color: Color.brand.opacity(0.35), radius: 8, y: 3)
+                    .fill(Color.brand.opacity(0.15))
+                    .frame(width: 40, height: 40)
                 Image(systemName: "eye.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.brand)
             }
 
             VStack(alignment: .leading, spacing: 4) {

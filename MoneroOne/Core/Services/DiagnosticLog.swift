@@ -102,7 +102,7 @@ final class DiagnosticLog {
 
     func export() -> String {
         var lines: [String] = []
-        lines.append("MoneroOne Diagnostic Log")
+        lines.append("Monero One Diagnostic Log")
         lines.append("Exported: \(ISO8601DateFormatter().string(from: Date()))")
         lines.append("Device: \(deviceInfo())")
         lines.append("App Version: \(appVersion())")

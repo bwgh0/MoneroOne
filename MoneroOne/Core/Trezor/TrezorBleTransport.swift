@@ -703,7 +703,7 @@ extension TrezorBleTransport: CBCentralManagerDelegate {
             updateOnMain { self.connectionState = .error(String(localized: "Bluetooth is turned off")) }
         case .unauthorized:
             TrezorLog.log("[BLE] Bluetooth UNAUTHORIZED - check app permissions")
-            updateOnMain { self.connectionState = .error(String(localized: "Bluetooth permission denied. Go to Settings → MoneroOne → Bluetooth.")) }
+            updateOnMain { self.connectionState = .error(String(localized: "Bluetooth permission denied. Go to Settings → Monero One → Bluetooth.")) }
         case .unsupported:
             TrezorLog.log("[BLE] Bluetooth UNSUPPORTED on this device")
             updateOnMain { self.connectionState = .error(String(localized: "Bluetooth not supported")) }

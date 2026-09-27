@@ -767,7 +767,7 @@ private struct ChartMarkerBadge: View {
 
     var body: some View {
         Image(systemName: style == .received ? "arrow.down.left" : "arrow.up.right")
-            .font(.system(size: 9, weight: .heavy))
+            .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: 18, height: 18)
             .background(Circle().fill(tint))

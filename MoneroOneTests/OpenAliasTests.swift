@@ -4,9 +4,9 @@ import XCTest
 @testable import MoneroOne
 
 // OpenAlias send spec, sections 8.1 and 8.2. No test here calls the wallet2
-// resolver, and no test reaches the network: the bridge tests use a fake DoH
-// transport, and the SOCKS test and the kit tests use listeners on the IPv4
-// loopback.
+// resolver. Only the live loop reaches the network, and it runs only when
+// asked: the bridge tests use a fake DoH transport, and the SOCKS test and
+// the kit tests use listeners on the IPv4 loopback.
 
 // MARK: - Fixtures
 
@@ -867,6 +867,160 @@ final class DnsBridgeTests: XCTestCase {
         XCTAssertNotNil(DnsBridge.goodAnswer(DohHTTPReply(status: 200, contentType: "application/dns-message; charset=binary", body: Data(good))))
     }
 
+    // MARK: Malformed frames, FORMERR and NOTIMPL
+
+    /// `query` with an EDNS OPT record: 4096-byte size, the DO bit on, and
+    /// `options` as its data.
+    private func withEdns(_ query: [UInt8], options: [UInt8] = []) -> [UInt8] {
+        var message = query
+        message[11] = 1  // ARCOUNT
+        message += [0, 0, 41, 0x10, 0, 0, 0, 0x80, 0, UInt8(options.count >> 8), UInt8(options.count & 0xFF)]
+        return message + options
+    }
+
+    /// The frame that libunbound 1.16.1 sometimes sends: the query with its
+    /// ID written over its flags, so QDCOUNT reads 0.
+    private func idOverFlags(_ query: [UInt8]) -> [UInt8] {
+        Array(query[0..<2]) + Array(query[4...])
+    }
+
+    /// `query` (without EDNS) with another type and class.
+    private func typed(_ query: [UInt8], type: UInt16, qclass: UInt16) -> [UInt8] {
+        Array(query.dropLast(4)) + [UInt8(type >> 8), UInt8(type & 0xFF), UInt8(qclass >> 8), UInt8(qclass & 0xFF)]
+    }
+
+    private func replaced(_ query: [UInt8], at index: Int, with byte: UInt8) -> [UInt8] {
+        var message = query
+        message[index] = byte
+        return message
+    }
+
+    func testWellFormedQueryCheck() {
+        let query = dnsQuery(id: 3)
+        let options: [UInt8] = [0, 10, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, 0, 12, 0, 3, 0, 0, 0]  // a cookie, padding
+        let a63 = String(repeating: "a", count: 63)
+        let longestName = [a63, a63, a63, String(repeating: "b", count: 61)].joined(separator: ".")  // 255 bytes
+        let edns = withEdns(query, options: options)
+
+        // Every query that unbound sends: EDNS with options, any flags
+        // other than QR and the opcode, any type and class, any case.
+        let accepted: [[UInt8]] = [
+            query,
+            withEdns(query),
+            edns,
+            replaced(replaced(query, at: 2, with: 0), at: 3, with: 0),  // no flags
+            replaced(replaced(query, at: 2, with: 0x07), at: 3, with: 0x70),  // AA, TC, RD, Z, AD, CD
+            dnsQuery(id: 4, name: "DoNaTe.GetMonero.ORG"),
+            typed(dnsQuery(id: 5, name: "_ta-4f66-9728"), type: 10, qclass: 1),  // RFC 8145
+            withEdns(typed(dnsQuery(id: 6, name: "org"), type: 48, qclass: 1)),  // DNSKEY
+            typed(query, type: 65535, qclass: 255),
+            typed(query, type: 16, qclass: 3),  // CHAOS
+            dnsQuery(id: 7, name: "."),  // the root: 17 bytes
+            dnsQuery(id: 8, name: longestName),
+        ]
+        for message in accepted {
+            XCTAssertTrue(DnsBridge.isWellFormedQuery(message), Fixture.hex(message))
+        }
+
+        var longOption = edns
+        longOption[edns.count - options.count - 1] += 1  // RDLENGTH one byte too long
+        let rejected: [[UInt8]] = [
+            idOverFlags(query),
+            idOverFlags(edns),
+            replaced(query, at: 2, with: 0x81),  // QR on
+            replaced(query, at: 2, with: 0x01 | 4 << 3),  // opcode NOTIFY
+            replaced(query, at: 2, with: 0x01 | 5 << 3),  // opcode UPDATE
+            replaced(query, at: 5, with: 0),  // no question
+            replaced(query, at: 5, with: 2),  // two questions
+            replaced(query, at: 7, with: 1),  // an answer record
+            replaced(query, at: 9, with: 1),  // an authority record
+            replaced(query, at: 11, with: 1),  // an additional record that is not there
+            query + [0],  // a byte left over
+            Array(query.dropLast()),  // cut short
+            Array(edns.dropLast()),  // an option cut short
+            longOption,
+            replaced(query, at: 12, with: 64),  // a label of 64 bytes
+            Array(query[0..<12]) + [0xC0, 0x0C, 0, 16, 0, 1],  // a compression pointer
+            dnsQuery(id: 9, name: longestName + "b"),  // 256 bytes
+            Array(query[0..<12]),  // a header only
+        ]
+        for message in rejected {
+            XCTAssertFalse(DnsBridge.isWellFormedQuery(message), Fixture.hex(message))
+        }
+    }
+
+    func testMalformedFrameGetsServfailAndNeverGoesUpstream() async throws {
+        let transport = FakeTransport()
+        let (bridge, fd) = try await startBridge(transport)
+        defer { close(fd); bridge.stop() }
+
+        let resend = idOverFlags(typed(dnsQuery(id: 0x4CA2, name: "_ta-4f66-9728"), type: 10, qclass: 1))
+        XCTAssertEqual(resend.count, 29)
+        let reply = try exchange(fd, resend)
+        XCTAssertEqual(messageID(reply), 0x4CA2)
+        XCTAssertEqual(reply[3] & 0x0F, 2, "SERVFAIL")
+        XCTAssertEqual(transport.calls.count, 0)
+        XCTAssertEqual(bridge.synthesizedCount, 1)
+
+        // Only that query fails: the next query goes out.
+        let next = try exchange(fd, withEdns(dnsQuery(id: 9, name: "org")))
+        XCTAssertEqual(messageID(next), 9)
+        XCTAssertEqual(next[3] & 0x0F, 0)
+        XCTAssertEqual(transport.calls.count, 1)
+        bridge.stop()
+        XCTAssertEqual(bridge.answeredCount, 1)
+        XCTAssertEqual(bridge.synthesizedCount, 1)
+    }
+
+    func testFormerrAndNotimplAreNeverPassedOn() async throws {
+        for rcode: UInt8 in [1, 4] {
+            let refuse: FakeTransport.Handler = { message, _ in
+                var bytes = [UInt8](message)
+                bytes[2] |= 0x80
+                bytes[3] = (bytes[3] & 0xF0) | rcode
+                return DohHTTPReply(status: 200, contentType: "application/dns-message", body: Data(bytes))
+            }
+            let refused = try await refuse(Data(dnsQuery(id: 0)), server1)
+            XCTAssertNil(DnsBridge.goodAnswer(refused), "rcode \(rcode)")
+
+            // One server: the next server answers.
+            let first = server1
+            let oneBad = FakeTransport { message, url in
+                if url == first { return try await refuse(message, url) }
+                return try await FakeTransport.echo(message, url)
+            }
+            let (bridge, fd) = try await startBridge(oneBad)
+            let answer = try exchange(fd, withEdns(dnsQuery(id: 10, name: "org")))
+            XCTAssertEqual(messageID(answer), 10)
+            XCTAssertEqual(answer[3] & 0x0F, 0)
+            XCTAssertEqual(oneBad.calls.map { $0.server }, [server1, server2])
+            close(fd)
+            bridge.stop()
+            XCTAssertEqual(bridge.answeredCount, 1)
+            XCTAssertEqual(bridge.synthesizedCount, 0)
+
+            // Every server: a SERVFAIL made by the bridge.
+            let allBad = FakeTransport(handler: refuse)
+            let (bridge2, fd2) = try await startBridge(allBad)
+            let servfail = try exchange(fd2, withEdns(dnsQuery(id: 11, name: "org")))
+            XCTAssertEqual(messageID(servfail), 11)
+            XCTAssertEqual(servfail[3] & 0x0F, 2)
+            XCTAssertEqual(allBad.calls.count, 2)
+            close(fd2)
+            bridge2.stop()
+            XCTAssertEqual(bridge2.answeredCount, 0)
+            XCTAssertEqual(bridge2.synthesizedCount, 1)
+        }
+
+        // Other rcodes go on as the server sent them.
+        for rcode: UInt8 in [0, 2, 3, 5] {
+            var bytes = dnsQuery(id: 0)
+            bytes[2] |= 0x80
+            bytes[3] = (bytes[3] & 0xF0) | rcode
+            XCTAssertEqual(DnsBridge.goodAnswer(DohHTTPReply(status: 200, contentType: "application/dns-message", body: Data(bytes))), bytes)
+        }
+    }
+
     func testStoppedBridgeRefusesConnections() async throws {
         let bridge = DnsBridge(transport: FakeTransport(), servers: [server1, server2])
         let port = try await bridge.start()
@@ -1121,5 +1275,36 @@ final class OpenAliasKitLookupTests: XCTestCase {
     func testWallet2ResolverLinks() {
         let resolver: (String) -> (address: String, dnssecValid: Bool)? = Kit.resolveOpenAliasWithWallet2
         XCTAssertNotNil(resolver as Any?)
+    }
+}
+
+// MARK: - Live loop (network)
+
+/// Live network: many real lookups of one name, to count the outcomes. Runs
+/// only when the test process has OPENALIAS_LIVE=1, for example with
+/// `TEST_RUNNER_OPENALIAS_LIVE=1 xcodebuild test ...`. OPENALIAS_COUNT sets
+/// the count and OPENALIAS_PAUSE_MS the pause after each lookup.
+final class OpenAliasLiveLoopTests: XCTestCase {
+    func testLookUpManyTimes() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(environment["OPENALIAS_LIVE"] == "1", "The live loop runs only with OPENALIAS_LIVE=1.")
+        let count = environment["OPENALIAS_COUNT"].flatMap { Int($0) } ?? 40
+        let pause = environment["OPENALIAS_PAUSE_MS"].flatMap { Int($0) } ?? 500
+        let name = OpenAliasName(display: "donate@getmonero.org", query: "donate.getmonero.org")
+        let resolver = OpenAliasResolver()
+        var tally: [String: Int] = [:]
+        for run in 1...max(count, 1) {
+            let started = Date()
+            let outcome = await resolver.resolve(name) { _ in .valid }
+            let label: String
+            switch outcome {
+            case .success(let found): label = "resolved, DNSSEC \(found.dnssec)"
+            case .failure(let failure): label = "failed, \(failure)"
+            }
+            tally[label, default: 0] += 1
+            print("[OpenAliasLoop] \(run)/\(count): \(label) in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
+            try await Task.sleep(for: .milliseconds(pause))
+        }
+        print("[OpenAliasLoop] tally over \(count): \(tally.sorted { $0.key < $1.key })")
     }
 }

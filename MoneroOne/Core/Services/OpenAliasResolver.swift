@@ -247,10 +247,16 @@ final class DnsBridge: @unchecked Sendable {
 
     /// Queries of one connection run at the same time and answer in any order.
     private func handle(query: [UInt8], on connection: NWConnection, queue: DispatchQueue) {
+        let wellFormed = Self.isWellFormedQuery(query)
         let route: Route = lock.withLock {
             guard !stopped else { return .drop }
             queries += 1
-            if queries > queryCap || isDown {
+            // A frame that is not one well-formed query never goes upstream.
+            // A DoH server answers it with FORMERR or NOTIMPL, and libunbound
+            // then asks without EDNS for the rest of the lookup. The answers
+            // lose their signatures, and the lookup fails as bogus. A SERVFAIL
+            // fails only this query.
+            if queries > queryCap || isDown || !wellFormed {
                 synthesized += 1
                 return .servfail
             }
@@ -279,7 +285,8 @@ final class DnsBridge: @unchecked Sendable {
     }
 
     /// Sends the query to the preferred server, then to the next server after
-    /// a transport failure. When every server fails, the bridge goes down.
+    /// a transport failure or a reply that `goodAnswer` refuses. When every
+    /// server fails, the bridge goes down.
     private func forward(_ query: [UInt8]) async -> [UInt8] {
         var message = query
         message[0] = 0  // RFC 8484, section 4.1: ID 0 on the wire
@@ -318,15 +325,70 @@ final class DnsBridge: @unchecked Sendable {
     // MARK: DNS messages
 
     /// The answer bytes of a good DoH reply: status 200, a DNS message
-    /// content type, 12 to 65535 bytes, and the QR bit set. Else nil, which
-    /// counts as a transport failure.
+    /// content type, 12 to 65535 bytes, the QR bit set, and an rcode other
+    /// than FORMERR and NOTIMPL. Else nil, which counts as a transport
+    /// failure. libunbound reads FORMERR or NOTIMPL as "this server has no
+    /// EDNS" and then asks without the DO bit, so the answers lose their
+    /// signatures. Every DoH server has EDNS, so the bridge tries the next
+    /// server instead.
     static func goodAnswer(_ reply: DohHTTPReply) -> [UInt8]? {
         guard reply.status == 200,
               let type = reply.contentType?.lowercased(), type.hasPrefix("application/dns-message"),
               (12...65535).contains(reply.body.count) else { return nil }
         let bytes = [UInt8](reply.body)
         guard bytes[2] & 0x80 != 0 else { return nil }
+        let rcode = bytes[3] & 0x0F
+        guard rcode != Rcode.formerr, rcode != Rcode.notimpl else { return nil }
         return bytes
+    }
+
+    private enum Rcode {
+        static let formerr: UInt8 = 1
+        static let notimpl: UInt8 = 4
+    }
+
+    /// One standard query: QR off, opcode 0, one question, no answer or
+    /// authority records, and every byte used by the question and the
+    /// additional records (the EDNS OPT record and its options). Any other
+    /// flag, and any type and class, pass. libunbound 1.16.1 (the Android
+    /// kit) sometimes resends a query with its ID written over its flags,
+    /// so its QDCOUNT reads 0.
+    static func isWellFormedQuery(_ query: [UInt8]) -> Bool {
+        // The header, the root name, the type and the class.
+        guard query.count >= 17 else { return false }
+        guard query[2] & 0x80 == 0, (query[2] >> 3) & 0x0F == 0 else { return false }
+        guard uint16(query, 4) == 1, uint16(query, 6) == 0, uint16(query, 8) == 0 else { return false }
+        guard var index = endOfName(in: query, at: 12, pointerAllowed: false) else { return false }
+        index += 4
+        for _ in 0..<uint16(query, 10) {
+            guard let end = endOfName(in: query, at: index, pointerAllowed: true),
+                  end + 10 <= query.count else { return false }
+            index = end + 10 + uint16(query, end + 8)
+        }
+        return index == query.count
+    }
+
+    private static func uint16(_ message: [UInt8], _ index: Int) -> Int {
+        Int(message[index]) << 8 | Int(message[index + 1])
+    }
+
+    /// The offset after the name at `start`. Nil when a label is bad, when
+    /// the name is longer than 255 bytes, or when it runs past the end.
+    private static func endOfName(in message: [UInt8], at start: Int, pointerAllowed: Bool) -> Int? {
+        var index = start
+        var length = 1  // the zero byte at the end
+        while index < message.count {
+            let label = Int(message[index])
+            if label == 0 { return index + 1 }
+            if label & 0xC0 == 0xC0 {
+                return pointerAllowed && index + 2 <= message.count ? index + 2 : nil
+            }
+            guard label < 64 else { return nil }
+            length += 1 + label
+            guard length <= 255 else { return nil }
+            index += 1 + label
+        }
+        return nil
     }
 
     /// A SERVFAIL for the query: its ID, QR and RA on, opcode, RD and CD

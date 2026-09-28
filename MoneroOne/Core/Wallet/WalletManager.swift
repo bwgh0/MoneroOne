@@ -3173,6 +3173,8 @@ class WalletManager: ObservableObject {
         for id in ids {
             deleteWallet(id: id)
         }
+        // OpenAlias pins belong to this device's payment history.
+        OpenAliasPinStore().clearAll()
     }
 
     func deleteWallet(id: UUID) {

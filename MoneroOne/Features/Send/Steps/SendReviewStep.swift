@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SendReviewStep: View {
     let recipientAddress: String
+    /// Set when the recipient came from an OpenAlias name.
+    var aliasSummary: OpenAliasSummary? = nil
     let amountString: String
     let memo: String
     let isSendingAll: Bool
@@ -48,14 +50,30 @@ struct SendReviewStep: View {
                                 Text("Recipient")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                if let aliasSummary {
+                                    Text(aliasSummary.name.display)
+                                        .font(.subheadline.weight(.medium))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
                                 CodeText(formatAddress(recipientAddress), color: .label)
                             }
 
                             Spacer()
                         }
-                        .padding()
+                        .padding(aliasSummary == nil ? .all : [.horizontal, .top])
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Recipient: \(recipientAddress)")
+                        .accessibilityLabel(recipientLabel)
+
+                        if let aliasSummary {
+                            // Under the text column: the 36 pt icon and the
+                            // 12 pt spacing of the row.
+                            OpenAliasReviewNotes(summary: aliasSummary)
+                                .padding(.leading, 64)
+                                .padding(.trailing)
+                                .padding(.top, 8)
+                                .padding(.bottom)
+                        }
 
                         Divider().padding(.horizontal)
 
@@ -214,6 +232,13 @@ struct SendReviewStep: View {
                 showContent = true
             }
         }
+    }
+
+    private var recipientLabel: Text {
+        if let aliasSummary {
+            return Text("Recipient: \(aliasSummary.name.display), address \(recipientAddress)")
+        }
+        return Text("Recipient: \(recipientAddress)")
     }
 
     private func formatAddress(_ addr: String) -> String {

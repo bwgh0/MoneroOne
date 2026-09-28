@@ -1,13 +1,23 @@
 import SwiftUI
 
 struct SendAddressStep: View {
-    @Binding var recipientAddress: String
+    /// The text of the field: an address or an OpenAlias name.
+    @Binding var recipientInput: String
     @Binding var showScanner: Bool
     let isConnected: Bool
     let isValidAddress: Bool
-    let onContinue: () -> Void
+    @ObservedObject var lookup: OpenAliasLookupModel
+    /// Called with the summary when the field holds a resolved name, else nil.
+    let onContinue: (OpenAliasSummary?) -> Void
 
     @State private var showContent = false
+    @State private var dialog: ContinueDialog?
+
+    /// The dialog that Continue shows on a resolved name (spec 5.2).
+    private enum ContinueDialog {
+        case changed(OpenAliasSummary, pinnedAt: Date)
+        case unsigned(OpenAliasSummary)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,21 +33,32 @@ struct SendAddressStep: View {
 
                     // Address field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Recipient Address")
+                        Text("Recipient")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
                         HStack {
-                            TextField("Enter XMR address", text: $recipientAddress)
+                            // Typed text goes to the lookup from the binding: when
+                            // two keystrokes land in one frame, SwiftUI drops an
+                            // onChange call, and the lookup kept a part of the name.
+                            TextField("Enter XMR address or OpenAlias", text: Binding(
+                                get: { recipientInput },
+                                set: { newValue in
+                                    recipientInput = newValue
+                                    lookup.textChanged(newValue)
+                                }
+                            ))
                                 .font(.system(.caption, design: .monospaced))
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
+                                .onSubmit { lookup.submit(recipientInput) }
                                 .accessibilityIdentifier("send.addressField")
-                                .accessibilityLabel("Recipient address")
+                                .accessibilityLabel("Recipient address or OpenAlias name")
 
-                            if !recipientAddress.isEmpty {
+                            if !recipientInput.isEmpty {
                                 Button {
-                                    recipientAddress = ""
+                                    lookup.cancel()
+                                    recipientInput = ""
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.secondary)
@@ -49,17 +70,32 @@ struct SendAddressStep: View {
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
 
-                        // Validation indicator
-                        if !recipientAddress.isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: isValidAddress ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .foregroundStyle(isValidAddress ? .green : .red)
-                                Text(isValidAddress ? "Valid address" : "Invalid address")
-                                    .font(.caption)
-                                    .foregroundStyle(isValidAddress ? .green : .red)
+                        // Validation indicator. On the name path the lookup
+                        // row takes its place, in a slot of the same height,
+                        // so the buttons keep their positions.
+                        if !recipientInput.isEmpty {
+                            ZStack(alignment: .leading) {
+                                validationRow(isValid: false)
+                                    .hidden()
+                                    .accessibilityHidden(true)
+                                switch input {
+                                case .empty:
+                                    EmptyView()
+                                case .address:
+                                    // Typed text shows its row after the typing delay.
+                                    if lookup.phase == .address {
+                                        validationRow(isValid: isValidAddress)
+                                            .transition(.opacity)
+                                    }
+                                case .name, .reserved, .invalidName:
+                                    OpenAliasStatusRow(lookup: lookup)
+                                }
                             }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel(isValidAddress ? "Valid address" : "Invalid address")
+                        }
+
+                        if let resolvedSummary {
+                            OpenAliasResultBlock(summary: resolvedSummary)
+                                .transition(.opacity)
                         }
                     }
 
@@ -82,7 +118,8 @@ struct SendAddressStep: View {
 
                         Button {
                             if let clipboard = UIPasteboard.general.string {
-                                recipientAddress = clipboard
+                                recipientInput = clipboard
+                                lookup.submit(clipboard)
                             }
                         } label: {
                             HStack(spacing: 6) {
@@ -104,7 +141,7 @@ struct SendAddressStep: View {
             }
 
             // Continue button
-            Button(action: onContinue) {
+            Button(action: continueTapped) {
                 HStack(spacing: 8) {
                     Text("Continue")
                         .font(.callout.weight(.semibold))
@@ -119,7 +156,7 @@ struct SendAddressStep: View {
             .disabled(!canContinue)
             .padding()
             .accessibilityLabel("Continue")
-            .accessibilityHint(canContinue ? "Proceed to enter amount" : "Enter a valid address first")
+            .accessibilityHint(continueHint)
         }
         .navigationTitle("Send XMR")
         .navigationBarTitleDisplayMode(.inline)
@@ -129,9 +166,93 @@ struct SendAddressStep: View {
                 showContent = true
             }
         }
+        .alert(
+            dialogTitle,
+            isPresented: Binding(
+                get: { dialog != nil },
+                set: { if !$0 { dialog = nil } }
+            ),
+            presenting: dialog
+        ) { dialog in
+            Button("Cancel", role: .cancel) {}
+            switch dialog {
+            case .changed(let summary, _):
+                Button("Use New Address") { onContinue(summary) }
+            case .unsigned(let summary):
+                Button("Continue Anyway") { onContinue(summary) }
+            }
+        } message: { dialog in
+            switch dialog {
+            case .changed(let summary, let pinnedAt):
+                Text("The address for \(summary.name.display) is different from the address you paid on \(DateFormatter.localizedString(from: pinnedAt, dateStyle: .medium, timeStyle: .none)). Check the new address with the recipient.")
+            case .unsigned(let summary):
+                Text("\(summary.name.display) has no DNSSEC signature. A DNS server between you and the owner of the name can change this answer. Check the address with the recipient before you send.")
+            }
+        }
+    }
+
+    /// The existing "Valid address" / "Invalid address" row.
+    private func validationRow(isValid: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: isValid ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(isValid ? .green : .red)
+            Text(isValid ? "Valid address" : "Invalid address")
+                .font(.caption)
+                .foregroundStyle(isValid ? .green : .red)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isValid ? "Valid address" : "Invalid address")
+    }
+
+    private var input: RecipientInput {
+        OpenAlias.classify(recipientInput)
+    }
+
+    /// The lookup result, when it belongs to the name in the field.
+    private var resolvedSummary: OpenAliasSummary? {
+        guard case .name(let name) = input, let summary = lookup.summary,
+              summary.name.query == name.query else { return nil }
+        return summary
     }
 
     private var canContinue: Bool {
-        isConnected && isValidAddress
+        guard isConnected else { return false }
+        switch input {
+        case .address: return isValidAddress
+        case .name: return resolvedSummary != nil
+        case .empty, .reserved, .invalidName: return false
+        }
+    }
+
+    private var continueHint: Text {
+        if canContinue { return Text("Proceed to enter amount") }
+        if case .name = input, lookup.isLooking { return Text("Wait for the name lookup to finish") }
+        return Text("Enter a valid address first")
+    }
+
+    private var dialogTitle: Text {
+        switch dialog {
+        case .changed: return Text("Address Changed")
+        case .unsigned: return Text("Name Not Signed")
+        case nil: return Text(verbatim: "")
+        }
+    }
+
+    /// Continue on a resolved name shows one dialog at most: a changed pin
+    /// first, since its message also asks for a check, then a name with no
+    /// DNSSEC signature.
+    private func continueTapped() {
+        guard case .name = input else {
+            onContinue(nil)
+            return
+        }
+        guard let summary = resolvedSummary else { return }
+        if case .changed(let pinnedAt) = summary.pin {
+            dialog = .changed(summary, pinnedAt: pinnedAt)
+        } else if summary.dnssec == .off {
+            dialog = .unsigned(summary)
+        } else {
+            onContinue(summary)
+        }
     }
 }

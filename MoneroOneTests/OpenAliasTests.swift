@@ -5,7 +5,8 @@ import XCTest
 
 // OpenAlias send spec, sections 8.1 and 8.2. No test here calls the wallet2
 // resolver, and no test reaches the network: the bridge tests use a fake DoH
-// transport, and the kit tests use listeners on the IPv4 loopback.
+// transport, and the SOCKS test and the kit tests use listeners on the IPv4
+// loopback.
 
 // MARK: - Fixtures
 
@@ -886,6 +887,67 @@ final class DnsBridgeTests: XCTestCase {
         XCTAssertTrue(refused)
     }
 
+    // MARK: Listener start
+
+    func testStartResultForListenerStates() {
+        XCTAssertNil(DnsBridge.startResult(for: .setup, port: nil))
+        XCTAssertEqual(try DnsBridge.startResult(for: .ready, port: 5300)?.get(), 5300)
+        XCTAssertThrowsError(try DnsBridge.startResult(for: .ready, port: 0)?.get())
+        // A listener that waits for a network fails at once.
+        XCTAssertThrowsError(try DnsBridge.startResult(for: .waiting(.posix(.ENETDOWN)), port: nil)?.get())
+        XCTAssertThrowsError(try DnsBridge.startResult(for: .failed(.posix(.EADDRINUSE)), port: nil)?.get())
+        XCTAssertThrowsError(try DnsBridge.startResult(for: .cancelled, port: nil)?.get()) {
+            XCTAssertTrue($0 is CancellationError, "\($0)")
+        }
+    }
+
+    /// A bridge whose listener never reports a state: its queue is held.
+    /// The caller resumes the queue at the end of the test.
+    private func heldBridge() -> (DnsBridge, DispatchQueue) {
+        let queue = DispatchQueue(label: "test.bridge.held")
+        queue.suspend()
+        return (DnsBridge(transport: FakeTransport(), servers: [server1, server2], listenerQueue: queue), queue)
+    }
+
+    /// A stopped bridge refuses a new start at once.
+    private func assertStopped(_ bridge: DnsBridge, file: StaticString = #filePath, line: UInt = #line) async {
+        do {
+            _ = try await bridge.start(timeout: 60)
+            XCTFail("a stopped bridge started", file: file, line: line)
+        } catch {
+            XCTAssertTrue(error is CancellationError, "\(error)", file: file, line: line)
+        }
+    }
+
+    func testStartEndsAtDeadline() async {
+        let (bridge, queue) = heldBridge()
+        defer { queue.resume() }
+        let started = Date()
+        do {
+            _ = try await bridge.start(timeout: 0.3)
+            XCTFail("a listener without a state")
+        } catch {
+            XCTAssertTrue(error is DnsBridge.StartTimeout, "\(error)")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 3)
+        await assertStopped(bridge)
+    }
+
+    func testCancelEndsStart() async {
+        let (bridge, queue) = heldBridge()
+        defer { queue.resume() }
+        let task = Task { try await bridge.start(timeout: 60) }
+        try? await Task.sleep(for: .milliseconds(200))
+        let cancelled = Date()
+        task.cancel()
+        let result = await task.result
+        XCTAssertLessThan(Date().timeIntervalSince(cancelled), 3)
+        XCTAssertThrowsError(try result.get()) {
+            XCTAssertTrue($0 is CancellationError, "\($0)")
+        }
+        await assertStopped(bridge)
+    }
+
     // MARK: Tor configuration
 
     func testSessionConfigurationWithProxy() throws {
@@ -904,6 +966,67 @@ final class DnsBridgeTests: XCTestCase {
         let direct = OpenAliasResolver.sessionConfiguration(proxy: nil, timeout: OpenAliasResolver.Config.dohTimeoutDirect)
         XCTAssertTrue(direct.proxyConfigurations.isEmpty)
         XCTAssertEqual(direct.timeoutIntervalForRequest, 5)
+    }
+
+    private struct SocksConnect: Equatable, Sendable {
+        let addressType: UInt8
+        let host: String
+        let port: UInt16
+    }
+
+    /// A SOCKS5 proxy that reads one CONNECT request and closes. Nil when
+    /// none arrives in 5 s.
+    private static func readSocksConnect(listening fd: Int32) -> SocksConnect? {
+        var incoming = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        guard poll(&incoming, 1, 5000) == 1 else { return nil }
+        let client = accept(fd, nil, nil)
+        guard client >= 0 else { return nil }
+        defer { close(client) }
+        var timeout = timeval(tv_sec: 5, tv_usec: 0)
+        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        var noSigPipe: Int32 = 1
+        setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
+        // The greeting: version 5 and the methods. The reply: no authentication.
+        guard let greeting = try? Loopback.read(client, count: 2), greeting[0] == 5,
+              (try? Loopback.read(client, count: Int(greeting[1]))) != nil,
+              (try? Loopback.write(client, [5, 0])) != nil,
+              // The request: version, CONNECT, reserved, address type.
+              let request = try? Loopback.read(client, count: 4), request[1] == 1 else { return nil }
+        var host = ""
+        switch request[3] {
+        case 3:
+            guard let length = try? Loopback.read(client, count: 1),
+                  let name = try? Loopback.read(client, count: Int(length[0])) else { return nil }
+            host = String(decoding: name, as: UTF8.self)
+        case 4:
+            guard (try? Loopback.read(client, count: 16)) != nil else { return nil }
+        default:
+            guard (try? Loopback.read(client, count: 4)) != nil else { return nil }
+        }
+        guard let port = try? Loopback.read(client, count: 2) else { return nil }
+        return SocksConnect(addressType: request[3], host: host, port: UInt16(port[0]) << 8 | UInt16(port[1]))
+    }
+
+    func testSocksConnectCarriesDohHostName() async throws {
+        let (fd, port) = try Loopback.bind(listen: true)
+        let proxyServer = Task.detached { () -> SocksConnect? in
+            defer { close(fd) }
+            return Self.readSocksConnect(listening: fd)
+        }
+        // The IPv4 loopback as text, built at run time.
+        let proxy = OpenAliasResolver.Proxy(host: "\(IPv4Address.loopback)", port: try XCTUnwrap(NWEndpoint.Port(rawValue: port)))
+        let transport = URLSessionDohTransport(configuration: OpenAliasResolver.sessionConfiguration(
+            proxy: proxy, timeout: OpenAliasResolver.Config.dohTimeoutDirect))
+        defer { transport.invalidate() }
+        do {
+            _ = try await transport.post(Data(dnsQuery(id: 0)), to: OpenAliasResolver.Config.servers[0])
+            XCTFail("the fake proxy never connects")
+        } catch {
+            // Expected: the fake proxy closes after the request.
+        }
+        let connect = await proxyServer.value
+        // Address type 3, a domain name: the proxy resolves the host name.
+        XCTAssertEqual(connect, SocksConnect(addressType: 3, host: "dns.quad9.net", port: 443))
     }
 
     func testParseProxy() {

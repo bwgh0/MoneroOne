@@ -439,10 +439,11 @@ struct OpenAliasReviewNotes: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.caption)
                 .accessibilityElement(children: .combine)
             }
         }
+        // Both icons at the size of the caption text.
+        .font(.caption)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

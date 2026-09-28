@@ -58,14 +58,19 @@ final class URLSessionDohTransport: DohTransport, @unchecked Sendable {
 /// the kit goes to a DoH server, and the answer goes back on the same
 /// connection. A new bridge serves each lookup; `stop()` ends it.
 final class DnsBridge: @unchecked Sendable {
+    /// The listener was not ready before the deadline of `start(timeout:)`.
+    struct StartTimeout: Error {}
+
     private let transport: DohTransport
     private let servers: [URL]
     private let queryCap: Int
-    private let listenerQueue = DispatchQueue(label: "one.monero.openalias.bridge")
+    private let listenerQueue: DispatchQueue
     private let lock = NSLock()
 
     // Guarded by `lock`.
     private var listener: NWListener?
+    /// The caller of `start()`, until the listener is ready.
+    private var starting: ResumeOnce<UInt16>?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private var requests: [UUID: Task<Void, Never>] = [:]
     private var queries = 0
@@ -75,10 +80,12 @@ final class DnsBridge: @unchecked Sendable {
     private var isDown = false
     private var stopped = false
 
-    init(transport: DohTransport, servers: [URL], queryCap: Int = OpenAliasResolver.Config.queryCap) {
+    init(transport: DohTransport, servers: [URL], queryCap: Int = OpenAliasResolver.Config.queryCap,
+         listenerQueue: DispatchQueue = DispatchQueue(label: "one.monero.openalias.bridge")) {
         self.transport = transport
         self.servers = servers
         self.queryCap = queryCap
+        self.listenerQueue = listenerQueue
     }
 
     /// Queries that a DoH server answered.
@@ -87,62 +94,86 @@ final class DnsBridge: @unchecked Sendable {
     var synthesizedCount: Int { lock.withLock { synthesized } }
 
     /// Listens on the IPv4 loopback, on a port that the system picks.
-    /// Returns that port once the listener is ready.
-    func start() async throws -> UInt16 {
+    /// Returns that port once the listener is ready. It throws, and the
+    /// bridge stops, when the listener fails or waits for a network, when
+    /// it is not ready after `timeout` seconds, or when the task is cancelled.
+    func start(timeout: TimeInterval = TimeInterval(OpenAliasResolver.Config.kitTimeoutDirectMs) / 1000) async throws -> UInt16 {
         let parameters = NWParameters.tcp
         // Bound to the loopback address, so only this device can connect.
         // `acceptLocalOnly` stays off: on iOS 27 it resets every loopback
         // connection before the handler sees it.
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
         let listener = try NWListener(using: parameters)
-        let registered: Bool = lock.withLock {
-            guard !stopped else { return false }
-            self.listener = listener
-            return true
-        }
-        guard registered else { throw CancellationError() }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let once = ResumeOnce(continuation)
-            listener.stateUpdateHandler = { [weak self, weak listener] state in
-                switch state {
-                case .ready:
-                    if let port = listener?.port?.rawValue, port != 0 {
-                        once.resume(with: .success(port))
-                    } else {
-                        once.resume(with: .failure(NWError.posix(.EADDRNOTAVAIL)))
-                    }
-                case .failed(let error):
-                    once.resume(with: .failure(error))
-                    self?.stop()
-                case .cancelled:
-                    once.resume(with: .failure(CancellationError()))
-                default:
-                    break
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let once = ResumeOnce(continuation)
+                let registered: Bool = lock.withLock {
+                    guard !stopped else { return false }
+                    self.listener = listener
+                    starting = once
+                    return true
                 }
-            }
-            listener.newConnectionHandler = { [weak self] connection in
-                guard let self else {
-                    connection.cancel()
+                guard registered else {
+                    once.resume(with: .failure(CancellationError()))
                     return
                 }
-                self.accept(connection)
+                listener.stateUpdateHandler = { [weak self, weak listener] state in
+                    guard let result = Self.startResult(for: state, port: listener?.port?.rawValue) else { return }
+                    once.resume(with: result)
+                    if case .failure = result { self?.stop() }
+                }
+                listener.newConnectionHandler = { [weak self] connection in
+                    guard let self else {
+                        connection.cancel()
+                        return
+                    }
+                    self.accept(connection)
+                }
+                listener.start(queue: listenerQueue)
+                // A loopback listener is ready at once. The deadline ends a
+                // start that never gets a state.
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeout) { [weak self] in
+                    if once.resume(with: .failure(StartTimeout())) { self?.stop() }
+                }
             }
-            listener.start(queue: listenerQueue)
+        } onCancel: {
+            stop()
+        }
+    }
+
+    /// The result of `start()` for a listener state. Nil while the listener
+    /// gets ready.
+    static func startResult(for state: NWListener.State, port: UInt16?) -> Result<UInt16, Error>? {
+        switch state {
+        case .ready:
+            if let port, port != 0 { return .success(port) }
+            return .failure(NWError.posix(.EADDRNOTAVAIL))
+        case .waiting(let error), .failed(let error):
+            // The loopback needs no network, so a listener that waits for
+            // one never gets ready.
+            return .failure(error)
+        case .cancelled:
+            return .failure(CancellationError())
+        default:
+            return nil
         }
     }
 
     /// Closes the listener, every connection and every request in flight.
+    /// A `start()` in progress throws `CancellationError`.
     func stop() {
-        let (listener, connections, requests): (NWListener?, [NWConnection], [Task<Void, Never>]) = lock.withLock {
+        let (listener, starting, connections, requests): (NWListener?, ResumeOnce<UInt16>?, [NWConnection], [Task<Void, Never>]) = lock.withLock {
             stopped = true
             defer {
                 self.listener = nil
+                self.starting = nil
                 self.connections.removeAll()
                 self.requests.removeAll()
             }
-            return (self.listener, Array(self.connections.values), Array(self.requests.values))
+            return (self.listener, self.starting, Array(self.connections.values), Array(self.requests.values))
         }
+        starting?.resume(with: .failure(CancellationError()))
         listener?.cancel()
         connections.forEach { $0.cancel() }
         requests.forEach { $0.cancel() }
@@ -340,12 +371,15 @@ private final class ResumeOnce<Value>: @unchecked Sendable {
         self.continuation = continuation
     }
 
-    func resume(with result: Result<Value, Error>) {
+    /// True when this call resumed the continuation.
+    @discardableResult
+    func resume(with result: Result<Value, Error>) -> Bool {
         let pending: CheckedContinuation<Value, Error>? = lock.withLock {
             defer { continuation = nil }
             return continuation
         }
         pending?.resume(with: result)
+        return pending != nil
     }
 }
 
@@ -409,10 +443,11 @@ struct OpenAliasResolver {
 
         let json: String
         do {
-            let port = try await bridge.start()
+            let kitTimeout = torOn ? Config.kitTimeoutTorMs : Config.kitTimeoutDirectMs
+            // A cancel also stops a bridge whose listener is not ready yet.
+            let port = try await bridge.start(timeout: TimeInterval(kitTimeout) / 1000)
             let lookup = kitLookup
             let query = name.query
-            let kitTimeout = torOn ? Config.kitTimeoutTorMs : Config.kitTimeoutDirectMs
             // The kit call blocks for up to its timeout. A cancel stops the
             // bridge, and the kit then returns at once.
             json = await withTaskCancellationHandler {
@@ -424,6 +459,8 @@ struct OpenAliasResolver {
             } onCancel: {
                 bridge.stop()
             }
+        } catch is DnsBridge.StartTimeout {
+            return .failure(.timeout)
         } catch {
             return .failure(netError)
         }

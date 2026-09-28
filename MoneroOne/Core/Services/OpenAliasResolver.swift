@@ -285,18 +285,24 @@ final class DnsBridge: @unchecked Sendable {
     }
 
     /// Sends the query to the preferred server, then to the next server after
-    /// a transport failure or a reply that `goodAnswer` refuses. When every
-    /// server fails, the bridge goes down.
+    /// a transport failure or a refusal. When every server fails with a
+    /// transport failure, the bridge goes down. When a server refuses, the
+    /// SERVFAIL fails only this query.
     private func forward(_ query: [UInt8]) async -> [UInt8] {
         var message = query
         message[0] = 0  // RFC 8484, section 4.1: ID 0 on the wire
         message[1] = 0
         let first = lock.withLock { preferred }
+        var refused = false
         for offset in 0..<servers.count {
             if Task.isCancelled { break }
             let index = (first + offset) % servers.count
             guard let reply = try? await transport.post(Data(message), to: servers[index]),
-                  var answer = Self.goodAnswer(reply) else { continue }
+                  var answer = Self.dnsReply(reply) else { continue }
+            if Self.isRefusal(answer) {
+                refused = true
+                continue
+            }
             answer[0] = query[0]
             answer[1] = query[1]
             lock.withLock {
@@ -308,7 +314,9 @@ final class DnsBridge: @unchecked Sendable {
         }
         lock.withLock {
             guard !stopped else { return }
-            isDown = true
+            // Only a transport failure marks the bridge down. A server that
+            // refuses one query still answers the others.
+            if !refused { isDown = true }
             synthesized += 1
         }
         return Self.servfail(for: query)
@@ -324,22 +332,26 @@ final class DnsBridge: @unchecked Sendable {
 
     // MARK: DNS messages
 
-    /// The answer bytes of a good DoH reply: status 200, a DNS message
-    /// content type, 12 to 65535 bytes, the QR bit set, and an rcode other
-    /// than FORMERR and NOTIMPL. Else nil, which counts as a transport
-    /// failure. libunbound reads FORMERR or NOTIMPL as "this server has no
-    /// EDNS" and then asks without the DO bit, so the answers lose their
-    /// signatures. Every DoH server has EDNS, so the bridge tries the next
-    /// server instead.
-    static func goodAnswer(_ reply: DohHTTPReply) -> [UInt8]? {
+    /// The bytes of a DNS reply: status 200, a DNS message content type, 12
+    /// to 65535 bytes, and the QR bit set. Else nil, which counts as a
+    /// transport failure.
+    static func dnsReply(_ reply: DohHTTPReply) -> [UInt8]? {
         guard reply.status == 200,
               let type = reply.contentType?.lowercased(), type.hasPrefix("application/dns-message"),
               (12...65535).contains(reply.body.count) else { return nil }
         let bytes = [UInt8](reply.body)
         guard bytes[2] & 0x80 != 0 else { return nil }
-        let rcode = bytes[3] & 0x0F
-        guard rcode != Rcode.formerr, rcode != Rcode.notimpl else { return nil }
         return bytes
+    }
+
+    /// FORMERR or NOTIMPL, which the bridge never passes on. libunbound reads
+    /// either one as "this server has no EDNS" and then asks without the DO
+    /// bit, so the answers lose their signatures. Every DoH server has EDNS,
+    /// so the bridge tries the next server instead.
+    static func isRefusal(_ answer: [UInt8]) -> Bool {
+        guard answer.count >= 4 else { return false }
+        let rcode = answer[3] & 0x0F
+        return rcode == Rcode.formerr || rcode == Rcode.notimpl
     }
 
     private enum Rcode {

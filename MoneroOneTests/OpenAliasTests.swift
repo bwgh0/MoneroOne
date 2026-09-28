@@ -850,7 +850,7 @@ final class DnsBridgeTests: XCTestCase {
             DohHTTPReply(status: 200, contentType: "application/dns-message", body: Data(dnsQuery(id: 0))),  // no QR bit
         ]
         for reply in bad {
-            XCTAssertNil(DnsBridge.goodAnswer(reply))
+            XCTAssertNil(DnsBridge.dnsReply(reply))
             let first = server1
             let transport = FakeTransport { message, url in
                 if url == first { return reply }
@@ -864,7 +864,7 @@ final class DnsBridgeTests: XCTestCase {
         }
         var good = dnsQuery(id: 0)
         good[2] |= 0x80
-        XCTAssertNotNil(DnsBridge.goodAnswer(DohHTTPReply(status: 200, contentType: "application/dns-message; charset=binary", body: Data(good))))
+        XCTAssertNotNil(DnsBridge.dnsReply(DohHTTPReply(status: 200, contentType: "application/dns-message; charset=binary", body: Data(good))))
     }
 
     // MARK: Malformed frames, FORMERR and NOTIMPL
@@ -981,7 +981,7 @@ final class DnsBridgeTests: XCTestCase {
                 return DohHTTPReply(status: 200, contentType: "application/dns-message", body: Data(bytes))
             }
             let refused = try await refuse(Data(dnsQuery(id: 0)), server1)
-            XCTAssertNil(DnsBridge.goodAnswer(refused), "rcode \(rcode)")
+            XCTAssertTrue(DnsBridge.isRefusal(try XCTUnwrap(DnsBridge.dnsReply(refused))), "rcode \(rcode)")
 
             // One server: the next server answers.
             let first = server1
@@ -999,16 +999,27 @@ final class DnsBridgeTests: XCTestCase {
             XCTAssertEqual(bridge.answeredCount, 1)
             XCTAssertEqual(bridge.synthesizedCount, 0)
 
-            // Every server: a SERVFAIL made by the bridge.
-            let allBad = FakeTransport(handler: refuse)
+            // Every server refuses "org": a SERVFAIL made by the bridge.
+            let allBad = FakeTransport { message, url in
+                if [UInt8](message)[13] == UInt8(ascii: "o") { return try await refuse(message, url) }
+                return try await FakeTransport.echo(message, url)
+            }
             let (bridge2, fd2) = try await startBridge(allBad)
             let servfail = try exchange(fd2, withEdns(dnsQuery(id: 11, name: "org")))
             XCTAssertEqual(messageID(servfail), 11)
             XCTAssertEqual(servfail[3] & 0x0F, 2)
             XCTAssertEqual(allBad.calls.count, 2)
+            XCTAssertEqual(bridge2.synthesizedCount, 1)
+
+            // A refusal is not a transport failure: the bridge is not down,
+            // so the next query still goes upstream and gets its answer.
+            let next = try exchange(fd2, withEdns(dnsQuery(id: 12, name: "net")))
+            XCTAssertEqual(messageID(next), 12)
+            XCTAssertEqual(next[3] & 0x0F, 0)
+            XCTAssertEqual(allBad.calls.map { $0.server }, [server1, server2, server1])
             close(fd2)
             bridge2.stop()
-            XCTAssertEqual(bridge2.answeredCount, 0)
+            XCTAssertEqual(bridge2.answeredCount, 1)
             XCTAssertEqual(bridge2.synthesizedCount, 1)
         }
 
@@ -1017,7 +1028,8 @@ final class DnsBridgeTests: XCTestCase {
             var bytes = dnsQuery(id: 0)
             bytes[2] |= 0x80
             bytes[3] = (bytes[3] & 0xF0) | rcode
-            XCTAssertEqual(DnsBridge.goodAnswer(DohHTTPReply(status: 200, contentType: "application/dns-message", body: Data(bytes))), bytes)
+            XCTAssertEqual(DnsBridge.dnsReply(DohHTTPReply(status: 200, contentType: "application/dns-message", body: Data(bytes))), bytes)
+            XCTAssertFalse(DnsBridge.isRefusal(bytes), "rcode \(rcode)")
         }
     }
 

@@ -357,7 +357,7 @@ struct OpenAliasStatusRow: View {
                     } label: {
                         Text("Try Again")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.brand)
                     }
                     .accessibilityHint("Look up the name again")
                 }

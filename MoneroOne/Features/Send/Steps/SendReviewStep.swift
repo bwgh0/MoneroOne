@@ -66,10 +66,10 @@ struct SendReviewStep: View {
                         .accessibilityLabel(recipientLabel)
 
                         if let aliasSummary {
-                            // Under the text column: the 36 pt icon and the
-                            // 12 pt spacing of the row.
+                            // Under the text column: the 16 pt padding, the
+                            // 40 pt icon disc and the 12 pt spacing of the row.
                             OpenAliasReviewNotes(summary: aliasSummary)
-                                .padding(.leading, 64)
+                                .padding(.leading, 68)
                                 .padding(.trailing)
                                 .padding(.top, 8)
                                 .padding(.bottom)

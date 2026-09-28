@@ -206,10 +206,13 @@ struct BalanceCard: View {
             }
 
             HStack(spacing: 16) {
-                Image("MoneroMark")
+                Image("MoneroSymbol")
                     .resizable()
-                    .scaledToFit()
+                    .scaledToFill()
                     .frame(width: 48, height: 48)
+                    .clipShape(Circle())
+                    .scaleEffect(1.15)
+                    .clipShape(Circle())
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {

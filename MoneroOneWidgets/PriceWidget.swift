@@ -93,10 +93,13 @@ struct PriceWidgetView: View {
 
     private var noDataView: some View {
         VStack(spacing: 8) {
-            Image("MoneroMark")
+            Image("MoneroSymbol")
                 .resizable()
-                .scaledToFit()
+                .scaledToFill()
                 .frame(width: 32, height: 32)
+                .clipShape(Circle())
+                .scaleEffect(1.15)
+                .clipShape(Circle())
 
             Text("XMR Price")
                 .font(.headline.weight(.semibold))
@@ -113,10 +116,13 @@ struct PriceWidgetView: View {
     private var smallView: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Logo
-            Image("MoneroMark")
+            Image("MoneroSymbol")
                 .resizable()
-                .scaledToFit()
+                .scaledToFill()
                 .frame(width: 36, height: 36)
+                .clipShape(Circle())
+                .scaleEffect(1.15)
+                .clipShape(Circle())
 
             // Name
             Text("Monero")
@@ -151,10 +157,13 @@ struct PriceWidgetView: View {
             // Left side - Price info
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Image("MoneroMark")
+                    Image("MoneroSymbol")
                         .resizable()
-                        .scaledToFit()
+                        .scaledToFill()
                         .frame(width: 24, height: 24)
+                        .clipShape(Circle())
+                        .scaleEffect(1.15)
+                        .clipShape(Circle())
 
                     Text("Monero")
                         .font(.subheadline.weight(.semibold))
@@ -214,10 +223,13 @@ struct PriceWidgetView: View {
         VStack(alignment: .leading, spacing: 10) {
             // Header
             HStack {
-                Image("MoneroMark")
+                Image("MoneroSymbol")
                     .resizable()
-                    .scaledToFit()
+                    .scaledToFill()
                     .frame(width: 28, height: 28)
+                    .clipShape(Circle())
+                    .scaleEffect(1.15)
+                    .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Monero")

@@ -26,7 +26,7 @@ struct QRCodeView: View {
                 // of the mark's edge and the code scans as before.
                 if showLogo {
                     let plateSize = size * 0.22
-                    Image("MoneroMark")
+                    Image("MoneroLogo")
                         .resizable()
                         .scaledToFit()
                         .padding(plateSize * 0.1)
@@ -532,7 +532,7 @@ struct QRFocusView: View {
     /// own started them a beat late, a second motion inside the first.
     private var lockup: some View {
         HStack(spacing: 8) {
-            Image("MoneroMark")
+            Image("MoneroLogo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: Self.lockupHeight, height: Self.lockupHeight)

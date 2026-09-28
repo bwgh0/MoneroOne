@@ -1,3 +1,4 @@
+import QuartzCore
 import SwiftUI
 
 struct AnimatedMoneroLogo: View {
@@ -7,6 +8,9 @@ struct AnimatedMoneroLogo: View {
     @State private var floating = false
 
     var size: CGFloat = 240
+
+    private static let floatCurve = Animation.easeInOut(duration: 2.5).repeatForever(autoreverses: true)
+    private static let shineCurve = Animation.easeInOut(duration: 1.2)
 
     private var imageName: String {
         colorScheme == .dark ? "MoneroSymbolDark" : "MoneroSymbol"
@@ -38,10 +42,12 @@ struct AnimatedMoneroLogo: View {
                         .frame(width: geo.size.width * 0.35)
                         .blur(radius: 8)
                         .offset(x: shineOffset * geo.size.width)
+                        .animation(Self.shineCurve, value: shineOffset)
                     }
                     .clipShape(Circle())
                 }
                 .offset(y: floating ? -10 : 10)
+                .animation(Self.floatCurve, value: floating)
 
             // Orange glow below - stronger when logo is down
             Ellipse()
@@ -50,6 +56,7 @@ struct AnimatedMoneroLogo: View {
                 .blur(radius: 25)
                 .opacity(floating ? 0.2 : 0.6)
                 .scaleEffect(x: floating ? 0.75 : 1.1)
+                .animation(Self.floatCurve, value: floating)
                 .offset(y: -20)
         }
         .scaleEffect(appeared ? 1.0 : 0.4)
@@ -60,22 +67,28 @@ struct AnimatedMoneroLogo: View {
                 appeared = true
             }
 
-            // Shine sweep
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                withAnimation(.easeInOut(duration: 1.2)) {
-                    shineOffset = 1.5
-                }
-            }
+            // Float and shine. These state changes carry no transaction
+            // animation: each curve sits on the logo's own modifiers above,
+            // through .animation(_:value:). A global
+            // withAnimation(repeatForever) here leaked into the PIN
+            // keyboard's layout change on a cold launch, and the whole
+            // unlock screen then floated with the logo.
+            Self.afterOnScreenTime(0.3) { floating = true }
+            Self.afterOnScreenTime(0.6) { shineOffset = 1.5 }
+        }
+    }
 
-            // Floating animation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(
-                    .easeInOut(duration: 2.5)
-                    .repeatForever(autoreverses: true)
-                ) {
-                    floating = true
-                }
-            }
+    /// Runs `action` after `delay` seconds of on-screen time. It waits in
+    /// short main-queue steps and counts each step as 0.1 s at most, so a
+    /// main-thread stall does not count. On a cold launch the first keyboard
+    /// load stalls the main thread for about 0.6 s while the logo is still
+    /// hidden; with a plain asyncAfter the shine then ran as soon as the
+    /// logo came into view.
+    private static func afterOnScreenTime(_ delay: TimeInterval, _ action: @escaping () -> Void) {
+        guard delay > 0 else { return action() }
+        let start = CACurrentMediaTime()
+        DispatchQueue.main.asyncAfter(deadline: .now() + min(delay, 0.05)) {
+            afterOnScreenTime(delay - min(CACurrentMediaTime() - start, 0.1), action)
         }
     }
 }

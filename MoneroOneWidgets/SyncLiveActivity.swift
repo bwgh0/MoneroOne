@@ -11,7 +11,7 @@ struct SyncLiveActivity: Widget {
             DynamicIsland {
                 // Expanded UI
                 DynamicIslandExpandedRegion(.leading) {
-                    Image("MoneroMark")
+                    Image("MoneroSymbol")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 28, height: 28)
@@ -95,10 +95,11 @@ struct SyncLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Image("MoneroMark")
+                Image("MoneroSymbol")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 18, height: 18)
+                    .clipShape(Circle())
             } compactTrailing: {
                 if context.state.isBlocked {
                     Image(systemName: "location.slash")
@@ -159,7 +160,7 @@ struct LockScreenView: View {
     var body: some View {
         HStack(spacing: 16) {
             // Monero logo
-            Image("MoneroMark")
+            Image("MoneroSymbol")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 44, height: 44)

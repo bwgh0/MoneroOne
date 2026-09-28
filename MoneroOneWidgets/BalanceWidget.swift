@@ -73,10 +73,13 @@ struct BalanceWidgetView: View {
 
     private var disabledView: some View {
         VStack(spacing: 8) {
-            Image("MoneroMark")
+            Image("MoneroSymbol")
                 .resizable()
-                .scaledToFit()
+                .scaledToFill()
                 .frame(width: 32, height: 32)
+                .clipShape(Circle())
+                .scaleEffect(1.15)
+                .clipShape(Circle())
 
             Text("Monero One")
                 .font(.headline.weight(.semibold))
@@ -91,10 +94,13 @@ struct BalanceWidgetView: View {
         VStack(alignment: .leading, spacing: 6) {
             // Header
             HStack {
-                Image("MoneroMark")
+                Image("MoneroSymbol")
                     .resizable()
-                    .scaledToFit()
+                    .scaledToFill()
                     .frame(width: 22, height: 22)
+                    .clipShape(Circle())
+                    .scaleEffect(1.15)
+                    .clipShape(Circle())
 
                 Spacer()
 
@@ -136,10 +142,13 @@ struct BalanceWidgetView: View {
             // Left side - Balance
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Image("MoneroMark")
+                    Image("MoneroSymbol")
                         .resizable()
-                        .scaledToFit()
+                        .scaledToFill()
                         .frame(width: 26, height: 26)
+                        .clipShape(Circle())
+                        .scaleEffect(1.15)
+                        .clipShape(Circle())
 
                     Text("Monero One")
                         .font(.subheadline.weight(.semibold))

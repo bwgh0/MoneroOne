@@ -131,6 +131,9 @@ final class DnsBridge: @unchecked Sendable {
                     self.accept(connection)
                 }
                 listener.start(queue: listenerQueue)
+                // A stop() after the registration cancelled the listener
+                // before it started. Cancel it again, so it never listens.
+                if lock.withLock({ stopped }) { listener.cancel() }
                 // A loopback listener is ready at once. The deadline ends a
                 // start that never gets a state.
                 DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeout) { [weak self] in

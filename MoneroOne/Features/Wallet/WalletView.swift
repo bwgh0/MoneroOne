@@ -6,10 +6,9 @@ struct WalletView: View {
     @ObservedObject private var trustedLocationSync = TrustedLocationSyncManager.shared
     @State private var showReceive = false
     @State private var showSend = false
-    @State private var showPortfolio = false
     @State private var showWalletManager = false
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
-    @Binding var selectedTab: MainTabView.Tab
+    let openChart: (ChartView.Mode) -> Void
     /// Viewport and above-activity heights, so the empty activity card can
     /// fill the leftover height on short screens (iPhone Duo cover).
     @State private var viewportHeight: CGFloat = 0
@@ -74,10 +73,10 @@ struct WalletView: View {
                             trustedLocationName: trustedLocationSync.currentTrustedLocationName,
                             isTrustedLocationEnabled: trustedLocationSync.isEnabled,
                             onPriceChangeTap: {
-                                selectedTab = .chart
+                                openChart(.price)
                             },
                             onCardTap: {
-                                showPortfolio = true
+                                openChart(.portfolio)
                             },
                             onHardwareSyncTap: {
                                 // Clear any leftover .complete/.failed
@@ -143,15 +142,6 @@ struct WalletView: View {
                     .environmentObject(priceService)
             }
             .presentsSendRequests(from: walletManager, showSend: $showSend)
-            .sheet(isPresented: $showPortfolio) {
-                PortfolioChartView(
-                    balance: walletManager.displayBalance,
-                    priceService: priceService
-                )
-                .environmentObject(walletManager)
-                .environmentObject(priceService)
-                .closesForPaymentLink()
-            }
             .sheet(item: $hardwareSheetIntent) { intent in
                 HardwareSessionSheet(
                     intent: intent,
@@ -454,7 +444,7 @@ private extension View {
 #Preview {
     let priceService = PriceService()
     let priceHistoryService = PriceHistoryService(priceService: priceService)
-    WalletView(selectedTab: .constant(.wallet))
+    WalletView(openChart: { _ in })
         .environmentObject(WalletManager())
         .environmentObject(priceService)
         .environmentObject(priceHistoryService)

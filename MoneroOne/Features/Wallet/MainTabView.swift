@@ -5,6 +5,8 @@ struct MainTabView: View {
     @EnvironmentObject var priceService: PriceService
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State private var selectedTab: Tab = .wallet
+    @State private var selectedChartMode: ChartView.Mode = .portfolio
+    @State private var chartPath: [ChartView.Destination] = []
 
     enum Tab {
         case wallet
@@ -62,14 +64,18 @@ struct MainTabView: View {
 
     private var iPhoneTabView: some View {
         TabView(selection: $selectedTab) {
-            WalletView(selectedTab: $selectedTab)
+            WalletView { mode in
+                selectedChartMode = mode
+                chartPath = []
+                selectedTab = .chart
+            }
                 .tabItem {
                     Label("Wallet", systemImage: "wallet.pass")
                 }
                 .tag(Tab.wallet)
                 .accessibilityIdentifier("tab.wallet")
 
-            PriceChartView()
+            ChartView(selectedMode: $selectedChartMode, path: $chartPath)
                 .tabItem {
                     Label("Chart", systemImage: "chart.line.uptrend.xyaxis")
                 }
@@ -90,4 +96,5 @@ struct MainTabView: View {
     MainTabView()
         .environmentObject(WalletManager())
         .environmentObject(PriceService())
+        .environmentObject(PriceAlertService())
 }

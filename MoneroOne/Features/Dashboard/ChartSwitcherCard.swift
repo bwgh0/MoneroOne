@@ -112,6 +112,7 @@ struct ChartSwitcherCard: View {
             CompactGlassSegmentedPicker(selection: $chartMode) { mode in
                 mode.title
             }
+            .accessibilityElement(children: .contain)
             .accessibilityLabel("Chart mode")
             .accessibilityHint("Switch between portfolio and price chart")
 
@@ -124,6 +125,8 @@ struct ChartSwitcherCard: View {
                         portfolioHeader
                     }
                 }
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
 
                 Spacer()
 

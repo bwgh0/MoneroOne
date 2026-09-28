@@ -5,77 +5,19 @@ import Accessibility
 struct PriceChartView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var priceService: PriceService
-    @EnvironmentObject var priceAlertService: PriceAlertService
-    @State private var selectedTimeRange: TimeRange = .week
+    @Binding var selectedTimeRange: ChartTimeRange
     /// The sample under the finger, in the selected currency.
     @State private var selectedPoint: PriceDataPoint?
 
-    enum TimeRange: String, CaseIterable {
-        case day = "24H"
-        case week = "1W"
-        case month = "1M"
-        case year = "1Y"
-        case all = "All"
-
-        var apiRange: String {
-            switch self {
-            case .day: return "1D"
-            case .week: return "7D"
-            case .month: return "1M"
-            case .year: return "1Y"
-            case .all: return "All"
-            }
-        }
-
-        /// The button label, in the user's language ("1W").
-        var title: String { ChartRangeTitle.title(for: rawValue) }
-    }
-
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Current Price Header
-                    priceHeader
-
-                    // Time Range Selector
-                    timeRangeSelector
-
-                    // Price Chart
-                    chartSection
-
-                    // Price Statistics
-                    statsSection
-                }
-                .padding()
-            }
-            .navigationTitle("Monero Price")
-            .navigationBarTitleDisplayMode(.inline)
-            .task {
-                priceService.selectChartRange(selectedTimeRange.apiRange)
-            }
-            .onChange(of: selectedTimeRange) { newValue in
-                selectedPoint = nil
-                priceService.selectChartRange(newValue.apiRange)
-            }
-            .refreshable {
-                await priceService.fetchPrice()
-                await priceService.fetchChartData(range: selectedTimeRange.apiRange, force: true)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink {
-                        PriceAlertsView(
-                            priceAlertService: priceAlertService,
-                            priceService: priceService
-                        )
-                    } label: {
-                        Image(systemName: "bell")
-                    }
-                    .accessibilityLabel("Price alerts")
-                    .accessibilityHint("View and manage price alerts")
-                }
-            }
+        VStack(spacing: 24) {
+            priceHeader
+            timeRangeSelector
+            chartSection
+            statsSection
+        }
+        .onChange(of: selectedTimeRange) { _, _ in
+            selectedPoint = nil
         }
     }
 
@@ -100,65 +42,34 @@ struct PriceChartView: View {
         return ((lastPrice - firstPrice) / firstPrice) * 100
     }
 
-    private func formatChartPriceChange(_ change: Double) -> String {
-        let sign = change >= 0 ? "+" : ""
-        return "\(sign)\(String(format: "%.2f", change))%"
-    }
-
     private var priceHeader: some View {
-        VStack(spacing: 8) {
+        ChartValueHeader {
             if let price = displayPrice {
                 Text(formatPrice(price))
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .monospacedDigit()
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.1), value: price)
                     .accessibilityLabel("Current Monero price, \(formatPrice(price))")
-
-                // Both states share one slot so the chart below never moves
-                // when a scrub starts or ends.
-                ZStack {
-                    // Show price change for selected time range
-                    HStack(spacing: 16) {
-                        if let change = chartPriceChange {
-                            HStack(spacing: 4) {
-                                Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                Text(formatChartPriceChange(change))
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(change >= 0 ? .green : .red)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
-                            .cornerRadius(8)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Price change \(selectedTimeRange.title), \(change >= 0 ? String(localized: "up", comment: "Price went up") : String(localized: "down", comment: "Price went down")) \(formatChartPriceChange(change))")
-                        } else if priceService.isLoadingChart {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        }
-
-                        Text(selectedTimeRange.title)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .opacity(selectedPoint == nil ? 1 : 0)
-                    .accessibilityHidden(selectedPoint != nil)
-
-                    if let selectedPoint = selectedPoint {
-                        // Show selected date when interacting
-                        Text(timeAxis.scrubLabel(for: selectedPoint.timestamp))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.15), value: selectedPoint == nil)
             } else {
-                ProgressView()
-                    .scaleEffect(1.2)
+                ProgressView().scaleEffect(1.2)
             }
+        } details: {
+            ZStack {
+                HStack(spacing: 12) {
+                    ChartChangeBadge(change: chartPriceChange, timeAxis: timeAxis, isLoading: priceService.isLoadingChart)
+                    Text(selectedTimeRange.title)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .opacity(selectedPoint == nil ? 1 : 0)
+                .accessibilityHidden(selectedPoint != nil)
+
+                if let selectedPoint {
+                    Text(timeAxis.scrubLabel(for: selectedPoint.timestamp))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .animation(.easeInOut(duration: 0.15), value: selectedPoint == nil)
         }
-        .padding(.vertical, 8)
     }
 
     private var timeAxis: ChartTimeAxis {
@@ -168,7 +79,9 @@ struct PriceChartView: View {
     // MARK: - Time Range Selector
 
     private var timeRangeSelector: some View {
-        GlassSegmentedPicker(selection: $selectedTimeRange) { range in
+        GlassSegmentedPicker(selection: $selectedTimeRange, accessibilityLabel: { range in
+            (ChartTimeAxis(rawValue: range.apiRange) ?? .week).spokenName
+        }) { range in
             range.title
         }
     }
@@ -232,38 +145,13 @@ struct PriceChartView: View {
     // MARK: - Stats Section
 
     private var statsSection: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("Statistics")
-                    .font(.headline)
-                Spacer()
-            }
-
-            if let range = priceService.priceRange {
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 12) {
-                    StatCard(
-                        title: String(localized: "\(selectedTimeRange.title) High", comment: "Highest price in the chart range, e.g. 1W High"),
-                        value: formatPrice(range.max),
-                        color: .green
-                    )
-
-                    StatCard(
-                        title: String(localized: "\(selectedTimeRange.title) Low", comment: "Lowest price in the chart range, e.g. 1W Low"),
-                        value: formatPrice(range.min),
-                        color: .red
-                    )
-                }
-            }
-
-            if let lastUpdated = priceService.lastUpdated {
-                Text("Last updated \(lastUpdated, style: .relative) ago")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
+        ChartStatistics(
+            title: "Statistics",
+            range: priceService.priceRange,
+            selectedTimeRange: selectedTimeRange,
+            lastUpdated: priceService.lastUpdated,
+            formatValue: formatPrice
+        )
     }
 
     // MARK: - Helpers
@@ -306,9 +194,13 @@ struct StatCard: View {
             Text(title)
                 .font(.caption)
                 .foregroundColor(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
             Text(value)
                 .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
                 .foregroundColor(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -498,6 +390,7 @@ enum ChartTimeAxis: String, Equatable {
 /// VoiceOver sees the chart as one element (see `ChartSpeech`); the marks
 /// are hidden, or Swift Charts adds a stop for every day of the range.
 struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
+    @ScaledMetric(relativeTo: .caption2) private var axisLabelWidth: CGFloat = 64
     struct Axes: Equatable {
         var time: ChartTimeAxis
         var currencyCode: String
@@ -548,6 +441,9 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                             if let amount = mark.as(Double.self) {
                                 Text(Self.compact(amount, currencyCode: axes.currencyCode, span: domain.upperBound - domain.lowerBound))
                                     .font(.caption2)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                    .frame(width: axisLabelWidth, alignment: .leading)
                             }
                         }
                     }
@@ -971,7 +867,9 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
 }
 
 #Preview {
-    PriceChartView()
+    @Previewable @State var path: [ChartView.Destination] = []
+    ChartView(selectedMode: .constant(.price), path: $path)
+        .environmentObject(WalletManager())
         .environmentObject(PriceService())
         .environmentObject(PriceAlertService())
 }

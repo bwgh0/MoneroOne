@@ -162,39 +162,18 @@ struct PortfolioChartView: View {
     let balance: Decimal
     @ObservedObject var priceService: PriceService
     @EnvironmentObject private var walletManager: WalletManager
-    @Environment(\.dismiss) private var dismiss
-    @State private var selectedTimeRange: TimeRange = .week
+    @Binding var selectedTimeRange: ChartTimeRange
     @State private var selectedPoint: PortfolioDataPoint?
     /// nil until the first load, which follows the first frame.
     @State private var ledger: BalanceLedger?
     @State private var seriesCache = PortfolioSeriesCache()
-
-    enum TimeRange: String, CaseIterable {
-        case day = "24H"
-        case week = "1W"
-        case month = "1M"
-        case year = "1Y"
-        case all = "All"
-
-        var apiRange: String {
-            switch self {
-            case .day: return "1D"
-            case .week: return "7D"
-            case .month: return "1M"
-            case .year: return "1Y"
-            case .all: return "All"
-            }
-        }
-
-        /// The button label, in the user's language ("1W").
-        var title: String { ChartRangeTitle.title(for: rawValue) }
-    }
 
     private var balanceDouble: Double {
         (balance as NSDecimalNumber).doubleValue
     }
 
     private var currentPortfolioValue: Double? {
+        if balanceDouble == 0 { return 0 }
         guard let price = priceService.xmrPrice else { return nil }
         return balanceDouble * price
     }
@@ -232,52 +211,25 @@ struct PortfolioChartView: View {
         // Read once per render; the header, chart and stats all use it.
         let series = self.series
         let data = series.points
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Portfolio Value Header
-                    portfolioHeader(data)
-
-                    // Time Range Selector
-                    timeRangeSelector
-
-                    // Chart
-                    chartSection(data, markers: series.markers)
-
-                    // Stats
-                    statsSection(data)
-                }
-                .padding()
+        VStack(spacing: 24) {
+            portfolioHeader(data)
+            timeRangeSelector
+            chartSection(data, markers: series.markers)
+            statsSection(data)
+        }
+        .task(id: ledgerKey) {
+            // The newest transactions are in memory and draw at once;
+            // the full list replaces them when it has loaded.
+            if ledger == nil {
+                ledger = walletManager.recentBalanceLedger
             }
-            .navigationTitle("Portfolio")
-            .navigationBarTitleDisplayMode(.inline)
-            .horizontalBarsOnDuo()
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
+            let full = await walletManager.balanceLedger()
+            if !Task.isCancelled {
+                ledger = full
             }
-            .task {
-                priceService.selectChartRange(selectedTimeRange.apiRange)
-            }
-            .task(id: ledgerKey) {
-                // The newest transactions are in memory and draw at once;
-                // the full list replaces them when it has loaded.
-                if ledger == nil {
-                    ledger = walletManager.recentBalanceLedger
-                }
-                let full = await walletManager.balanceLedger()
-                if !Task.isCancelled {
-                    ledger = full
-                }
-            }
-            .onChange(of: selectedTimeRange) { newValue in
-                selectedPoint = nil
-                priceService.selectChartRange(newValue.apiRange)
-            }
+        }
+        .onChange(of: selectedTimeRange) { _, _ in
+            selectedPoint = nil
         }
     }
 
@@ -296,77 +248,37 @@ struct PortfolioChartView: View {
         return ((lastValue - firstValue) / firstValue) * 100
     }
 
-    private func formatValueChange(_ change: Double) -> String {
-        let sign = change >= 0 ? "+" : ""
-        return "\(sign)\(String(format: "%.2f", change))%"
-    }
-
     private func portfolioHeader(_ data: [PortfolioDataPoint]) -> some View {
-        VStack(spacing: 8) {
-            if balanceDouble == 0 {
-                // Zero balance state
-                Text("Add XMR to track portfolio")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-            } else if let value = displayValue {
+        ChartValueHeader {
+            if let value = displayValue {
                 Text(formatCurrency(value))
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .monospacedDigit()
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.1), value: value)
                     .accessibilityLabel("Portfolio value, \(formatCurrency(value))")
-
-                // One slot for both states so the chart never moves on scrub.
-                ZStack {
-                    // Show portfolio change for selected time range
-                    HStack(spacing: 12) {
-                        Text(XMRFormatter.format(balance) + " XMR")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        if let change = portfolioValueChange(data) {
-                            HStack(spacing: 4) {
-                                Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                Text(formatValueChange(change))
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(change >= 0 ? .green : .red)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background((change >= 0 ? Color.green : Color.red).opacity(0.15))
-                            .cornerRadius(6)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("Change, \(timeAxis.spokenSpan)")
-                            .accessibilityValue(ChartSpeech.spokenChange(change))
-                        } else if priceService.isLoadingChart {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                        }
-
-                        // The change's label names the range.
-                        Text(selectedTimeRange.title)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .accessibilityHidden(true)
-                    }
-                    .opacity(selectedPoint == nil ? 1 : 0)
-                    .accessibilityHidden(selectedPoint != nil)
-
-                    if let selectedPoint = selectedPoint {
-                        Text(scrubCaption(for: selectedPoint))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.15), value: selectedPoint == nil)
             } else {
-                ProgressView()
-                    .scaleEffect(1.2)
+                ProgressView().scaleEffect(1.2)
             }
+        } details: {
+            ZStack {
+                HStack(spacing: 12) {
+                    Text(XMRFormatter.format(balance) + " XMR")
+                        .foregroundColor(.secondary)
+                    ChartChangeBadge(change: portfolioValueChange(data), timeAxis: timeAxis, isLoading: priceService.isLoadingChart)
+                    Text(selectedTimeRange.title)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .opacity(selectedPoint == nil ? 1 : 0)
+                .accessibilityHidden(selectedPoint != nil)
+
+                if let selectedPoint {
+                    Text(scrubCaption(for: selectedPoint))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .animation(.easeInOut(duration: 0.15), value: selectedPoint == nil)
         }
-        .padding(.vertical, 8)
     }
 
     private var timeAxis: ChartTimeAxis {
@@ -383,32 +295,11 @@ struct PortfolioChartView: View {
     // MARK: - Time Range Selector
 
     private var timeRangeSelector: some View {
-        HStack(spacing: 0) {
-            ForEach(TimeRange.allCases, id: \.self) { range in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedTimeRange = range
-                    }
-                } label: {
-                    Text(range.title)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(selectedTimeRange == range ? .white : .secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            selectedTimeRange == range ?
-                            Color.brand : Color.clear
-                        )
-                        .cornerRadius(8)
-                }
-                // "1 week", not "1W", and which one is on.
-                .accessibilityLabel((ChartTimeAxis(rawValue: range.apiRange) ?? .week).spokenName)
-                .accessibilityAddTraits(selectedTimeRange == range ? .isSelected : [])
-            }
+        GlassSegmentedPicker(selection: $selectedTimeRange, accessibilityLabel: { range in
+            (ChartTimeAxis(rawValue: range.apiRange) ?? .week).spokenName
+        }) { range in
+            range.title
         }
-        .padding(4)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
     }
 
     // MARK: - Chart Section
@@ -438,12 +329,12 @@ struct PortfolioChartView: View {
                 )
                 .equatable()
                 .frame(height: 240)
+                .clipped()
             }
         }
         .frame(height: 280)
         .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(16)
+        .dashboardCard()
     }
 
     private var chartPlaceholder: some View {
@@ -477,40 +368,13 @@ struct PortfolioChartView: View {
     // MARK: - Stats Section
 
     private func statsSection(_ data: [PortfolioDataPoint]) -> some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("Portfolio Range")
-                    .font(.headline)
-                Spacer()
-            }
-
-            if let range = portfolioRange(data), balanceDouble > 0 {
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 12) {
-                    StatCard(
-                        title: String(localized: "\(selectedTimeRange.title) High", comment: "Highest price in the chart range, e.g. 1W High"),
-                        value: formatCurrency(range.max),
-                        color: .green
-                    )
-
-                    StatCard(
-                        title: String(localized: "\(selectedTimeRange.title) Low", comment: "Lowest price in the chart range, e.g. 1W Low"),
-                        value: formatCurrency(range.min),
-                        color: .red
-                    )
-                }
-            } else {
-                Text("No data available")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color(.tertiarySystemGroupedBackground))
-                    .cornerRadius(12)
-            }
-        }
+        ChartStatistics(
+            title: "Statistics",
+            range: balanceDouble > 0 ? portfolioRange(data) : nil,
+            selectedTimeRange: selectedTimeRange,
+            lastUpdated: priceService.lastUpdated,
+            formatValue: formatCurrency
+        )
     }
 
     // MARK: - Helpers
@@ -534,9 +398,9 @@ struct PortfolioChartView: View {
 }
 
 #Preview {
-    PortfolioChartView(
-        balance: 1.234567,
-        priceService: PriceService()
-    )
-    .environmentObject(WalletManager())
+    @Previewable @State var path: [ChartView.Destination] = []
+    ChartView(selectedMode: .constant(.portfolio), path: $path)
+        .environmentObject(WalletManager())
+        .environmentObject(PriceService())
+        .environmentObject(PriceAlertService())
 }

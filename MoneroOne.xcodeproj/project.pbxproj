@@ -47,6 +47,7 @@
 		7EA94082B41801AA3830AE21 /* WalletView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873A08AAC18A1EE631F3FC67 /* WalletView.swift */; };
 		D4E5F6A7B8C9D0E1F2A3B4C5 /* WalletManagerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* WalletManagerSheet.swift */; };
 		7EFE00922F8A910BDA499EC1 /* PriceChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC83A18E25A660B8C7DFC5EA /* PriceChartView.swift */; };
+		D928C0A10000000000000001 /* ChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D928C0A10000000000000002 /* ChartView.swift */; };
 		84BEB133F2C7D5434D9A865D /* PINEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108EE77DBE9D8CB6BE79F891 /* PINEntryView.swift */; };
 		89BEB8E5F42F4AC548599706 /* SecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C4D9F0B5479B927D727DBA /* SecurityTests.swift */; };
 		8BFA73260FA46CA7935C386F /* UnlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA44CACB97519C2456A1D98 /* UnlockView.swift */; };
@@ -267,6 +268,7 @@
 		A960D21BC3F24D2F556BE5C9 /* TransactionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionDetailView.swift; sourceTree = "<group>"; };
 		AC367EEA19A6EFF922406006 /* MoneroKit.Swift */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MoneroKit.Swift; path = ../MoneroKit.Swift; sourceTree = SOURCE_ROOT; };
 		AC83A18E25A660B8C7DFC5EA /* PriceChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceChartView.swift; sourceTree = "<group>"; };
+		D928C0A10000000000000002 /* ChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartView.swift; sourceTree = "<group>"; };
 		B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmountFormattingTests.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCacheIdTests.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRemediationTests.swift; sourceTree = "<group>"; };
@@ -505,6 +507,7 @@
 			isa = PBXGroup;
 			children = (
 				AC83A18E25A660B8C7DFC5EA /* PriceChartView.swift */,
+				D928C0A10000000000000002 /* ChartView.swift */,
 			);
 			path = Chart;
 			sourceTree = "<group>";
@@ -1020,6 +1023,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				B54C66B7EE7EB85A39DF435B /* PriceAlertService.swift in Sources */,
 				79AC7BE8045740D2F375CDAD /* PriceAlertsView.swift in Sources */,
 				7EFE00922F8A910BDA499EC1 /* PriceChartView.swift in Sources */,
+				D928C0A10000000000000001 /* ChartView.swift in Sources */,
 				AD0F7D6C1B7BB344FE46EEEA /* PriceService.swift in Sources */,
 				2DF02AC4B9C24E1FB4AF7222 /* PriceHistoryService.swift in Sources */,
 				FDAEF5EEB1E15AA0EDA74B6F /* QRCodeView.swift in Sources */,

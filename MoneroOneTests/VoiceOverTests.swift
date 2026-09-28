@@ -147,6 +147,35 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertFalse(elements.first?.accessibilityTraits.contains(.adjustable) ?? true)
     }
 
+    /// Switching modes must reuse the loaded history and expose only the
+    /// visible chart (including its range buttons) to VoiceOver.
+    func testChartModeSwitchingKeepsHistoryAndHidesInactiveContent() throws {
+        let wallet = ChartWallet()
+        wallet.balance = 2
+        let price = ChartPrices(points: samples(price: { 500 + Double($0) }))
+        let view = host(ChartModesHarness(wallet: wallet, price: price), height: 874)
+        XCTAssertEqual(wallet.historyLoads, 1)
+
+        for mode in ["Price", "Portfolio", "Price", "Portfolio"] {
+            let available = accessibilityElements(in: view)
+            let button = try XCTUnwrap(available.first {
+                $0.accessibilityLabel == mode && $0.accessibilityTraits.contains(.button)
+            }, "Available controls: \(available.compactMap(\.accessibilityLabel))")
+            XCTAssertTrue(button.accessibilityActivate())
+            RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+
+            let elements = accessibilityElements(in: view)
+            let chartLabels = elements.compactMap(\.accessibilityLabel).filter {
+                $0 == "Monero price chart, past week" || $0 == "Portfolio chart, past week"
+            }
+            XCTAssertEqual(chartLabels, [mode == "Price" ? "Monero price chart, past week" : "Portfolio chart, past week"])
+            XCTAssertEqual(elements.filter { $0.accessibilityLabel == "1 week" }.count, 1, "Only the visible range selector is reachable")
+        }
+
+        XCTAssertEqual(wallet.historyLoads, 1, "Mode switches must not fetch wallet history again")
+        XCTAssertEqual(price.rangeLoads, 1, "Mode switches must not fetch the price series again")
+    }
+
     // MARK: - QR focus mode
 
     /// The Receive QR is a button: VoiceOver's double tap grows it into
@@ -269,5 +298,48 @@ final class VoiceOverTests: XCTestCase {
         guard element.responds(to: Selector(("accessibilityCustomContent"))),
               let content = element.value(forKey: "accessibilityCustomContent") as? [AXCustomContent] else { return [] }
         return content.map { "\($0.label): \($0.value)" }
+    }
+}
+
+@MainActor
+private final class ChartWallet: WalletManager {
+    private(set) var historyLoads = 0
+
+    override func balanceLedger() async -> BalanceLedger {
+        historyLoads += 1
+        return BalanceLedger(balance: displayBalance, changes: [])
+    }
+}
+
+@MainActor
+private final class ChartPrices: PriceService {
+    let points: [PriceDataPoint]
+    private(set) var rangeLoads = 0
+
+    init(points: [PriceDataPoint]) {
+        self.points = points
+        super.init()
+        xmrPrice = points.last?.price
+    }
+
+    override func chartData(for range: String) -> [PriceDataPoint] { points }
+
+    override func selectChartRange(_ range: String) {
+        rangeLoads += 1
+        currentChartRange = range
+    }
+}
+
+private struct ChartModesHarness: View {
+    let wallet: WalletManager
+    let price: PriceService
+    @State private var mode: ChartView.Mode = .portfolio
+    @State private var path: [ChartView.Destination] = []
+
+    var body: some View {
+        ChartView(selectedMode: $mode, path: $path)
+            .environmentObject(wallet)
+            .environmentObject(price)
+            .environmentObject(PriceAlertService())
     }
 }

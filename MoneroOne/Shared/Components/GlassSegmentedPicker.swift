@@ -4,6 +4,7 @@ import SwiftUI
 /// Uses iOS 26 liquid glass effect when available, falls back to material on older versions.
 struct GlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.AllCases: RandomAccessCollection {
     @Binding var selection: T
+    var accessibilityLabel: ((T) -> String)? = nil
     let label: (T) -> String
 
     @Namespace private var namespace
@@ -29,7 +30,7 @@ struct GlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.AllCases: 
                         }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(label(item))
+                .accessibilityLabel(accessibilityLabel?(item) ?? label(item))
                 .accessibilityAddTraits(selection == item ? .isSelected : [])
                 .accessibilityHint(selection == item ? "Currently selected" : "Double tap to select")
             }

@@ -87,7 +87,7 @@ final class OpenAliasLookupModel: ObservableObject {
     }
 
     /// Paste, Scan and Return: the text is classified, and a lookup starts,
-    /// at once.
+    /// at once. A name whose lookup failed is looked up again.
     func submit(_ text: String) {
         update(text, immediate: true)
     }
@@ -152,7 +152,8 @@ final class OpenAliasLookupModel: ObservableObject {
             if let name, name.query == newName.query {
                 // The same query name: keep the state, show the new text.
                 if name != newName { self.name = newName }
-                if phase == .waiting {
+                switch phase {
+                case .waiting:
                     if immediate {
                         startLookup(newName)
                     } else {
@@ -161,6 +162,11 @@ final class OpenAliasLookupModel: ObservableObject {
                         stopWork()
                         schedule { [weak self] in self?.startLookup(newName) }
                     }
+                case .failed where immediate:
+                    // Return or Paste after a failed lookup: look it up again.
+                    startLookup(newName)
+                default:
+                    break
                 }
                 return
             }

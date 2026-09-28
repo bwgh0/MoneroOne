@@ -656,6 +656,26 @@ final class OpenAliasTests: XCTestCase {
         XCTAssertEqual(stub.calls, 2)
     }
 
+    func testModelReturnLooksUpFailedNameAgain() async {
+        let stub = KitStub(json: Fixture.answer(records: []))
+        let (model, _) = makeModel(stub)
+        model.textChanged("donate@getmonero.org")
+        await waitUntil { model.phase == .failed(.noRecord) }
+        XCTAssertEqual(model.phase, .failed(.noRecord))
+        XCTAssertEqual(stub.calls, 1)
+        // Typing the same query name again does nothing.
+        model.textChanged("donate@getmonero.org ")
+        try? await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(model.phase, .failed(.noRecord))
+        XCTAssertEqual(stub.calls, 1)
+        // Return looks it up again, also for a failure without Try Again.
+        model.submit("donate@getmonero.org ")
+        XCTAssertEqual(model.phase, .looking)
+        await waitUntil { stub.calls == 2 && model.phase == .failed(.noRecord) }
+        XCTAssertEqual(model.phase, .failed(.noRecord))
+        XCTAssertEqual(stub.calls, 2)
+    }
+
     func testModelWritesPinOnlyOnSuccess() {
         let (model, _) = makeModel(KitStub(json: ""))
         let summary = OpenAliasSummary(name: OpenAliasName(display: "donate@getmonero.org", query: "donate.getmonero.org"),

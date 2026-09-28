@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: bwgh0/MoneroKit.Swift
+          ref: 4b48cec0a06acf8bb4fb6da6bee1077f53890a65
           path: MoneroKit.Swift
           # Required so `Monero.xcframework/**/*.a` is fetched as
           # the real binary instead of left as an LFS pointer.

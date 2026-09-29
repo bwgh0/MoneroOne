@@ -79,13 +79,8 @@ struct SyncSettingsView: View {
                 } label: {
                     HStack {
                         Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Restore Height")
-                                    .foregroundColor(.primary)
-                                Text("Adjust where scanning starts")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
+                            Text("Restore Height")
+                                .foregroundColor(.primary)
                         } icon: {
                             Image(systemName: "calendar.badge.clock")
                                 .foregroundColor(.purple)
@@ -99,8 +94,6 @@ struct SyncSettingsView: View {
                 .buttonStyle(.plain)
             } header: {
                 Text("Scan Range")
-            } footer: {
-                Text("Set this to when you created your wallet to skip scanning older blocks. Useful if sync is taking too long.")
             }
 
             // Trusted Locations
@@ -242,19 +235,13 @@ struct SyncSettingsView: View {
 
     private var permissionWarningText: String {
         if syncManager.authorizationStatus == .authorizedAlways && syncManager.needsPreciseLocation {
-            return String(localized: "Trusted Locations requires Precise Location to accurately determine if you're inside a trusted zone. Go to Settings > Location and enable \"Precise Location\".")
+            return String(localized: "In Settings, turn on Precise Location.", comment: "Trusted Locations: the fix when location is approximate")
         }
         switch syncManager.authorizationStatus {
-        case .authorizedWhenInUse:
-            return String(localized: "Trusted Locations requires \"Always\" location access. Go to Settings > Location and select \"Always\" to enable trusted zone monitoring.")
-        case .denied:
-            return String(localized: "Location access was denied. Go to Settings > Location and enable location access, then select \"Always\".")
         case .restricted:
-            return String(localized: "Location access is restricted on this device. Check your device settings or parental controls.")
-        case .notDetermined:
-            return String(localized: "Location permission hasn't been granted yet. Go to Settings > Location and select \"Always\".")
+            return String(localized: "Check Screen Time or device management.", comment: "Trusted Locations: where location access is restricted")
         default:
-            return String(localized: "Please enable \"Always\" location access in Settings to use Trusted Locations.")
+            return String(localized: "In Settings, set Location to Always.", comment: "Trusted Locations: the fix when location access is not Always")
         }
     }
 
@@ -322,7 +309,7 @@ struct RestoreHeightSheet: View {
                             .monospacedDigit()
                     }
                 } footer: {
-                    Text("Set to when you created your wallet to skip older blocks. Monero produces ~1 block every 2 minutes.")
+                    Text("Pick the day you created this wallet to skip older blocks.")
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -364,7 +351,7 @@ struct RestoreHeightSheet: View {
                     updateRestoreHeight()
                 }
             } message: {
-                Text("This will restart scanning from block \(formatHeight(estimatedHeight)). Any transactions before this won't be found.")
+                Text("Scanning restarts at block \(formatHeight(estimatedHeight)). Earlier transactions won't be found.")
             }
             .onAppear {
                 // Initialize date picker to current restore height's estimated date

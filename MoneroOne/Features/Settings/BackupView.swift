@@ -119,7 +119,7 @@ struct BackupView: View {
             Text("Your Seed Phrase")
                 .font(.headline)
 
-            Text("Write this down and store it safely. Never share it with anyone.")
+            Text("Write it down and never share it.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -160,7 +160,7 @@ struct BackupView: View {
 
             Spacer()
 
-            Text("Warning: Anyone with this phrase can access your funds! Clipboard clears in 5 min.")
+            Text("Anyone with these words can take your funds.")
                 .font(.caption)
                 .foregroundColor(.red)
                 .multilineTextAlignment(.center)
@@ -168,7 +168,7 @@ struct BackupView: View {
         .alert("Seed Copied", isPresented: $showCopiedAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Your seed phrase has been copied. The clipboard will be automatically cleared in 5 minutes for security.")
+            Text("The clipboard clears in \(Duration.seconds(clipboardClearDelay).formatted(.units(allowed: [.minutes, .seconds], width: .wide))).")
         }
         .onDisappear {
             clipboardClearTask?.cancel()

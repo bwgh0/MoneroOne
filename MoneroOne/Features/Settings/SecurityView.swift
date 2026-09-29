@@ -53,7 +53,7 @@ struct SecurityView: View {
                     }
                 }
             } footer: {
-                Text("Require Face ID, Touch ID, or your device passcode before each transaction is broadcast. Hardware wallets always confirm on the device itself.")
+                Text("Hardware wallets confirm on the device instead.")
             }
 
             Section("Auto-Lock") {

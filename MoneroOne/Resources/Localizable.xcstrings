@@ -10183,190 +10183,96 @@
         }
       }
     },
-    "Add your first alert to get notified when XMR crosses a price threshold" : {
+    "Add places you trust, like home or work." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Füge deinen ersten Alarm hinzu, um benachrichtigt zu werden, wenn XMR eine Preisschwelle überschreitet"
+            "value" : "Füge Orte hinzu, denen du vertraust, etwa dein Zuhause oder die Arbeit."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agrega tu primera alerta para recibir un aviso cuando XMR cruce un umbral de precio"
+            "value" : "Añade lugares de confianza, como tu casa o el trabajo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajoutez votre première alerte pour recevoir une notification quand le XMR franchit un seuil de prix"
+            "value" : "Ajoutez des lieux de confiance, comme votre domicile ou votre travail."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiungi il tuo primo avviso per ricevere una notifica quando XMR raggiunge una soglia di prezzo"
+            "value" : "Aggiungi luoghi di cui ti fidi, come casa o lavoro."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最初のアラートを追加すると、XMRの価格が設定値に達したときに通知を受け取れます"
+            "value" : "自宅や職場など、信頼できる場所を追加してください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "첫 알림을 추가하면 XMR 가격이 설정한 기준을 넘을 때 알림을 받습니다"
+            "value" : "집이나 직장처럼 신뢰할 수 있는 장소를 추가하세요."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg je eerste melding toe en krijg bericht als XMR een prijsgrens passeert"
+            "value" : "Voeg plekken toe die je vertrouwt, zoals thuis of werk."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dodaj pierwszy alert, aby otrzymać powiadomienie, gdy XMR przekroczy próg cenowy"
+            "value" : "Dodaj zaufane miejsca, na przykład dom lub pracę."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adicione seu primeiro alerta para ser notificado quando o XMR cruzar um limite de preço"
+            "value" : "Adicione locais de confiança, como sua casa ou o trabalho."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adaugă prima alertă ca să fii notificat când XMR trece de un prag de preț"
+            "value" : "Adaugă locuri de încredere, cum ar fi acasă sau la serviciu."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Добавьте первое оповещение, чтобы узнать, когда цена XMR пересечёт заданный порог"
+            "value" : "Добавьте места, которым доверяете, например дом или работу."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XMR bir fiyat eşiğini geçtiğinde bildirim almak için ilk uyarınızı ekleyin"
+            "value" : "Ev veya iş gibi güvendiğiniz yerleri ekleyin."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Додайте перше сповіщення, щоб дізнатися, коли ціна XMR перетне заданий поріг"
+            "value" : "Додайте місця, яким довіряєте, як-от дім чи роботу."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "添加你的第一个提醒，在 XMR 突破价格阈值时收到通知"
+            "value" : "添加你信任的地点，比如家或公司。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新增你的第一個提醒，在 XMR 突破價格門檻時收到通知"
-          }
-        }
-      }
-    },
-    "Add your home, office, or other safe locations where your wallet syncs regularly." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Füge dein Zuhause, dein Büro oder andere sichere Orte hinzu, an denen deine Wallet regelmäßig synchronisiert."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agrega tu casa, tu oficina u otras ubicaciones seguras donde tu cartera se sincroniza con frecuencia."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajoutez votre domicile, votre bureau ou d’autres lieux sûrs où votre portefeuille se synchronise régulièrement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aggiungi casa, ufficio o altri luoghi sicuri in cui il portafoglio si sincronizza regolarmente."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自宅や職場など、ウォレットを定期的に同期する安全な場所を追加してください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "지갑이 정기적으로 동기화되는 집, 사무실 등 안전한 위치를 추가하세요."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Voeg je huis, kantoor of andere veilige locaties toe waar je portemonnee regelmatig synchroniseert."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dodaj dom, biuro lub inne bezpieczne miejsca, w których portfel regularnie się synchronizuje."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adicione sua casa, escritório ou outros locais seguros onde sua carteira sincroniza com frequência."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adaugă casa, biroul sau alte locuri sigure unde portofelul se sincronizează regulat."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Добавьте дом, офис или другие безопасные места, где кошелёк регулярно синхронизируется."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cüzdanınızın düzenli olarak eşzamanlandığı ev, ofis veya diğer güvenli konumları ekleyin."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Додайте дім, офіс або інші безпечні місця, де гаманець регулярно синхронізується."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加你的家、办公室或其他钱包定期同步的安全位置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新增你的住家、辦公室或其他錢包定期同步的安全位置。"
+            "value" : "加入你信任的地點，例如家裡或公司。"
           }
         }
       }
@@ -11029,96 +10935,96 @@
         }
       }
     },
-    "Adjust where scanning starts" : {
+    "After a payment arrives, Receive shows a new address. Old ones keep working." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Startpunkt des Scans anpassen"
+            "value" : "Nach einer eingegangenen Zahlung zeigt Empfangen eine neue Adresse. Alte Adressen funktionieren weiter."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajusta dónde empieza el escaneo"
+            "value" : "Cuando llega un pago, Recibir muestra una dirección nueva. Las anteriores siguen funcionando."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajuster le début de l’analyse"
+            "value" : "Après la réception d’un paiement, Recevoir affiche une nouvelle adresse. Les anciennes restent valides."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Regola il punto di inizio della scansione"
+            "value" : "Dopo l’arrivo di un pagamento, Ricevi mostra un nuovo indirizzo. Quelli vecchi continuano a funzionare."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "スキャンの開始位置を調整"
+            "value" : "支払いを受け取ると、「受け取る」に新しいアドレスが表示されます。以前のアドレスも引き続き使えます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "스캔 시작 지점 조정"
+            "value" : "결제를 받으면 받기에 새 주소가 표시됩니다. 이전 주소도 계속 사용할 수 있습니다."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pas aan waar het scannen begint"
+            "value" : "Na een ontvangen betaling toont Ontvang een nieuw adres. Oude adressen blijven werken."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zmień punkt początkowy skanowania"
+            "value" : "Po otrzymaniu płatności ekran Odbierz pokazuje nowy adres. Stare adresy nadal działają."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajuste onde a varredura começa"
+            "value" : "Depois que um pagamento chega, Receber mostra um novo endereço. Os antigos continuam funcionando."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajustează de unde începe scanarea"
+            "value" : "După ce sosește o plată, Primește afișează o adresă nouă. Cele vechi funcționează în continuare."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Настройте, откуда начинается сканирование"
+            "value" : "После поступления платежа на экране «Получить» появится новый адрес. Старые адреса продолжат работать."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Taramanın başlayacağı noktayı ayarlayın"
+            "value" : "Bir ödeme geldikten sonra Al ekranı yeni bir adres gösterir. Eski adresler çalışmaya devam eder."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Змініть початок сканування"
+            "value" : "Після надходження платежу на екрані «Отримати» з’явиться нова адреса. Старі адреси й далі працюють."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "调整扫描起点"
+            "value" : "收到付款后，“收款”会显示新地址。旧地址仍然可用。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "調整掃描起點"
+            "value" : "收到付款後，「收款」會顯示新地址。舊地址仍可使用。"
           }
         }
       }
@@ -11971,100 +11877,6 @@
         }
       }
     },
-    "Allow widgets to display wallet info" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Widgets dürfen Wallet-Infos anzeigen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permitir que los widgets muestren información de la cartera"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Autoriser les widgets à afficher les informations du portefeuille"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Consenti ai widget di mostrare i dati del portafoglio"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ウィジェットにウォレット情報を表示"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "위젯에 지갑 정보 표시 허용"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toon portemonneegegevens in widgets"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zezwalaj widżetom na wyświetlanie danych portfela"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permitir que os widgets mostrem dados da carteira"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permite widgeturilor să afișeze informații despre portofel"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Разрешить виджетам показывать данные кошелька"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Widget'larda cüzdan bilgilerini göster"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Дозволити віджетам показувати дані гаманця"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "允许小组件显示钱包信息"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "允許小工具顯示錢包資訊"
-          }
-        }
-      }
-    },
     "Amount" : {
       "localizations" : {
         "de" : {
@@ -12909,6 +12721,194 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不限"
+          }
+        }
+      }
+    },
+    "Anyone with the view key can see every payment you receive." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wer den View-Key hat, sieht jede Zahlung, die du erhältst."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cualquiera con la clave de vista puede ver cada pago que recibes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toute personne disposant de la clé d’audit peut voir chaque paiement que vous recevez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiunque abbia la chiave di visualizzazione può vedere ogni pagamento che ricevi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ビューキーを持つ人は、あなたが受け取るすべての支払いを確認できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "보기 키가 있는 사람은 누구나 내가 받는 모든 결제를 볼 수 있습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iedereen met de alleen-lezen sleutel ziet elke betaling die je ontvangt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Każdy, kto ma klucz podglądu, widzi każdą otrzymaną przez ciebie płatność."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualquer pessoa com a chave de visualização pode ver cada pagamento que você recebe."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oricine are cheia de citire poate vedea fiecare plată pe care o primești."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Любой, у кого есть ключ просмотра, видит все платежи, которые вы получаете."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Görüntüleme anahtarına sahip olan herkes aldığınız her ödemeyi görebilir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Будь-хто з ключем перегляду бачить кожен платіж, який ви отримуєте."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何拥有查看密钥的人都能看到你收到的每一笔付款。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何擁有檢視金鑰的人都能看到你收到的每一筆付款。"
+          }
+        }
+      }
+    },
+    "Anyone with these words can take your funds." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wer diese Wörter hat, kann über dein Guthaben verfügen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cualquiera con estas palabras puede llevarse tus fondos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toute personne disposant de ces mots peut prendre vos fonds."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiunque abbia queste parole può prendere i tuoi fondi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これらの単語を知っている人は誰でも資金を持ち出せます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 단어를 가진 사람은 누구나 자금을 가져갈 수 있습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iedereen met deze woorden kan je tegoed meenemen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Każdy, kto zna te słowa, może zabrać twoje środki."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualquer pessoa com estas palavras pode levar seus fundos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oricine are aceste cuvinte îți poate lua fondurile."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Любой, у кого есть эти слова, может забрать ваши средства."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kelimelere sahip olan herkes fonlarınızı alabilir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Будь-хто з цими словами може забрати ваші кошти."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何拥有这些单词的人都能拿走你的资金。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何擁有這些單字的人都能拿走你的資金。"
           }
         }
       }
@@ -14418,100 +14418,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "備份助記詞"
-          }
-        }
-      }
-    },
-    "Balance & Transactions" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guthaben & Transaktionen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saldo y transacciones"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Solde et transactions"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saldo e transazioni"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "残高とトランザクション"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "잔액 및 거래"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saldo en transacties"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saldo i transakcje"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saldo e Transações"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sold și tranzacții"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Баланс и транзакции"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bakiye ve İşlemler"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Баланс і транзакції"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "余额和交易"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "餘額與交易"
           }
         }
       }
@@ -17540,6 +17446,101 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "圖表模式"
+          }
+        }
+      }
+    },
+    "Check Screen Time or device management." : {
+      "comment" : "Trusted Locations: where location access is restricted",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prüfe die Bildschirmzeit oder die Geräteverwaltung."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisa Tiempo de uso o la gestión del dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vérifiez Temps d’écran ou la gestion de l’appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controlla Tempo di utilizzo o la gestione del dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スクリーンタイムまたはデバイス管理を確認してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "스크린 타임 또는 기기 관리를 확인하세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controleer Schermtijd of het apparaatbeheer."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprawdź Czas przed ekranem lub zarządzanie urządzeniem."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifique o Tempo de Uso ou o gerenciamento do dispositivo."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifică Timp de utilizare sau gestionarea dispozitivului."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверьте «Экранное время» или управление устройством."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ekran Süresi’ni veya aygıt yönetimini kontrol edin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перевірте «Екранний час» або керування пристроєм."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请检查“屏幕使用时间”或设备管理。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請檢查「螢幕使用時間」或裝置管理。"
           }
         }
       }
@@ -31282,100 +31283,6 @@
         }
       }
     },
-    "Enable notifications to receive price alerts" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aktiviere Mitteilungen, um Preisalarme zu erhalten"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activa las notificaciones para recibir alertas de precio"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activez les notifications pour recevoir les alertes de prix"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attiva le notifiche per ricevere gli avvisi di prezzo"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "価格アラートを受け取るには通知を有効にしてください"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "가격 알림을 받으려면 알림을 활성화하세요"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schakel meldingen in om prijsmeldingen te ontvangen"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Włącz powiadomienia, aby otrzymywać alerty cenowe"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ative as notificações para receber alertas de preço"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activează notificările ca să primești alerte de preț"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Включите уведомления, чтобы получать ценовые оповещения"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiyat uyarıları almak için bildirimleri açın"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Увімкніть сповіщення, щоб отримувати цінові сповіщення"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用通知以接收价格提醒"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "啟用通知以接收價格提醒"
-          }
-        }
-      }
-    },
     "Enabled" : {
       "comment" : "Location permission status",
       "localizations" : {
@@ -32976,100 +32883,6 @@
         }
       }
     },
-    "Enter the SOCKS5 proxy address as host:port" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gib die SOCKS5-Proxy-Adresse als host:port ein"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ingresa la dirección del proxy SOCKS5 como host:port"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saisissez l’adresse du proxy SOCKS5 au format host:port"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inserisci l’indirizzo del proxy SOCKS5 nel formato host:port"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SOCKS5プロキシのアドレスをhost:portの形式で入力してください"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SOCKS5 프록시 주소를 host:port 형식으로 입력하세요"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Voer het SOCKS5-proxyadres in als host:port"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wprowadź adres proxy SOCKS5 w formacie host:port"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Digite o endereço do proxy SOCKS5 como host:port"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Introdu adresa proxy-ului SOCKS5 ca host:port"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Введите адрес прокси SOCKS5 в формате host:port"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SOCKS5 proxy adresini host:port biçiminde girin"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Введіть адресу проксі SOCKS5 у форматі host:port"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以 host:port 格式输入 SOCKS5 代理地址"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以 host:port 格式輸入 SOCKS5 代理伺服器位址"
-          }
-        }
-      }
-    },
     "Enter the primary address and private view key of the wallet you want to watch. No seed is stored on this device — you won't be able to send." : {
       "localizations" : {
         "de" : {
@@ -33160,6 +32973,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "輸入你要觀察的錢包的主要位址和私密檢視金鑰。此裝置上不會儲存助記詞，因此你無法傳送。"
+          }
+        }
+      }
+    },
+    "Enter these on another device to get a view-only copy of this wallet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib diese Daten auf einem anderen Gerät ein, um eine View-Only-Kopie dieser Wallet zu erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introdúcelas en otro dispositivo para tener una copia de solo visualización de esta cartera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saisissez-les sur un autre appareil pour obtenir une copie d’audit de ce portefeuille."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inseriscili su un altro dispositivo per avere una copia solo visualizzazione di questo portafoglio."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "別のデバイスでこれらを入力すると、このウォレットの閲覧専用コピーを作成できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다른 기기에 이 정보를 입력하면 이 지갑의 보기 전용 사본을 만들 수 있습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voer deze gegevens in op een ander apparaat voor een alleen-lezen kopie van deze portemonnee."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wprowadź te dane na innym urządzeniu, aby mieć kopię tego portfela tylko do podglądu."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insira estes dados em outro dispositivo para ter uma cópia somente leitura desta carteira."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introdu aceste date pe alt dispozitiv pentru o copie de citire a acestui portofel."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите их на другом устройстве, чтобы получить копию этого кошелька только для просмотра."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cüzdanın yalnızca görüntüleme kopyasını almak için bunları başka bir aygıta girin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введіть ці дані на іншому пристрої, щоб отримати копію цього гаманця лише для перегляду."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在另一台设备上输入这些信息，即可获得此钱包的只读副本。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在另一部裝置上輸入這些資訊，即可取得此錢包的唯讀副本。"
           }
         }
       }
@@ -35517,288 +35424,6 @@
         }
       }
     },
-    "Fiat Mode" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiat-Modus"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modo fiat"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mode fiat"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modalità fiat"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法定通貨モード"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "법정 화폐 모드"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiatmodus"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tryb fiat"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modo Fiat"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mod fiat"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Фиатный режим"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiat Modu"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Фіатний режим"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法币模式"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法幣模式"
-          }
-        }
-      }
-    },
-    "Fiat Mode shows balances and transactions in %@ first, with XMR below." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Im Fiat-Modus stehen Guthaben und Transaktionen zuerst in %@, darunter in XMR."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El modo fiat muestra primero los saldos y las transacciones en %@, con XMR debajo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le mode fiat affiche d’abord les soldes et les transactions en %@, avec le montant en XMR en dessous."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La modalità fiat mostra saldi e transazioni prima in %@, con XMR sotto."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法定通貨モードでは、残高とトランザクションを先に%@で表示し、その下にXMRを表示します。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "법정 화폐 모드에서는 잔액과 거래가 %@ 기준으로 먼저 표시되고 XMR은 그 아래에 표시됩니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiatmodus toont saldi en transacties eerst in %@, met XMR eronder."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tryb fiat pokazuje saldo i transakcje najpierw w %@, a pod spodem w XMR."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O Modo Fiat mostra saldos e transações primeiro em %@, com XMR abaixo."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modul fiat afișează soldurile și tranzacțiile mai întâi în %@, cu XMR dedesubt."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "В фиатном режиме баланс и транзакции сначала показываются в %@, а под ними — в XMR."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiat Modu, bakiyeleri ve işlemleri önce %@ cinsinden, altında da XMR olarak gösterir."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "У фіатному режимі баланс і транзакції спершу показано в %@, а під ними — в XMR."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法币模式会先以 %@ 显示余额和交易，XMR 金额显示在下方。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法幣模式會先以 %@ 顯示餘額和交易，XMR 金額顯示在下方。"
-          }
-        }
-      }
-    },
-    "Fiat values are fetched from CoinMarketCap and update every 5 minutes." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiat-Werte stammen von CoinMarketCap und werden alle 5 Minuten aktualisiert."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los valores en moneda fiat se obtienen de CoinMarketCap y se actualizan cada 5 minutos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les valeurs en monnaie fiat proviennent de CoinMarketCap et sont mises à jour toutes les 5 minutes."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I valori in valuta fiat provengono da CoinMarketCap e si aggiornano ogni 5 minuti."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法定通貨換算額はCoinMarketCapから取得し、5分ごとに更新されます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "법정 화폐 가치는 CoinMarketCap에서 가져오며 5분마다 업데이트됩니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiatwaarden worden opgehaald bij CoinMarketCap en elke 5 minuten bijgewerkt."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wartości w walutach fiat są pobierane z CoinMarketCap i aktualizowane co 5 minut."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Os valores em moeda fiat vêm do CoinMarketCap e são atualizados a cada 5 minutos."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Valorile fiat sunt preluate de la CoinMarketCap și se actualizează la fiecare 5 minute."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Стоимость в фиатной валюте берётся из CoinMarketCap и обновляется каждые 5 минут."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fiat değerleri CoinMarketCap'ten alınır ve 5 dakikada bir güncellenir."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Фіатні значення надходять із CoinMarketCap і оновлюються кожні 5 хвилин."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法币价值取自 CoinMarketCap，每 5 分钟更新一次。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法幣價值取自 CoinMarketCap，每 5 分鐘更新一次。"
-          }
-        }
-      }
-    },
     "Filter transactions" : {
       "localizations" : {
         "de" : {
@@ -36652,6 +36277,100 @@
         }
       }
     },
+    "Get notified when XMR crosses a price you set." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erhalte eine Mitteilung, sobald XMR deinen Zielpreis erreicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recibe un aviso cuando XMR alcance el precio que elijas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recevez une notification quand le XMR atteint le prix que vous avez choisi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricevi una notifica quando XMR raggiunge il prezzo che scegli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XMRが設定した価格に達すると通知を受け取れます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XMR이 설정한 가격에 도달하면 알림을 받습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Krijg een melding als XMR een prijs bereikt die je instelt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otrzymuj powiadomienie, gdy XMR osiągnie ustaloną przez ciebie cenę."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Receba uma notificação quando o XMR atingir o preço que você definir."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primește o notificare când XMR atinge prețul pe care îl alegi."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Получайте уведомление, когда XMR достигнет заданной вами цены."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XMR belirlediğiniz fiyata ulaştığında bildirim alın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отримуйте сповіщення, коли XMR досягне заданої вами ціни."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当 XMR 达到你设定的价格时收到通知。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當 XMR 達到你設定的價格時收到通知。"
+          }
+        }
+      }
+    },
     "Good Afternoon" : {
       "localizations" : {
         "de" : {
@@ -37213,6 +36932,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "硬體錢包"
+          }
+        }
+      }
+    },
+    "Hardware wallets confirm on the device instead." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hardware-Wallets bestätigen stattdessen auf dem Gerät."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las carteras de hardware confirman en el propio dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un portefeuille matériel confirme plutôt sur l’appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I portafogli hardware confermano invece sul dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ハードウェアウォレットでは、代わりにデバイス本体で確認します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "하드웨어 지갑은 대신 기기에서 확인합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hardwareportemonnees bevestigen in plaats daarvan op het apparaat."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portfel sprzętowy wymaga zamiast tego potwierdzenia na urządzeniu."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Com uma carteira de hardware, a confirmação é feita no próprio dispositivo."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portofelele hardware confirmă în schimb pe dispozitiv."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Аппаратные кошельки вместо этого запрашивают подтверждение на устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Donanım cüzdanları bunun yerine aygıtın kendisinde onay ister."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Апаратні гаманці натомість підтверджують транзакції на пристрої."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "硬件钱包改为在设备上确认。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "硬體錢包改為在裝置上確認。"
           }
         }
       }
@@ -38347,100 +38160,6 @@
         }
       }
     },
-    "If you enjoy Monero One, consider donating to support continued development." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wenn dir Monero One gefällt, unterstütze die Weiterentwicklung mit einer Spende."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Si te gusta Monero One, considera hacer una donación para apoyar su desarrollo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Si vous appréciez Monero One, pensez à faire un don pour soutenir son développement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se ti piace Monero One, valuta una donazione per sostenerne lo sviluppo."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Monero Oneを気に入っていただけたら、継続的な開発を支援するため、寄付をご検討ください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Monero One이 마음에 드셨다면 지속적인 개발을 위해 기부를 고려해 주세요."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vind je Monero One fijn? Overweeg een donatie om de verdere ontwikkeling te steunen."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Jeśli lubisz Monero One, rozważ darowiznę na dalszy rozwój aplikacji."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se você gosta do Monero One, considere fazer uma doação para apoiar o desenvolvimento contínuo."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dacă îți place Monero One, ia în considerare o donație pentru a susține dezvoltarea în continuare."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Если вам нравится Monero One, поддержите дальнейшую разработку пожертвованием."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Monero One hoşunuza gidiyorsa geliştirmenin sürmesi için bağış yapmayı düşünün."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Якщо вам подобається Monero One, підтримайте подальшу розробку пожертвою."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "如果你喜欢 Monero One，欢迎捐赠以支持后续开发。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "如果你喜歡 Monero One，歡迎捐款贊助後續開發。"
-          }
-        }
-      }
-    },
     "If you lose your seed phrase, your funds are permanently lost. Write it down and store it securely offline." : {
       "localizations" : {
         "de" : {
@@ -38719,6 +38438,196 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重要資訊"
+          }
+        }
+      }
+    },
+    "In Settings, set Location to Always." : {
+      "comment" : "Trusted Locations: the fix when location access is not Always",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setze in den Einstellungen „Standort“ auf „Immer“."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En Configuración, cambia Ubicación a “Siempre”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dans Réglages, réglez Position sur « Toujours »."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Impostazioni, imposta Posizione su “Sempre”."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「設定」で「位置情報」を「常に」にしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설정에서 위치를 ‘항상’으로 설정하세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zet in Instellingen ‘Locatie’ op ‘Altijd’."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "W Ustawieniach ustaw Lokalizację na „Zawsze”."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Em Ajustes, defina Localização como “Sempre”."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "În Configurări, setează Localizare la „Întotdeauna”."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В «Настройках» выберите для «Геопозиции» вариант «Всегда»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayarlar’da Konum’u “Her Zaman” olarak ayarlayın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У Параметрах установіть для локації варіант «Завжди»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在“设置”中将“位置”设为“始终”。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請在「設定」中將「位置」設為「永遠」。"
+          }
+        }
+      }
+    },
+    "In Settings, turn on Precise Location." : {
+      "comment" : "Trusted Locations: the fix when location is approximate",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiviere in den Einstellungen „Genauer Standort“."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En Configuración, activa “Ubicación exacta”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dans Réglages, activez « Position exacte »."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Impostazioni, attiva “Posizione esatta”."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「設定」で「正確な位置情報」をオンにしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설정에서 ‘정확한 위치’를 켜세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schakel in Instellingen ‘Exacte locatie’ in."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "W Ustawieniach włącz „Dokładna lokalizacja”."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Em Ajustes, ative “Localização Exata”."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "În Configurări, activează „Localizare precisă”."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В «Настройках» включите «Точная геопозиция»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayarlar’da “Tam Konum” seçeneğini açın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У Параметрах увімкніть «Точна локація»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在“设置”中打开“精确位置”。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請在「設定」中開啟「精確位置」。"
           }
         }
       }
@@ -43022,96 +42931,96 @@
     "Monero One" : {
       "shouldTranslate" : false
     },
-    "Monero One does not include Tor. Turn this on only if Orbot or another Tor proxy app is running on this iPhone. Without one, none of your nodes will connect." : {
+    "Monero One has no built-in Tor. Without Orbot or another Tor app running, no node will connect." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One enthält kein Tor. Schalte dies nur ein, wenn Orbot oder eine andere Tor-Proxy-App auf diesem iPhone läuft. Ohne sie verbindet sich keiner deiner Nodes."
+            "value" : "Monero One hat kein eingebautes Tor. Ohne laufendes Orbot oder eine andere Tor-App verbindet sich kein Node."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One no incluye Tor. Activa esta opción solo si Orbot u otra app de proxy Tor se está ejecutando en este iPhone. Sin una, ninguno de tus nodos se conectará."
+            "value" : "Monero One no incluye Tor. Si Orbot u otra app de Tor no está en ejecución, ningún nodo se conectará."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One n’intègre pas Tor. N’activez cette option que si Orbot ou une autre app proxy Tor est en cours d’exécution sur cet iPhone. Sans elle, aucun de vos nœuds ne se connectera."
+            "value" : "Monero One n’intègre pas Tor. Sans Orbot ou une autre app Tor en cours d’exécution, aucun nœud ne se connectera."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One non include Tor. Attiva questa opzione solo se Orbot o un’altra app proxy Tor è in esecuzione su questo iPhone. Senza un’app di questo tipo, nessuno dei tuoi nodi si connetterà."
+            "value" : "Monero One non include Tor. Senza Orbot o un’altra app Tor in esecuzione, nessun nodo si connetterà."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero OneにTorは含まれていません。このiPhoneでOrbotまたは他のTorプロキシAppが動作している場合にのみオンにしてください。プロキシAppがないと、どのノードにも接続できません。"
+            "value" : "Monero OneにはTorが内蔵されていません。OrbotまたはほかのTor Appが動作していないと、どのノードにも接続できません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One에는 Tor가 포함되어 있지 않습니다. 이 iPhone에서 Orbot 또는 다른 Tor 프록시 앱이 실행 중일 때만 켜세요. 그렇지 않으면 어떤 노드에도 연결되지 않습니다."
+            "value" : "Monero One에는 Tor가 내장되어 있지 않습니다. Orbot 또는 다른 Tor 앱이 실행 중이 아니면 어떤 노드에도 연결되지 않습니다."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One bevat geen Tor. Schakel dit alleen in als Orbot of een andere Tor-proxyapp op deze iPhone draait. Zonder zo'n app maakt geen van je nodes verbinding."
+            "value" : "Monero One heeft geen ingebouwde Tor. Zonder actieve Orbot of een andere Tor-app maakt geen enkele node verbinding."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One nie zawiera sieci Tor. Włącz tę opcję tylko wtedy, gdy na tym iPhonie działa Orbot lub inna aplikacja proxy Tor. Bez niej żaden węzeł się nie połączy."
+            "value" : "Monero One nie ma wbudowanego Tora. Bez działającego Orbota lub innej aplikacji Tor żaden węzeł się nie połączy."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Monero One não inclui o Tor. Ative isto somente se o Orbot ou outro app de proxy Tor estiver em execução neste iPhone. Sem um deles, nenhum dos seus nós vai se conectar."
+            "value" : "O Monero One não tem Tor integrado. Sem o Orbot ou outro app de Tor em execução, nenhum nó vai se conectar."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One nu include Tor. Activează această opțiune doar dacă Orbot sau altă aplicație proxy Tor rulează pe acest iPhone. Fără una, niciunul dintre noduri nu se va conecta."
+            "value" : "Monero One nu are Tor integrat. Fără Orbot sau altă aplicație Tor pornită, niciun nod nu se va conecta."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One не включает Tor. Включайте этот параметр, только если на этом iPhone работает Orbot или другое приложение-прокси Tor. Без него ни один из ваших узлов не подключится."
+            "value" : "В Monero One нет встроенного Tor. Без запущенного Orbot или другого приложения Tor ни один узел не подключится."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One, Tor içermez. Bunu yalnızca bu iPhone'da Orbot veya başka bir Tor proxy uygulaması çalışıyorsa açın. Böyle bir uygulama olmadan düğümlerinizin hiçbiri bağlanmaz."
+            "value" : "Monero One'da yerleşik Tor yoktur. Orbot veya başka bir Tor uygulaması çalışmıyorsa hiçbir düğüm bağlanmaz."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One не містить Tor. Вмикайте цей параметр, лише якщо на цьому iPhone працює Orbot або інша програма проксі Tor. Без неї жоден вузол не підключиться."
+            "value" : "У Monero One немає вбудованого Tor. Без запущеного Orbot або іншої програми Tor жоден вузол не підключиться."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One 不包含 Tor。仅当这台 iPhone 上正在运行 Orbot 或其他 Tor 代理 App 时，才打开此选项。否则，你的所有节点都将无法连接。"
+            "value" : "Monero One 没有内置 Tor。如果没有运行 Orbot 或其他 Tor App，任何节点都无法连接。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Monero One 不含 Tor。只有在這部 iPhone 上正在執行 Orbot 或其他 Tor 代理 App 時，才開啟此選項。否則，你的所有節點都將無法連線。"
+            "value" : "Monero One 沒有內建 Tor。如果沒有執行 Orbot 或其他 Tor App，任何節點都無法連線。"
           }
         }
       }
@@ -49628,96 +49537,96 @@
         }
       }
     },
-    "Only needed for nodes that require RPC credentials" : {
+    "Only for nodes that need a login." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nur für Nodes nötig, die RPC-Zugangsdaten verlangen"
+            "value" : "Nur für Nodes, die eine Anmeldung verlangen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solo es necesario para nodos que requieren credenciales RPC"
+            "value" : "Solo para nodos que requieren inicio de sesión."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Uniquement pour les nœuds qui exigent des identifiants RPC"
+            "value" : "Uniquement pour les nœuds qui exigent des identifiants."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Serve solo per i nodi che richiedono credenziali RPC"
+            "value" : "Solo per i nodi che richiedono un accesso."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RPC認証情報が必要なノードでのみ必要です"
+            "value" : "ログインが必要なノードの場合のみ入力します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RPC 자격 증명이 필요한 노드에만 필요합니다"
+            "value" : "로그인이 필요한 노드에만 사용합니다."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alleen nodig voor nodes die RPC-inloggegevens vereisen"
+            "value" : "Alleen voor nodes die een login vereisen."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Potrzebne tylko, gdy węzeł wymaga danych logowania RPC"
+            "value" : "Tylko dla węzłów, które wymagają logowania."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Necessário apenas para nós que exigem credenciais RPC"
+            "value" : "Somente para nós que exigem login."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Necesar doar pentru nodurile care cer date de autentificare RPC"
+            "value" : "Doar pentru nodurile care cer autentificare."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Нужно только для узлов, требующих учётные данные RPC"
+            "value" : "Только для узлов, которым нужен вход."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yalnızca RPC kimlik bilgisi gerektiren düğümler için gereklidir"
+            "value" : "Yalnızca oturum açma gerektiren düğümler için."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Потрібно лише для вузлів, які вимагають облікових даних RPC"
+            "value" : "Лише для вузлів, яким потрібен вхід."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅在节点需要 RPC 凭据时填写"
+            "value" : "仅适用于需要登录的节点。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅在節點需要 RPC 憑證時填寫"
+            "value" : "僅適用於需要登入的節點。"
           }
         }
       }
@@ -53258,96 +53167,96 @@
         }
       }
     },
-    "Picks fastest reliable node" : {
+    "Pick the day you created this wallet to skip older blocks." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wählt den schnellsten zuverlässigen Node"
+            "value" : "Wähle den Tag, an dem du diese Wallet erstellt hast, um ältere Blöcke zu überspringen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige el nodo confiable más rápido"
+            "value" : "Elige el día en que creaste esta cartera para omitir los bloques anteriores."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choisit le nœud fiable le plus rapide"
+            "value" : "Choisissez le jour de création de ce portefeuille pour ignorer les blocs plus anciens."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sceglie il nodo affidabile più veloce"
+            "value" : "Scegli il giorno in cui hai creato questo portafoglio per saltare i blocchi precedenti."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最速で信頼性の高いノードを選択します"
+            "value" : "このウォレットを作成した日を選ぶと、それより古いブロックをスキップできます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "가장 빠르고 안정적인 노드를 선택합니다"
+            "value" : "이 지갑을 만든 날을 선택하면 이전 블록을 건너뜁니다."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kiest de snelste betrouwbare node"
+            "value" : "Kies de dag waarop je deze portemonnee hebt aangemaakt om oudere blokken over te slaan."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wybiera najszybszy niezawodny węzeł"
+            "value" : "Wybierz dzień utworzenia tego portfela, aby pominąć starsze bloki."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Escolhe o nó confiável mais rápido"
+            "value" : "Escolha o dia em que você criou esta carteira para pular os blocos anteriores."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alege cel mai rapid nod fiabil"
+            "value" : "Alege ziua în care ai creat acest portofel pentru a sări peste blocurile mai vechi."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выбирает самый быстрый надёжный узел"
+            "value" : "Выберите день создания этого кошелька, чтобы пропустить более старые блоки."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "En hızlı güvenilir düğümü seçer"
+            "value" : "Daha eski blokları atlamak için bu cüzdanı oluşturduğunuz günü seçin."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вибирає найшвидший надійний вузол"
+            "value" : "Виберіть день створення цього гаманця, щоб пропустити старіші блоки."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选择最快且可靠的节点"
+            "value" : "选择你创建此钱包的日期，即可跳过更早的区块。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選擇最快且可靠的節點"
+            "value" : "選擇你建立此錢包的日期，即可略過更早的區塊。"
           }
         }
       }
@@ -55572,6 +55481,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法取得價格"
+          }
+        }
+      }
+    },
+    "Prices from CoinMarketCap, updated every 5 minutes." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preise von CoinMarketCap, alle 5 Minuten aktualisiert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precios de CoinMarketCap, actualizados cada 5 minutos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prix fournis par CoinMarketCap, mis à jour toutes les 5 minutes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prezzi da CoinMarketCap, aggiornati ogni 5 minuti."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "価格はCoinMarketCapから取得し、5分ごとに更新されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "가격은 CoinMarketCap에서 가져오며 5분마다 업데이트됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prijzen van CoinMarketCap, elke 5 minuten bijgewerkt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceny z CoinMarketCap, aktualizowane co 5 minut."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preços do CoinMarketCap, atualizados a cada 5 minutos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prețuri de la CoinMarketCap, actualizate la fiecare 5 minute."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цены от CoinMarketCap, обновляются каждые 5 минут."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fiyatlar CoinMarketCap'ten alınır ve 5 dakikada bir güncellenir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ціни від CoinMarketCap, оновлюються кожні 5 хвилин."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "价格来自 CoinMarketCap，每 5 分钟更新一次。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "價格來自 CoinMarketCap，每 5 分鐘更新一次。"
           }
         }
       }
@@ -60468,100 +60471,6 @@
         }
       }
     },
-    "Require Face ID, Touch ID, or your device passcode before each transaction is broadcast. Hardware wallets always confirm on the device itself." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vor jeder gesendeten Transaktion Face ID, Touch ID oder den Gerätecode verlangen. Hardware-Wallets bestätigen immer auf dem Gerät selbst."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Solicita Face ID, Touch ID o el código del dispositivo antes de transmitir cada transacción. Las carteras de hardware siempre confirman en el propio dispositivo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exiger Face ID, Touch ID ou le code de l’appareil avant la diffusion de chaque transaction. Un portefeuille matériel confirme toujours sur l’appareil lui-même."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Richiedi Face ID, Touch ID o il codice del dispositivo prima della trasmissione di ogni transazione. I portafogli hardware confermano sempre sul dispositivo stesso."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "トランザクションをブロードキャストする前に、毎回Face ID、Touch ID、またはデバイスのパスコードを要求します。ハードウェアウォレットでは常にデバイス本体で確認します。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "거래를 전송할 때마다 먼저 Face ID, Touch ID 또는 기기 암호를 요구합니다. 하드웨어 지갑은 항상 기기 자체에서 확인합니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vereis Face ID, Touch ID of je toegangscode voordat een transactie wordt uitgezonden. Hardwareportemonnees bevestigen altijd op het apparaat zelf."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wymagaj Face ID, Touch ID lub kodu urządzenia przed wysłaniem każdej transakcji do sieci. Portfel sprzętowy zawsze wymaga potwierdzenia na samym urządzeniu."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exige Face ID, Touch ID ou o código do dispositivo antes de transmitir cada transação. Com uma carteira de hardware, a confirmação é sempre feita no próprio dispositivo."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cere Face ID, Touch ID sau codul de acces al dispozitivului înainte de transmiterea fiecărei tranzacții. Portofelele hardware confirmă întotdeauna direct pe dispozitiv."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Запрашивать Face ID, Touch ID или код-пароль устройства перед отправкой каждой транзакции в сеть. Аппаратные кошельки всегда запрашивают подтверждение на самом устройстве."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Her işlem yayınlanmadan önce Face ID, Touch ID veya aygıt parolanız istensin. Donanım cüzdanları her zaman aygıtın kendisinde onay ister."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Вимагати Face ID, Touch ID або код-пароль пристрою перед передаванням кожної транзакції в мережу. Апаратні гаманці завжди підтверджують транзакції на самому пристрої."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每笔交易广播前，都需要通过面容 ID、触控 ID 或设备密码验证。硬件钱包始终在设备本身上确认。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每筆交易廣播前，都需要透過 Face ID、Touch ID 或裝置密碼驗證。硬體錢包一律在裝置本身上確認。"
-          }
-        }
-      }
-    },
     "Requires Orbot or a local Tor daemon" : {
       "localizations" : {
         "de" : {
@@ -62726,100 +62635,6 @@
         }
       }
     },
-    "Route traffic through SOCKS5 proxy" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Datenverkehr über SOCKS5-Proxy leiten"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enrutar el tráfico por el proxy SOCKS5"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Faire passer le trafic par un proxy SOCKS5"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Instrada il traffico tramite proxy SOCKS5"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SOCKS5プロキシ経由で通信します"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SOCKS5 프록시를 통해 트래픽 라우팅"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Leid verkeer via SOCKS5-proxy"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kieruj ruch przez proxy SOCKS5"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rotear o tráfego pelo proxy SOCKS5"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Direcționează traficul prin proxy SOCKS5"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Направлять трафик через прокси SOCKS5"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Trafiği SOCKS5 proxy üzerinden yönlendir"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Спрямовувати трафік через проксі SOCKS5"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通过 SOCKS5 代理路由流量"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "透過 SOCKS5 代理伺服器傳送流量"
-          }
-        }
-      }
-    },
     "Russian Ruble" : {
       "comment" : "Currency name",
       "localizations" : {
@@ -63762,6 +63577,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在掃描 %lld%%⋯"
+          }
+        }
+      }
+    },
+    "Scanning restarts at block %@. Earlier transactions won't be found." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Scan beginnt erneut bei Block %@. Frühere Transaktionen werden nicht gefunden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El escaneo se reinicia en el bloque %@. No se encontrarán las transacciones anteriores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’analyse reprend au bloc %@. Les transactions antérieures ne seront pas trouvées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La scansione riparte dal blocco %@. Le transazioni precedenti non verranno trovate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブロック%@からスキャンをやり直します。それより前のトランザクションは検出されません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "블록 %@부터 스캔을 다시 시작합니다. 그 이전의 거래는 찾을 수 없습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het scannen begint opnieuw bij blok %@. Eerdere transacties worden niet gevonden."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skanowanie rozpocznie się od bloku %@. Wcześniejsze transakcje nie zostaną znalezione."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A varredura recomeça no bloco %@. Transações anteriores não serão encontradas."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scanarea repornește de la blocul %@. Tranzacțiile anterioare nu vor fi găsite."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сканирование начнётся заново с блока %@. Более ранние транзакции не будут найдены."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tarama %@ numaralı bloktan yeniden başlar. Daha önceki işlemler bulunmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сканування почнеться знову з блоку %@. Раніші транзакції не буде знайдено."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将从区块 %@ 重新开始扫描。更早的交易将无法找到。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將從區塊 %@ 重新開始掃描。更早的交易將無法找到。"
           }
         }
       }
@@ -67447,194 +67356,6 @@
         }
       }
     },
-    "Set this to when you created your wallet to skip scanning older blocks. Useful if sync is taking too long." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Setze dies auf das Erstelldatum deiner Wallet, um ältere Blöcke zu überspringen. Hilfreich, wenn der Sync zu lange dauert."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Indica cuándo creaste tu cartera para omitir los bloques anteriores. Útil si la sincronización tarda demasiado."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Indiquez la date de création de votre portefeuille pour ne pas analyser les blocs plus anciens. Utile si la synchronisation prend trop de temps."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Imposta la data di creazione del portafoglio per saltare la scansione dei blocchi precedenti. Utile se la sincronizzazione richiede troppo tempo."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ウォレットを作成した日を設定すると、それより古いブロックのスキャンを省略できます。同期に時間がかかりすぎる場合に便利です。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "지갑을 만든 날짜로 설정하면 이전 블록 스캔을 건너뜁니다. 동기화가 너무 오래 걸릴 때 유용합니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stel dit in op het moment dat je je portemonnee aanmaakte, zodat oudere blokken niet worden gescand. Handig als synchroniseren te lang duurt."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ustaw datę utworzenia portfela, aby pominąć skanowanie starszych bloków. Przydatne, gdy synchronizacja trwa zbyt długo."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Defina a data em que você criou sua carteira para pular a varredura de blocos mais antigos. Útil se a sincronização estiver demorando muito."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Setează data la care ai creat portofelul pentru a omite scanarea blocurilor mai vechi. Util dacă sincronizarea durează prea mult."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Укажите дату создания кошелька, чтобы пропустить сканирование более старых блоков. Полезно, если синхронизация идёт слишком долго."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eski blokları taramayı atlamak için bunu cüzdanınızı oluşturduğunuz tarihe ayarlayın. Eşzamanlama çok uzun sürüyorsa işe yarar."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Укажіть дату створення гаманця, щоб не сканувати старіші блоки. Корисно, якщо синхронізація триває надто довго."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将此项设为你创建钱包的时间，即可跳过扫描更早的区块。同步耗时过长时很有用。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "將此項設為你建立錢包的時間，即可略過掃描較舊的區塊。同步耗時過長時很有用。"
-          }
-        }
-      }
-    },
-    "Set to when you created your wallet to skip older blocks. Monero produces ~1 block every 2 minutes." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Setze es auf das Erstelldatum deiner Wallet, um ältere Blöcke zu überspringen. Monero erzeugt etwa alle 2 Minuten einen Block."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Indica cuándo creaste tu cartera para omitir los bloques anteriores. Monero produce ~1 bloque cada 2 minutos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Indiquez la date de création de votre portefeuille pour ignorer les blocs plus anciens. Monero produit ~1 bloc toutes les 2 minutes."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Imposta la data di creazione del portafoglio per saltare i blocchi precedenti. Monero produce ~1 blocco ogni 2 minuti."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ウォレットを作成した時点に設定すると、それより古いブロックを省略できます。Moneroでは約2分ごとに1ブロックが生成されます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "지갑을 만든 시점으로 설정하면 이전 블록을 건너뜁니다. Monero는 약 2분마다 블록을 1개 생성합니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stel in op het moment dat je je portemonnee aanmaakte om oudere blokken over te slaan. Monero produceert ~1 blok per 2 minuten."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ustaw datę utworzenia portfela, aby pominąć starsze bloki. Monero tworzy ok. 1 blok co 2 minuty."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Defina a data em que você criou sua carteira para pular blocos mais antigos. O Monero produz ~1 bloco a cada 2 minutos."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Setează data la care ai creat portofelul pentru a omite blocurile mai vechi. Monero produce ~1 bloc la fiecare 2 minute."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Укажите дату создания кошелька, чтобы пропустить старые блоки. Monero создаёт ~1 блок каждые 2 минуты."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eski blokları atlamak için cüzdanınızı oluşturduğunuz tarihe ayarlayın. Monero yaklaşık her 2 dakikada 1 blok üretir."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Укажіть дату створення гаманця, щоб пропустити старіші блоки. Monero створює ~1 блок кожні 2 хвилини."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设为你创建钱包的时间，即可跳过更早的区块。Monero 大约每 2 分钟产生 1 个区块。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設為你建立錢包的時間，即可略過較舊的區塊。Monero 大約每 2 分鐘產生 1 個區塊。"
-          }
-        }
-      }
-    },
     "Setting an accurate date speeds up scanning. Leave off to scan from genesis (slower)." : {
       "localizations" : {
         "de" : {
@@ -68481,100 +68202,6 @@
         }
       }
     },
-    "Share these to set up a view-only wallet — it can watch incoming transactions but cannot spend." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Teile diese Daten, um eine View-Only-Wallet einzurichten. Sie sieht eingehende Transaktionen, kann aber nichts ausgeben."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compártelas para configurar una cartera de solo visualización — puede ver las transacciones entrantes, pero no gastar."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Partagez-les pour configurer un portefeuille d’audit — il peut suivre les transactions entrantes, mais pas dépenser."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Condividi questi dati per configurare un portafoglio solo visualizzazione — può monitorare le transazioni in entrata ma non può spendere."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "これらを共有すると閲覧専用ウォレットを設定できます。閲覧専用ウォレットでは受け取ったトランザクションを確認できますが、送金はできません。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 정보를 공유하면 보기 전용 지갑을 설정할 수 있습니다 — 들어오는 거래는 볼 수 있지만 지출은 할 수 없습니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deel deze gegevens om een alleen-lezen portemonnee in te stellen — die kan inkomende transacties volgen, maar niets uitgeven."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Udostępnij te dane, aby skonfigurować portfel tylko do podglądu – może on obserwować przychodzące transakcje, ale nie może wydawać środków."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compartilhe estes dados para configurar uma carteira somente leitura — ela pode acompanhar as transações recebidas, mas não pode gastar."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Partajează aceste date pentru a configura un portofel de citire — poate urmări tranzacțiile primite, dar nu poate cheltui."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Поделитесь ими, чтобы настроить кошелёк только для просмотра — он видит входящие транзакции, но не может тратить средства."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Yalnızca görüntüleme cüzdanı kurmak için bunları paylaşın — bu cüzdan gelen işlemleri izleyebilir ancak harcama yapamaz."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Поширте ці дані, щоб налаштувати гаманець лише для перегляду — він бачить вхідні транзакції, але не може витрачати кошти."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "共享这些信息即可设置只读钱包。只读钱包可以查看收到的交易，但无法花费资金。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "分享這些資訊即可設定唯讀錢包。唯讀錢包可以查看收到的交易，但無法花費資金。"
-          }
-        }
-      }
-    },
     "Share view-only wallet keys" : {
       "localizations" : {
         "de" : {
@@ -68665,6 +68292,194 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享唯讀錢包金鑰"
+          }
+        }
+      }
+    },
+    "Show %@ First" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ zuerst anzeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar %@ primero"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher %@ en premier"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra prima %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@を先に表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 먼저 표시"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ eerst tonen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokazuj najpierw %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar %@ Primeiro"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afișează mai întâi %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сначала показывать %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Önce %@ Göster"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спершу показувати %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "优先显示 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "優先顯示 %@"
+          }
+        }
+      }
+    },
+    "Show Balance & Transactions" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guthaben & Transaktionen zeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar saldo y transacciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher le solde et les transactions"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra saldo e transazioni"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "残高とトランザクションを表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "잔액 및 거래 표시"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saldo en transacties tonen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokazuj saldo i transakcje"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar Saldo e Transações"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afișează soldul și tranzacțiile"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показывать баланс и транзакции"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bakiye ve İşlemleri Göster"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показувати баланс і транзакції"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示余额和交易"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示餘額與交易"
           }
         }
       }
@@ -73946,6 +73761,100 @@
         }
       }
     },
+    "The Price widget works without this." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Preis-Widget funktioniert auch ohne diese Einstellung."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El widget de precio funciona sin esta opción."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le widget de prix fonctionne sans ce réglage."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il widget Prezzo funziona anche senza questa impostazione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "価格ウィジェットはこの設定がなくても使用できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "가격 위젯은 이 설정 없이도 작동합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De prijswidget werkt ook zonder deze instelling."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widżet ceny działa bez tego ustawienia."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O widget de preço funciona sem este ajuste."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widgetul Preț funcționează și fără această setare."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виджет «Цена» работает и без этого параметра."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fiyat widget'ı bu ayar olmadan da çalışır."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Віджет «Ціна» працює без цього параметра."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“价格”小组件无需此设置即可使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「價格」小工具不需要此設定也能使用。"
+          }
+        }
+      }
+    },
     "The amount in this link is not a valid XMR amount." : {
       "localizations" : {
         "de" : {
@@ -74036,6 +73945,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此連結中的金額不是有效的 XMR 金額。"
+          }
+        }
+      }
+    },
+    "The clipboard clears in %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Zwischenablage wird in %@ geleert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El portapapeles se borrará en %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le presse-papiers sera vidé dans %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli appunti verranno svuotati tra %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クリップボードは%@後に消去されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "클립보드는 %@ 후에 지워집니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het klembord wordt over %@ gewist."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schowek zostanie wyczyszczony za %@."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A área de transferência será limpa em %@."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clipboardul se golește în %@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Буфер обмена очистится через %@."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pano %@ içinde temizlenir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Буфер обміну буде очищено через %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剪贴板将在 %@后清除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剪貼板將在 %@後清除。"
           }
         }
       }
@@ -74131,100 +74134,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "價格來源沒有 %@ 報價。"
-          }
-        }
-      }
-    },
-    "The private view key reveals every incoming transaction. Share it only with people you trust to watch your balance." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der private View-Key zeigt jede eingehende Transaktion. Teile ihn nur mit Personen, denen du den Blick auf dein Guthaben anvertraust."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La clave de vista privada revela todas las transacciones entrantes. Compártela solo con personas en quienes confíes para ver tu saldo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La clé d’audit privée révèle toutes les transactions entrantes. Ne la partagez qu’avec des personnes à qui vous confiez le suivi de votre solde."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La chiave di visualizzazione privata rivela ogni transazione in entrata. Condividila solo con persone fidate a cui vuoi mostrare il tuo saldo."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "秘密ビューキーがあれば、受け取ったすべてのトランザクションを確認できます。残高の閲覧を任せられる信頼できる相手とだけ共有してください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "비공개 보기 키는 들어오는 모든 거래를 드러냅니다. 잔액을 보여 줘도 될 만큼 신뢰하는 사람과만 공유하세요."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "De geheime alleen-lezen sleutel toont elke inkomende transactie. Deel hem alleen met mensen die je vertrouwt om je saldo te volgen."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prywatny klucz podglądu ujawnia każdą przychodzącą transakcję. Udostępniaj go tylko osobom, którym ufasz, aby mogły obserwować saldo."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A chave de visualização privada revela todas as transações recebidas. Compartilhe-a apenas com pessoas em quem você confia para acompanhar seu saldo."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cheia secretă de citire dezvăluie fiecare tranzacție primită. Partajeaz-o doar cu persoane în care ai încredere să-ți urmărească soldul."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Приватный ключ просмотра раскрывает все входящие транзакции. Передавайте его только тем, кому доверяете наблюдать за вашим балансом."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Özel görüntüleme anahtarı gelen tüm işlemleri açığa çıkarır. Bu anahtarı yalnızca bakiyenizi izlemesine güvendiğiniz kişilerle paylaşın."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Приватний ключ перегляду розкриває всі вхідні транзакції. Поширюйте його лише серед людей, яким довіряєте стежити за вашим балансом."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私有查看密钥会暴露每一笔收到的交易。请只与你信任的人共享，让其查看你的余额。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私密檢視金鑰會洩露每一筆收到的交易。請只分享給你信任的人，讓對方查看你的餘額。"
           }
         }
       }
@@ -74887,100 +74796,6 @@
         }
       }
     },
-    "This location will be removed from your trusted zones." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieser Ort wird aus deinen vertrauenswürdigen Zonen entfernt."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta ubicación se eliminará de tus zonas de confianza."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ce lieu sera retiré de vos zones de confiance."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Questo luogo verrà rimosso dalle zone attendibili."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この場所は信頼ゾーンから削除されます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 위치가 신뢰 구역에서 제거됩니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deze locatie wordt verwijderd uit je vertrouwde zones."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ta lokalizacja zostanie usunięta z zaufanych stref."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Este local será removido das suas zonas confiáveis."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Această locație va fi eliminată din zonele de încredere."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Это место будет удалено из доверенных зон."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu konum güvenilir bölgelerinizden kaldırılacak."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Це місце буде видалено з довірених зон."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此位置将从你的可信区域中移除。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此位置將從你的受信任區域中移除。"
-          }
-        }
-      }
-    },
     "This may take a moment" : {
       "localizations" : {
         "de" : {
@@ -75165,100 +74980,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這可以避免錢包在公共 Wi-Fi 等不受信任的網路或陌生位置上活動，從而保護你。"
-          }
-        }
-      }
-    },
-    "This removes every wallet from this device only. Your wallets still exist on the blockchain and can be recovered with your seed phrases." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das entfernt alle Wallets nur von diesem Gerät. Deine Wallets existieren weiter auf der Blockchain und lassen sich mit deinen Seed-Phrasen wiederherstellen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esto elimina todas las carteras solo de este dispositivo. Tus carteras siguen existiendo en la cadena de bloques y puedes recuperarlas con tus frases semilla."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cette action supprime tous les portefeuilles de cet appareil uniquement. Vos portefeuilles existent toujours sur la blockchain et peuvent être restaurés avec leur phrase de récupération."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rimuove tutti i portafogli solo da questo dispositivo. I portafogli continuano a esistere sulla blockchain e puoi recuperarli con le frasi seed."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このデバイスからのみ、すべてのウォレットを削除します。ウォレットはブロックチェーン上に存在し続けるため、シードフレーズで復元できます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 기기에서만 모든 지갑을 제거합니다. 지갑은 블록체인에 그대로 남아 있으며 시드 문구로 복구할 수 있습니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dit verwijdert alle portemonnees alleen van dit apparaat. Je portemonnees bestaan nog op de blockchain en zijn te herstellen met je seedzinnen."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usuwa to wszystkie portfele tylko z tego urządzenia. Portfele nadal istnieją w blockchainie i można je odzyskać za pomocą fraz seed."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Isso remove todas as carteiras apenas deste dispositivo. Suas carteiras continuam existindo na blockchain e podem ser recuperadas com suas frases-semente."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Această acțiune elimină toate portofelele doar de pe acest dispozitiv. Portofelele există în continuare pe blockchain și pot fi recuperate cu frazele seed."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Все кошельки будут удалены только с этого устройства. Они по-прежнему существуют в блокчейне и могут быть восстановлены по мнемоническим фразам."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu işlem tüm cüzdanları yalnızca bu aygıttan kaldırır. Cüzdanlarınız blok zincirinde var olmaya devam eder ve kurtarma ifadelerinizle geri yüklenebilir."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Усі гаманці буде видалено лише з цього пристрою. Гаманці й надалі існують у блокчейні, і їх можна відновити за допомогою мнемонічних фраз."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这只会从此设备移除所有钱包。你的钱包仍然存在于区块链上，可以用各自的助记词恢复。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這只會從此裝置移除所有錢包。你的錢包仍然存在於區塊鏈上，可以用各自的助記詞回復。"
           }
         }
       }
@@ -75734,6 +75455,100 @@
         }
       }
     },
+    "This wallet scans again from its restore height. Transaction keys for its past sends are deleted." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Wallet wird ab der Wiederherstellungshöhe neu gescannt. Transaktionsschlüssel bisher gesendeter Zahlungen werden gelöscht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta cartera se volverá a escanear desde su altura de restauración. Se borrarán las claves de transacción de los envíos anteriores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce portefeuille sera analysé à nouveau depuis sa hauteur de restauration. Les clés de transaction des envois passés seront supprimées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo portafoglio verrà scansionato di nuovo dalla sua altezza di ripristino. Le chiavi delle transazioni inviate finora verranno eliminate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このウォレットは復元ブロック高から再スキャンされます。過去の送金のトランザクションキーは削除されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 지갑을 복원 높이부터 다시 스캔합니다. 지난 송금의 거래 키는 삭제됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze portemonnee wordt opnieuw gescand vanaf de herstelhoogte. Transactiesleutels van eerdere verzendingen worden verwijderd."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ten portfel zostanie przeskanowany ponownie od wysokości przywracania. Klucze transakcji wcześniejszych wysyłek zostaną usunięte."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta carteira fará uma nova varredura a partir da altura de restauração. As chaves das transações enviadas serão apagadas."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acest portofel va fi scanat din nou de la înălțimea de restaurare. Cheile tranzacțiilor trimise anterior vor fi șterse."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот кошелёк будет заново просканирован с высоты восстановления. Ключи транзакций прошлых отправок будут удалены."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cüzdan geri yükleme yüksekliğinden yeniden taranır. Geçmiş gönderimlerin işlem anahtarları silinir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей гаманець буде знову проскановано з висоти відновлення. Ключі транзакцій минулих надсилань буде видалено."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此钱包将从恢复高度重新扫描。过去发送的交易密钥将被删除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此錢包將從回復高度重新掃描。過去傳送的交易金鑰將被刪除。"
+          }
+        }
+      }
+    },
     "This wallet was restored from a private view key, so it can't sign transactions on this device. To spend, open the wallet that owns the spend key." : {
       "localizations" : {
         "de" : {
@@ -75828,100 +75643,6 @@
         }
       }
     },
-    "This will clear all sync progress and re-sync from the beginning. Your wallet and keys are not affected." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dadurch wird der gesamte Sync-Fortschritt gelöscht und von vorn synchronisiert. Deine Wallet und Schlüssel bleiben unberührt."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esto borrará todo el progreso de sincronización y volverá a sincronizar desde el principio. Tu cartera y tus claves no se verán afectadas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toute la progression de la synchronisation sera effacée et la synchronisation reprendra depuis le début. Votre portefeuille et vos clés ne sont pas affectés."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verrà cancellato tutto l’avanzamento della sincronizzazione e il portafoglio si risincronizzerà dall’inizio. Il portafoglio e le chiavi non vengono modificati."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同期の進行状況をすべて消去し、最初から同期し直します。ウォレットとキーには影響しません。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "모든 동기화 진행 상황이 지워지고 처음부터 다시 동기화됩니다. 지갑과 키에는 영향이 없습니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dit wist alle synchronisatievoortgang en synchroniseert opnieuw vanaf het begin. Je portemonnee en sleutels blijven ongewijzigd."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spowoduje to wyczyszczenie postępu synchronizacji i ponowną synchronizację od początku. Portfel i klucze pozostaną nienaruszone."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Isso apagará todo o progresso de sincronização e sincronizará de novo desde o início. Sua carteira e suas chaves não serão afetadas."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se va șterge tot progresul sincronizării și se va sincroniza din nou de la început. Portofelul și cheile nu sunt afectate."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Весь прогресс синхронизации будет сброшен, и синхронизация начнётся с самого начала. Кошелёк и ключи это не затронет."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu işlem tüm eşzamanlama ilerlemesini siler ve baştan yeniden eşzamanlar. Cüzdanınız ve anahtarlarınız etkilenmez."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Весь прогрес синхронізації буде скинуто, і синхронізація почнеться з початку. Гаманець і ключі не зміняться."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这将清除所有同步进度，并从头重新同步。你的钱包和密钥不受影响。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這將清除所有同步進度，並從頭重新同步。你的錢包和金鑰不受影響。"
-          }
-        }
-      }
-    },
     "This will delete all wallet data from this device. You can restore your wallet using your seed phrase.\n\nThis action cannot be undone." : {
       "localizations" : {
         "de" : {
@@ -76012,100 +75733,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這將刪除此裝置上的所有錢包資料。你可以使用助記詞回復錢包。\n\n此動作無法復原。"
-          }
-        }
-      }
-    },
-    "This will restart scanning from block %@. Any transactions before this won't be found." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Scan beginnt dann erneut ab Block %@. Transaktionen davor werden nicht gefunden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esto reiniciará el escaneo desde el bloque %@. No se encontrarán las transacciones anteriores."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’analyse reprendra depuis le bloc %@. Les transactions antérieures ne seront pas trouvées."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La scansione ripartirà dal blocco %@. Le transazioni precedenti non verranno trovate."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ブロック%@からスキャンをやり直します。それより前のトランザクションは検出されません。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "블록 %@부터 스캔을 다시 시작합니다. 그 이전의 거래는 찾을 수 없습니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Het scannen begint opnieuw vanaf blok %@. Transacties van daarvoor worden niet gevonden."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Skanowanie rozpocznie się od bloku %@. Wcześniejsze transakcje nie zostaną znalezione."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Isso reiniciará a varredura a partir do bloco %@. Transações anteriores a ele não serão encontradas."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scanarea va reporni de la blocul %@. Tranzacțiile de dinainte nu vor fi găsite."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сканирование начнётся заново с блока %@. Более ранние транзакции не будут найдены."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tarama %@ numaralı bloktan yeniden başlar. Bundan önceki işlemler bulunmaz."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сканування почнеться знову з блоку %@. Транзакції до цього блоку не буде знайдено."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这将从区块 %@ 重新开始扫描。此前的任何交易都将无法找到。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這將從區塊 %@ 重新開始掃描。在此之前的交易都將無法找到。"
           }
         }
       }
@@ -85828,100 +85455,6 @@
         }
       }
     },
-    "Warning: Anyone with this phrase can access your funds! Clipboard clears in 5 min." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Warnung: Wer diese Phrase hat, hat Zugriff auf dein Guthaben! Die Zwischenablage wird nach 5 Min. geleert."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Advertencia: ¡cualquiera con esta frase puede acceder a tus fondos! El portapapeles se borra en 5 min."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attention : toute personne disposant de cette phrase peut accéder à vos fonds ! Le presse-papiers sera vidé dans 5 min."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attenzione: chiunque abbia questa frase può accedere ai tuoi fondi! Gli appunti si svuotano tra 5 min."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "警告：このフレーズを知っている人は誰でも資金にアクセスできます。クリップボードは5分後に消去されます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "경고: 이 문구를 가진 사람은 누구나 자금에 접근할 수 있습니다! 클립보드는 5분 후에 지워집니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waarschuwing: iedereen met deze zin heeft toegang tot je tegoed! Het klembord wordt over 5 min gewist."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uwaga: każdy, kto ma tę frazę, ma dostęp do środków! Schowek zostanie wyczyszczony za 5 min."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aviso: qualquer pessoa com esta frase pode acessar seus fundos! A área de transferência será limpa em 5 min."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Avertisment: oricine are această frază îți poate accesa fondurile! Clipboardul se golește în 5 min."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Внимание: любой, у кого есть эта фраза, получит доступ к вашим средствам! Буфер обмена очистится через 5 мин."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uyarı: Bu ifadeye sahip olan herkes fonlarınıza erişebilir! Pano 5 dk. içinde temizlenir."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Увага: будь-хто з цією фразою має доступ до ваших коштів! Буфер обміну буде очищено через 5 хв."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "警告：任何拥有此助记词的人都能动用你的资金！剪贴板将在 5 分钟后清除。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "警告：任何擁有此助記詞的人都能動用你的資金！剪貼板將在 5 分鐘後清除。"
-          }
-        }
-      }
-    },
     "Watch-only — balances and transactions, no sending." : {
       "localizations" : {
         "de" : {
@@ -86294,100 +85827,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你是什麼時候建立這個錢包的？"
-          }
-        }
-      }
-    },
-    "When enabled, your balance and recent transactions will appear in widgets. The Price widget works without this setting." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wenn aktiviert, erscheinen dein Guthaben und die letzten Transaktionen in Widgets. Das Preis-Widget funktioniert auch ohne diese Einstellung."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Si está activado, tu saldo y tus transacciones recientes aparecerán en los widgets. El widget de precio funciona sin esta opción."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Une fois l’option activée, votre solde et vos transactions récentes s’affichent dans les widgets. Le widget de prix fonctionne sans ce réglage."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se è attivo, il saldo e le transazioni recenti compaiono nei widget. Il widget Prezzo funziona anche senza questa impostazione."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "オンにすると、残高と最近のトランザクションがウィジェットに表示されます。価格ウィジェットはこの設定がなくても使用できます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "활성화하면 잔액과 최근 거래가 위젯에 표시됩니다. 가격 위젯은 이 설정 없이도 작동합니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Als dit aan staat, verschijnen je saldo en recente transacties in widgets. De prijswidget werkt ook zonder deze instelling."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Po włączeniu saldo i ostatnie transakcje będą widoczne w widżetach. Widżet ceny działa bez tego ustawienia."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quando ativado, seu saldo e suas transações recentes aparecem nos widgets. O widget de preço funciona sem este ajuste."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Când opțiunea este activată, soldul și tranzacțiile recente apar în widgeturi. Widgetul Preț funcționează și fără această setare."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Если параметр включён, баланс и последние транзакции будут показаны в виджетах. Виджет «Цена» работает и без этого параметра."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Açıldığında bakiyeniz ve son işlemleriniz widget'larda görünür. Fiyat widget'ı bu ayar olmadan da çalışır."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Якщо ввімкнено, баланс і нещодавні транзакції з’являтимуться у віджетах. Віджет «Ціна» працює без цього параметра."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用后，你的余额和最近的交易将显示在小组件中。“价格”小组件无需此设置即可使用。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "啟用後，你的餘額和最近的交易會顯示在小工具中。「價格」小工具不需要此設定也能使用。"
           }
         }
       }
@@ -87150,96 +86589,96 @@
         }
       }
     },
-    "Write this down and store it safely. Never share it with anyone." : {
+    "Write it down and never share it." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Schreibe sie auf und bewahre sie sicher auf. Teile sie niemals mit anderen."
+            "value" : "Schreibe sie auf und teile sie niemals."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anótala y guárdala en un lugar seguro. Nunca la compartas con nadie."
+            "value" : "Anótala y nunca la compartas."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notez-la et conservez-la en lieu sûr. Ne la communiquez jamais à personne."
+            "value" : "Notez-la et ne la communiquez jamais."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trascrivila e conservala al sicuro. Non condividerla mai con nessuno."
+            "value" : "Trascrivila e non condividerla mai."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "書き留めて安全に保管してください。絶対に誰とも共有しないでください。"
+            "value" : "書き留めて、誰とも共有しないでください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 내용을 적어서 안전하게 보관하세요. 누구와도 공유하지 마세요."
+            "value" : "적어 두고 절대 공유하지 마세요."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Schrijf dit op en bewaar het veilig. Deel het nooit met iemand."
+            "value" : "Schrijf het op en deel het nooit."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zapisz ją i przechowuj bezpiecznie. Nigdy nikomu jej nie udostępniaj."
+            "value" : "Zapisz ją i nigdy jej nie udostępniaj."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anote e guarde em local seguro. Nunca compartilhe com ninguém."
+            "value" : "Anote e nunca compartilhe."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Noteaz-o și păstreaz-o în siguranță. Nu o partaja niciodată cu nimeni."
+            "value" : "Noteaz-o și nu o partaja niciodată."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Запишите её и храните в надёжном месте. Никому её не передавайте."
+            "value" : "Запишите её и никому не передавайте."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bunu bir yere yazın ve güvenli bir yerde saklayın. Asla kimseyle paylaşmayın."
+            "value" : "Bir yere yazın ve asla paylaşmayın."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Запишіть фразу та зберігайте її в надійному місці. Нікому її не показуйте."
+            "value" : "Запишіть фразу й нікому її не показуйте."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请将其写下并妥善保管。切勿与任何人共享。"
+            "value" : "请将其写下，切勿与任何人共享。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "請將它寫下來並妥善保管。切勿與任何人分享。"
+            "value" : "請將它寫下來，切勿與任何人分享。"
           }
         }
       }
@@ -87717,190 +87156,96 @@
         }
       }
     },
-    "You'll be notified when XMR drops below this price" : {
+    "You can restore them only with their seed phrases or keys." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Du wirst benachrichtigt, wenn XMR unter diesen Preis fällt"
+            "value" : "Du kannst sie nur mit ihren Seed-Phrasen oder Schlüsseln wiederherstellen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recibirás un aviso cuando XMR baje de este precio"
+            "value" : "Solo podrás restaurarlas con sus frases semilla o claves."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vous recevrez une notification si le XMR passe sous ce prix"
+            "value" : "Vous ne pourrez les restaurer qu’avec leurs phrases de récupération ou leurs clés."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Riceverai una notifica quando XMR scende sotto questo prezzo"
+            "value" : "Potrai ripristinarli solo con le loro frasi seed o chiavi."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XMRがこの価格を下回ると通知されます"
+            "value" : "復元するには、各ウォレットのシードフレーズまたはキーが必要です。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XMR 가격이 이 가격 아래로 떨어지면 알림을 받습니다"
+            "value" : "시드 문구나 키가 있어야만 복원할 수 있습니다."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Je krijgt een melding als XMR onder deze prijs zakt"
+            "value" : "Je kunt ze alleen herstellen met hun seedzinnen of sleutels."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Otrzymasz powiadomienie, gdy XMR spadnie poniżej tej ceny"
+            "value" : "Przywrócisz je tylko za pomocą ich fraz seed lub kluczy."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Você será notificado quando o XMR ficar abaixo deste preço"
+            "value" : "Você só poderá restaurá-las com as frases-semente ou chaves delas."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vei fi notificat când XMR scade sub acest preț"
+            "value" : "Le poți restaura doar cu frazele seed sau cheile lor."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вы получите уведомление, когда цена XMR опустится ниже этого значения"
+            "value" : "Восстановить их можно только с помощью мнемонических фраз или ключей."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XMR bu fiyatın altına düştüğünde bildirim alırsınız"
+            "value" : "Bunları yalnızca kurtarma ifadeleri veya anahtarlarıyla geri yükleyebilirsiniz."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ви отримаєте сповіщення, коли ціна XMR опуститься нижче цього рівня"
+            "value" : "Відновити їх можна лише за допомогою мнемонічних фраз або ключів."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当 XMR 跌破此价格时，你会收到通知"
+            "value" : "只能用它们的助记词或密钥恢复。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "當 XMR 跌破此價格時，你會收到通知"
-          }
-        }
-      }
-    },
-    "You'll be notified when XMR goes above this price" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Du wirst benachrichtigt, wenn XMR über diesen Preis steigt"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recibirás un aviso cuando XMR supere este precio"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vous recevrez une notification si le XMR passe au-dessus de ce prix"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Riceverai una notifica quando XMR sale sopra questo prezzo"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XMRがこの価格を上回ると通知されます"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XMR 가격이 이 가격 위로 오르면 알림을 받습니다"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Je krijgt een melding als XMR boven deze prijs stijgt"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otrzymasz powiadomienie, gdy XMR wzrośnie powyżej tej ceny"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Você será notificado quando o XMR ultrapassar este preço"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vei fi notificat când XMR urcă peste acest preț"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Вы получите уведомление, когда цена XMR поднимется выше этого значения"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XMR bu fiyatın üstüne çıktığında bildirim alırsınız"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ви отримаєте сповіщення, коли ціна XMR підніметься вище цього рівня"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当 XMR 突破此价格时，你会收到通知"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "當 XMR 突破此價格時，你會收到通知"
+            "value" : "只能用它們的助記詞或金鑰回復。"
           }
         }
       }
@@ -88089,100 +87434,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的位置資料會保留在你的裝置上，僅用於檢查你是否位於受信任區域內，絕不會被儲存、記錄或傳輸到任何地方。"
-          }
-        }
-      }
-    },
-    "Your seed phrase has been copied. The clipboard will be automatically cleared in 5 minutes for security." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deine Seed-Phrase wurde kopiert. Die Zwischenablage wird aus Sicherheitsgründen nach 5 Minuten automatisch geleert."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se copió tu frase semilla. Por seguridad, el portapapeles se borrará automáticamente en 5 minutos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Votre phrase de récupération a été copiée. Par sécurité, le presse-papiers sera vidé automatiquement dans 5 minutes."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La frase seed è stata copiata. Per sicurezza, gli appunti verranno svuotati automaticamente tra 5 minuti."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "シードフレーズをコピーしました。セキュリティのため、クリップボードは5分後に自動的に消去されます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "시드 문구가 복사되었습니다. 보안을 위해 5분 후에 클립보드가 자동으로 지워집니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Je seedzin is gekopieerd. Het klembord wordt uit veiligheid na 5 minuten automatisch gewist."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fraza seed została skopiowana. Ze względów bezpieczeństwa schowek zostanie automatycznie wyczyszczony za 5 minut."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sua frase-semente foi copiada. Por segurança, a área de transferência será limpa automaticamente em 5 minutos."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fraza seed a fost copiată. Din motive de securitate, clipboardul va fi golit automat în 5 minute."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Мнемоническая фраза скопирована. В целях безопасности буфер обмена автоматически очистится через 5 минут."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kurtarma ifadeniz kopyalandı. Güvenlik için pano 5 dakika içinde otomatik olarak temizlenecek."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Мнемонічну фразу скопійовано. З міркувань безпеки буфер обміну буде автоматично очищено через 5 хвилин."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的助记词已拷贝。为了安全，剪贴板将在 5 分钟后自动清除。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的助記詞已拷貝。為了安全起見，剪貼板將在 5 分鐘後自動清除。"
           }
         }
       }
@@ -90190,6 +89441,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "唯讀"
+          }
+        }
+      }
+    },
+    "“%@” scans again from its restore height. Transaction keys for its past sends are deleted." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Wallet „%@“ wird ab der Wiederherstellungshöhe neu gescannt. Transaktionsschlüssel bisher gesendeter Zahlungen werden gelöscht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cartera “%@” se volverá a escanear desde su altura de restauración. Se borrarán las claves de transacción de los envíos anteriores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le portefeuille « %@ » sera analysé à nouveau depuis sa hauteur de restauration. Les clés de transaction des envois passés seront supprimées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il portafoglio “%@” verrà scansionato di nuovo dalla sua altezza di ripristino. Le chiavi delle transazioni inviate finora verranno eliminate."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」は復元ブロック高から再スキャンされます。過去の送金のトランザクションキーは削除されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‘%@’ 지갑을 복원 높이부터 다시 스캔합니다. 지난 송금의 거래 키는 삭제됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‘%@’ wordt opnieuw gescand vanaf de herstelhoogte. Transactiesleutels van eerdere verzendingen worden verwijderd."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portfel „%@” zostanie przeskanowany ponownie od wysokości przywracania. Klucze transakcji wcześniejszych wysyłek zostaną usunięte."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A carteira “%@” fará uma nova varredura a partir da altura de restauração. As chaves das transações enviadas serão apagadas."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portofelul „%@” va fi scanat din nou de la înălțimea de restaurare. Cheile tranzacțiilor trimise anterior vor fi șterse."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кошелёк «%@» будет заново просканирован с высоты восстановления. Ключи транзакций прошлых отправок будут удалены."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” cüzdanı geri yükleme yüksekliğinden yeniden taranır. Geçmiş gönderimlerin işlem anahtarları silinir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Гаманець «%@» буде знову проскановано з висоти відновлення. Ключі транзакцій минулих надсилань буде видалено."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”将从恢复高度重新扫描。过去发送的交易密钥将被删除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」將從回復高度重新掃描。過去傳送的交易金鑰將被刪除。"
           }
         }
       }

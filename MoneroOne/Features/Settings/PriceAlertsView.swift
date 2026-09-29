@@ -13,14 +13,9 @@ struct PriceAlertsView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "bell.slash")
                             .foregroundColor(.yellow)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Notifications Disabled")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text("Enable notifications to receive price alerts")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        Text("Notifications Disabled")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
                         Spacer()
                         // Compact capsule: an inline action inside a row.
                         Button {
@@ -48,7 +43,7 @@ struct PriceAlertsView: View {
                             .foregroundColor(.secondary)
                         Text("No Price Alerts")
                             .font(.headline)
-                        Text("Add your first alert to get notified when XMR crosses a price threshold")
+                        Text("Get notified when XMR crosses a price you set.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)

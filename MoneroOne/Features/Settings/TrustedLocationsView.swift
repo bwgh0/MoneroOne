@@ -69,7 +69,7 @@ struct TrustedLocationsView: View {
                         Text("No Trusted Locations")
                             .font(.headline)
 
-                        Text("Add your home, office, or other safe locations where your wallet syncs regularly.")
+                        Text("Add places you trust, like home or work.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)

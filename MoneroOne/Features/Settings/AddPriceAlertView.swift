@@ -53,12 +53,6 @@ struct AddPriceAlertView: View {
                     }
                 } header: {
                     Text("Target Price")
-                } footer: {
-                    if alertType == .above {
-                        Text("You'll be notified when XMR goes above this price")
-                    } else {
-                        Text("You'll be notified when XMR drops below this price")
-                    }
                 }
 
                 Section {

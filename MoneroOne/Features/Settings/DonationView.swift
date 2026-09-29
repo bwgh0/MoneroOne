@@ -27,12 +27,6 @@ struct DonationView: View {
 
                     Text("Support Development")
                         .font(.title2.weight(.semibold))
-
-                    Text("If you enjoy Monero One, consider donating to support continued development.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
                 }
                 .padding(.top, 16)
                 .qrFocusRecede(focus, toward: .top)

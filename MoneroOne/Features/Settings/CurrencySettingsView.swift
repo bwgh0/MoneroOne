@@ -35,7 +35,7 @@ struct CurrencySettingsView: View {
             } header: {
                 Text("Display Currency")
             } footer: {
-                Text("Fiat values are fetched from CoinMarketCap and update every 5 minutes.")
+                Text("Prices from CoinMarketCap, updated every 5 minutes.")
             }
 
             Section("Current Price") {

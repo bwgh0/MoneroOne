@@ -34,7 +34,7 @@ struct ExportViewKeyView: View {
                 if let snap = snapshot {
                     ViewKeyExportCard(
                         title: "Pair Another Device",
-                        subtitle: "Share these to set up a view-only wallet — it can watch incoming transactions but cannot spend.",
+                        subtitle: "Enter these on another device to get a view-only copy of this wallet.",
                         address: snap.address,
                         viewKey: snap.viewKey,
                         restoreHeight: snap.restoreHeight,
@@ -46,7 +46,7 @@ struct ExportViewKeyView: View {
                         .padding(.top, 60)
                 }
 
-                Text("The private view key reveals every incoming transaction. Share it only with people you trust to watch your balance.")
+                Text("Anyone with the view key can see every payment you receive.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

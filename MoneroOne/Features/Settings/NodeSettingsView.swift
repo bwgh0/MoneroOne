@@ -15,13 +15,7 @@ struct NodeSettingsView: View {
             // MARK: - Nodes Section
             Section {
                 Toggle(isOn: $nodeManager.autoSelectEnabled) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Auto Select")
-                            .font(.body)
-                        Text("Picks fastest reliable node")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    Text("Auto Select")
                 }
 
                 // Clearnet default nodes
@@ -58,13 +52,7 @@ struct NodeSettingsView: View {
             // MARK: - Tor Proxy Section
             Section {
                 Toggle(isOn: torToggleBinding) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Use Tor Proxy")
-                            .font(.body)
-                        Text("Route traffic through SOCKS5 proxy")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    Text("Use Tor Proxy")
                 }
 
                 if torEnabled {
@@ -112,7 +100,7 @@ struct NodeSettingsView: View {
             Button("Cancel", role: .cancel) {}
             Button("Turn On") { torEnabled = true }
         } message: {
-            Text("Monero One does not include Tor. Turn this on only if Orbot or another Tor proxy app is running on this iPhone. Without one, none of your nodes will connect.")
+            Text("Monero One has no built-in Tor. Without Orbot or another Tor app running, no node will connect.")
         }
         .sheet(isPresented: $showAddNode) {
             AddCustomNodeView { name, url, login, password in
@@ -499,7 +487,7 @@ struct AddCustomNodeView: View {
                         SecureField("Password", text: $password)
                     }
                 } footer: {
-                    Text("Only needed for nodes that require RPC credentials")
+                    Text("Only for nodes that need a login.")
                 }
             }
             .navigationTitle("Add Node")
@@ -570,7 +558,7 @@ struct EditCustomNodeView: View {
                         SecureField("Password", text: $password)
                     }
                 } footer: {
-                    Text("Only needed for nodes that require RPC credentials")
+                    Text("Only for nodes that need a login.")
                 }
             }
             .navigationTitle("Edit Node")
@@ -635,8 +623,6 @@ struct EditCustomProxyView: View {
                         .autocorrectionDisabled()
                 } header: {
                     Text("Proxy Details")
-                } footer: {
-                    Text("Enter the SOCKS5 proxy address as host:port")
                 }
             }
             .navigationTitle("Edit Proxy")
@@ -693,8 +679,6 @@ struct AddCustomProxyView: View {
                         .autocorrectionDisabled()
                 } header: {
                     Text("Proxy Details")
-                } footer: {
-                    Text("Enter the SOCKS5 proxy address as host:port")
                 }
             }
             .navigationTitle("Add Proxy")

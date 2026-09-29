@@ -273,8 +273,6 @@ struct AddTrustedLocationView: View {
                     }
                     dismiss()
                 }
-            } message: {
-                Text("This location will be removed from your trusted zones.")
             }
             .onAppear {
                 setupInitialState()

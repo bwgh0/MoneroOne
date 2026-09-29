@@ -9,12 +9,7 @@ struct WidgetSettingsView: View {
         List {
             Section {
                 Toggle(isOn: $widgetEnabled) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Balance & Transactions")
-                        Text("Allow widgets to display wallet info")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("Show Balance & Transactions")
                 }
                 .onChange(of: widgetEnabled) { enabled in
                     // Reload once the file is written.
@@ -31,7 +26,7 @@ struct WidgetSettingsView: View {
                     }
                 }
             } footer: {
-                Text("When enabled, your balance and recent transactions will appear in widgets. The Price widget works without this setting.")
+                Text("The Price widget works without this.")
             }
         }
         .navigationTitle("Widget")

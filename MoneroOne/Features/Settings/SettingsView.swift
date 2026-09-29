@@ -46,6 +46,15 @@ struct SettingsView: View {
         }
     }
 
+    /// Names the wallet: the reset clears only the active one, and with
+    /// its cache the transaction keys that no rescan brings back.
+    private var resetSyncMessage: Text {
+        if let name = walletManager.activeWallet?.name {
+            return Text("“\(name)” scans again from its restore height. Transaction keys for its past sends are deleted.")
+        }
+        return Text("This wallet scans again from its restore height. Transaction keys for its past sends are deleted.")
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -110,7 +119,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Privacy & Security")
                 } footer: {
-                    Text("These preferences apply to all wallets. After an address receives a payment, Receive shows a new unused address. Old addresses keep working.")
+                    Text("After a payment arrives, Receive shows a new address. Old ones keep working.")
                 }
 
                 // Display Section
@@ -145,6 +154,21 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.languageRow")
 
                     NavigationLink {
+                        WidgetSettingsView()
+                    } label: {
+                        SettingsRow(
+                            icon: "square.stack.3d.up.fill",
+                            title: "Home Screen Widget",
+                            color: .blue
+                        )
+                    }
+                } header: {
+                    Text("Display")
+                }
+
+                // Currency Section
+                Section {
+                    NavigationLink {
                         CurrencySettingsView(priceService: priceService)
                     } label: {
                         HStack {
@@ -165,7 +189,7 @@ struct SettingsView: View {
                     Toggle(isOn: $priceService.showFiatFirst) {
                         SettingsRow(
                             icon: "banknote",
-                            title: "Fiat Mode",
+                            title: "Show \(priceService.selectedCurrency.uppercased()) First",
                             color: .green
                         )
                     }
@@ -193,20 +217,8 @@ struct SettingsView: View {
                         .accessibilityLabel("Price Alerts, \(priceAlertService.alerts.filter { $0.isEnabled }.count) active")
                         .accessibilityHint("View and manage price alerts")
                     }
-
-                    NavigationLink {
-                        WidgetSettingsView()
-                    } label: {
-                        SettingsRow(
-                            icon: "square.stack.3d.up.fill",
-                            title: "Home Screen Widget",
-                            color: .blue
-                        )
-                    }
                 } header: {
-                    Text("Display")
-                } footer: {
-                    Text("Fiat Mode shows balances and transactions in \(priceService.selectedCurrency.uppercased()) first, with XMR below.")
+                    Text("Currency")
                 }
 
                 // Sync Section
@@ -359,7 +371,7 @@ struct SettingsView: View {
                     walletManager.resetSyncData()
                 }
             } message: {
-                Text("This will clear all sync progress and re-sync from the beginning. Your wallet and keys are not affected.")
+                resetSyncMessage
             }
             .alert("Remove All Wallets from Device?", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
@@ -367,7 +379,7 @@ struct SettingsView: View {
                     walletManager.deleteAllWallets()
                 }
             } message: {
-                Text("This removes every wallet from this device only. Your wallets still exist on the blockchain and can be recovered with your seed phrases.")
+                Text("You can restore them only with their seed phrases or keys.")
             }
         }
     }

@@ -90,24 +90,21 @@ struct ViewOnlyAvatarBadge: View {
     }
 }
 
-/// The same corner badge for a hardware wallet, in the colors of the balance
-/// card's hardware pill: a green bolt while the device link is up, a gray
-/// crossed-out bolt while it is idle. A hardware wallet can send (the device
-/// signs), so it gets this badge instead of the view-only eye.
+/// The same corner badge for a hardware wallet, with the shield the app uses
+/// for hardware wallets elsewhere. A hardware wallet can send (the device
+/// signs), so it gets this badge instead of the view-only eye. It marks the
+/// kind of wallet only: the balance card's Live pill shows the device link.
 struct HardwareAvatarBadge: View {
-    let isLive: Bool
-
     var body: some View {
-        Image(systemName: isLive ? "bolt.fill" : "bolt.slash.fill")
+        Image(systemName: "lock.shield.fill")
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.white)
-            .contentTransition(.symbolEffect(.replace))
             .frame(width: 18, height: 18)
-            .background(Circle().fill(isLive ? Color.green : Color.gray))
+            .background(Circle().fill(Color.brand))
             .overlay(
                 Circle().strokeBorder(Color(.systemBackground), lineWidth: 1.5)
             )
-            .animation(.easeInOut, value: isLive)
+            .accessibilityLabel("Hardware wallet")
     }
 }
 
@@ -320,9 +317,6 @@ struct WalletRow: View {
     let onMoveDown: (() -> Void)?
     /// True while this row is the one being dragged.
     let isLifted: Bool
-    /// True on the active hardware wallet while its device link is up: the
-    /// balance card's green Live pill, which the open list covers.
-    var isDeviceLive: Bool = false
 
     @State private var showDeleteZone = false
     /// True from the moment a horizontal swipe is recognised until just after
@@ -434,9 +428,7 @@ struct WalletRow: View {
         }
         var parts = [wallet.name, amount]
         if wallet.requiresHardwareSession {
-            // The badge's link state, in the words of the balance card pill.
-            parts.append(String(localized: "hardware wallet", comment: "VoiceOver: wallet kind after name and balance")
-                + (isDeviceLive ? String(localized: ", connected") : String(localized: ", not connected")))
+            parts.append(String(localized: "hardware wallet", comment: "VoiceOver: wallet kind after name and balance"))
         } else if wallet.isViewOnly {
             parts.append(String(localized: "view-only", comment: "VoiceOver: wallet kind after name and balance"))
         }
@@ -474,7 +466,7 @@ struct WalletRow: View {
                 .overlay(alignment: .bottomTrailing) {
                     // Hardware first: `isViewOnly` is true for it too.
                     if wallet.requiresHardwareSession {
-                        HardwareAvatarBadge(isLive: isDeviceLive).offset(x: 3, y: 3)
+                        HardwareAvatarBadge().offset(x: 3, y: 3)
                     } else if wallet.isViewOnly {
                         ViewOnlyAvatarBadge().offset(x: 3, y: 3)
                     }
@@ -729,10 +721,7 @@ struct WalletManagerRows: View {
             onDelete: isActive ? nil : { deleteWalletId = wallet.id },
             onMoveUp: wallets.first?.id == wallet.id ? nil : { nudge(wallet.id, by: -1) },
             onMoveDown: wallets.last?.id == wallet.id ? nil : { nudge(wallet.id, by: 1) },
-            isLifted: dragId == wallet.id,
-            // One Trezor link, owned by the active wallet: the same rule
-            // as the balance card pill, so the two never disagree.
-            isDeviceLive: isActive && walletManager.isHardwareDeviceWarm
+            isLifted: dragId == wallet.id
         )
     }
 

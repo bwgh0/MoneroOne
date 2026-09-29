@@ -409,8 +409,13 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     let value: KeyPath<Point, Double>
     /// nil hides both axes (dashboard card).
     let axes: Axes?
-    /// Dots drawn on top of the line.
+    /// Badges drawn above the line and the area, each one whole.
     var markers: [ChartMarker] = []
+    /// Keeps the line far enough inside the plot's edges that a marker on
+    /// the first or last sample, or at the top or bottom, is whole. Set it
+    /// in every range of a chart that can show markers, so the plot does
+    /// not shift when a range has none.
+    var insetsForMarkers = false
     let speech: ChartSpeech
     /// Persistent mode: a tap or drag selects until the parent sets the
     /// cursor back to nil (Now). nil keeps transient price inspection.
@@ -420,8 +425,8 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.points == rhs.points && lhs.domain == rhs.domain && lhs.axes == rhs.axes
             && lhs.timestamp == rhs.timestamp && lhs.value == rhs.value
-            && lhs.markers == rhs.markers && lhs.speech == rhs.speech
-            && lhs.cursor === rhs.cursor
+            && lhs.markers == rhs.markers && lhs.insetsForMarkers == rhs.insetsForMarkers
+            && lhs.speech == rhs.speech && lhs.cursor === rhs.cursor
     }
 
     var body: some View {
@@ -458,9 +463,24 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
         }
     }
 
+    /// A chart that fades after a cutoff or shows markers is one
+    /// compositing group: the overlay fades the marks and parts markers
+    /// from the line by erasing the chart's own pixels, never the card's.
+    @ViewBuilder
     private var chart: some View {
-        SampledChartMarks(points: points, domain: domain, timestamp: timestamp, value: value, markers: markers)
-            .equatable()
+        if cursor != nil || !markers.isEmpty {
+            marksWithOverlay.compositingGroup()
+        } else {
+            marksWithOverlay
+        }
+    }
+
+    private var marksWithOverlay: some View {
+        SampledChartMarks(
+            points: points, domain: domain, timestamp: timestamp, value: value,
+            inset: insetsForMarkers ? ChartMarkerBadge.plotInset : 0
+        )
+        .equatable()
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 ScrubOverlay(
@@ -519,18 +539,31 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     }
 }
 
+/// The line and its area. Markers draw in the overlay, above these marks.
 private struct SampledChartMarks<Point: Identifiable & Equatable>: View, Equatable {
     let points: [Point]
     let domain: ClosedRange<Double>
     let timestamp: KeyPath<Point, Date>
     let value: KeyPath<Point, Double>
-    let markers: [ChartMarker]
+    /// Space between the plot's edges and the line, in points.
+    let inset: CGFloat
 
     private static var fill: LinearGradient {
         LinearGradient(colors: [Color.brand.opacity(0.4), Color.brand.opacity(0)], startPoint: .top, endPoint: .bottom)
     }
 
     var body: some View {
+        if inset > 0 {
+            marks
+                .chartXScale(range: .plotDimension(padding: inset))
+                .chartYScale(domain: domain, range: .plotDimension(padding: inset))
+        } else {
+            marks
+                .chartYScale(domain: domain)
+        }
+    }
+
+    private var marks: some View {
         Chart {
             ForEach(points) { point in
                 AreaMark(
@@ -551,19 +584,7 @@ private struct SampledChartMarks<Point: Identifiable & Equatable>: View, Equatab
                 .interpolationMethod(.linear)
                 .accessibilityHidden(true)
             }
-
-            ForEach(markers) { marker in
-                PointMark(
-                    x: .value("Time", marker.timestamp),
-                    y: .value("Value", marker.value)
-                )
-                .symbol {
-                    ChartMarkerBadge(style: marker.style)
-                }
-                .accessibilityHidden(true)
-            }
         }
-        .chartYScale(domain: domain)
     }
 }
 
@@ -673,29 +694,68 @@ struct ChartAudioGraph: AXChartDescriptorRepresentable {
     }
 }
 
-/// A disc in the activity row's color with its arrow. A ring in the
-/// card's color cuts it out of the line under it. Selected, it grows and
-/// sits in a halo.
+/// A disc in the activity row's color with its arrow. A ring around it
+/// erases the chart under it, so the line parts around the disc in the
+/// card's own color, glass or not. Selected, it grows and sits in a halo.
+/// Draw it inside the chart's compositing group, or the ring cuts through
+/// the card as well.
 private struct ChartMarkerBadge: View {
     let style: ChartMarker.Style
     var selected = false
+    /// After a past cutoff, the disc and its arrow fade as one shape.
+    var faded = false
+
+    /// What the line, the area and a marker keep after a past cutoff.
+    static let fadedOpacity = 0.35
+    private static let disc: CGFloat = 18
+    private static let ring: CGFloat = 2
+    private static let selectedScale: CGFloat = 1.25
+    /// How far inside the plot's edges a marker's center stays, so a
+    /// selected badge on the first or last sample, or at the top, is whole.
+    static let plotInset = ((disc + 2 * ring) * selectedScale / 2).rounded(.up)
 
     private var tint: Color { style == .received ? .green : .brand }
 
     var body: some View {
-        Image(systemName: style == .received ? "arrow.down.left" : "arrow.up.right")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: 18, height: 18)
-            .background(Circle().fill(tint))
-            .padding(2)
-            .background(Circle().fill(Color(.secondarySystemGroupedBackground)))
-            .scaleEffect(selected ? 1.25 : 1)
-            .background {
-                if selected {
-                    Circle().fill(tint.opacity(0.15)).frame(width: 38, height: 38)
-                }
+        let scale = selected ? Self.selectedScale : 1
+        ZStack {
+            if selected {
+                Circle().fill(tint.opacity(0.15)).frame(width: 38, height: 38)
             }
+            Circle()
+                .frame(width: (Self.disc + 2 * Self.ring) * scale, height: (Self.disc + 2 * Self.ring) * scale)
+                .blendMode(.destinationOut)
+            Image(systemName: style == .received ? "arrow.down.left" : "arrow.up.right")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: Self.disc, height: Self.disc)
+                .background(Circle().fill(tint))
+                .scaleEffect(scale)
+                .compositingGroup()
+                .opacity(faded ? Self.fadedOpacity : 1)
+        }
+    }
+}
+
+/// Every marker, above the line and the area and each one whole. It is
+/// equatable, so a scrub that crosses no marker leaves it alone.
+private struct ChartMarkerLayer: View, Equatable {
+    struct Badge: Identifiable, Equatable {
+        let id: Date
+        let style: ChartMarker.Style
+        let center: CGPoint
+        let faded: Bool
+    }
+
+    let badges: [Badge]
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(badges) { badge in
+                ChartMarkerBadge(style: badge.style, faded: badge.faded)
+                    .position(badge.center)
+            }
+        }
     }
 }
 
@@ -900,44 +960,57 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
         pin(markers[next])
     }
 
+    /// Bottom to top: the fade after a past cutoff, the cutoff's rule, the
+    /// markers, the selection, and the touch surface, which draws nothing.
     private var plot: some View {
-        ZStack(alignment: .topLeading) {
-            ChartTouchSurface(onEvent: handle)
-
-            if let point = selected,
-               let x = proxy.position(forX: point[keyPath: timestamp]),
-               let y = proxy.position(forY: point[keyPath: value]) {
-                let px = plotFrame.minX + x
-                let py = plotFrame.minY + y
+        let spot = selectedSpot
+        let cutoff = persistsSelection ? spot?.point[keyPath: timestamp] : nil
+        return ZStack(alignment: .topLeading) {
+            if let spot {
                 if persistsSelection {
+                    // Fades the line and the area after the cutoff. It
+                    // erases part of what is under it in the chart's
+                    // compositing group, so the card shows through and no
+                    // color lies over the plot.
+                    let width = max(plotFrame.maxX - spot.center.x, 0)
                     Rectangle()
-                        .fill(Color(.secondarySystemGroupedBackground).opacity(0.65))
-                        .frame(width: max(plotFrame.maxX - px, 0), height: plotFrame.height)
-                        .position(x: px + max(plotFrame.maxX - px, 0) / 2, y: plotFrame.midY)
+                        .fill(.black.opacity(1 - ChartMarkerBadge.fadedOpacity))
+                        .frame(width: width, height: plotFrame.height)
+                        .position(x: spot.center.x + width / 2, y: plotFrame.midY)
+                        .blendMode(.destinationOut)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
                 Path { path in
-                    path.move(to: CGPoint(x: px, y: plotFrame.minY))
-                    path.addLine(to: CGPoint(x: px, y: plotFrame.maxY))
+                    path.move(to: CGPoint(x: spot.center.x, y: plotFrame.minY))
+                    path.addLine(to: CGPoint(x: spot.center.x, y: plotFrame.maxY))
                 }
                 .stroke(Color.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
                 .allowsHitTesting(false)
+            }
 
+            ChartMarkerLayer(badges: badges(fadingAfter: cutoff))
+                .equatable()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            if let spot {
                 // On a marker, the marker itself shows the selection.
-                if let marker = markers.first(where: { $0.timestamp == point[keyPath: timestamp] }) {
+                if let marker = markers.first(where: { $0.timestamp == spot.point[keyPath: timestamp] }) {
                     ChartMarkerBadge(style: marker.style, selected: true)
-                        .position(x: px, y: py)
+                        .position(spot.center)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 } else {
                     Circle()
                         .fill(Color.brand)
                         .frame(width: 10, height: 10)
-                        .position(x: px, y: py)
+                        .position(spot.center)
                         .allowsHitTesting(false)
                 }
             }
+
+            ChartTouchSurface(onEvent: handle)
         }
         .onChange(of: points) { _ in
             if persistsSelection {
@@ -947,6 +1020,29 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                 pinned = nil
                 update(nil)
             }
+        }
+    }
+
+    /// The selected sample and where it sits in the overlay.
+    private var selectedSpot: (point: Point, center: CGPoint)? {
+        guard let point = selected,
+              let x = proxy.position(forX: point[keyPath: timestamp]),
+              let y = proxy.position(forY: point[keyPath: value]) else { return nil }
+        return (point, CGPoint(x: plotFrame.minX + x, y: plotFrame.minY + y))
+    }
+
+    /// Each marker where it sits in the overlay. After a past cutoff, a
+    /// marker fades as the line does.
+    private func badges(fadingAfter cutoff: Date?) -> [ChartMarkerLayer.Badge] {
+        markers.compactMap { marker in
+            guard let x = proxy.position(forX: marker.timestamp),
+                  let y = proxy.position(forY: marker.value) else { return nil }
+            return ChartMarkerLayer.Badge(
+                id: marker.timestamp,
+                style: marker.style,
+                center: CGPoint(x: plotFrame.minX + x, y: plotFrame.minY + y),
+                faded: cutoff.map { marker.timestamp > $0 } ?? false
+            )
         }
     }
 

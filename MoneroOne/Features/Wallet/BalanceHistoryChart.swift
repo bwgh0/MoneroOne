@@ -474,6 +474,7 @@ struct BalanceHistoryChart: View {
             value: \.value,
             axes: .init(time: series.tickAxis, currencyCode: series.currency.uppercased()),
             markers: series.markers,
+            insetsForMarkers: true,
             speech: ChartSpeech(
                 title: String(localized: "Balance history"),
                 span: (ChartTimeAxis(rawValue: series.range.apiRange) ?? .week).spokenSpan,

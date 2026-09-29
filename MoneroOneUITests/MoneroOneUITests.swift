@@ -620,6 +620,30 @@ final class BalanceHistoryFlowTests: XCTestCase {
         XCTAssertEqual(send.frame.minY, anchor, accuracy: 0.5, "Returning to Now moved the controls below the card")
     }
 
+    /// A drag that starts up or down scrolls the page and selects nothing.
+    /// The same drag after the finger rests on the chart reads it out.
+    func testVerticalDragScrollsButHoldStartsTheReadout() {
+        launchFixture(style: "Light")
+        element("wallet.historyToggle").tap()
+        let chart = historyChart(covering: "past week")
+        XCTAssertTrue(chart.waitForExistence(timeout: 5))
+        let top = chart.frame.minY
+
+        // Slow drags that rest before lifting, so the page does not coast.
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.8))
+            .press(forDuration: 0.05, thenDragTo: chart.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.3)),
+                   withVelocity: .slow, thenHoldForDuration: 0.3)
+        XCTAssertLessThan(chart.frame.minY, top - 20, "A vertical drag on the chart should scroll the page")
+        XCTAssertFalse(element("wallet.historyNow").exists, "A vertical drag should not select a date")
+
+        let scrolled = chart.frame.minY
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.4))
+            .press(forDuration: 0.6, thenDragTo: chart.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.9)),
+                   withVelocity: .slow, thenHoldForDuration: 0.3)
+        XCTAssertEqual(chart.frame.minY, scrolled, accuracy: 0.5, "A held finger owns the touch, so the page stays put")
+        XCTAssertTrue(element("wallet.historyNow").waitForExistence(timeout: 3), "A held finger should read out the chart even when it then moves down")
+    }
+
     private func historyChart(covering span: String) -> XCUIElement {
         app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier == 'wallet.historyChart' AND label CONTAINS %@", span))

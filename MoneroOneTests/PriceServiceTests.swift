@@ -542,6 +542,23 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertTrue(yesterday.localizedCaseInsensitiveContains("yesterday"), yesterday)
     }
 
+    // MARK: - Chart touch
+
+    func testStillFingerStartsTheReadoutAfterAQuarterSecond() {
+        XCTAssertEqual(ChartTouch.holdDelay, 0.25)
+        XCTAssertEqual(ChartTouch.holdSlop, 8, "A resting finger may drift a little")
+    }
+
+    func testSidewaysDragReadsOutTheChart() {
+        XCTAssertTrue(ChartTouch.scrubs(CGSize(width: -10, height: 0)))
+        XCTAssertTrue(ChartTouch.scrubs(CGSize(width: 10, height: 12)), "Diagonal leans to the readout")
+    }
+
+    func testVerticalDragScrollsThePage() {
+        XCTAssertFalse(ChartTouch.scrubs(CGSize(width: 2, height: 10)))
+        XCTAssertFalse(ChartTouch.scrubs(CGSize(width: -6, height: -12)))
+    }
+
     // MARK: - Portfolio history
 
     private func d(_ s: String) -> Decimal { Decimal(string: s)! }

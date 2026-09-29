@@ -699,9 +699,105 @@ private struct ChartMarkerBadge: View {
     }
 }
 
-/// A tap or horizontal drag selects a real sample. Persistent mode keeps it
-/// until the parent returns to Now; transient price inspection retains its
-/// existing release/marker behavior. Vertical gestures leave scrolling intact.
+/// How a touch starts a chart's readout. A still finger starts it after
+/// `holdDelay`, a sideways drag starts it at once, and a drag that starts
+/// up or down belongs to the page's scroll view.
+enum ChartTouch {
+    /// How long a still finger rests before the readout starts.
+    static let holdDelay: TimeInterval = 0.25
+    /// How far a resting finger may drift.
+    static let holdSlop: CGFloat = 8
+
+    /// Whether a drag that has moved `translation` reads out the chart
+    /// rather than scrolling the page.
+    static func scrubs(_ translation: CGSize) -> Bool {
+        abs(translation.height) <= abs(translation.width) * 1.5
+    }
+}
+
+/// UIKit reads the chart's touches so that the page's scroll view can
+/// still take a drag that starts on the chart: its pan waits only until
+/// the touch is clearly neither a hold nor a sideways drag. A SwiftUI
+/// drag gesture here kept the page from scrolling for the whole touch.
+private struct ChartTouchSurface: UIViewRepresentable {
+    enum Event {
+        case began(CGPoint)
+        case moved(CGPoint)
+        /// Where the finger lifted, and how far it is from where it landed.
+        case ended(CGPoint, CGSize)
+        case cancelled
+        case tapped(CGPoint)
+    }
+
+    let onEvent: (Event) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        let coordinator = context.coordinator
+        let hold = UILongPressGestureRecognizer(target: coordinator, action: #selector(Coordinator.track(_:)))
+        hold.minimumPressDuration = ChartTouch.holdDelay
+        hold.allowableMovement = ChartTouch.holdSlop
+        let slide = UIPanGestureRecognizer(target: coordinator, action: #selector(Coordinator.track(_:)))
+        let tap = UITapGestureRecognizer(target: coordinator, action: #selector(Coordinator.tap(_:)))
+        for recognizer in [hold, slide, tap] as [UIGestureRecognizer] {
+            recognizer.delegate = coordinator
+            view.addGestureRecognizer(recognizer)
+        }
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.onEvent = onEvent
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onEvent: (Event) -> Void = { _ in }
+        private var start: CGPoint = .zero
+
+        @objc func track(_ recognizer: UIGestureRecognizer) {
+            let location = recognizer.location(in: recognizer.view)
+            switch recognizer.state {
+            case .began:
+                let moved = (recognizer as? UIPanGestureRecognizer)?.translation(in: recognizer.view) ?? .zero
+                start = CGPoint(x: location.x - moved.x, y: location.y - moved.y)
+                onEvent(.began(location))
+            case .changed:
+                onEvent(.moved(location))
+            case .ended:
+                onEvent(.ended(location, CGSize(width: location.x - start.x, height: location.y - start.y)))
+            case .cancelled, .failed:
+                onEvent(.cancelled)
+            default:
+                break
+            }
+        }
+
+        @objc func tap(_ recognizer: UITapGestureRecognizer) {
+            onEvent(.tapped(recognizer.location(in: recognizer.view)))
+        }
+
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return true }
+            var moved = pan.translation(in: pan.view)
+            if moved == .zero { moved = pan.velocity(in: pan.view) }
+            return ChartTouch.scrubs(CGSize(width: moved.x, height: moved.y))
+        }
+
+        /// The page's scroll view waits for the hold and the sideways drag
+        /// to fail; once either begins, the touch is the chart's.
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            !(recognizer is UITapGestureRecognizer) && other is UIPanGestureRecognizer && other.view is UIScrollView
+        }
+    }
+}
+
+/// Touch and hold, or a sideways drag, reads out a real sample; a drag
+/// that starts up or down scrolls the page. Transient mode (price) drops
+/// the readout on release unless a tap pinned a marker. Persistent mode
+/// (wallet history) keeps the selection until the parent returns to Now.
 private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     let proxy: ChartProxy
     let plotFrame: CGRect
@@ -718,13 +814,11 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     private var persistsSelection: Bool { cursor != nil }
 
     @State private var selected: Point?
-    @State private var scrolling = false
     /// The marker a tap or a VoiceOver swipe left selected.
     @State private var pinned: ChartMarker?
     /// What was pinned when the current touch began, so tapping it again clears it.
     @State private var pinnedAtTouchStart: ChartMarker?
     @State private var touching = false
-    @State private var directionDecided = false
     @AccessibilityFocusState private var voiceOverFocus: Bool
 
     /// Half of the 44 pt minimum hit target.
@@ -808,52 +902,7 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
 
     private var plot: some View {
         ZStack(alignment: .topLeading) {
-            Color.clear
-                .contentShape(Rectangle())
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                        .onChanged { drag in
-                            if !touching {
-                                touching = true
-                                pinnedAtTouchStart = pinned
-                                directionDecided = false
-                            }
-                            if scrolling { return }
-                            let dx = abs(drag.translation.width)
-                            let dy = abs(drag.translation.height)
-                            if !directionDecided {
-                                guard max(dx, dy) >= 8 else { return }
-                                directionDecided = true
-                                if dy > dx * 1.5 {
-                                    scrolling = true
-                                    return
-                                }
-                                pinned = nil
-                            }
-                            select(at: drag.location)
-                        }
-                        .onEnded { drag in
-                            let tapped = !scrolling
-                                && abs(drag.translation.width) < 10 && abs(drag.translation.height) < 10
-                            if persistsSelection {
-                                if !scrolling {
-                                    if tapped, let marker = marker(near: drag.location) {
-                                        pin(marker)
-                                    } else {
-                                        select(at: drag.location)
-                                    }
-                                }
-                            } else if tapped, let marker = marker(near: drag.location), marker != pinnedAtTouchStart {
-                                pin(marker)
-                            } else {
-                                update(nil)
-                            }
-                            touching = false
-                            scrolling = false
-                            directionDecided = false
-                            pinnedAtTouchStart = nil
-                        }
-                )
+            ChartTouchSurface(onEvent: handle)
 
             if let point = selected,
                let x = proxy.position(forX: point[keyPath: timestamp]),
@@ -922,6 +971,47 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
         update(point)
         pinned = selected == nil ? nil : marker
         HapticFeedback.shared.softTick()
+    }
+
+    private func handle(_ event: ChartTouchSurface.Event) {
+        switch event {
+        case .began(let location):
+            // A held or sliding finger replaces a pinned marker.
+            touching = true
+            pinnedAtTouchStart = pinned
+            pinned = nil
+            select(at: location)
+        case .moved(let location):
+            select(at: location)
+        case .ended(let location, let travel):
+            finish(at: location, tapped: abs(travel.width) < 10 && abs(travel.height) < 10)
+        case .cancelled:
+            if !persistsSelection { update(nil) }
+            touching = false
+            pinnedAtTouchStart = nil
+        case .tapped(let location):
+            pinnedAtTouchStart = pinned
+            finish(at: location, tapped: true)
+        }
+    }
+
+    /// A lifted finger. Persistent mode keeps what it chose; transient mode
+    /// drops the readout unless a tap landed on a marker, and tapping the
+    /// pinned marker again clears it.
+    private func finish(at location: CGPoint, tapped: Bool) {
+        if persistsSelection {
+            if tapped, let marker = marker(near: location) {
+                pin(marker)
+            } else {
+                select(at: location)
+            }
+        } else if tapped, let marker = marker(near: location), marker != pinnedAtTouchStart {
+            pin(marker)
+        } else {
+            update(nil)
+        }
+        touching = false
+        pinnedAtTouchStart = nil
     }
 
     private func select(at location: CGPoint) {

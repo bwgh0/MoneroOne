@@ -12,6 +12,7 @@ struct CommandCenterView: View {
     /// stretches, and the wallet rows replace the balance column (same
     /// choreography as WalletView on iPhone).
     @State private var showWalletManager = false
+    @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
 
     /// Below this width (iPad portrait, iPhone Duo unfolded) the chart stacks
     /// under the balance instead of taking its own column.
@@ -68,6 +69,13 @@ struct CommandCenterView: View {
                 TransactionListView()
             }
             .closesForPaymentLink()
+        }
+        .sheet(item: $hardwareSheetIntent) { intent in
+            HardwareSessionSheet(
+                intent: intent,
+                trezorManager: walletManager.trezorManager
+            )
+            .environmentObject(walletManager)
         }
     }
 
@@ -157,8 +165,21 @@ struct CommandCenterView: View {
             connectionStage: walletManager.connectionStage,
             priceService: priceService,
             isViewOnly: walletManager.isViewOnly,
+            isHardwareWallet: walletManager.isHardwareWallet,
+            hardwareDeviceName: walletManager.hardwareDisplayName,
+            hardwareLastSentSyncAt: walletManager.lastHardwareSentSyncAt,
+            isHardwareDeviceWarm: walletManager.isHardwareDeviceWarm,
             onPriceChangeTap: nil,
-            onCardTap: nil
+            onCardTap: nil,
+            onHardwareSyncTap: {
+                // Clear a finished run's .complete/.failed state so the sheet
+                // opens to a fresh bringup. This stays at the tap site, as in
+                // WalletView: SwiftUI can re-fire the sheet's onAppear during
+                // state changes, and a reset there could slip past the
+                // duplicate-session guard.
+                walletManager.clearTerminalSessionState()
+                hardwareSheetIntent = .syncSentTransactions
+            }
         )
     }
 
@@ -166,7 +187,9 @@ struct CommandCenterView: View {
         QuickActionsCard(
             onSend: { showSend = true },
             onReceive: { showReceive = true },
-            isSendDisabled: walletManager.isViewOnly
+            // canSend: `isViewOnly` is true for a hardware wallet too, and
+            // its device signs the send.
+            isSendDisabled: !walletManager.canSend
         )
     }
 

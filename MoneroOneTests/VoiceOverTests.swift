@@ -74,6 +74,23 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertEqual(elements[0].accessibilityCustomActions?.map(\.name), ["Rename", "Move down"])
     }
 
+    /// A hardware wallet reads as one, and says whether its device link is
+    /// up, as the bolt badge on its icon shows.
+    func testHardwareWalletRowSaysWhetherItsDeviceIsConnected() {
+        let trezor = WalletSource.hardware(.trezor(TrezorBinding(model: "Safe 7", deviceId: "T1")))
+        let rows = VStack {
+            row(wallet("Cold", source: trezor, address: "48edfHu7V9Z84YzzMa6f"), active: false)
+            row(wallet("Travel", source: trezor, address: "4AdUndXHHZ6cfufTMvpp"), active: true, live: true)
+        }
+
+        let elements = accessibilityElements(in: host(rows, height: 280))
+
+        XCTAssertEqual(elements.map { $0.accessibilityLabel ?? "" }, [
+            "Cold, \(MoneroOne.XMRFormatter.format(0)) XMR, hardware wallet, not connected",
+            "Travel, \(MoneroOne.XMRFormatter.format(0)) XMR, hardware wallet, connected",
+        ])
+    }
+
     // MARK: - Charts
 
     /// The chart is one adjustable element: its value sums the line up, a
@@ -234,11 +251,11 @@ final class VoiceOverTests: XCTestCase {
         )
     }
 
-    private func row(_ wallet: WalletInfo, active: Bool, first: Bool = false) -> WalletRow {
+    private func row(_ wallet: WalletInfo, active: Bool, first: Bool = false, live: Bool = false) -> WalletRow {
         WalletRow(
             wallet: wallet, isActive: active, balance: 0, address: wallet.cachedPrimaryAddress,
             onTap: {}, onRename: {}, onDelete: active ? nil : {},
-            onMoveUp: first ? nil : {}, onMoveDown: {}, isLifted: false
+            onMoveUp: first ? nil : {}, onMoveDown: {}, isLifted: false, isDeviceLive: live
         )
     }
 

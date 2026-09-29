@@ -87,7 +87,8 @@ struct DonationView: View {
             }
             .glassButtonStyle()
 
-            // Send Button
+            // Send Button, gated on canSend: `isViewOnly` is true for a
+            // hardware wallet too, and its device signs the send.
             Button {
                 walletManager.prefillSendAddress = donationAddress
                 walletManager.prefillSendAmount = "0.25"
@@ -99,14 +100,14 @@ struct DonationView: View {
                     Text("Send XMR")
                 }
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(walletManager.isViewOnly ? Color.gray : Color.brand)
+                .foregroundStyle(walletManager.canSend ? Color.brand : Color.gray)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
             .glassButtonStyle()
-            .disabled(walletManager.isViewOnly)
-            .accessibilityLabel(walletManager.isViewOnly ? "Send XMR, disabled for view-only wallet" : "Send XMR")
-            .accessibilityHint(walletManager.isViewOnly ? "This wallet is view-only and cannot send" : "Prefills send screen with donation address")
+            .disabled(!walletManager.canSend)
+            .accessibilityLabel(walletManager.canSend ? "Send XMR" : "Send XMR, disabled for view-only wallet")
+            .accessibilityHint(walletManager.canSend ? "Prefills send screen with donation address" : "This wallet is view-only and cannot send")
         }
         .padding(.horizontal)
     }

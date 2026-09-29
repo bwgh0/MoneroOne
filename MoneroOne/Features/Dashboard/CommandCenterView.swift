@@ -164,6 +164,7 @@ struct CommandCenterView: View {
     private var transactionsPanel: some View {
         TransactionsPanelView(
             onSeeAll: { showAllTransactions = true },
+            isHistoryOpen: isHistoryExpanded,
             asOf: selectedHistoryPoint?.timestamp,
             historyTransactions: pastTransactions
         )

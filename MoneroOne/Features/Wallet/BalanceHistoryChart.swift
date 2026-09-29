@@ -181,6 +181,10 @@ final class BalanceHistoryModel {
 
     /// The wallet's full history once loaded; its newest transactions before.
     private(set) var ledger: BalanceLedger?
+    /// Where the history starts when the wallet holds only part of it,
+    /// else nil. Read from the full list only, so a long history that is
+    /// still loading does not flash the note under the chart.
+    private(set) var historyStart: Date?
     /// Bumped with `ledger`, a cheap signal to rebuild the series.
     private(set) var ledgerVersion = 0
     /// What the chart draws. It belongs to the previous range until the
@@ -224,6 +228,9 @@ final class BalanceHistoryModel {
             // A wallet switch while loading: the list belongs to the old one.
             guard let self, !Task.isCancelled, session == walletManager.walletSessionId else { return }
             self.apply(full)
+            if self.historyStart != full.knownSince {
+                self.historyStart = full.knownSince
+            }
         }
     }
 
@@ -379,7 +386,7 @@ struct BalanceHistoryChart: View {
                 (ChartTimeAxis(rawValue: range.apiRange) ?? .week).spokenName
             }) { $0.title }
 
-            footnote(showsLegend: shown?.isDrawable == true && shown?.markers.isEmpty == false)
+            coverageNote
         }
         .task(id: isActive ? selectedTimeRange : nil) {
             guard isActive else { return }
@@ -524,44 +531,17 @@ struct BalanceHistoryChart: View {
         balance == 0 && model.ledger?.changes.isEmpty == true
     }
 
-    /// One slot for the legend or the coverage note, always reserved, so a
-    /// range without transfers is as tall as one with them.
-    private func footnote(showsLegend: Bool) -> some View {
-        let knownSince = model.ledger?.knownSince
-        let legendVisible = showsLegend && knownSince == nil
-        return ZStack {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    transferLegend
-                    Text("Transfers affect value").foregroundStyle(.secondary)
-                }
-                VStack(spacing: 4) {
-                    transferLegend
-                    Text("Transfers affect value").foregroundStyle(.secondary)
-                }
-            }
-            .labelStyle(.titleAndIcon)
-            // Full width inside the slot: sized to its own width, the
-            // legend lost a fraction of a point and cut "Received" short.
-            .frame(maxWidth: .infinity)
-            .opacity(legendVisible ? 1 : 0)
-            .accessibilityHidden(!legendVisible)
-
-            if let knownSince {
-                Text("History available from \(knownSince.formatted(date: .abbreviated, time: .omitted))")
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .font(.caption2)
-    }
-
-    private var transferLegend: some View {
-        HStack(spacing: 12) {
-            Label("Received", systemImage: "circle.fill").foregroundStyle(.green)
-            Label("Sent", systemImage: "circle.fill").foregroundStyle(Color.brand)
+    /// Says where the history starts when the wallet holds only part of
+    /// it. That is per wallet, so every range keeps the same height.
+    @ViewBuilder
+    private var coverageNote: some View {
+        if let historyStart = model.historyStart {
+            Text("History available from \(historyStart.formatted(date: .abbreviated, time: .omitted))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity)
         }
     }
 }

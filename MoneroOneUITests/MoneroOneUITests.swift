@@ -600,6 +600,8 @@ final class BalanceHistoryFlowTests: XCTestCase {
         XCTAssertTrue(historyChart(covering: "past week").waitForExistence(timeout: 5))
         let send = element("wallet.sendButton")
         let anchor = send.frame.minY
+        // Dots and the activity list name each transfer; no legend below.
+        XCTAssertFalse(app.staticTexts["Transfers affect value"].exists, "The transfer legend should be gone")
 
         let ranges: [(button: String, settled: XCUIElement)] = [
             ("24 hours", historyChart(covering: "past 24 hours")),
@@ -614,10 +616,21 @@ final class BalanceHistoryFlowTests: XCTestCase {
             capture("history-range-\(range.button)")
         }
 
+        // The "As of" line opens with History, so scrubbing moves no row.
+        let header = element("wallet.activityHeader")
+        XCTAssertTrue(header.label.hasSuffix("As of now"), "History should date the list at once: \(header.label)")
+        let firstRow = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'wallet.transaction.'")).firstMatch
+        let rowTop = firstRow.frame.minY
+
         selectPast()
         XCTAssertEqual(send.frame.minY, anchor, accuracy: 0.5, "Scrubbing moved the controls below the card")
+        XCTAssertEqual(firstRow.frame.minY, rowTop, accuracy: 0.5, "Scrubbing moved the activity list")
+        XCTAssertFalse(header.label.hasSuffix("As of now"), "A past point should date the list: \(header.label)")
+        capture("history-scrubbed")
         element("wallet.historyNow").tap()
         XCTAssertEqual(send.frame.minY, anchor, accuracy: 0.5, "Returning to Now moved the controls below the card")
+        XCTAssertTrue(header.label.hasSuffix("As of now"), "Now should date the list as now: \(header.label)")
     }
 
     /// A drag that starts up or down scrolls the page and selects nothing.

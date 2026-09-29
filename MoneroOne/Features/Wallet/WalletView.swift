@@ -112,6 +112,7 @@ struct WalletView: View {
                     if !showWalletManager {
                         RecentTransactionsSection(
                             emptyStateMinHeight: recentFillHeight,
+                            isHistoryOpen: isHistoryExpanded,
                             asOf: selectedHistoryPoint?.timestamp,
                             // Read only in the past, so loading history does
                             // not redraw the list at Now.
@@ -229,6 +230,9 @@ struct RecentTransactionsSection: View {
     /// Stretches the empty-state card to this height so it reaches the
     /// bottom of the screen instead of leaving a blank block under it.
     var emptyStateMinHeight: CGFloat? = nil
+    /// Shows the "As of" line for as long as History is open, so it
+    /// arrives with the chart and scrubbing never moves the rows below.
+    var isHistoryOpen = false
     var asOf: Date? = nil
     var historyTransactions: [MoneroTransaction]? = nil
 
@@ -255,14 +259,17 @@ struct RecentTransactionsSection: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(asOf == nil ? "Recent Activity" : "Activity")
+                    Text("Recent Activity")
                         .font(.headline)
-                    if let asOf {
-                        Text("Through \(asOf.formatted(date: .abbreviated, time: .shortened))")
+                    if isHistoryOpen {
+                        ActivityAsOfText(asOf: asOf)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("wallet.activityHeader")
                 Spacer()
                 if !recentTransactions.isEmpty {
                     NavigationLink {
@@ -336,6 +343,32 @@ struct RecentTransactionsSection: View {
             .presentationDetents([.fraction(0.75), .large])
             .presentationDragIndicator(.visible)
         }
+    }
+}
+
+/// "As of now" while History shows the present, or the moment picked on
+/// the chart. Its digits roll like the balance above while a finger scrubs.
+struct ActivityAsOfText: View {
+    let asOf: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var text: String {
+        guard let asOf else {
+            return String(localized: "As of now", comment: "Activity header while History shows the present")
+        }
+        return String(
+            localized: "As of \(asOf.formatted(date: .abbreviated, time: .shortened))",
+            comment: "Activity header: the list shows transactions up to this date and time"
+        )
+    }
+
+    var body: some View {
+        Text(text)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .contentTransition(.numericText())
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.1), value: text)
     }
 }
 

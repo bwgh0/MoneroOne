@@ -99,7 +99,7 @@ struct TransactionListView: View {
 
         List {
             if let asOf {
-                Text("Through \(asOf.formatted(date: .abbreviated, time: .shortened))")
+                ActivityAsOfText(asOf: asOf)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .listRowBackground(Color.clear)
@@ -126,7 +126,7 @@ struct TransactionListView: View {
         }
         .listStyle(.plain)
         .animation(.easeInOut(duration: 0.25), value: filtered.isEmpty)
-        .navigationTitle(asOf == nil ? "All Transactions" : "Activity")
+        .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
         .searchable(text: $searchText, prompt: "Search by ID, address, or memo")

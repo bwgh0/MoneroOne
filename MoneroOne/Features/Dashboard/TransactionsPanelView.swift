@@ -5,6 +5,8 @@ struct TransactionsPanelView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var selectedTransaction: MoneroTransaction?
     var onSeeAll: (() -> Void)?
+    /// Shows the "As of" line for as long as History is open.
+    var isHistoryOpen = false
     var asOf: Date? = nil
     var historyTransactions: [MoneroTransaction]? = nil
 
@@ -28,8 +30,17 @@ struct TransactionsPanelView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
-                Text(asOf == nil ? "Recent Activity" : "Activity")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Recent Activity")
+                        .font(.headline)
+                    if isHistoryOpen {
+                        ActivityAsOfText(asOf: asOf)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
                 Spacer()
                 if !activity.isEmpty {
                     Button {
@@ -43,13 +54,6 @@ struct TransactionsPanelView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
-
-            if let asOf {
-                Text("Through \(asOf.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
-            }
 
             // Transaction list
             if activity.isEmpty {

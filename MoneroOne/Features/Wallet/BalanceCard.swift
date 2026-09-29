@@ -392,7 +392,7 @@ struct BalanceCard: View {
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
-                .animation(reduceMotion || historicalPoint != nil ? nil : .easeInOut(duration: 0.2), value: heroText)
+                .animation(digitAnimation, value: heroText)
 
                 if let captionText {
                     Text(captionText)
@@ -400,7 +400,7 @@ struct BalanceCard: View {
                         .foregroundColor(.secondary)
                         .monospacedDigit()
                         .contentTransition(.numericText())
-                        .animation(reduceMotion || historicalPoint != nil ? nil : .easeInOut(duration: 0.2), value: captionText)
+                        .animation(digitAnimation, value: captionText)
                 }
             }
 
@@ -409,6 +409,13 @@ struct BalanceCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(balanceAccessibilityLabel)
         .accessibilityIdentifier("wallet.balanceValue")
+    }
+
+    /// Digits roll like the Price header: briskly while a finger scrubs
+    /// the History chart, a little slower for live balance changes.
+    private var digitAnimation: Animation? {
+        guard !reduceMotion else { return nil }
+        return .easeInOut(duration: historicalPoint == nil ? 0.2 : 0.1)
     }
 
     private var availableRow: some View {

@@ -225,6 +225,31 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertEqual(price.rangeLoads, 1)
     }
 
+    // MARK: - Balance card
+
+    /// The amount is one element with Show history on the rotor, as a tap
+    /// on it opens History. The History button keeps its own label.
+    func testBalanceOffersShowHistoryOnTheRotor() throws {
+        var opened: [Bool] = []
+        let card = BalanceCard(
+            balance: 1.25, unlockedBalance: 1.25, syncState: .synced, connectionStage: .synced,
+            priceService: PriceService(),
+            isHistoryExpanded: Binding(get: { false }, set: { opened.append($0) })
+        )
+        .environmentObject(WalletManager())
+
+        let elements = accessibilityElements(in: host(card, height: 400))
+        let balance = try XCTUnwrap(elements.first { $0.accessibilityLabel?.hasPrefix("Balance:") == true })
+        XCTAssertEqual(balance.accessibilityCustomActions?.map(\.name), ["Show history"])
+        XCTAssertTrue(elements.contains { $0.accessibilityLabel == "Balance history" }, "the History button keeps its label")
+
+        for action in balance.accessibilityCustomActions ?? [] {
+            _ = action.actionHandler?(action)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(opened, [true], "Show history opens History")
+    }
+
     // MARK: - QR focus mode
 
     /// The Receive QR is a button: VoiceOver's double tap grows it into

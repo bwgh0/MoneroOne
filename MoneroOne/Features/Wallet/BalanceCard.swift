@@ -376,39 +376,51 @@ struct BalanceCard: View {
                 .clipShape(Circle())
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(heroText)
-                        .font(.system(size: balanceSize, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+            // The amount and the space beside it open and close History,
+            // as the History button does. The symbol, the chart and the
+            // controls above keep their own taps, and a drag that starts
+            // here still scrolls the page.
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(heroText)
+                            .font(.system(size: balanceSize, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
 
-                    if !isFiatFirst {
-                        Text("XMR")
-                            .font(.headline)
+                        if !isFiatFirst {
+                            Text("XMR")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .animation(digitAnimation, value: heroText)
+
+                    if let captionText {
+                        Text(captionText)
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                            .animation(digitAnimation, value: captionText)
                     }
                 }
-                .fixedSize(horizontal: false, vertical: true)
-                .animation(digitAnimation, value: heroText)
 
-                if let captionText {
-                    Text(captionText)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .animation(digitAnimation, value: captionText)
-                }
+                Spacer()
             }
-
-            Spacer()
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .onTapGesture { toggleHistory() }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(balanceAccessibilityLabel)
         .accessibilityIdentifier("wallet.balanceValue")
+        .accessibilityAction(named: isHistoryExpanded.wrappedValue ? "Hide history" : "Show history") {
+            toggleHistory()
+        }
     }
 
     /// Digits roll like the Price header: briskly while a finger scrubs

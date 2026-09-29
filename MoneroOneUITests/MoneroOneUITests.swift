@@ -675,4 +675,45 @@ final class BalanceHistoryFlowTests: XCTestCase {
         now.tap()
         XCTAssertFalse(now.exists)
     }
+
+    /// The amount opens History and closes it back at now, as the History
+    /// button does. The Monero symbol beside it does not, and a drag that
+    /// starts on the amount scrolls the page.
+    func testTappingTheAmountTogglesHistory() {
+        launchFixture(style: "Light")
+        let balance = element("wallet.balanceValue")
+        let chart = element("wallet.historyChart")
+        let toggle = element("wallet.historyToggle")
+        let currentBalance = balance.label
+
+        balance.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 24, dy: 0)).tap()
+        XCTAssertFalse(chart.waitForExistence(timeout: 1), "The Monero symbol should not open History")
+
+        balance.tap()
+        XCTAssertTrue(chart.waitForExistence(timeout: 5), "Tapping the amount should open History")
+        XCTAssertEqual(toggle.value as? String, "Expanded", "The History button should show the same state")
+
+        selectPast()
+        XCTAssertNotEqual(balance.label, currentBalance, "The amount should follow the selected time")
+        capture("history-amount-selected")
+        balance.tap()
+        XCTAssertTrue(chart.waitForNonExistence(timeout: 3), "Tapping the amount again should close History")
+        XCTAssertEqual(toggle.value as? String, "Collapsed")
+        XCTAssertFalse(element("wallet.historyNow").exists, "Closing History should return to now")
+        XCTAssertEqual(balance.label, currentBalance, "Closing History should show the current balance")
+
+        balance.tap()
+        XCTAssertTrue(chart.waitForExistence(timeout: 3), "Tapping the amount should open History again")
+        XCTAssertFalse(element("wallet.historyNow").exists, "Reopening History should start at now")
+        let header = element("wallet.activityHeader")
+        XCTAssertTrue(header.label.hasSuffix("As of now"), "The list should be dated now: \(header.label)")
+
+        // A slow drag that rests before lifting, so the page does not coast.
+        let top = balance.frame.minY
+        balance.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: balance.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: -1.5)),
+                   withVelocity: .slow, thenHoldForDuration: 0.3)
+        XCTAssertLessThan(balance.frame.minY, top - 20, "A drag that starts on the amount should scroll the page")
+        XCTAssertTrue(chart.exists, "A drag should leave History open")
+    }
 }

@@ -350,7 +350,7 @@ struct SettingsView: View {
                             color: .brand
                         )
                     }
-                    .accessibilityHint("Clears all sync progress and re-syncs from the beginning")
+                    .accessibilityHint("Scans this wallet again from its restore height")
 
                     Button(role: .destructive) {
                         showDeleteConfirmation = true

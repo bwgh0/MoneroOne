@@ -592,6 +592,40 @@ final class BalanceHistoryFlowTests: XCTestCase {
         capture("price-light")
     }
 
+    /// The card keeps one height in every range, with or without dots,
+    /// empty, and while scrubbing, so nothing below it moves.
+    func testCardKeepsOneHeightAcrossRangesAndScrubbing() {
+        launchFixture(style: "Light")
+        element("wallet.historyToggle").tap()
+        XCTAssertTrue(historyChart(covering: "past week").waitForExistence(timeout: 5))
+        let send = element("wallet.sendButton")
+        let anchor = send.frame.minY
+
+        let ranges: [(button: String, settled: XCUIElement)] = [
+            ("24 hours", historyChart(covering: "past 24 hours")),
+            ("1 year", app.staticTexts["History unavailable for this period"]),
+            ("All time", historyChart(covering: "all time")),
+            ("1 week", historyChart(covering: "past week"))
+        ]
+        for range in ranges {
+            app.buttons[range.button].firstMatch.tap()
+            XCTAssertTrue(range.settled.waitForExistence(timeout: 5), "\(range.button) should finish loading")
+            XCTAssertEqual(send.frame.minY, anchor, accuracy: 0.5, "\(range.button) moved the controls below the card")
+            capture("history-range-\(range.button)")
+        }
+
+        selectPast()
+        XCTAssertEqual(send.frame.minY, anchor, accuracy: 0.5, "Scrubbing moved the controls below the card")
+        element("wallet.historyNow").tap()
+        XCTAssertEqual(send.frame.minY, anchor, accuracy: 0.5, "Returning to Now moved the controls below the card")
+    }
+
+    private func historyChart(covering span: String) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'wallet.historyChart' AND label CONTAINS %@", span))
+            .firstMatch
+    }
+
     func testHistoryControlsRemainReachableAtLargeText() {
         launchFixture(style: "Light", largeText: true)
         capture("history-large-text-current")

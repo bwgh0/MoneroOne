@@ -11,7 +11,7 @@ struct WalletView: View {
     @State private var isHistoryExpanded = false
     @State private var selectedHistoryPoint: PortfolioDataPoint?
     @State private var selectedHistoryRange: ChartTimeRange = .week
-    @State private var historyTransactions: [MoneroTransaction]?
+    @State private var historyModel = BalanceHistoryModel()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Viewport and above-activity heights, so the empty activity card can
     /// fill the leftover height on short screens (iPhone Duo cover).
@@ -81,7 +81,7 @@ struct WalletView: View {
                             isHistoryExpanded: $isHistoryExpanded,
                             selectedHistoryPoint: $selectedHistoryPoint,
                             selectedHistoryRange: $selectedHistoryRange,
-                            onHistoryLoaded: { historyTransactions = $0.transactions },
+                            historyModel: historyModel,
                             onHardwareSyncTap: {
                                 // Clear any leftover .complete/.failed
                                 // state from the prior run so the
@@ -113,11 +113,15 @@ struct WalletView: View {
                         RecentTransactionsSection(
                             emptyStateMinHeight: recentFillHeight,
                             asOf: selectedHistoryPoint?.timestamp,
-                            historyTransactions: historyTransactions
+                            // Read only in the past, so loading history does
+                            // not redraw the list at Now.
+                            historyTransactions: selectedHistoryPoint == nil ? nil : historyModel.ledger?.transactions
                         )
                             .padding(.horizontal)
                             .padding(.top, 16)
-                            .transaction { $0.animation = nil }
+                            // Moves with the card when History opens or
+                            // closes; every other change lands at once.
+                            .transaction { if !$0.isHistoryDisclosure { $0.animation = nil } }
                     }
 
                     // Wallet rows — slide in from the right
@@ -137,7 +141,7 @@ struct WalletView: View {
             .walletHeader(showWalletManager: $showWalletManager)
             .onChange(of: walletManager.walletSessionId) { _, _ in
                 selectedHistoryPoint = nil
-                historyTransactions = nil
+                historyModel = BalanceHistoryModel()
                 isHistoryExpanded = false
             }
             .onChange(of: showSend) { _, isPresented in
@@ -228,13 +232,13 @@ struct RecentTransactionsSection: View {
     var asOf: Date? = nil
     var historyTransactions: [MoneroTransaction]? = nil
 
-    private var activity: [MoneroTransaction] {
-        let source = asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
-        return TransactionListLogic.through(asOf, transactions: source)
-    }
-
+    /// The newest five at `asOf` (`TransactionListLogic.through`). It stops
+    /// at the fifth match, so scrubbing far back does not copy the whole
+    /// history on every frame. Read once per render.
     private var recentTransactions: [MoneroTransaction] {
-        Array(activity.prefix(5))
+        let source = asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
+        guard let asOf else { return Array(source.prefix(5)) }
+        return Array(source.lazy.filter { $0.timestamp <= asOf }.prefix(5))
     }
 
     private var isSyncing: Bool {
@@ -247,6 +251,7 @@ struct RecentTransactionsSection: View {
     }
 
     var body: some View {
+        let recentTransactions = self.recentTransactions
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -259,7 +264,7 @@ struct RecentTransactionsSection: View {
                     }
                 }
                 Spacer()
-                if !activity.isEmpty {
+                if !recentTransactions.isEmpty {
                     NavigationLink {
                         TransactionListView(asOf: asOf, historyTransactions: historyTransactions)
                     } label: {

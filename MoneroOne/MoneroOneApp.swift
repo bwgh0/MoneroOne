@@ -322,7 +322,15 @@ private final class BalanceHistoryFixturePrices: PriceService {
         showFiatFirst = false
     }
 
-    override func chartData(for range: String) -> [PriceDataPoint] { samples }
+    /// 24H holds no transfers and 1Y has no data, so the card's height can
+    /// be checked against a range without dots and an empty one.
+    override func chartData(for range: String) -> [PriceDataPoint] {
+        switch range {
+        case "1D": return Array(samples.suffix(6))
+        case "1Y": return []
+        default: return samples
+        }
+    }
     override func selectChartRange(_ range: String) { currentChartRange = range }
     override func startAutoRefresh() {}
     override func refreshIfStale() async {}

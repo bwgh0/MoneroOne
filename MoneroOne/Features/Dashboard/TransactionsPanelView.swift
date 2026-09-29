@@ -23,6 +23,8 @@ struct TransactionsPanelView: View {
     }
 
     var body: some View {
+        // Filtered once per render; a scrub renders on every step.
+        let activity = self.activity
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {

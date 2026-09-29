@@ -168,142 +168,364 @@ final class PortfolioSeriesCache {
     }
 }
 
+// MARK: - Balance history in the wallet card
+
+private struct HistoryDisclosureKey: TransactionKey {
+    static let defaultValue = false
+}
+
+extension Transaction {
+    /// Marks the History open and close animation. Views that otherwise
+    /// drop animations, such as the activity list, keep this one so they
+    /// move with the card instead of jumping ahead of it.
+    var isHistoryDisclosure: Bool {
+        get { self[HistoryDisclosureKey.self] }
+        set { self[HistoryDisclosureKey.self] = newValue }
+    }
+}
+
+/// The balance card's history, owned by the screen that shows the card so
+/// it outlives History closing and reopening. The ledger loads while
+/// History is open and reloads after a transaction or the balance changes.
+/// Each range's series is built off the main thread and kept; while a range
+/// loads, the last series stays up, so the chart is never torn down.
+@Observable
+final class BalanceHistoryModel {
+    struct Series: Equatable {
+        let range: ChartTimeRange
+        let currency: String
+        let points: [PortfolioDataPoint]
+        let markers: [ChartMarker]
+        let domain: ClosedRange<Double>
+        /// Ticks for the span drawn; "All" starts at the first holding.
+        let tickAxis: ChartTimeAxis
+        let spokenCount: String?
+        /// Two samples or more, one of them holding XMR.
+        let isDrawable: Bool
+    }
+
+    /// Everything a series is built from.
+    private struct Inputs: Equatable {
+        let range: ChartTimeRange
+        let prices: [PriceDataPoint]
+        let rate: Double
+        let currency: String
+        let ledger: BalanceLedger
+    }
+
+    /// The wallet's full history once loaded; its newest transactions before.
+    private(set) var ledger: BalanceLedger?
+    /// Bumped with `ledger`, a cheap signal to rebuild the series.
+    private(set) var ledgerVersion = 0
+    /// What the chart draws. It belongs to the previous range until the
+    /// selected one is built.
+    private(set) var shown: Series?
+    /// Ranges whose price fetch has finished once, with or without data.
+    private(set) var fetchedRanges: Set<ChartTimeRange> = []
+    /// The chart's cursor, mirroring the selected point.
+    let cursor = ChartCursor()
+
+    @ObservationIgnored private var built: [ChartTimeRange: (inputs: Inputs, series: Series)] = [:]
+    @ObservationIgnored private var wantedRange: ChartTimeRange?
+    @ObservationIgnored private var ledgerIsStale = true
+    @ObservationIgnored private var ledgerTask: Task<Void, Never>?
+    @ObservationIgnored private var buildTask: Task<Void, Never>?
+
+    deinit {
+        ledgerTask?.cancel()
+        buildTask?.cancel()
+    }
+
+    /// A transaction or the balance changed; the next refresh reloads.
+    func invalidateLedger() {
+        ledgerIsStale = true
+    }
+
+    /// Loads the ledger when it is missing or out of date. The newest
+    /// transactions are in memory and draw at once; the full list
+    /// replaces them when it has loaded.
+    @MainActor
+    func refreshLedger(from walletManager: WalletManager) {
+        guard ledgerIsStale else { return }
+        ledgerIsStale = false
+        let session = walletManager.walletSessionId
+        if ledger == nil {
+            apply(walletManager.recentBalanceLedger)
+        }
+        ledgerTask?.cancel()
+        ledgerTask = Task { @MainActor [weak self] in
+            let full = await walletManager.balanceLedger()
+            // A wallet switch while loading: the list belongs to the old one.
+            guard let self, !Task.isCancelled, session == walletManager.walletSessionId else { return }
+            self.apply(full)
+        }
+    }
+
+    func markFetched(_ range: ChartTimeRange) {
+        if !fetchedRanges.contains(range) {
+            fetchedRanges.insert(range)
+        }
+    }
+
+    /// Shows `range`: its kept series when no input changed, else a new one
+    /// built off the main thread. Until then the current series stays up.
+    @MainActor
+    func show(_ range: ChartTimeRange, prices: [PriceDataPoint], pricesLoaded: Bool, rate: Double, currency: String) {
+        wantedRange = range
+        guard let ledger, pricesLoaded else { return }
+        let inputs = Inputs(range: range, prices: prices, rate: rate, currency: currency, ledger: ledger)
+        buildTask?.cancel()
+        if let kept = built[range], kept.inputs == inputs {
+            display(kept.series)
+            return
+        }
+        buildTask = Task { @MainActor [weak self] in
+            let series = await Task.detached(priority: .userInitiated) {
+                Self.makeSeries(inputs)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.built[range] = (inputs, series)
+            if self.wantedRange == range {
+                self.display(series)
+            }
+        }
+    }
+
+    private func apply(_ next: BalanceLedger) {
+        guard next != ledger else { return }
+        ledger = next
+        ledgerVersion &+= 1
+        // Every kept series was drawn from the old ledger.
+        built.removeAll()
+    }
+
+    private func display(_ series: Series) {
+        if series != shown {
+            shown = series
+        }
+    }
+
+    /// The line, its dots and its axis for one range. Pure, so it can run
+    /// off the main thread; formats with its own currency formatter.
+    private static func makeSeries(_ inputs: Inputs) -> Series {
+        let points = PortfolioHistory.points(
+            prices: inputs.prices,
+            rate: inputs.rate,
+            ledger: inputs.ledger,
+            startAtFirstHolding: inputs.range == .all
+        )
+        let formatter = FiatCurrency.formatter(for: inputs.currency)
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        let markers = PortfolioHistory.markers(for: points) { value in
+            formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+        }
+        let tickAxis: ChartTimeAxis
+        if let first = points.first, let last = points.last {
+            tickAxis = .fitting(span: last.timestamp.timeIntervalSince(first.timestamp))
+        } else {
+            tickAxis = ChartTimeAxis(rawValue: inputs.range.apiRange) ?? .week
+        }
+        return Series(
+            range: inputs.range,
+            currency: inputs.currency,
+            points: points,
+            markers: markers,
+            domain: PriceService.chartYDomain(for: points.map(\.value)),
+            tickAxis: tickAxis,
+            spokenCount: PortfolioHistory.spokenCount(in: points),
+            isDrawable: points.count >= 2 && points.contains { $0.balance > 0 }
+        )
+    }
+}
+
 /// Optional detail inside the wallet's existing balance card. The parent owns
 /// the one displayed balance and the activity cutoff through selectedPoint.
+/// Every row keeps one height in every range and state (loading, empty,
+/// scrubbing), so the card never jumps; the chart stays built between
+/// ranges and while History is closed.
 struct BalanceHistoryChart: View {
     let balance: Decimal
+    /// False while History is closed: the chart stays built but idle.
+    let isActive: Bool
+    let model: BalanceHistoryModel
     @ObservedObject var priceService: PriceService
     @EnvironmentObject private var walletManager: WalletManager
     @Binding var selectedTimeRange: ChartTimeRange
     @Binding var selectedPoint: PortfolioDataPoint?
-    var onLedgerLoaded: (BalanceLedger) -> Void = { _ in }
-    @State private var ledger: BalanceLedger?
-    @State private var seriesCache = PortfolioSeriesCache()
     @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 152
+
+    /// Drawn, hidden, before the first series is built.
+    private static let placeholder = BalanceHistoryModel.Series(
+        range: .week, currency: "usd", points: [], markers: [], domain: 0...1,
+        tickAxis: .week, spokenCount: nil, isDrawable: false
+    )
+
+    /// Changes whenever the selected range's series needs a rebuild.
+    private struct SeriesKey: Equatable {
+        let range: ChartTimeRange
+        let sampleCount: Int
+        let firstSample: Date?
+        let lastSample: Date?
+        let tip: Double?
+        let tipAt: Date?
+        let rate: Double
+        let currency: String
+        let ledgerVersion: Int
+        let fetched: Bool
+        let isActive: Bool
+    }
+
+    private var seriesKey: SeriesKey {
+        let samples = priceService.chartDataCache[selectedTimeRange.apiRange]
+        return SeriesKey(
+            range: selectedTimeRange,
+            sampleCount: samples?.count ?? 0,
+            firstSample: samples?.first?.timestamp,
+            lastSample: samples?.last?.timestamp,
+            tip: priceService.xmrPrice,
+            tipAt: priceService.lastUpdated,
+            rate: priceService.usdToSelectedRate,
+            currency: priceService.selectedCurrency,
+            ledgerVersion: model.ledgerVersion,
+            fetched: model.fetchedRanges.contains(selectedTimeRange),
+            isActive: isActive
+        )
+    }
 
     private var timeAxis: ChartTimeAxis {
         ChartTimeAxis(rawValue: selectedTimeRange.apiRange) ?? .week
     }
 
-    private var isLoading: Bool {
-        ledger == nil || priceService.loadingChartRanges.contains(selectedTimeRange.apiRange)
-    }
-
-    private var series: (points: [PortfolioDataPoint], markers: [ChartMarker]) {
-        guard let ledger else { return ([], []) }
-        return seriesCache.series(
-            prices: priceService.chartData(for: selectedTimeRange.apiRange),
-            rate: priceService.usdToSelectedRate,
-            ledger: ledger,
-            startAtFirstHolding: selectedTimeRange == .all,
-            currency: priceService.selectedCurrency,
-            formatValue: formatCurrency
-        )
-    }
-
-    private var ledgerKey: [String] {
-        [walletManager.walletSessionId.uuidString, "\(balance)"]
-            + walletManager.transactions.map {
-                "\($0.id) \($0.status) \($0.type) \($0.amount) \($0.fee) \($0.timestamp.timeIntervalSince1970)"
-            }
-    }
-
     var body: some View {
-        let series = self.series
-        let data = series.points
+        let shown = model.shown
+        let isCurrent = shown?.range == selectedTimeRange
         VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Text(selectedPoint.map { $0.timestamp.formatted(date: .abbreviated, time: .shortened) }
-                     ?? timeAxis.spokenSpan.capitalized)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .accessibilityIdentifier("wallet.historyDate")
-                Spacer(minLength: 4)
-                if selectedPoint != nil {
-                    Button {
-                        selectedPoint = nil
-                        HapticFeedback.shared.buttonPress()
-                    } label: {
-                        Label("Now", systemImage: "clock.arrow.circlepath")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.brand)
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Return to current balance and activity")
-                    .accessibilityIdentifier("wallet.historyNow")
-                } else {
-                    Text(priceService.selectedCurrency.uppercased())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
-            }
-            .frame(minHeight: 44)
+            header
 
-            chartContent(data, markers: series.markers)
-                .frame(height: chartHeight)
+            ZStack {
+                chart(shown ?? Self.placeholder, isLive: isCurrent && shown?.isDrawable == true)
+                chartOverlay(shown, isCurrent: isCurrent)
+            }
+            .frame(height: chartHeight)
 
             GlassSegmentedPicker(selection: $selectedTimeRange, accessibilityLabel: { range in
                 (ChartTimeAxis(rawValue: range.apiRange) ?? .week).spokenName
             }) { $0.title }
 
-            if let knownSince = ledger?.knownSince {
-                Text("History available from \(knownSince.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-            } else if !series.markers.isEmpty {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) {
-                        transferLegend
-                        Text("Transfers affect value").foregroundStyle(.secondary)
-                    }
-                    VStack(spacing: 4) {
-                        transferLegend
-                        Text("Transfers affect value").foregroundStyle(.secondary)
-                    }
-                }
-                .font(.caption2)
-                .labelStyle(.titleAndIcon)
-                .frame(maxWidth: .infinity)
+            footnote(showsLegend: shown?.isDrawable == true && shown?.markers.isEmpty == false)
+        }
+        .task(id: isActive ? selectedTimeRange : nil) {
+            guard isActive else { return }
+            let range = selectedTimeRange
+            await priceService.fetchChartData(range: range.apiRange)
+            if !Task.isCancelled {
+                model.markFetched(range)
             }
         }
-        .task(id: selectedTimeRange) {
-            await priceService.fetchChartData(range: selectedTimeRange.apiRange)
+        .onChange(of: seriesKey, initial: true) { _, key in
+            guard key.isActive else { return }
+            model.show(
+                key.range,
+                prices: priceService.chartData(for: key.range.apiRange),
+                pricesLoaded: key.sampleCount > 0 || key.fetched,
+                rate: key.rate,
+                currency: key.currency
+            )
         }
-        .task(id: ledgerKey) {
-            let session = walletManager.walletSessionId
-            if ledger == nil {
-                let recent = walletManager.recentBalanceLedger
-                ledger = recent
-                onLedgerLoaded(recent)
-            }
-            let full = await walletManager.balanceLedger()
-            guard !Task.isCancelled, session == walletManager.walletSessionId else { return }
-            ledger = full
-            onLedgerLoaded(full)
+        .onChange(of: isActive, initial: true) { _, active in
+            if active { model.refreshLedger(from: walletManager) }
         }
+        .onChange(of: walletManager.transactions) { _, _ in ledgerChanged() }
+        .onChange(of: balance) { _, _ in ledgerChanged() }
         .onChange(of: selectedTimeRange) { _, _ in selectedPoint = nil }
-        .onChange(of: data) { _, points in
+        .onChange(of: shown) { _, series in
             // A refresh keeps the same instant when its real sample survives.
             // The replacement ledger may change its holdings or currency value.
-            selectedPoint = PortfolioHistory.historicalSelection(selectedPoint, in: points)
+            guard let series, series.range == selectedTimeRange else { return }
+            selectedPoint = PortfolioHistory.historicalSelection(selectedPoint, in: series.points)
+        }
+        .onChange(of: selectedPoint?.timestamp, initial: true) { _, timestamp in
+            model.cursor.timestamp = timestamp
         }
     }
 
-    private var transferLegend: some View {
-        HStack(spacing: 12) {
-            Label("Received", systemImage: "circle.fill").foregroundStyle(.green)
-            Label("Sent", systemImage: "circle.fill").foregroundStyle(Color.brand)
+    private func ledgerChanged() {
+        model.invalidateLedger()
+        if isActive {
+            model.refreshLedger(from: walletManager)
         }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text(selectedPoint.map { $0.timestamp.formatted(date: .abbreviated, time: .shortened) }
+                 ?? timeAxis.spokenSpan.capitalized)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .accessibilityIdentifier("wallet.historyDate")
+            Spacer(minLength: 4)
+            if selectedPoint != nil {
+                Button {
+                    selectedPoint = nil
+                    HapticFeedback.shared.buttonPress()
+                } label: {
+                    Label("Now", systemImage: "clock.arrow.circlepath")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.brand)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Return to current balance and activity")
+                .accessibilityIdentifier("wallet.historyNow")
+            } else {
+                Text(priceService.selectedCurrency.uppercased())
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(minHeight: 44)
+    }
+
+    /// Always in the hierarchy: loading, empty and range changes fade it
+    /// rather than swap it out, so Swift Charts never rebuilds from nothing.
+    private func chart(_ series: BalanceHistoryModel.Series, isLive: Bool) -> some View {
+        SampledLineChart(
+            points: series.points,
+            domain: series.domain,
+            timestamp: \.timestamp,
+            value: \.value,
+            axes: .init(time: series.tickAxis, currencyCode: series.currency.uppercased()),
+            markers: series.markers,
+            speech: ChartSpeech(
+                title: String(localized: "Balance history"),
+                span: (ChartTimeAxis(rawValue: series.range.apiRange) ?? .week).spokenSpan,
+                currencyCode: series.currency,
+                note: series.spokenCount,
+                markerHint: String(localized: "Adjust to explore the balance and activity at each time. Return to Now to show the current wallet.")
+            ),
+            cursor: model.cursor,
+            onSelect: { selectedPoint = PortfolioHistory.historicalSelection($0, in: series.points) }
+        )
+        .equatable()
+        // New data replaces the line in one frame; morphing hundreds of
+        // samples inside another animation is what stutters.
+        .transaction { $0.animation = nil }
+        .animation(.easeInOut(duration: 0.2)) { content in
+            content.opacity(isLive ? 1 : (series.isDrawable ? 0.3 : 0))
+        }
+        .allowsHitTesting(isLive)
+        .accessibilityHidden(!isLive)
+        .accessibilityIdentifier("wallet.historyChart")
     }
 
     @ViewBuilder
-    private func chartContent(_ data: [PortfolioDataPoint], markers: [ChartMarker]) -> some View {
-        if isLoading && data.count < 2 {
+    private func chartOverlay(_ series: BalanceHistoryModel.Series?, isCurrent: Bool) -> some View {
+        if series == nil {
             VStack(spacing: 8) {
                 ProgressView()
                 Text("Loading balance history…")
@@ -311,53 +533,70 @@ struct BalanceHistoryChart: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if data.count >= 2, data.contains(where: { $0.balance > 0 }) {
-            SampledLineChart(
-                points: data,
-                domain: PriceService.chartYDomain(for: data.map(\.value)),
-                timestamp: \.timestamp,
-                value: \.value,
-                axes: .init(time: tickAxis(for: data), currencyCode: priceService.selectedCurrency.uppercased()),
-                markers: markers,
-                speech: ChartSpeech(
-                    title: String(localized: "Balance history"),
-                    span: timeAxis.spokenSpan,
-                    currencyCode: priceService.selectedCurrency,
-                    note: PortfolioHistory.spokenCount(in: data),
-                    markerHint: String(localized: "Adjust to explore the balance and activity at each time. Return to Now to show the current wallet.")
-                ),
-                persistsSelection: true,
-                selectedTimestamp: selectedPoint?.timestamp,
-                onSelect: { selectedPoint = PortfolioHistory.historicalSelection($0, in: data) }
-            )
-            .equatable()
-            .accessibilityIdentifier("wallet.historyChart")
-        } else {
+        } else if !isCurrent {
+            ProgressView()
+                .accessibilityLabel(Text("Loading balance history…"))
+        } else if series?.isDrawable == false {
             VStack(spacing: 8) {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .font(.title2)
                     .foregroundStyle(.secondary)
-                Text(balance == 0 && ledger?.changes.isEmpty == true ? "Your history starts here" : "History unavailable for this period")
+                Text(isNewWallet ? "Your history starts here" : "History unavailable for this period")
                     .font(.subheadline.weight(.medium))
-                Text(balance == 0 && ledger?.changes.isEmpty == true ? "Receive XMR to start tracking your wallet’s value." : "Try another time range.")
+                Text(isNewWallet ? "Receive XMR to start tracking your wallet’s value." : "Try another time range.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
+            .lineLimit(2)
+            .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    private func tickAxis(for data: [PortfolioDataPoint]) -> ChartTimeAxis {
-        guard let first = data.first, let last = data.last else { return timeAxis }
-        return .fitting(span: last.timestamp.timeIntervalSince(first.timestamp))
+    private var isNewWallet: Bool {
+        balance == 0 && model.ledger?.changes.isEmpty == true
     }
 
-    private func formatCurrency(_ value: Double) -> String {
-        let formatter = FiatCurrency.formatter(for: priceService.selectedCurrency)
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    /// One slot for the legend or the coverage note, always reserved, so a
+    /// range without transfers is as tall as one with them.
+    private func footnote(showsLegend: Bool) -> some View {
+        let knownSince = model.ledger?.knownSince
+        let legendVisible = showsLegend && knownSince == nil
+        return ZStack {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    transferLegend
+                    Text("Transfers affect value").foregroundStyle(.secondary)
+                }
+                VStack(spacing: 4) {
+                    transferLegend
+                    Text("Transfers affect value").foregroundStyle(.secondary)
+                }
+            }
+            .labelStyle(.titleAndIcon)
+            // Full width inside the slot: sized to its own width, the
+            // legend lost a fraction of a point and cut "Received" short.
+            .frame(maxWidth: .infinity)
+            .opacity(legendVisible ? 1 : 0)
+            .accessibilityHidden(!legendVisible)
+
+            if let knownSince {
+                Text("History available from \(knownSince.formatted(date: .abbreviated, time: .omitted))")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .font(.caption2)
+    }
+
+    private var transferLegend: some View {
+        HStack(spacing: 12) {
+            Label("Received", systemImage: "circle.fill").foregroundStyle(.green)
+            Label("Sent", systemImage: "circle.fill").foregroundStyle(Color.brand)
+        }
     }
 }
 

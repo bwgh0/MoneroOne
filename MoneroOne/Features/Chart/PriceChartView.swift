@@ -379,6 +379,18 @@ enum ChartTimeAxis: String, Equatable {
 
 // MARK: - Sampled line chart
 
+/// The instant a persistent chart selects, owned by the screen; nil is Now.
+/// The chart reads it outside its own equality, so moving it redraws only
+/// the cursor, never the marks or the axes of a long series.
+@Observable
+final class ChartCursor {
+    var timestamp: Date?
+
+    init(timestamp: Date? = nil) {
+        self.timestamp = timestamp
+    }
+}
+
 /// A sampled line with an independently updating inspection overlay. The
 /// marks remain equatable when persistent selection changes, so scrubbing a
 /// long series does not rebuild its chart content. Existing price charts use
@@ -400,16 +412,16 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     /// Dots drawn on top of the line.
     var markers: [ChartMarker] = []
     let speech: ChartSpeech
-    var persistsSelection = false
-    /// The parent's selected instant; nil means Now. Used only in persistent mode.
-    var selectedTimestamp: Date? = nil
+    /// Persistent mode: a tap or drag selects until the parent sets the
+    /// cursor back to nil (Now). nil keeps transient price inspection.
+    var cursor: ChartCursor? = nil
     let onSelect: (Point?) -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.points == rhs.points && lhs.domain == rhs.domain && lhs.axes == rhs.axes
             && lhs.timestamp == rhs.timestamp && lhs.value == rhs.value
             && lhs.markers == rhs.markers && lhs.speech == rhs.speech
-            && lhs.persistsSelection == rhs.persistsSelection && lhs.selectedTimestamp == rhs.selectedTimestamp
+            && lhs.cursor === rhs.cursor
     }
 
     var body: some View {
@@ -461,8 +473,7 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                     speech: speech,
                     summary: summary,
                     audioGraph: audioGraph,
-                    persistsSelection: persistsSelection,
-                    selectedTimestamp: selectedTimestamp,
+                    cursor: cursor,
                     onSelect: onSelect
                 )
             }
@@ -701,9 +712,10 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     let speech: ChartSpeech
     let summary: String
     let audioGraph: ChartAudioGraph
-    let persistsSelection: Bool
-    let selectedTimestamp: Date?
+    let cursor: ChartCursor?
     let onSelect: (Point?) -> Void
+
+    private var persistsSelection: Bool { cursor != nil }
 
     @State private var selected: Point?
     @State private var scrolling = false
@@ -728,7 +740,10 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                 .accessibilityFocused($voiceOverFocus)
         )
         .onAppear { synchronizeSelection() }
-        .onChange(of: selectedTimestamp) { _, _ in synchronizeSelection() }
+        .onChange(of: cursor?.timestamp) { _, _ in
+            // Mid-drag the finger leads and the cursor follows a frame behind.
+            if !touching { synchronizeSelection() }
+        }
         .onChange(of: voiceOverFocus) { focused in
             // Off the chart, the header goes back to the value now.
             if !persistsSelection, !focused, pinned != nil {
@@ -916,9 +931,9 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     }
 
     private func synchronizeSelection() {
-        guard persistsSelection else { return }
-        selected = selectedTimestamp.flatMap { date in points.first { $0[keyPath: timestamp] == date } }
-        pinned = selectedTimestamp.flatMap { date in markers.first { $0.timestamp == date } }
+        guard let cursor else { return }
+        selected = cursor.timestamp.flatMap { date in points.first { $0[keyPath: timestamp] == date } }
+        pinned = cursor.timestamp.flatMap { date in markers.first { $0.timestamp == date } }
     }
 
     private func update(_ point: Point?) {

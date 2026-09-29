@@ -17,7 +17,7 @@ struct CommandCenterView: View {
     @State private var isHistoryExpanded = false
     @State private var selectedHistoryPoint: PortfolioDataPoint?
     @State private var selectedHistoryRange: ChartTimeRange = .week
-    @State private var historyTransactions: [MoneroTransaction]?
+    @State private var historyModel = BalanceHistoryModel()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -42,7 +42,7 @@ struct CommandCenterView: View {
         }
         .onChange(of: walletManager.walletSessionId) { _, _ in
             selectedHistoryPoint = nil
-            historyTransactions = nil
+            historyModel = BalanceHistoryModel()
             isHistoryExpanded = false
         }
         .onChange(of: showSend) { _, isPresented in
@@ -60,7 +60,7 @@ struct CommandCenterView: View {
         .presentsSendRequests(from: walletManager, showSend: $showSend)
         .sheet(isPresented: $showAllTransactions) {
             NavigationStack {
-                TransactionListView(asOf: selectedHistoryPoint?.timestamp, historyTransactions: historyTransactions)
+                TransactionListView(asOf: selectedHistoryPoint?.timestamp, historyTransactions: pastTransactions)
             }
             .closesForPaymentLink()
         }
@@ -137,7 +137,7 @@ struct CommandCenterView: View {
             isHistoryExpanded: $isHistoryExpanded,
             selectedHistoryPoint: $selectedHistoryPoint,
             selectedHistoryRange: $selectedHistoryRange,
-            onHistoryLoaded: { historyTransactions = $0.transactions },
+            historyModel: historyModel,
             onHardwareSyncTap: {
                 // Clear a finished run's .complete/.failed state so the sheet
                 // opens to a fresh bringup. This stays at the tap site, as in
@@ -165,9 +165,15 @@ struct CommandCenterView: View {
         TransactionsPanelView(
             onSeeAll: { showAllTransactions = true },
             asOf: selectedHistoryPoint?.timestamp,
-            historyTransactions: historyTransactions
+            historyTransactions: pastTransactions
         )
         .dashboardCard()
+    }
+
+    /// The full history behind a past point. Read only in the past, so
+    /// loading history does not redraw the panel at Now.
+    private var pastTransactions: [MoneroTransaction]? {
+        selectedHistoryPoint == nil ? nil : historyModel.ledger?.transactions
     }
 
     // MARK: - Banners

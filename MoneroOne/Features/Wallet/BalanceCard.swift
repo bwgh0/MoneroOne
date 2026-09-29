@@ -18,11 +18,16 @@ struct BalanceCard: View {
     var isHistoryExpanded: Binding<Bool> = .constant(false)
     var selectedHistoryPoint: Binding<PortfolioDataPoint?> = .constant(nil)
     var selectedHistoryRange: Binding<ChartTimeRange> = .constant(.week)
-    var onHistoryLoaded: (BalanceLedger) -> Void = { _ in }
+    var historyModel = BalanceHistoryModel()
     var onHardwareSyncTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var balanceSize: CGFloat = 32
+    /// The history chart is built on first open and then kept, closed, so
+    /// reopening and switching ranges never rebuild it.
+    @State private var isHistoryMounted = false
+    /// The first open builds the chart closed, then opens it once laid out.
+    @State private var opensHistoryOnMount = false
 
     private var historicalPoint: PortfolioDataPoint? { selectedHistoryPoint.wrappedValue }
     private var displayedBalance: Decimal { historicalPoint?.balance ?? balance }
@@ -98,217 +103,43 @@ struct BalanceCard: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                if historicalPoint != nil {
-                    Label("Historical balance", systemImage: "clock.arrow.circlepath")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                } else if isSyncBlocked {
-                    Circle()
-                        .fill(Color.gray)
-                        .frame(width: 8, height: 8)
-                        .accessibilityHidden(true)
-                    Text("Paused")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .accessibilityLabel("Sync status: paused")
-                } else if case .synced = syncState {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 8, height: 8)
-                        .accessibilityHidden(true)
-                    Text("Synced")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        // One line at full width: squeezed by a long pill,
-                        // "Синхронизировано" broke with a hyphen.
-                        .lineLimit(1)
-                        .fixedSize()
-                        .accessibilityLabel("Sync status: synced")
-                } else if case .error(let msg) = syncState {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                        .accessibilityHidden(true)
-                    Text("Error: \(msg)")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .lineLimit(1)
-                        .accessibilityLabel("Sync error: \(msg)")
-                } else {
-                    ConnectionStepIndicator(
-                        stage: connectionStage,
-                        syncProgress: syncProgress
-                    )
-                }
-
-                if isHardwareWallet {
-                    Button {
-                        onHardwareSyncTap?()
-                    } label: {
-                        HStack(spacing: 5) {
-                            // Two-state pill: its hue is the
-                            // primary visual signal so connection
-                            // state is impossible to miss at a
-                            // glance. Green = device link is live
-                            // (BLE connected, THP up, bridge ready
-                            // — anything we could send to right
-                            // now). Gray = idle, next tap will go
-                            // through the full BLE/THP bringup.
-                            Image(systemName: isHardwareDeviceWarm ? "bolt.fill" : "bolt.slash.fill")
-                                .font(.caption2.weight(.bold))
-                            Text(isHardwareDeviceWarm
-                                 ? String(localized: "\(hardwareDeviceName ?? "Trezor") • Live", comment: "Hardware wallet pill: device name, then that the link is up")
-                                 : (hardwareDeviceName ?? "Trezor"))
-                                .font(.caption2.weight(.semibold))
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(isHardwareDeviceWarm ? Color.green : Color.gray)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule().fill((isHardwareDeviceWarm ? Color.green : Color.gray).opacity(0.15))
-                        )
-                        .padding(.leading, 6)
+                // The past covers the status and pills without replacing
+                // them, so the row keeps its height while scrubbing.
+                ZStack(alignment: .leading) {
+                    HStack {
+                        syncStatus
+                        devicePill
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(hardwareDeviceName ?? String(localized: "Hardware wallet"))\(isHardwareDeviceWarm ? String(localized: ", connected") : String(localized: ", not connected")). Tap to sync sent transactions.")
-                } else if isViewOnly {
-                    // The eye alone when the word does not fit beside the
-                    // status: "Solo visualizzazione" and "Только просмотр"
-                    // wrapped inside the pill.
-                    ViewThatFits(in: .horizontal) {
-                        viewOnlyPill(showsText: true)
-                        viewOnlyPill(showsText: false)
-                    }
-                    .padding(.leading, 6)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("View-only wallet")
-                }
+                    .opacity(historicalPoint == nil ? 1 : 0)
+                    .accessibilityHidden(historicalPoint != nil)
 
-                Spacer()
-
-                Button {
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
-                        isHistoryExpanded.wrappedValue.toggle()
-                        if !isHistoryExpanded.wrappedValue { selectedHistoryPoint.wrappedValue = nil }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chart.xyaxis.line")
-                        Text("History")
-                        Image(systemName: "chevron.down")
-                            .font(.caption2.weight(.semibold))
-                            .rotationEffect(.degrees(isHistoryExpanded.wrappedValue ? 180 : 0))
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.brand)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.brand.opacity(0.12), in: Capsule())
-                    // Keep the compact status row while providing a 44pt target.
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                    .padding(.vertical, -10)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("wallet.historyToggle")
-                .accessibilityLabel("Balance history")
-                .accessibilityValue(isHistoryExpanded.wrappedValue ? "Expanded" : "Collapsed")
-                .accessibilityHint(isHistoryExpanded.wrappedValue ? "Hides balance history and returns to now" : "Shows your balance over time")
-            }
-
-            HStack(spacing: 16) {
-                Image("MoneroSymbol")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 48, height: 48)
-                    .clipShape(Circle())
-                    .scaleEffect(1.15)
-                    .clipShape(Circle())
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(heroText)
-                            .font(.system(size: balanceSize, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
+                    if historicalPoint != nil {
+                        Label("Historical balance", systemImage: "clock.arrow.circlepath")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-
-                        if !isFiatFirst {
-                            Text("XMR")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .animation(reduceMotion || historicalPoint != nil ? nil : .easeInOut(duration: 0.2), value: heroText)
-
-                    if let captionText {
-                        Text(captionText)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
-                            .animation(reduceMotion || historicalPoint != nil ? nil : .easeInOut(duration: 0.2), value: captionText)
+                            .minimumScaleFactor(0.8)
                     }
                 }
 
-                Spacer()
+                historyToggle
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(balanceAccessibilityLabel)
-            .accessibilityIdentifier("wallet.balanceValue")
 
-            if isHistoryExpanded.wrappedValue {
-                BalanceHistoryChart(
-                    balance: balance,
-                    priceService: priceService,
-                    selectedTimeRange: selectedHistoryRange,
-                    selectedPoint: selectedHistoryPoint,
-                    onLedgerLoaded: onHistoryLoaded
-                )
-                .transition(.opacity)
+            VStack(spacing: 0) {
+                balanceRow
+
+                if isHistoryMounted || isHistoryExpanded.wrappedValue {
+                    historyChart
+                }
             }
 
             // Unlocked Balance
-            if historicalPoint == nil, unlockedBalance != balance {
-                VStack(spacing: 4) {
-                    HStack {
-                        Text("Available:")
-                            .foregroundColor(.secondary)
-                        if isFiatFirst, let fiat = priceService.formatFiatValue(unlockedBalance) {
-                            Text(fiat)
-                                .fontWeight(.medium)
-                            Text("(\(XMRFormatter.format(unlockedBalance)) XMR)")
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text(XMRFormatter.format(unlockedBalance))
-                                .fontWeight(.medium)
-                            Text("XMR")
-                                .foregroundColor(.secondary)
-                            if let fiat = priceService.formatFiatValue(unlockedBalance) {
-                                Text("(\(fiat))")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    .font(.subheadline)
-
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                            .font(.caption2)
-                            .accessibilityHidden(true)
-                        Text("Locked until recent transactions confirm")
-                            .font(.caption2)
-                    }
-                    .foregroundColor(.brand)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(availableAccessibilityLabel)
+            if unlockedBalance != balance {
+                availableRow
+                    // Kept in place while viewing the past so the card does not shrink.
+                    .opacity(historicalPoint == nil ? 1 : 0)
+                    .accessibilityHidden(historicalPoint != nil)
             }
 
             // Hardware-wallet "sent transactions may be out of date" banner.
@@ -413,6 +244,262 @@ struct BalanceCard: View {
         }
     }
 
+    // MARK: - Status row
+
+    @ViewBuilder
+    private var syncStatus: some View {
+        if isSyncBlocked {
+            Circle()
+                .fill(Color.gray)
+                .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
+            Text("Paused")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .accessibilityLabel("Sync status: paused")
+        } else if case .synced = syncState {
+            Circle()
+                .fill(Color.green)
+                .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
+            Text("Synced")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                // One line at full width: squeezed by a long pill,
+                // "Синхронизировано" broke with a hyphen.
+                .lineLimit(1)
+                .fixedSize()
+                .accessibilityLabel("Sync status: synced")
+        } else if case .error(let msg) = syncState {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
+            Text("Error: \(msg)")
+                .font(.caption)
+                .foregroundColor(.red)
+                .lineLimit(1)
+                .accessibilityLabel("Sync error: \(msg)")
+        } else {
+            ConnectionStepIndicator(
+                stage: connectionStage,
+                syncProgress: syncProgress
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var devicePill: some View {
+        if isHardwareWallet {
+            Button {
+                onHardwareSyncTap?()
+            } label: {
+                HStack(spacing: 5) {
+                    // Two-state pill: its hue is the
+                    // primary visual signal so connection
+                    // state is impossible to miss at a
+                    // glance. Green = device link is live
+                    // (BLE connected, THP up, bridge ready
+                    // — anything we could send to right
+                    // now). Gray = idle, next tap will go
+                    // through the full BLE/THP bringup.
+                    Image(systemName: isHardwareDeviceWarm ? "bolt.fill" : "bolt.slash.fill")
+                        .font(.caption2.weight(.bold))
+                    Text(isHardwareDeviceWarm
+                         ? String(localized: "\(hardwareDeviceName ?? "Trezor") • Live", comment: "Hardware wallet pill: device name, then that the link is up")
+                         : (hardwareDeviceName ?? "Trezor"))
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(isHardwareDeviceWarm ? Color.green : Color.gray)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill((isHardwareDeviceWarm ? Color.green : Color.gray).opacity(0.15))
+                )
+                .padding(.leading, 6)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(hardwareDeviceName ?? String(localized: "Hardware wallet"))\(isHardwareDeviceWarm ? String(localized: ", connected") : String(localized: ", not connected")). Tap to sync sent transactions.")
+        } else if isViewOnly {
+            // The eye alone when the word does not fit beside the
+            // status: "Solo visualizzazione" and "Только просмотр"
+            // wrapped inside the pill.
+            ViewThatFits(in: .horizontal) {
+                viewOnlyPill(showsText: true)
+                viewOnlyPill(showsText: false)
+            }
+            .padding(.leading, 6)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("View-only wallet")
+        }
+    }
+
+    private var historyToggle: some View {
+        Button {
+            toggleHistory()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chart.xyaxis.line")
+                Text("History")
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .rotationEffect(.degrees(isHistoryExpanded.wrappedValue ? 180 : 0))
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.brand)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.brand.opacity(0.12), in: Capsule())
+            // Keep the compact status row while providing a 44pt target.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .padding(.vertical, -10)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("wallet.historyToggle")
+        .accessibilityLabel("Balance history")
+        .accessibilityValue(isHistoryExpanded.wrappedValue ? "Expanded" : "Collapsed")
+        .accessibilityHint(isHistoryExpanded.wrappedValue ? "Hides balance history and returns to now" : "Shows your balance over time")
+    }
+
+    // MARK: - Balance
+
+    private var balanceRow: some View {
+        HStack(spacing: 16) {
+            Image("MoneroSymbol")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 48, height: 48)
+                .clipShape(Circle())
+                .scaleEffect(1.15)
+                .clipShape(Circle())
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(heroText)
+                        .font(.system(size: balanceSize, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+
+                    if !isFiatFirst {
+                        Text("XMR")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .animation(reduceMotion || historicalPoint != nil ? nil : .easeInOut(duration: 0.2), value: heroText)
+
+                if let captionText {
+                    Text(captionText)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(reduceMotion || historicalPoint != nil ? nil : .easeInOut(duration: 0.2), value: captionText)
+                }
+            }
+
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(balanceAccessibilityLabel)
+        .accessibilityIdentifier("wallet.balanceValue")
+    }
+
+    private var availableRow: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text("Available:")
+                    .foregroundColor(.secondary)
+                if isFiatFirst, let fiat = priceService.formatFiatValue(unlockedBalance) {
+                    Text(fiat)
+                        .fontWeight(.medium)
+                    Text("(\(XMRFormatter.format(unlockedBalance)) XMR)")
+                        .foregroundColor(.secondary)
+                } else {
+                    Text(XMRFormatter.format(unlockedBalance))
+                        .fontWeight(.medium)
+                    Text("XMR")
+                        .foregroundColor(.secondary)
+                    if let fiat = priceService.formatFiatValue(unlockedBalance) {
+                        Text("(\(fiat))")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .font(.subheadline)
+
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .font(.caption2)
+                    .accessibilityHidden(true)
+                Text("Locked until recent transactions confirm")
+                    .font(.caption2)
+            }
+            .foregroundColor(.brand)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(availableAccessibilityLabel)
+    }
+
+    // MARK: - History
+
+    /// Lives under the amount. It keeps its full layout while closed; only
+    /// its frame, clip and opacity animate, so opening and closing never
+    /// lay the chart out again and everything below moves with the card.
+    private var historyChart: some View {
+        BalanceHistoryChart(
+            balance: balance,
+            isActive: isHistoryExpanded.wrappedValue,
+            model: historyModel,
+            priceService: priceService,
+            selectedTimeRange: selectedHistoryRange,
+            selectedPoint: selectedHistoryPoint
+        )
+        .padding(.top, 16)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(height: isHistoryExpanded.wrappedValue ? nil : 0, alignment: .top)
+        .clipShape(HistoryRevealClip())
+        .opacity(isHistoryExpanded.wrappedValue ? 1 : 0)
+        .allowsHitTesting(isHistoryExpanded.wrappedValue)
+        .accessibilityHidden(!isHistoryExpanded.wrappedValue)
+        .onAppear {
+            // First open: the chart is laid out closed, then opens.
+            if opensHistoryOnMount {
+                opensHistoryOnMount = false
+                setHistoryExpanded(true)
+            }
+        }
+    }
+
+    private func toggleHistory() {
+        if isHistoryExpanded.wrappedValue {
+            // Back to now without animation, so the activity list swaps
+            // its rows in place while the card closes around it.
+            selectedHistoryPoint.wrappedValue = nil
+            isHistoryMounted = true
+            setHistoryExpanded(false)
+        } else if isHistoryMounted {
+            setHistoryExpanded(true)
+        } else {
+            opensHistoryOnMount = true
+            isHistoryMounted = true
+        }
+    }
+
+    private func setHistoryExpanded(_ expanded: Bool) {
+        var transaction = Transaction(animation: reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85))
+        transaction.isHistoryDisclosure = true
+        withTransaction(transaction) {
+            isHistoryExpanded.wrappedValue = expanded
+        }
+    }
+
     /// Subtitle copy for the hardware-wallet sync banner — surfaces
     /// when the user last brought their device online for a key-image
     /// sync. Falls back to a "may be out of date" prompt if we've never
@@ -443,6 +530,14 @@ struct BalanceCard: View {
         } else {
             return "\(count)"
         }
+    }
+}
+
+/// Clips the history reveal at its top and bottom only, so chart dots and
+/// glass at the sides are not cut while it opens.
+private struct HistoryRevealClip: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: -24, dy: 0))
     }
 }
 

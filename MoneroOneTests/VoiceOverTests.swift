@@ -401,15 +401,18 @@ private struct PersistentHistoryHarness: View {
     let points: [PriceDataPoint]
     let speech: ChartSpeech
     @ObservedObject var selection: PersistentHistorySelection
+    @State private var cursor = ChartCursor()
 
     var body: some View {
         SampledLineChart(
             points: points, domain: 450...600, timestamp: \.timestamp, value: \.price,
-            axes: nil, speech: speech, persistsSelection: true,
-            selectedTimestamp: selection.point?.timestamp,
+            axes: nil, speech: speech, cursor: cursor,
             onSelect: { selection.point = $0 }
         )
         .equatable()
         .frame(height: 200)
+        .onChange(of: selection.point?.timestamp, initial: true) { _, timestamp in
+            cursor.timestamp = timestamp
+        }
     }
 }

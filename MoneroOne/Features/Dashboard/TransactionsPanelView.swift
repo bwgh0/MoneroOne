@@ -5,6 +5,13 @@ struct TransactionsPanelView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var selectedTransaction: MoneroTransaction?
     var onSeeAll: (() -> Void)?
+    var asOf: Date? = nil
+    var historyTransactions: [MoneroTransaction]? = nil
+
+    private var activity: [MoneroTransaction] {
+        let source = asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
+        return TransactionListLogic.through(asOf, transactions: source)
+    }
 
     private var isSyncing: Bool {
         switch walletManager.syncState {
@@ -19,10 +26,10 @@ struct TransactionsPanelView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
-                Text("Recent Activity")
+                Text(asOf == nil ? "Recent Activity" : "Activity")
                     .font(.headline)
                 Spacer()
-                if !walletManager.transactions.isEmpty {
+                if !activity.isEmpty {
                     Button {
                         onSeeAll?()
                     } label: {
@@ -35,15 +42,22 @@ struct TransactionsPanelView: View {
             .padding(.horizontal, 16)
             .padding(.top, 16)
 
+            if let asOf {
+                Text("Through \(asOf.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+            }
+
             // Transaction list
-            if walletManager.transactions.isEmpty {
+            if activity.isEmpty {
                 emptyState
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.bottom, 16)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(walletManager.transactions) { transaction in
+                        ForEach(activity) { transaction in
                             TransactionPanelRow(transaction: transaction) {
                                 selectedTransaction = transaction
                             }
@@ -60,7 +74,7 @@ struct TransactionsPanelView: View {
                 TransactionDetailView(transaction: transaction)
             }
             .closesForPaymentLink()
-            .presentationDetents([.fraction(0.75)])
+            .presentationDetents([.fraction(0.75), .large])
             .presentationDragIndicator(.visible)
         }
     }
@@ -68,7 +82,16 @@ struct TransactionsPanelView: View {
     @ViewBuilder
     private var emptyState: some View {
         VStack(spacing: 12) {
-            if isSyncing {
+            if asOf != nil {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                Text("No transactions by this time")
+                    .font(.subheadline.weight(.medium))
+                Text("Move forward in history or return to Now.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if isSyncing {
                 ProgressView()
                     .tint(.brand)
                 Text("Syncing transactions...")
@@ -142,6 +165,7 @@ struct TransactionPanelRow: View {
             .padding(12)
         }
         .glassButtonStyle()
+        .accessibilityIdentifier("wallet.transaction.\(transaction.id)")
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
     }

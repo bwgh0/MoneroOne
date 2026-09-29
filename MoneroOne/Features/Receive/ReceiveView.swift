@@ -649,6 +649,7 @@ struct AddressPickerView: View {
     @State private var renameEmoji: String = ""
     /// Edit mode: a tap on a subaddress renames it instead of showing it.
     @State private var isEditing = false
+    @State private var searchText = ""
 
     /// The index Receive shows, kept per wallet by the manager.
     private var selectedIndex: Int { walletManager.selectedReceiveIndex }
@@ -662,8 +663,18 @@ struct AddressPickerView: View {
         let limit = ReceiveAddressLogic.creationLimit(
             unusedAfterLastUsed: ReceiveAddressLogic.unusedAfterLastUsed(rows)
         )
+        let visibleRows = rows.filter { ReceiveAddressLogic.matchesSearch($0, query: searchText) }
+        let main = ReceiveAddressLogic.mainRow(primaryAddress: walletManager.primaryAddress, usage: usage)
+        let visibleMain = main.flatMap { ReceiveAddressLogic.matchesSearch($0, query: searchText) ? $0 : nil }
+        let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         List {
-            if let main = ReceiveAddressLogic.mainRow(primaryAddress: walletManager.primaryAddress, usage: usage) {
+            if rows.count >= ReceiveAddressLogic.searchThreshold || isSearching {
+                Section {
+                    AddressSearchField(text: $searchText)
+                }
+            }
+
+            if let main = visibleMain {
                 Section {
                     addressRow(main)
                 } footer: {
@@ -672,9 +683,15 @@ struct AddressPickerView: View {
             }
 
             Section {
-                newAddressRow(canCreate: canCreate(limit))
-                ForEach(rows) { row in
+                if !isSearching {
+                    newAddressRow(canCreate: canCreate(limit))
+                }
+                ForEach(visibleRows) { row in
                     addressRow(row)
+                }
+                if isSearching && visibleRows.isEmpty && visibleMain == nil {
+                    Text("No matching addresses")
+                        .foregroundStyle(.secondary)
                 }
             } header: {
                 Text("Subaddresses")
@@ -687,11 +704,15 @@ struct AddressPickerView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollDismissesKeyboard(.interactively)
         // New Address and a kit update slide rows in instead of popping them.
         .animation(.snappy(duration: 0.3), value: rows.count)
         .navigationTitle("Select Address")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
+        .onChange(of: walletManager.activeWallet?.id) { _, _ in
+            searchText = ""
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -866,11 +887,43 @@ struct AddressPickerView: View {
             }
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
+            searchText = ""
             let name = SubaddressName.display(index: result.index, label: result.label)
             UIAccessibility.post(
                 notification: .announcement,
                 argument: String(localized: "Showing new address, \(name)", comment: "VoiceOver: announced after New Address")
             )
+        }
+    }
+}
+
+/// A search row appears only once the address list needs it. Keeping the
+/// field inside the list preserves row identity when the eighth address is
+/// created, including the selection and edit state.
+private struct AddressSearchField: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("Name, number, or address", text: $text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityLabel("Search addresses")
+                .accessibilityIdentifier("addresses.searchField")
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear address search")
+            }
         }
     }
 }
@@ -928,14 +981,17 @@ struct AddressListRow: View {
 
 // MARK: - Address Usage
 
-/// What an address has taken in, on the trailing side of its row: the
-/// total in green over the number of payments, or Unused.
+/// What an address has taken in, on the trailing side of its row: explicitly
+/// Received, the total in green, and the number of payments, or Unused.
 struct AddressUsageSummary: View {
     let usage: ReceiveAddressUsage
 
     var body: some View {
         if usage.payments > 0 {
             VStack(alignment: .trailing, spacing: 2) {
+                Text("Received", comment: "Address usage: the amount is total received, not its current balance")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
                 Text(verbatim: "\(XMRFormatter.formatCompact(usage.received)) XMR")
                     .font(.callout.weight(.medium))
                     .monospacedDigit()

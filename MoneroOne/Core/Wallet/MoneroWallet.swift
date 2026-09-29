@@ -869,17 +869,23 @@ struct BalanceLedger: Equatable {
     /// first transaction.
     let knownSince: Date?
 
-    init(balance: Decimal, changes: [BalanceChange], knownSince: Date? = nil) {
+    /// The same loaded history backs both the chart and its activity list.
+    /// Keep full records so an older point can still open transaction details.
+    let transactions: [MoneroTransaction]
+
+    init(balance: Decimal, changes: [BalanceChange], knownSince: Date? = nil, transactions: [MoneroTransaction] = []) {
         self.balance = balance
         self.changes = changes.sorted { $0.timestamp < $1.timestamp }
         self.knownSince = knownSince
+        self.transactions = transactions.sorted { $0.timestamp > $1.timestamp }
     }
 
     init(balance: Decimal, transactions: [MoneroTransaction], countsPendingIncoming: Bool, knownSince: Date? = nil) {
         self.init(
             balance: balance,
             changes: transactions.compactMap { BalanceChange($0, countsPendingIncoming: countsPendingIncoming) },
-            knownSince: knownSince
+            knownSince: knownSince,
+            transactions: transactions
         )
     }
 }

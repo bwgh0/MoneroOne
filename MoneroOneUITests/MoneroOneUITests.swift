@@ -205,11 +205,11 @@ final class MainAppFlowTests: XCTestCase {
             return
         }
 
-        let chartTab = app.tabBars.buttons["Chart"]
+        let chartTab = app.tabBars.buttons["Price"]
         let settingsTab = app.tabBars.buttons["Settings"]
 
         XCTAssertTrue(walletTab.exists, "Wallet tab should exist")
-        XCTAssertTrue(chartTab.exists, "Chart tab should exist")
+        XCTAssertTrue(chartTab.exists, "Price tab should exist")
         XCTAssertTrue(settingsTab.exists, "Settings tab should exist")
     }
 
@@ -457,7 +457,7 @@ final class DuoWalkthroughTests: XCTestCase {
             sleep(1)
         }
 
-        if tapIfExists(button(["Chart", "tab.chart"]), timeout: 2) {
+        if tapIfExists(button(["Price", "tab.price"]), timeout: 2) {
             sleep(1)
             shot("11-chart")
             tapIfExists(button(["Wallet", "tab.wallet"]), timeout: 3)
@@ -478,5 +478,130 @@ final class DuoWalkthroughTests: XCTestCase {
             shot("13-send")
             dismissSheet()
         }
+    }
+}
+
+// MARK: - Balance history
+
+/// Runs on a dedicated simulator with synthetic, offline wallet data.
+/// The app rejects the fixture flags in device and Release builds. These
+/// tests never use --reset-state or create, unlock, or send from a real wallet.
+final class BalanceHistoryFlowTests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    private func launchFixture(style: String = "Dark", largeText: Bool = false) {
+        app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting", "--balance-history-fixture",
+            "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+            "-AppleInterfaceStyle", style
+        ]
+        if largeText {
+            app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXXXL"]
+        }
+        app.launch()
+        XCTAssertTrue(element("wallet.historyToggle").waitForExistence(timeout: 10), "Fixture should open the unlocked wallet directly")
+    }
+
+    private func element(_ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    private func capture(_ name: String) {
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = name
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "\(name)-hierarchy"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+    }
+
+    private func scrollTo(_ target: XCUIElement, down: Bool) {
+        for _ in 0..<5 where !target.isHittable {
+            if down { app.swipeUp() } else { app.swipeDown() }
+        }
+        XCTAssertTrue(target.isHittable, "Expected control should be reachable by scrolling")
+    }
+
+    private func selectPast() {
+        let chart = element("wallet.historyChart")
+        XCTAssertTrue(chart.waitForExistence(timeout: 5))
+        scrollTo(chart, down: true)
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+            .press(forDuration: 0.15, thenDragTo: chart.coordinate(withNormalizedOffset: CGVector(dx: 0.38, dy: 0.5)))
+        XCTAssertTrue(element("wallet.historyNow").waitForExistence(timeout: 3), "Lifting a finger should preserve the historical selection")
+    }
+
+    func testHistoryPersistsFiltersActivityAndKeepsTransactionDetails() {
+        launchFixture()
+        capture("history-dark-current")
+        XCTAssertFalse(element("wallet.historyChart").exists)
+        let currentBalance = element("wallet.balanceValue").label
+
+        element("wallet.historyToggle").tap()
+        selectPast()
+        let historicalDate = element("wallet.historyDate").label
+        XCTAssertNotEqual(element("wallet.balanceValue").label, currentBalance, "Balance must follow the selected point in time")
+        capture("history-dark-selected")
+
+        let earlyTransaction = element("wallet.transaction.history-sent-early")
+        scrollTo(earlyTransaction, down: true)
+        XCTAssertFalse(element("wallet.transaction.history-received-latest").exists, "Activity after the selected time should be excluded")
+        earlyTransaction.tap()
+        XCTAssertTrue(app.navigationBars["Sent"].waitForExistence(timeout: 3), "A historical transaction should still open its full receipt")
+        capture("history-transaction-details")
+        scrollTo(element("transaction.copyAllButton"), down: true)
+
+        // Recent activity presents the existing receipt as a sheet.
+        // Begin at its navigation bar so this dismisses the sheet even
+        // when the technical fields have scrolled within its List.
+        app.navigationBars["Sent"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+        scrollTo(element("wallet.historyNow"), down: false)
+        XCTAssertEqual(element("wallet.historyDate").label, historicalDate, "Returning from details should preserve the selected time")
+        element("wallet.historyNow").tap()
+        XCTAssertFalse(element("wallet.historyNow").exists)
+        XCTAssertEqual(element("wallet.balanceValue").label, currentBalance)
+        scrollTo(element("wallet.transaction.history-received-latest"), down: true)
+        capture("history-dark-reset")
+    }
+
+    func testPriceHasItsOwnTabAndClosingHistoryReturnsToNow() {
+        launchFixture(style: "Light")
+        element("wallet.historyToggle").tap()
+        selectPast()
+        capture("history-light-selected")
+        scrollTo(element("wallet.historyToggle"), down: false)
+        element("wallet.historyToggle").tap()
+        XCTAssertFalse(element("wallet.historyChart").exists)
+        element("wallet.historyToggle").tap()
+        XCTAssertTrue(element("wallet.historyChart").waitForExistence(timeout: 3))
+        XCTAssertFalse(element("wallet.historyNow").exists, "Reopening History should show the current balance")
+
+        let priceTab = app.tabBars.buttons["Price"]
+        XCTAssertTrue(priceTab.exists)
+        priceTab.tap()
+        XCTAssertTrue(app.navigationBars["Price"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Portfolio"].exists, "Personal balance history belongs on Wallet")
+        capture("price-light")
+    }
+
+    func testHistoryControlsRemainReachableAtLargeText() {
+        launchFixture(style: "Light", largeText: true)
+        capture("history-large-text-current")
+        element("wallet.historyToggle").tap()
+        selectPast()
+        capture("history-large-text-selected")
+        let now = element("wallet.historyNow")
+        scrollTo(now, down: false)
+        XCTAssertGreaterThanOrEqual(now.frame.height, 44, "The visible compact control still needs a comfortable hit target")
+        now.tap()
+        XCTAssertFalse(now.exists)
     }
 }

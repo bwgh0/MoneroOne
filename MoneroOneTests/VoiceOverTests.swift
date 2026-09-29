@@ -49,9 +49,9 @@ final class VoiceOverTests: XCTestCase {
         let elements = accessibilityElements(in: host(rows, height: 420))
 
         XCTAssertEqual(elements.map { $0.accessibilityLabel ?? "" }, [
-            "Wallet 1, \(MoneroOne.XMRFormatter.format(0)) XMR",
-            "Savings, \(MoneroOne.XMRFormatter.format(1.25)) XMR, view-only",
-            "Wallet 2, \(MoneroOne.XMRFormatter.format(0)) XMR",
+            "Wallet 1, last known balance \(MoneroOne.XMRFormatter.format(0)) XMR",
+            "Savings, last known balance \(MoneroOne.XMRFormatter.format(1.25)) XMR, view-only",
+            "Wallet 2, last known balance \(MoneroOne.XMRFormatter.format(0)) XMR",
         ], "one element per wallet")
         let middle = elements[1]
         XCTAssertEqual(middle.accessibilityCustomActions?.map(\.name), ["Rename", "Delete", "Move up", "Move down"])
@@ -86,9 +86,21 @@ final class VoiceOverTests: XCTestCase {
         let elements = accessibilityElements(in: host(rows, height: 280))
 
         XCTAssertEqual(elements.map { $0.accessibilityLabel ?? "" }, [
-            "Cold, \(MoneroOne.XMRFormatter.format(0)) XMR, hardware wallet, not connected",
+            "Cold, last known balance \(MoneroOne.XMRFormatter.format(0)) XMR, hardware wallet, not connected",
             "Travel, \(MoneroOne.XMRFormatter.format(0)) XMR, hardware wallet, connected",
         ])
+    }
+
+    func testUnknownWalletBalanceIsNotAnnouncedAsZero() {
+        let unknown = wallet("New wallet", source: .seed(.polyseed), address: "")
+        let view = WalletRow(
+            wallet: unknown, isActive: false, balance: nil, address: nil,
+            onTap: {}, onRename: {}, onDelete: {}, onMoveUp: nil,
+            onMoveDown: nil, isLifted: false
+        )
+        let elements = accessibilityElements(in: host(view, height: 140))
+        XCTAssertEqual(elements.count, 1)
+        XCTAssertEqual(elements.first?.accessibilityLabel, "New wallet, balance unavailable")
     }
 
     // MARK: - Charts
@@ -164,33 +176,53 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertFalse(elements.first?.accessibilityTraits.contains(.adjustable) ?? true)
     }
 
-    /// Switching modes must reuse the loaded history and expose only the
-    /// visible chart (including its range buttons) to VoiceOver.
-    func testChartModeSwitchingKeepsHistoryAndHidesInactiveContent() throws {
+    /// Wallet history remains adjustable even when no transfer fell in the
+    /// range. Clearing the parent's selection must clear the overlay too.
+    func testPersistentHistoryAdjustsSamplesAndHonorsExternalNow() throws {
+        let points = samples(price: { 500 + Double($0) })
+        let selection = PersistentHistorySelection()
+        let speech = ChartSpeech(title: "Balance history", span: "past week", currencyCode: "usd")
+        let root = host(PersistentHistoryHarness(points: points, speech: speech, selection: selection), height: 220)
+        let chart = try XCTUnwrap(accessibilityElements(in: root).first)
+        XCTAssertTrue(chart.accessibilityTraits.contains(.adjustable))
+
+        chart.accessibilityDecrement()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(selection.point?.timestamp, points[points.count - 2].timestamp)
+        XCTAssertTrue(accessibilityElements(in: root).first?.accessibilityValue?.contains(speech.format(548)) == true)
+
+        selection.point = nil
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(accessibilityElements(in: root).first?.accessibilityValue, speech.summary(first: 500, last: 549))
+
+        selection.point = points[10]
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        let historical = try XCTUnwrap(accessibilityElements(in: root).first)
+        XCTAssertTrue(historical.accessibilityValue?.contains(speech.format(510)) == true)
+        historical.accessibilityIncrement()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(selection.point?.timestamp, points[11].timestamp)
+
+        selection.point = points[points.count - 2]
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        accessibilityElements(in: root).first?.accessibilityIncrement()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertNil(selection.point, "moving to the current tip returns to Now")
+    }
+
+    /// Market research has no wallet-history controls or ledger fetches.
+    func testPriceDestinationHasOneChartAndDoesNotLoadWalletHistory() {
         let wallet = ChartWallet()
-        wallet.balance = 2
         let price = ChartPrices(points: samples(price: { 500 + Double($0) }))
         let view = host(ChartModesHarness(wallet: wallet, price: price), height: 874)
-        XCTAssertEqual(wallet.historyLoads, 1)
-
-        for mode in ["Price", "Portfolio", "Price", "Portfolio"] {
-            let available = accessibilityElements(in: view)
-            let button = try XCTUnwrap(available.first {
-                $0.accessibilityLabel == mode && $0.accessibilityTraits.contains(.button)
-            }, "Available controls: \(available.compactMap(\.accessibilityLabel))")
-            XCTAssertTrue(button.accessibilityActivate())
-            RunLoop.main.run(until: Date().addingTimeInterval(0.3))
-
-            let elements = accessibilityElements(in: view)
-            let chartLabels = elements.compactMap(\.accessibilityLabel).filter {
-                $0 == "Monero price chart, past week" || $0 == "Portfolio chart, past week"
-            }
-            XCTAssertEqual(chartLabels, [mode == "Price" ? "Monero price chart, past week" : "Portfolio chart, past week"])
-            XCTAssertEqual(elements.filter { $0.accessibilityLabel == "1 week" }.count, 1, "Only the visible range selector is reachable")
-        }
-
-        XCTAssertEqual(wallet.historyLoads, 1, "Mode switches must not fetch wallet history again")
-        XCTAssertEqual(price.rangeLoads, 1, "Mode switches must not fetch the price series again")
+        let elements = accessibilityElements(in: view)
+        let labels = elements.compactMap(\.accessibilityLabel)
+        XCTAssertTrue(labels.contains("Monero price chart, past week"))
+        XCTAssertFalse(labels.contains("Portfolio chart, past week"))
+        XCTAssertFalse(labels.contains("Chart mode"))
+        XCTAssertEqual(elements.filter { $0.accessibilityLabel == "1 week" }.count, 1)
+        XCTAssertEqual(wallet.historyLoads, 0)
+        XCTAssertEqual(price.rangeLoads, 1)
     }
 
     // MARK: - QR focus mode
@@ -350,13 +382,34 @@ private final class ChartPrices: PriceService {
 private struct ChartModesHarness: View {
     let wallet: WalletManager
     let price: PriceService
-    @State private var mode: ChartView.Mode = .portfolio
     @State private var path: [ChartView.Destination] = []
 
     var body: some View {
-        ChartView(selectedMode: $mode, path: $path)
+        ChartView(path: $path)
             .environmentObject(wallet)
             .environmentObject(price)
             .environmentObject(PriceAlertService())
+    }
+}
+
+@MainActor
+private final class PersistentHistorySelection: ObservableObject {
+    @Published var point: PriceDataPoint?
+}
+
+private struct PersistentHistoryHarness: View {
+    let points: [PriceDataPoint]
+    let speech: ChartSpeech
+    @ObservedObject var selection: PersistentHistorySelection
+
+    var body: some View {
+        SampledLineChart(
+            points: points, domain: 450...600, timestamp: \.timestamp, value: \.price,
+            axes: nil, speech: speech, persistsSelection: true,
+            selectedTimestamp: selection.point?.timestamp,
+            onSelect: { selection.point = $0 }
+        )
+        .equatable()
+        .frame(height: 200)
     }
 }

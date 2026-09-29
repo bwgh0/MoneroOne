@@ -8,7 +8,11 @@ struct WalletView: View {
     @State private var showSend = false
     @State private var showWalletManager = false
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
-    let openChart: (ChartView.Mode) -> Void
+    @State private var isHistoryExpanded = false
+    @State private var selectedHistoryPoint: PortfolioDataPoint?
+    @State private var selectedHistoryRange: ChartTimeRange = .week
+    @State private var historyTransactions: [MoneroTransaction]?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Viewport and above-activity heights, so the empty activity card can
     /// fill the leftover height on short screens (iPhone Duo cover).
     @State private var viewportHeight: CGFloat = 0
@@ -32,6 +36,7 @@ struct WalletView: View {
                 color: .brand,
                 isDisabled: !walletManager.canSend
             ) {
+                selectedHistoryPoint = nil
                 showSend = true
             }
             .accessibilityIdentifier("wallet.sendButton")
@@ -43,6 +48,7 @@ struct WalletView: View {
                 icon: "arrow.down.circle.fill",
                 color: .green
             ) {
+                selectedHistoryPoint = nil
                 showReceive = true
             }
             .accessibilityIdentifier("wallet.receiveButton")
@@ -72,12 +78,10 @@ struct WalletView: View {
                             isOutsideTrustedZone: trustedLocationSync.isOutsideTrustedZone,
                             trustedLocationName: trustedLocationSync.currentTrustedLocationName,
                             isTrustedLocationEnabled: trustedLocationSync.isEnabled,
-                            onPriceChangeTap: {
-                                openChart(.price)
-                            },
-                            onCardTap: {
-                                openChart(.portfolio)
-                            },
+                            isHistoryExpanded: $isHistoryExpanded,
+                            selectedHistoryPoint: $selectedHistoryPoint,
+                            selectedHistoryRange: $selectedHistoryRange,
+                            onHistoryLoaded: { historyTransactions = $0.transactions },
                             onHardwareSyncTap: {
                                 // Clear any leftover .complete/.failed
                                 // state from the prior run so the
@@ -92,6 +96,7 @@ struct WalletView: View {
                                 hardwareSheetIntent = .syncSentTransactions
                             }
                         )
+                        .id(walletManager.walletSessionId)
                         .padding(.horizontal)
 
                         actionButtons
@@ -105,7 +110,11 @@ struct WalletView: View {
 
                     // Recent transactions — hide instantly, no animation
                     if !showWalletManager {
-                        RecentTransactionsSection(emptyStateMinHeight: recentFillHeight)
+                        RecentTransactionsSection(
+                            emptyStateMinHeight: recentFillHeight,
+                            asOf: selectedHistoryPoint?.timestamp,
+                            historyTransactions: historyTransactions
+                        )
                             .padding(.horizontal)
                             .padding(.top, 16)
                             .transaction { $0.animation = nil }
@@ -119,13 +128,21 @@ struct WalletView: View {
                 }
             }
             // Lets the wallet rows' swipe-to-delete work outside a List (iOS 27).
-            .animation(.snappy(duration: 0.35), value: showWalletManager)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.35), value: showWalletManager)
             // Viewport below the header bar and above the tab bar (background
             // content respects safe areas), used to size the activity card.
             .background {
                 Color.clear.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
             }
             .walletHeader(showWalletManager: $showWalletManager)
+            .onChange(of: walletManager.walletSessionId) { _, _ in
+                selectedHistoryPoint = nil
+                historyTransactions = nil
+                isHistoryExpanded = false
+            }
+            .onChange(of: showSend) { _, isPresented in
+                if isPresented { selectedHistoryPoint = nil }
+            }
             .refreshable {
                 await walletManager.refresh()
                 await priceService.fetchPrice()
@@ -208,9 +225,16 @@ struct RecentTransactionsSection: View {
     /// Stretches the empty-state card to this height so it reaches the
     /// bottom of the screen instead of leaving a blank block under it.
     var emptyStateMinHeight: CGFloat? = nil
+    var asOf: Date? = nil
+    var historyTransactions: [MoneroTransaction]? = nil
+
+    private var activity: [MoneroTransaction] {
+        let source = asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
+        return TransactionListLogic.through(asOf, transactions: source)
+    }
 
     private var recentTransactions: [MoneroTransaction] {
-        Array(walletManager.mergedTransactions.prefix(5))
+        Array(activity.prefix(5))
     }
 
     private var isSyncing: Bool {
@@ -225,12 +249,19 @@ struct RecentTransactionsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Recent Activity")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(asOf == nil ? "Recent Activity" : "Activity")
+                        .font(.headline)
+                    if let asOf {
+                        Text("Through \(asOf.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
-                if !walletManager.transactions.isEmpty {
+                if !activity.isEmpty {
                     NavigationLink {
-                        TransactionListView()
+                        TransactionListView(asOf: asOf, historyTransactions: historyTransactions)
                     } label: {
                         Text("See All")
                             .font(.subheadline)
@@ -244,7 +275,17 @@ struct RecentTransactionsSection: View {
                 // short displays and a glass capsule would turn into an egg.
                 VStack(spacing: 12) {
                     Group {
-                        if isSyncing {
+                        if asOf != nil {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.largeTitle)
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                            Text("No transactions by this time")
+                                .font(.subheadline.weight(.medium))
+                            Text("Move forward in history or return to Now.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else if isSyncing {
                             ProgressView()
                                 .tint(.brand)
                                 .accessibilityHidden(true)
@@ -287,7 +328,7 @@ struct RecentTransactionsSection: View {
                 TransactionDetailView(transaction: transaction)
             }
             .closesForPaymentLink()
-            .presentationDetents([.fraction(0.75)])
+            .presentationDetents([.fraction(0.75), .large])
             .presentationDragIndicator(.visible)
         }
     }
@@ -343,6 +384,7 @@ struct RecentTransactionCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
         .accessibilityHint("Shows transaction details")
+        .accessibilityIdentifier("wallet.transaction.\(transaction.id)")
     }
 
     private var amount: TransactionAmountText {
@@ -444,7 +486,7 @@ private extension View {
 #Preview {
     let priceService = PriceService()
     let priceHistoryService = PriceHistoryService(priceService: priceService)
-    WalletView(openChart: { _ in })
+    WalletView()
         .environmentObject(WalletManager())
         .environmentObject(priceService)
         .environmentObject(priceHistoryService)

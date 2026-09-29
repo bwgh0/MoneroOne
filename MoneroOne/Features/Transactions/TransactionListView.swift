@@ -9,6 +9,12 @@ struct TransactionListView: View {
     @State private var filterType: FilterType = .all
     /// Minor index of the receiving subaddress to show, nil for any.
     @State private var receivingIndex: Int?
+    var asOf: Date? = nil
+    var historyTransactions: [MoneroTransaction]? = nil
+
+    private var sourceTransactions: [MoneroTransaction] {
+        asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
+    }
 
     enum FilterType: String, CaseIterable {
         case all = "All"
@@ -57,17 +63,18 @@ struct TransactionListView: View {
     // outgoing sends as Received.
     private var filteredTransactions: [MoneroTransaction] {
         TransactionListLogic.filter(
-            walletManager.mergedTransactions,
+            sourceTransactions,
             type: filterType,
             receivingIndex: receivingIndex,
-            search: searchText
+            search: searchText,
+            asOf: asOf
         )
     }
 
     private var receivingOptions: [ReceivingAddressOption] {
         TransactionListLogic.receivingAddressOptions(
             subaddresses: walletManager.subaddresses.map(SubaddressSummary.init),
-            transactions: walletManager.mergedTransactions
+            transactions: TransactionListLogic.through(asOf, transactions: sourceTransactions)
         )
     }
 
@@ -91,6 +98,13 @@ struct TransactionListView: View {
             : nil
 
         List {
+            if let asOf {
+                Text("Through \(asOf.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
             if filtered.isEmpty {
                 emptyState
                     .listRowBackground(Color.clear)
@@ -112,7 +126,7 @@ struct TransactionListView: View {
         }
         .listStyle(.plain)
         .animation(.easeInOut(duration: 0.25), value: filtered.isEmpty)
-        .navigationTitle("All Transactions")
+        .navigationTitle(asOf == nil ? "All Transactions" : "Activity")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
         .searchable(text: $searchText, prompt: "Search by ID, address, or memo")
@@ -445,6 +459,13 @@ extension WalletManager {
 }
 
 enum TransactionListLogic {
+    /// Inclusive cutoff shared by recent activity and See All. Filtering
+    /// changes which records are visible; their full details stay intact.
+    static func through(_ date: Date?, transactions: [MoneroTransaction]) -> [MoneroTransaction] {
+        guard let date else { return transactions }
+        return transactions.filter { $0.timestamp <= date }
+    }
+
     /// Type filter, receiving-address filter and search compose with AND.
     /// A receiving-address filter keeps incoming transactions only:
     /// sends spend from the account, not from one subaddress.
@@ -483,9 +504,10 @@ enum TransactionListLogic {
         _ transactions: [MoneroTransaction],
         type: TransactionListView.FilterType,
         receivingIndex: Int?,
-        search: String
+        search: String,
+        asOf: Date? = nil
     ) -> [MoneroTransaction] {
-        transactions.filter { matches($0, type: type, receivingIndex: receivingIndex, search: search) }
+        through(asOf, transactions: transactions).filter { matches($0, type: type, receivingIndex: receivingIndex, search: search) }
     }
 
     /// Received and sent (amount plus fee) over `transactions`. Failed

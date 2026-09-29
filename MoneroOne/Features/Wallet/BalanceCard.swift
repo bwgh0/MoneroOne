@@ -15,29 +15,24 @@ struct BalanceCard: View {
     var isOutsideTrustedZone: Bool = false
     var trustedLocationName: String? = nil
     var isTrustedLocationEnabled: Bool = false
-    var onPriceChangeTap: (() -> Void)? = nil
-    var onCardTap: (() -> Void)? = nil
+    var isHistoryExpanded: Binding<Bool> = .constant(false)
+    var selectedHistoryPoint: Binding<PortfolioDataPoint?> = .constant(nil)
+    var selectedHistoryRange: Binding<ChartTimeRange> = .constant(.week)
+    var onHistoryLoaded: (BalanceLedger) -> Void = { _ in }
     var onHardwareSyncTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .largeTitle) private var balanceSize: CGFloat = 32
 
-    /// Calculate 24h price change from 1D chart data (same as chart views)
-    private var priceChange24h: Double? {
-        let dayData = priceService.chartData(for: "1D")
-        guard dayData.count >= 2,
-              let firstPrice = dayData.first?.price,
-              let lastPrice = dayData.last?.price,
-              firstPrice > 0 else { return nil }
-        return ((lastPrice - firstPrice) / firstPrice) * 100
-    }
+    private var historicalPoint: PortfolioDataPoint? { selectedHistoryPoint.wrappedValue }
+    private var displayedBalance: Decimal { historicalPoint?.balance ?? balance }
 
-    private func formatPriceChange(_ change: Double) -> String {
-        let sign = change >= 0 ? "+" : ""
-        return "\(sign)\(String(format: "%.2f", change))%"
-    }
-
-    /// The balance at the live price. Nil until a price has been fetched.
+    /// A historical amount uses the sampled price at that same moment.
     private var fiatBalance: String? {
-        priceService.formatFiatValue(balance)
+        if let historicalPoint {
+            return priceService.formatFiat(Decimal(historicalPoint.value))
+        }
+        return priceService.formatFiatValue(balance)
     }
 
     /// Fiat Mode puts the fiat balance in the hero and the XMR amount under
@@ -48,13 +43,13 @@ struct BalanceCard: View {
 
     /// The hero number: "1.2345" beside an "XMR" unit, or "$150.23".
     private var heroText: String {
-        isFiatFirst ? fiatBalance ?? "" : XMRFormatter.format(balance)
+        isFiatFirst ? fiatBalance ?? "" : XMRFormatter.format(displayedBalance)
     }
 
     /// The line under the hero: "≈ $150.23", or "1.2345 XMR" in Fiat Mode.
     private var captionText: String? {
         if isFiatFirst {
-            return "\(XMRFormatter.format(balance)) XMR"
+            return "\(XMRFormatter.format(displayedBalance)) XMR"
         }
         return fiatBalance.map { "≈ \($0)" }
     }
@@ -77,11 +72,15 @@ struct BalanceCard: View {
     }
 
     private var balanceAccessibilityLabel: String {
+        if let historicalPoint {
+            let date = historicalPoint.timestamp.formatted(date: .abbreviated, time: .shortened)
+            return String(localized: "Historical balance: \(XMRFormatter.format(displayedBalance)) XMR, \(fiatBalance ?? ""), as of \(date)")
+        }
         if isFiatFirst, let fiatBalance {
-            return String(localized: "Balance: \(fiatBalance), \(XMRFormatter.format(balance)) XMR", comment: "VoiceOver: Fiat Mode balance, fiat first, then XMR")
+            return String(localized: "Balance: \(fiatBalance), \(XMRFormatter.format(displayedBalance)) XMR", comment: "VoiceOver: Fiat Mode balance, fiat first, then XMR")
         }
         let approximately = fiatBalance.map { String(localized: ", approximately \($0)", comment: "VoiceOver: fiat value after an XMR amount") } ?? ""
-        return String(localized: "Balance: \(XMRFormatter.format(balance)) XMR\(approximately)")
+        return String(localized: "Balance: \(XMRFormatter.format(displayedBalance)) XMR\(approximately)")
     }
 
     private var availableAccessibilityLabel: String {
@@ -99,7 +98,13 @@ struct BalanceCard: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                if isSyncBlocked {
+                if historicalPoint != nil {
+                    Label("Historical balance", systemImage: "clock.arrow.circlepath")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                } else if isSyncBlocked {
                     Circle()
                         .fill(Color.gray)
                         .frame(width: 8, height: 8)
@@ -184,25 +189,34 @@ struct BalanceCard: View {
 
                 Spacer()
 
-                // Price change indicator (tappable)
-                if let change = priceChange24h {
-                    Button {
-                        onPriceChangeTap?()
-                    } label: {
-                        HStack(spacing: 2) {
-                            Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                .font(.caption2)
-                            Text(formatPriceChange(change))
-                                .font(.caption)
-                        }
-                        .foregroundColor(change >= 0 ? .green : .red)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill((change >= 0 ? Color.green : Color.red).opacity(0.15)))
+                Button {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
+                        isHistoryExpanded.wrappedValue.toggle()
+                        if !isHistoryExpanded.wrappedValue { selectedHistoryPoint.wrappedValue = nil }
                     }
-                    .accessibilityLabel("24 hour price change: \(formatPriceChange(change))")
-                    .accessibilityHint("Opens the price chart")
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chart.xyaxis.line")
+                        Text("History")
+                        Image(systemName: "chevron.down")
+                            .font(.caption2.weight(.semibold))
+                            .rotationEffect(.degrees(isHistoryExpanded.wrappedValue ? 180 : 0))
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.brand)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.brand.opacity(0.12), in: Capsule())
+                    // Keep the compact status row while providing a 44pt target.
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .padding(.vertical, -10)
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("wallet.historyToggle")
+                .accessibilityLabel("Balance history")
+                .accessibilityValue(isHistoryExpanded.wrappedValue ? "Expanded" : "Collapsed")
+                .accessibilityHint(isHistoryExpanded.wrappedValue ? "Hides balance history and returns to now" : "Shows your balance over time")
             }
 
             HStack(spacing: 16) {
@@ -218,7 +232,7 @@ struct BalanceCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(heroText)
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .font(.system(size: balanceSize, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .contentTransition(.numericText())
                             .lineLimit(1)
@@ -231,7 +245,7 @@ struct BalanceCard: View {
                         }
                     }
                     .fixedSize(horizontal: false, vertical: true)
-                    .animation(.easeInOut(duration: 0.2), value: heroText)
+                    .animation(reduceMotion || historicalPoint != nil ? nil : .easeInOut(duration: 0.2), value: heroText)
 
                     if let captionText {
                         Text(captionText)
@@ -239,7 +253,7 @@ struct BalanceCard: View {
                             .foregroundColor(.secondary)
                             .monospacedDigit()
                             .contentTransition(.numericText())
-                            .animation(.easeInOut(duration: 0.2), value: captionText)
+                            .animation(reduceMotion || historicalPoint != nil ? nil : .easeInOut(duration: 0.2), value: captionText)
                     }
                 }
 
@@ -247,13 +261,21 @@ struct BalanceCard: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(balanceAccessibilityLabel)
-            // The card's tap opens the portfolio chart; say so to VoiceOver.
-            .accessibilityAddTraits(onCardTap == nil ? [] : .isButton)
-            .accessibilityHint(onCardTap == nil ? "" : "Opens the portfolio chart")
-            .accessibilityAction { onCardTap?() }
+            .accessibilityIdentifier("wallet.balanceValue")
+
+            if isHistoryExpanded.wrappedValue {
+                BalanceHistoryChart(
+                    balance: balance,
+                    priceService: priceService,
+                    selectedTimeRange: selectedHistoryRange,
+                    selectedPoint: selectedHistoryPoint,
+                    onLedgerLoaded: onHistoryLoaded
+                )
+                .transition(.opacity)
+            }
 
             // Unlocked Balance
-            if unlockedBalance != balance {
+            if historicalPoint == nil, unlockedBalance != balance {
                 VStack(spacing: 4) {
                     HStack {
                         Text("Available:")
@@ -388,10 +410,6 @@ struct BalanceCard: View {
                     x: 0,
                     y: 4
                 )
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onCardTap?()
         }
     }
 

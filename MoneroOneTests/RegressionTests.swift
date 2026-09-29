@@ -1324,6 +1324,32 @@ final class TransactionScreenLogicTests: XCTestCase {
 
     // MARK: Filter predicate
 
+    func testHistoryCutoffIsInclusiveAndResetRestoresEveryRecord() {
+        let history = [
+            tx("later", .incoming, amount: 1, timestamp: 300),
+            tx("at-cutoff", .outgoing, amount: 0.5, fee: 0.01, timestamp: 200),
+            tx("earlier", .incoming, amount: 2, timestamp: 100)
+        ]
+        let cutoff = Date(timeIntervalSince1970: 200)
+        XCTAssertEqual(TransactionListLogic.through(cutoff, transactions: history).map(\.id), ["at-cutoff", "earlier"])
+        XCTAssertEqual(TransactionListLogic.through(cutoff.addingTimeInterval(-0.001), transactions: history).map(\.id), ["earlier"])
+        XCTAssertEqual(TransactionListLogic.through(nil, transactions: history), history)
+        XCTAssertTrue(TransactionListLogic.through(Date(timeIntervalSince1970: 99), transactions: history).isEmpty)
+        let filtered = TransactionListLogic.filter(history, type: .outgoing, receivingIndex: nil, search: "cutoff", asOf: cutoff)
+        XCTAssertEqual(filtered, [history[1]], "Full details including fee survive the cutoff and other filters")
+    }
+
+    func testBalanceLedgerRetainsFullActivityIncludingRecordsThatDoNotMoveBalance() {
+        let history = [
+            tx("failed", .outgoing, amount: 3, status: .failed, timestamp: 300),
+            tx("pending", .incoming, amount: 0.25, status: .pending, timestamp: 200),
+            tx("received", .incoming, amount: 1, timestamp: 100)
+        ]
+        let ledger = BalanceLedger(balance: 1, transactions: history, countsPendingIncoming: false)
+        XCTAssertEqual(ledger.transactions, history)
+        XCTAssertEqual(ledger.changes.map(\.id), ["received"])
+    }
+
     func testFilterDefaultsKeepEverything() {
         XCTAssertEqual(ids(), sample.map(\.id))
     }
@@ -1725,6 +1751,20 @@ final class ReceiveAddressLogicTests: XCTestCase {
         let address = "8" + String(repeating: "a", count: 86) + "Z1kqWXYZ"
         XCTAssertEqual(ReceiveAddressLogic.shortAddress(address), "8aaaaaaa…Z1kqWXYZ")
         XCTAssertEqual(ReceiveAddressLogic.shortAddress("short"), "short")
+    }
+
+    func testAddressSearchFindsOlderLabelsNumbersAndFullAddressFragments() {
+        let donations = ReceiveAddressRow(index: 12, address: "8BNm4Pq2Za7kW1xYZ1kq", label: "🎁 Café donations")
+        XCTAssertTrue(ReceiveAddressLogic.matchesSearch(donations, query: "  CAFE  "))
+        XCTAssertTrue(ReceiveAddressLogic.matchesSearch(donations, query: "donations"))
+        XCTAssertTrue(ReceiveAddressLogic.matchesSearch(donations, query: "12"))
+        XCTAssertTrue(ReceiveAddressLogic.matchesSearch(donations, query: "#12"))
+        XCTAssertTrue(ReceiveAddressLogic.matchesSearch(donations, query: "Za7kW1"))
+        XCTAssertTrue(ReceiveAddressLogic.matchesSearch(donations, query: " \n "))
+        XCTAssertFalse(ReceiveAddressLogic.matchesSearch(donations, query: "#1"))
+        XCTAssertFalse(ReceiveAddressLogic.matchesSearch(donations, query: "travel"))
+        XCTAssertFalse(ReceiveAddressLogic.matchesSearch(row(123), query: "#12"))
+        XCTAssertTrue(ReceiveAddressLogic.matchesSearch(row(0), query: "main"))
     }
 
     func testVoiceOverNamesTheNumberForALabelAndReadsTheTotal() {

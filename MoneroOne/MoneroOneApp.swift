@@ -7,7 +7,7 @@ private let logger = Logger(subsystem: "one.monero.MoneroOne", category: "App")
 
 @main
 struct MoneroOneApp: App {
-    @StateObject private var walletManager = WalletManager()
+    @StateObject private var walletManager: WalletManager
     @StateObject private var priceService: PriceService
     @StateObject private var priceHistoryService: PriceHistoryService
     @StateObject private var priceAlertService = PriceAlertService()
@@ -15,6 +15,7 @@ struct MoneroOneApp: App {
     @AppStorage("autoLockMinutes") private var autoLockMinutes = 5
     @AppStorage("appearanceMode") private var appearanceMode = 0
     @State private var backgroundTime: Date?
+    private let isBalanceHistoryFixture: Bool
 
     static let priceCheckTaskId = "one.monero.MoneroOne.priceCheck"
 
@@ -23,6 +24,21 @@ struct MoneroOneApp: App {
     }
 
     init() {
+        #if DEBUG && targetEnvironment(simulator)
+        // Explicitly opted-in UI verification data. No seed is generated,
+        // no wallet is opened, and the fixture never runs on a phone.
+        if CommandLine.arguments.contains("--uitesting") && CommandLine.arguments.contains("--balance-history-fixture") {
+            let prices = BalanceHistoryFixturePrices()
+            _walletManager = StateObject(wrappedValue: BalanceHistoryFixtureWallet())
+            _priceService = StateObject(wrappedValue: prices)
+            _priceHistoryService = StateObject(wrappedValue: PriceHistoryService(priceService: prices, cacheDirectory: nil))
+            isBalanceHistoryFixture = true
+            return
+        }
+        #endif
+
+        _walletManager = StateObject(wrappedValue: WalletManager())
+        isBalanceHistoryFixture = false
         // The history service prices by the currency the price service
         // selects, so both state objects share one PriceService instance.
         let priceService = PriceService()
@@ -59,13 +75,21 @@ struct MoneroOneApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            Group {
+                if isBalanceHistoryFixture {
+                    MainTabView()
+                        .edgeBreathingRoom()
+                } else {
+                    ContentView()
+                }
+            }
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
                 .environmentObject(priceHistoryService)
                 .environmentObject(priceAlertService)
                 .preferredColorScheme(colorScheme)
                 .onAppear {
+                    guard !isBalanceHistoryFixture else { return }
                     TrustedLocationSyncManager.shared.configure(walletManager: walletManager)
                     priceService.priceAlertService = priceAlertService
                     // Defer all price network calls until a wallet exists.
@@ -77,6 +101,7 @@ struct MoneroOneApp: App {
                     }
                 }
                 .onChange(of: walletManager.hasWallet) { hasWallet in
+                    guard !isBalanceHistoryFixture else { return }
                     if hasWallet {
                         priceService.startAutoRefresh()
                         priceHistoryService.startAutoRefresh()
@@ -106,6 +131,7 @@ struct MoneroOneApp: App {
     }
 
     private func handleScenePhaseChange(newPhase: ScenePhase) {
+        guard !isBalanceHistoryFixture else { return }
         // Add-wallet sheet is a long-running user flow (typing a seed, pasting
         // an address + view key from a password manager). Locking mid-flow
         // unmounts MainTabView and destroys the sheet + any partially-entered
@@ -224,3 +250,83 @@ struct MoneroOneApp: App {
         }
     }
 }
+
+#if DEBUG && targetEnvironment(simulator)
+/// Synthetic, offline data used only with both explicit UI-test launch flags.
+/// Keep this separate from wallet persistence and all production chart data.
+@MainActor
+private final class BalanceHistoryFixtureWallet: WalletManager {
+    static let end = ISO8601DateFormatter().date(from: "2026-09-28T16:00:00Z")!
+    static let address = "4" + String(repeating: "A", count: 94)
+
+    override init() {
+        super.init()
+        let wallet = WalletInfo(
+            id: UUID(uuidString: "AE86C999-BA9E-48A8-B932-C3F2577B5E50")!,
+            name: "History Demo", emoji: "💰", source: .seed(.polyseed),
+            createdAt: Self.end.addingTimeInterval(-7 * 86_400),
+            restoreHeight: 0, syncResetCount: 0, userCreatedSubaddressIndices: [],
+            cachedPrimaryAddress: Self.address, cachedBalance: Decimal(string: "12.4826")
+        )
+        wallets = [wallet]
+        activeWallet = wallet
+        isUnlocked = true
+        balance = Decimal(string: "12.4826")!
+        unlockedBalance = balance
+        address = Self.address
+        primaryAddress = Self.address
+        syncState = .synced
+        connectionStage = .synced
+        transactions = [
+            event("history-received-latest", type: .incoming, amount: "0.5", hoursAgo: 6),
+            event("history-sent-recent", type: .outgoing, amount: "0.12", hoursAgo: 30),
+            event("history-received-middle", type: .incoming, amount: "1.25", hoursAgo: 78),
+            event("history-sent-early", type: .outgoing, amount: "0.08", hoursAgo: 126),
+            event("history-received-opening", type: .incoming, amount: "10.9326", hoursAgo: 150)
+        ]
+    }
+
+    private func event(_ id: String, type: MoneroTransaction.TransactionType, amount: String, hoursAgo: Double) -> MoneroTransaction {
+        MoneroTransaction(
+            id: id, type: type, amount: Decimal(string: amount)!, fee: 0,
+            address: Self.address, timestamp: Self.end.addingTimeInterval(-hoursAgo * 3_600),
+            confirmations: 120, status: .confirmed, memo: nil, blockHeight: 3_600_000,
+            subaddressIndex: type == .incoming ? 0 : nil
+        )
+    }
+
+    override func balanceLedger() async -> BalanceLedger {
+        BalanceLedger(balance: balance, transactions: transactions, countsPendingIncoming: false)
+    }
+
+    override func refresh() async {}
+    override func resumeSync() {}
+}
+
+@MainActor
+private final class BalanceHistoryFixturePrices: PriceService {
+    private let samples: [PriceDataPoint] = (0...168).map { hour in
+        PriceDataPoint(
+            timestamp: BalanceHistoryFixtureWallet.end.addingTimeInterval(Double(hour - 168) * 3_600),
+            price: 255 + Double(hour) * 0.12 + sin(Double(hour) / 7) * 3
+        )
+    }
+
+    override init() {
+        super.init()
+        selectedCurrency = "usd"
+        usdToSelectedRate = 1
+        xmrPrice = samples.last?.price
+        lastUpdated = BalanceHistoryFixtureWallet.end
+        priceChange24h = 2.4
+        showFiatFirst = false
+    }
+
+    override func chartData(for range: String) -> [PriceDataPoint] { samples }
+    override func selectChartRange(_ range: String) { currentChartRange = range }
+    override func startAutoRefresh() {}
+    override func refreshIfStale() async {}
+    override func fetchPrice() async {}
+    override func fetchChartData(range: String = "7D", force: Bool = false) async {}
+}
+#endif

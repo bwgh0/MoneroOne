@@ -379,16 +379,11 @@ enum ChartTimeAxis: String, Equatable {
 
 // MARK: - Sampled line chart
 
-/// One series drawn as a line and fill over every real sample, with a
-/// touch-and-drag scrub overlay. The chart holds no binding: the selection
-/// is state inside the overlay and is reported up through `onSelect`, so a
-/// scrub re-renders the overlay only and never the marks. Callers apply
-/// `.equatable()`; the marks then rebuild only when `points`, `domain` or
-/// `axes` change. That is what keeps 700 samples smooth; the old code hid
-/// the cost by drawing 96 of them.
-///
-/// VoiceOver sees the chart as one element (see `ChartSpeech`); the marks
-/// are hidden, or Swift Charts adds a stop for every day of the range.
+/// A sampled line with an independently updating inspection overlay. The
+/// marks remain equatable when persistent selection changes, so scrubbing a
+/// long series does not rebuild its chart content. Existing price charts use
+/// transient inspection; wallet history opts into a parent-controlled cutoff.
+/// VoiceOver sees one adjustable element and an Audio Graph of every sample.
 struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     @ScaledMetric(relativeTo: .caption2) private var axisLabelWidth: CGFloat = 64
     struct Axes: Equatable {
@@ -405,20 +400,16 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     /// Dots drawn on top of the line.
     var markers: [ChartMarker] = []
     let speech: ChartSpeech
+    var persistsSelection = false
+    /// The parent's selected instant; nil means Now. Used only in persistent mode.
+    var selectedTimestamp: Date? = nil
     let onSelect: (Point?) -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.points == rhs.points && lhs.domain == rhs.domain && lhs.axes == rhs.axes
             && lhs.timestamp == rhs.timestamp && lhs.value == rhs.value
             && lhs.markers == rhs.markers && lhs.speech == rhs.speech
-    }
-
-    private static var fill: LinearGradient {
-        LinearGradient(
-            colors: [Color.brand.opacity(0.4), Color.brand.opacity(0.0)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+            && lhs.persistsSelection == rhs.persistsSelection && lhs.selectedTimestamp == rhs.selectedTimestamp
     }
 
     var body: some View {
@@ -456,39 +447,8 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     }
 
     private var chart: some View {
-        Chart {
-            ForEach(points) { point in
-                AreaMark(
-                    x: .value("Time", point[keyPath: timestamp]),
-                    yStart: .value("Min", domain.lowerBound),
-                    yEnd: .value("Value", point[keyPath: value])
-                )
-                .foregroundStyle(Self.fill)
-                .interpolationMethod(.linear)
-                .accessibilityHidden(true)
-
-                LineMark(
-                    x: .value("Time", point[keyPath: timestamp]),
-                    y: .value("Value", point[keyPath: value])
-                )
-                .foregroundStyle(Color.brand)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-                .interpolationMethod(.linear)
-                .accessibilityHidden(true)
-            }
-
-            ForEach(markers) { marker in
-                PointMark(
-                    x: .value("Time", marker.timestamp),
-                    y: .value("Value", marker.value)
-                )
-                .symbol {
-                    ChartMarkerBadge(style: marker.style)
-                }
-                .accessibilityHidden(true)
-            }
-        }
-        .chartYScale(domain: domain)
+        SampledChartMarks(points: points, domain: domain, timestamp: timestamp, value: value, markers: markers)
+            .equatable()
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 ScrubOverlay(
@@ -501,6 +461,8 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                     speech: speech,
                     summary: summary,
                     audioGraph: audioGraph,
+                    persistsSelection: persistsSelection,
+                    selectedTimestamp: selectedTimestamp,
                     onSelect: onSelect
                 )
             }
@@ -543,6 +505,54 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
         formatter.maximumFractionDigits = span < 5 ? 2 : 0
         formatter.minimumFractionDigits = formatter.maximumFractionDigits
         return formatter.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"
+    }
+}
+
+private struct SampledChartMarks<Point: Identifiable & Equatable>: View, Equatable {
+    let points: [Point]
+    let domain: ClosedRange<Double>
+    let timestamp: KeyPath<Point, Date>
+    let value: KeyPath<Point, Double>
+    let markers: [ChartMarker]
+
+    private static var fill: LinearGradient {
+        LinearGradient(colors: [Color.brand.opacity(0.4), Color.brand.opacity(0)], startPoint: .top, endPoint: .bottom)
+    }
+
+    var body: some View {
+        Chart {
+            ForEach(points) { point in
+                AreaMark(
+                    x: .value("Time", point[keyPath: timestamp]),
+                    yStart: .value("Min", domain.lowerBound),
+                    yEnd: .value("Value", point[keyPath: value])
+                )
+                .foregroundStyle(Self.fill)
+                .interpolationMethod(.linear)
+                .accessibilityHidden(true)
+
+                LineMark(
+                    x: .value("Time", point[keyPath: timestamp]),
+                    y: .value("Value", point[keyPath: value])
+                )
+                .foregroundStyle(Color.brand)
+                .lineStyle(StrokeStyle(lineWidth: 2))
+                .interpolationMethod(.linear)
+                .accessibilityHidden(true)
+            }
+
+            ForEach(markers) { marker in
+                PointMark(
+                    x: .value("Time", marker.timestamp),
+                    y: .value("Value", marker.value)
+                )
+                .symbol {
+                    ChartMarkerBadge(style: marker.style)
+                }
+                .accessibilityHidden(true)
+            }
+        }
+        .chartYScale(domain: domain)
     }
 }
 
@@ -678,16 +688,9 @@ private struct ChartMarkerBadge: View {
     }
 }
 
-/// Touch or drag to read a sample; releasing clears it. Tapping a marker
-/// keeps its sample selected until the next tap, so the caller can show
-/// it up top; tapping it again or anywhere else clears it. The gesture
-/// runs alongside the page's scroll view. The first clear move of a touch
-/// decides its axis once: mostly vertical means the page is scrolling and
-/// the touch is ignored until it ends; anything else scrubs.
-///
-/// The overlay is also the chart's one VoiceOver element. A swipe up or
-/// down pins the next or previous marker, as a tap on it would, so the
-/// header shows it too; moving VoiceOver off the chart clears it.
+/// A tap or horizontal drag selects a real sample. Persistent mode keeps it
+/// until the parent returns to Now; transient price inspection retains its
+/// existing release/marker behavior. Vertical gestures leave scrolling intact.
 private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     let proxy: ChartProxy
     let plotFrame: CGRect
@@ -698,6 +701,8 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     let speech: ChartSpeech
     let summary: String
     let audioGraph: ChartAudioGraph
+    let persistsSelection: Bool
+    let selectedTimestamp: Date?
     let onSelect: (Point?) -> Void
 
     @State private var selected: Point?
@@ -707,6 +712,7 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     /// What was pinned when the current touch began, so tapping it again clears it.
     @State private var pinnedAtTouchStart: ChartMarker?
     @State private var touching = false
+    @State private var directionDecided = false
     @AccessibilityFocusState private var voiceOverFocus: Bool
 
     /// Half of the 44 pt minimum hit target.
@@ -721,9 +727,11 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                 .accessibilityChartDescriptor(audioGraph)
                 .accessibilityFocused($voiceOverFocus)
         )
+        .onAppear { synchronizeSelection() }
+        .onChange(of: selectedTimestamp) { _, _ in synchronizeSelection() }
         .onChange(of: voiceOverFocus) { focused in
             // Off the chart, the header goes back to the value now.
-            if !focused, pinned != nil {
+            if !persistsSelection, !focused, pinned != nil {
                 pinned = nil
                 update(nil)
             }
@@ -734,7 +742,7 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     /// through them. Without, there is nothing to step to.
     @ViewBuilder
     private func steppingThroughMarkers(_ content: some View) -> some View {
-        if markers.isEmpty {
+        if markers.isEmpty && !persistsSelection {
             content
         } else {
             content
@@ -746,6 +754,12 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     /// The summary, or the pinned marker and where it falls: "Received
     /// 2.0000 XMR, Sep 20, 2026 at 3:05 PM, portfolio $1,234.56, 2 of 5".
     private var spokenValue: String {
+        if persistsSelection, let selected,
+           let index = points.firstIndex(where: { $0[keyPath: timestamp] == selected[keyPath: timestamp] }) {
+            let when = selected[keyPath: timestamp].formatted(date: .abbreviated, time: .shortened)
+            let amount = speech.format(selected[keyPath: value])
+            return String(localized: "\(when), \(amount), \(index + 1) of \(points.count)", comment: "VoiceOver: selected historical date, wallet value, and sample position")
+        }
         guard let pinned, let index = markers.firstIndex(of: pinned) else { return summary }
         return String(localized: "\(pinned.accessibilityLabel), \(pinned.accessibilityValue), \(index + 1) of \(markers.count)", comment: "VoiceOver: marker, its value, then position like 2 of 5")
     }
@@ -753,6 +767,19 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
     /// Up is the next marker in time, down the one before. From none, up
     /// starts at the oldest and down at the newest.
     private func step(_ direction: AccessibilityAdjustmentDirection) {
+        if persistsSelection {
+            guard !points.isEmpty else { return }
+            let current = selected.flatMap { selection in points.firstIndex { $0[keyPath: timestamp] == selection[keyPath: timestamp] } } ?? points.count - 1
+            let next: Int
+            switch direction {
+            case .increment: next = min(current + 1, points.count - 1)
+            case .decrement: next = max(current - 1, 0)
+            @unknown default: return
+            }
+            update(points[next])
+            pinned = selected.flatMap { selection in markers.first { $0.timestamp == selection[keyPath: timestamp] } }
+            return
+        }
         guard !markers.isEmpty else { return }
         let current = pinned.flatMap { markers.firstIndex(of: $0) }
         let next: Int
@@ -774,27 +801,41 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                             if !touching {
                                 touching = true
                                 pinnedAtTouchStart = pinned
-                                pinned = nil
+                                directionDecided = false
                             }
                             if scrolling { return }
                             let dx = abs(drag.translation.width)
                             let dy = abs(drag.translation.height)
-                            if selected == nil, dy > 16, dy > dx * 1.5 {
-                                scrolling = true
-                                return
+                            if !directionDecided {
+                                guard max(dx, dy) >= 8 else { return }
+                                directionDecided = true
+                                if dy > dx * 1.5 {
+                                    scrolling = true
+                                    return
+                                }
+                                pinned = nil
                             }
                             select(at: drag.location)
                         }
                         .onEnded { drag in
                             let tapped = !scrolling
                                 && abs(drag.translation.width) < 10 && abs(drag.translation.height) < 10
-                            if tapped, let marker = marker(near: drag.location), marker != pinnedAtTouchStart {
+                            if persistsSelection {
+                                if !scrolling {
+                                    if tapped, let marker = marker(near: drag.location) {
+                                        pin(marker)
+                                    } else {
+                                        select(at: drag.location)
+                                    }
+                                }
+                            } else if tapped, let marker = marker(near: drag.location), marker != pinnedAtTouchStart {
                                 pin(marker)
                             } else {
                                 update(nil)
                             }
                             touching = false
                             scrolling = false
+                            directionDecided = false
                             pinnedAtTouchStart = nil
                         }
                 )
@@ -804,29 +845,44 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
                let y = proxy.position(forY: point[keyPath: value]) {
                 let px = plotFrame.minX + x
                 let py = plotFrame.minY + y
+                if persistsSelection {
+                    Rectangle()
+                        .fill(Color(.secondarySystemGroupedBackground).opacity(0.65))
+                        .frame(width: max(plotFrame.maxX - px, 0), height: plotFrame.height)
+                        .position(x: px + max(plotFrame.maxX - px, 0) / 2, y: plotFrame.midY)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
                 Path { path in
                     path.move(to: CGPoint(x: px, y: plotFrame.minY))
                     path.addLine(to: CGPoint(x: px, y: plotFrame.maxY))
                 }
                 .stroke(Color.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
+                .allowsHitTesting(false)
 
                 // On a marker, the marker itself shows the selection.
                 if let marker = markers.first(where: { $0.timestamp == point[keyPath: timestamp] }) {
                     ChartMarkerBadge(style: marker.style, selected: true)
                         .position(x: px, y: py)
+                        .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 } else {
                     Circle()
                         .fill(Color.brand)
                         .frame(width: 10, height: 10)
                         .position(x: px, y: py)
+                        .allowsHitTesting(false)
                 }
             }
         }
         .onChange(of: points) { _ in
-            // New range under the finger: the old sample no longer exists.
-            pinned = nil
-            update(nil)
+            if persistsSelection {
+                synchronizeSelection()
+            } else {
+                // Transient price inspection clears when its series changes.
+                pinned = nil
+                update(nil)
+            }
         }
     }
 
@@ -848,8 +904,8 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
             update(nil)
             return
         }
-        pinned = marker
         update(point)
+        pinned = selected == nil ? nil : marker
         HapticFeedback.shared.softTick()
     }
 
@@ -859,16 +915,26 @@ private struct ScrubOverlay<Point: Identifiable & Equatable>: View {
         update(points.nearestByTimestamp(to: date, timestampKeyPath: timestamp))
     }
 
+    private func synchronizeSelection() {
+        guard persistsSelection else { return }
+        selected = selectedTimestamp.flatMap { date in points.first { $0[keyPath: timestamp] == date } }
+        pinned = selectedTimestamp.flatMap { date in markers.first { $0.timestamp == date } }
+    }
+
     private func update(_ point: Point?) {
-        guard point != selected else { return }
-        selected = point
-        onSelect(point)
+        // The final sample is the live wallet, whose balance can include
+        // transfers newer than the last price fetch. It has no past cutoff.
+        let next = persistsSelection && point?[keyPath: timestamp] == points.last?[keyPath: timestamp] ? nil : point
+        guard next != selected else { return }
+        selected = next
+        if next == nil { pinned = nil }
+        onSelect(next)
     }
 }
 
 #Preview {
     @Previewable @State var path: [ChartView.Destination] = []
-    ChartView(selectedMode: .constant(.price), path: $path)
+    ChartView(path: $path)
         .environmentObject(WalletManager())
         .environmentObject(PriceService())
         .environmentObject(PriceAlertService())

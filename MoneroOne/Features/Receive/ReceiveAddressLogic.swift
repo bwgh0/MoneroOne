@@ -27,6 +27,21 @@ struct ReceiveAddressRow: Identifiable, Equatable {
 /// New: how many unused subaddresses a wallet may run ahead of its last
 /// payment.
 enum ReceiveAddressLogic {
+    /// Keep short pickers simple; longer address histories need a way to
+    /// retrieve a named address without scrolling past every newer one.
+    static let searchThreshold = 8
+
+    static func matchesSearch(_ row: ReceiveAddressRow, query: String) -> Bool {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        if query.hasPrefix("#"), let index = Int(query.dropFirst()) {
+            return row.index == index
+        }
+        return Int(query) == row.index
+            || row.name.localizedStandardContains(query)
+            || row.address.localizedStandardContains(query)
+    }
+
     /// A wallet restored from its seed finds payments only this many
     /// subaddresses past the last used one (wallet2's minor lookahead).
     static let seedRestoreLookahead = 200

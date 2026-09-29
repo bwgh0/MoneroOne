@@ -14,36 +14,22 @@ struct CommandCenterView: View {
     @State private var showWalletManager = false
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
 
-    /// Below this width (iPad portrait, iPhone Duo unfolded) the chart stacks
-    /// under the balance instead of taking its own column.
-    private let threeColumnMinWidth: CGFloat = 1000
-
-    /// Shortest column height that still shows every card at full size. The
-    /// columns are sized to the viewport when it is taller, and scroll when
-    /// it is shorter. Two columns stack the chart card under the balance, so
-    /// they need more room.
-    private let twoColumnMinHeight: CGFloat = 600
-    private let threeColumnMinHeight: CGFloat = 520
+    @State private var isHistoryExpanded = false
+    @State private var selectedHistoryPoint: PortfolioDataPoint?
+    @State private var selectedHistoryRange: ChartTimeRange = .week
+    @State private var historyTransactions: [MoneroTransaction]?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geometry in
-            let useThreeColumns = geometry.size.width >= threeColumnMinWidth
-                && geometry.size.width > geometry.size.height
-            let minHeight = useThreeColumns ? threeColumnMinHeight : twoColumnMinHeight
-            // Fill the viewport so the cards stretch to the bottom edge instead
-            // of stacking at the top with dead space below them.
-            let columnHeight = max(geometry.size.height - 32, minHeight)
+            let columnHeight = max(geometry.size.height - 32, isHistoryExpanded ? 760 : 600)
 
             ScrollView {
-                Group {
-                    if useThreeColumns {
-                        threeColumnLayout
-                    } else {
-                        twoColumnLayout
-                    }
-                }
-                .frame(height: columnHeight)
-                .padding()
+                twoColumnLayout
+                    .frame(minHeight: columnHeight)
+                    .frame(maxWidth: 1280)
+                    .frame(maxWidth: .infinity)
+                    .padding()
             }
             // Lets the wallet rows' swipe-to-delete work outside a List (iOS 27).
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -53,6 +39,14 @@ struct CommandCenterView: View {
                 await walletManager.refresh()
                 await priceService.fetchPrice()
             }
+        }
+        .onChange(of: walletManager.walletSessionId) { _, _ in
+            selectedHistoryPoint = nil
+            historyTransactions = nil
+            isHistoryExpanded = false
+        }
+        .onChange(of: showSend) { _, isPresented in
+            if isPresented { selectedHistoryPoint = nil }
         }
         .sheet(isPresented: $showReceive) {
             ReceiveView()
@@ -66,7 +60,7 @@ struct CommandCenterView: View {
         .presentsSendRequests(from: walletManager, showSend: $showSend)
         .sheet(isPresented: $showAllTransactions) {
             NavigationStack {
-                TransactionListView()
+                TransactionListView(asOf: selectedHistoryPoint?.timestamp, historyTransactions: historyTransactions)
             }
             .closesForPaymentLink()
         }
@@ -79,34 +73,6 @@ struct CommandCenterView: View {
         }
     }
 
-    // MARK: - Three Columns (wide landscape)
-
-    private var threeColumnLayout: some View {
-        HStack(alignment: .top, spacing: 16) {
-            // Column 1: Balance + Quick Actions (or the wallet rows)
-            VStack(spacing: 16) {
-                greetingHeader
-                if showWalletManager {
-                    walletRows
-                } else {
-                    balanceCard
-                    quickActions
-                }
-                Spacer(minLength: 0)
-            }
-            .animation(.snappy(duration: 0.35), value: showWalletManager)
-            .frame(minWidth: 280, idealWidth: 320, maxWidth: 400)
-
-            // Column 2: Chart Switcher (Portfolio / Price)
-            ChartSwitcherCard(balance: walletManager.displayBalance)
-                .frame(minWidth: 300, idealWidth: 400, maxHeight: .infinity)
-
-            // Column 3: Transactions
-            transactionsPanel
-                .frame(minWidth: 300, idealWidth: 350, maxHeight: .infinity)
-        }
-    }
-
     // MARK: - Two Columns (portrait, iPhone Duo unfolded)
 
     /// Equal columns so the gutter sits on the fold when the Duo is half
@@ -114,7 +80,7 @@ struct CommandCenterView: View {
     /// division region).
     private var twoColumnLayout: some View {
         HStack(alignment: .top, spacing: 16) {
-            // Column 1: Balance + Actions + Chart (stacked, chart takes the rest)
+            // Wallet balance, its history and actions share one column.
             VStack(spacing: 16) {
                 greetingHeader
                 if showWalletManager {
@@ -123,11 +89,10 @@ struct CommandCenterView: View {
                 } else {
                     balanceCard
                     quickActions
-                    ChartSwitcherCard(balance: walletManager.displayBalance)
-                        .frame(maxHeight: .infinity)
+                    Spacer(minLength: 0)
                 }
             }
-            .animation(.snappy(duration: 0.35), value: showWalletManager)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.35), value: showWalletManager)
             .frame(maxWidth: .infinity)
 
             // Column 2: Transactions
@@ -169,8 +134,10 @@ struct CommandCenterView: View {
             hardwareDeviceName: walletManager.hardwareDisplayName,
             hardwareLastSentSyncAt: walletManager.lastHardwareSentSyncAt,
             isHardwareDeviceWarm: walletManager.isHardwareDeviceWarm,
-            onPriceChangeTap: nil,
-            onCardTap: nil,
+            isHistoryExpanded: $isHistoryExpanded,
+            selectedHistoryPoint: $selectedHistoryPoint,
+            selectedHistoryRange: $selectedHistoryRange,
+            onHistoryLoaded: { historyTransactions = $0.transactions },
             onHardwareSyncTap: {
                 // Clear a finished run's .complete/.failed state so the sheet
                 // opens to a fresh bringup. This stays at the tap site, as in
@@ -181,12 +148,13 @@ struct CommandCenterView: View {
                 hardwareSheetIntent = .syncSentTransactions
             }
         )
+        .id(walletManager.walletSessionId)
     }
 
     private var quickActions: some View {
         QuickActionsCard(
-            onSend: { showSend = true },
-            onReceive: { showReceive = true },
+            onSend: { selectedHistoryPoint = nil; showSend = true },
+            onReceive: { selectedHistoryPoint = nil; showReceive = true },
             // canSend: `isViewOnly` is true for a hardware wallet too, and
             // its device signs the send.
             isSendDisabled: !walletManager.canSend
@@ -194,9 +162,11 @@ struct CommandCenterView: View {
     }
 
     private var transactionsPanel: some View {
-        TransactionsPanelView(onSeeAll: {
-            showAllTransactions = true
-        })
+        TransactionsPanelView(
+            onSeeAll: { showAllTransactions = true },
+            asOf: selectedHistoryPoint?.timestamp,
+            historyTransactions: historyTransactions
+        )
         .dashboardCard()
     }
 

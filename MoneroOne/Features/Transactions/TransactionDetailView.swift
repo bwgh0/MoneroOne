@@ -68,6 +68,7 @@ struct TransactionDetailView: View {
 
     var body: some View {
         List {
+            // Keep the payment itself together before valuation and technical details.
             Section {
                 HStack {
                     Text("Amount")
@@ -80,44 +81,6 @@ struct TransactionDetailView: View {
                 .accessibilityLabel(transaction.type == .incoming
                     ? String(localized: "Amount: plus \(XMRFormatter.format(transaction.amount)) XMR", comment: "VoiceOver: amount received")
                     : String(localized: "Amount: minus \(XMRFormatter.format(transaction.amount)) XMR", comment: "VoiceOver: amount sent"))
-
-                // Fiat value at the time it happened, from price history;
-                // hidden until the history has loaded.
-                if let valueAtTime = priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
-                    .map({ priceService.formatFiat($0) }) {
-                    let label = transaction.type == .incoming ? String(localized: "Value when received") : String(localized: "Value when sent")
-                    HStack {
-                        Text(label)
-                        Spacer()
-                        Text(valueAtTime)
-                            .foregroundColor(.secondary)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(label): \(valueAtTime)")
-                }
-
-                // Fiat value at the live price; hidden until one is known.
-                if let valueToday = priceService.formatFiatValue(transaction.amount) {
-                    HStack {
-                        Text("Value today")
-                        Spacer()
-                        Text(valueToday)
-                            .foregroundColor(.secondary)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Value today: \(valueToday)")
-                }
-
-                if transaction.type == .outgoing {
-                    HStack {
-                        Text("Fee")
-                        Spacer()
-                        Text("\(XMRFormatter.format(transaction.fee)) XMR")
-                            .foregroundColor(.secondary)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Fee: \(XMRFormatter.format(transaction.fee)) XMR")
-                }
 
                 HStack {
                     Text("Status")
@@ -139,30 +102,6 @@ struct TransactionDetailView: View {
                 .accessibilityLabel("Status: \(transaction.displayStatusText)")
 
                 HStack {
-                    Text("Confirmations")
-                    Spacer()
-                    if let confirmations = transaction.confirmations {
-                        Text(confirmations.formatted(.number.locale(.numbers)))
-                            .foregroundColor(.secondary)
-                    } else {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Confirmations: \(transaction.confirmations ?? 0)")
-
-                if let memo = transaction.memo, !memo.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Memo")
-                        Text(memo)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-
-            Section("Details") {
-                HStack {
                     Text("Date")
                     Spacer()
                     Text(formattedDate)
@@ -171,11 +110,20 @@ struct TransactionDetailView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Date: \(formattedDate)")
 
-                copyableRow(
-                    label: String(localized: "Transaction ID"),
-                    value: transaction.id,
-                    field: .txId
-                )
+                // Fiat value at the time it happened, from price history;
+                // hidden until the history has loaded.
+                if let valueAtTime = priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+                    .map({ priceService.formatFiat($0) }) {
+                    let label = transaction.type == .incoming ? String(localized: "Value when received") : String(localized: "Value when sent")
+                    HStack {
+                        Text(label)
+                        Spacer()
+                        Text(valueAtTime)
+                            .foregroundColor(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(label): \(valueAtTime)")
+                }
 
                 if transaction.type == .incoming, let receivingAddress {
                     copyableRow(
@@ -209,7 +157,62 @@ struct TransactionDetailView: View {
                             )
                         }
                     }
+                }
 
+                if transaction.type == .outgoing {
+                    HStack {
+                        Text("Fee")
+                        Spacer()
+                        Text("\(XMRFormatter.format(transaction.fee)) XMR")
+                            .foregroundColor(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Fee: \(XMRFormatter.format(transaction.fee)) XMR")
+                }
+
+                if let memo = transaction.memo, !memo.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Memo")
+                        Text(memo)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            Section("Details") {
+                // Fiat value at the live price; hidden until one is known.
+                if let valueToday = priceService.formatFiatValue(transaction.amount) {
+                    HStack {
+                        Text("Value today")
+                        Spacer()
+                        Text(valueToday)
+                            .foregroundColor(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Value today: \(valueToday)")
+                }
+
+                HStack {
+                    Text("Confirmations")
+                    Spacer()
+                    if let confirmations = transaction.confirmations {
+                        Text(confirmations.formatted(.number.locale(.numbers)))
+                            .foregroundColor(.secondary)
+                    } else {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Confirmations: \(transaction.confirmations ?? 0)")
+
+                copyableRow(
+                    label: String(localized: "Transaction ID"),
+                    value: transaction.id,
+                    field: .txId
+                )
+
+                if transaction.type == .outgoing {
                     txKeyRow
                 }
 

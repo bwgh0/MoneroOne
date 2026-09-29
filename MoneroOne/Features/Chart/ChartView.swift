@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// One destination for the wallet's value and the market price, sharing a range.
+/// Market price and alerts. Personal balance history belongs to the wallet.
 struct ChartView: View {
-    @EnvironmentObject private var walletManager: WalletManager
     @EnvironmentObject private var priceService: PriceService
     @EnvironmentObject private var priceAlertService: PriceAlertService
-    @Binding var selectedMode: Mode
     @Binding var path: [Destination]
     @State private var selectedTimeRange: ChartTimeRange = .week
 
@@ -13,57 +11,16 @@ struct ChartView: View {
         case priceAlerts
     }
 
-    enum Mode: CaseIterable {
-        case portfolio
-        case price
-
-        var title: String {
-            switch self {
-            case .portfolio: return String(localized: "Portfolio")
-            case .price: return String(localized: "Price")
-            }
-        }
-    }
-
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(spacing: 24) {
-                    GlassSegmentedPicker(selection: $selectedMode) { $0.title }
-                        .accessibilityElement(children: .contain)
-                        .accessibilityLabel("Chart mode")
-                        .accessibilityHint("Switch between portfolio and price chart")
-
-                    // Keep the chart marks and loaded ledger alive. Replacing
-                    // the subtree on each switch rebuilt both and re-read the
-                    // wallet's full transaction history when returning to it.
-                    ZStack(alignment: .top) {
-                        PortfolioChartView(
-                            balance: walletManager.displayBalance,
-                            priceService: priceService,
-                            selectedTimeRange: $selectedTimeRange
-                        )
-                        // Drop the previous wallet's ledger and scrub selection.
-                        .id(walletManager.walletSessionId)
-                        .opacity(selectedMode == .portfolio ? 1 : 0)
-                        .allowsHitTesting(selectedMode == .portfolio)
-                        .accessibilityHidden(selectedMode != .portfolio)
-
-                        PriceChartView(selectedTimeRange: $selectedTimeRange)
-                            .opacity(selectedMode == .price ? 1 : 0)
-                            .allowsHitTesting(selectedMode == .price)
-                            .accessibilityHidden(selectedMode != .price)
-                    }
-                }
-                .padding()
+                PriceChartView(selectedTimeRange: $selectedTimeRange)
+                    .padding()
             }
-            .navigationTitle("Chart")
+            .navigationTitle("Price")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Destination.self) { _ in
-                PriceAlertsView(
-                    priceAlertService: priceAlertService,
-                    priceService: priceService
-                )
+                PriceAlertsView(priceAlertService: priceAlertService, priceService: priceService)
             }
             .refreshable {
                 await priceService.fetchPrice()
@@ -78,9 +35,7 @@ struct ChartView: View {
                     .accessibilityHint("View and manage price alerts")
                 }
             }
-            .task {
-                priceService.selectChartRange(selectedTimeRange.apiRange)
-            }
+            .task { priceService.selectChartRange(selectedTimeRange.apiRange) }
             .onChange(of: selectedTimeRange) { _, range in
                 priceService.selectChartRange(range.apiRange)
             }
@@ -211,9 +166,8 @@ struct ChartStatistics: View {
 }
 
 #Preview {
-    @Previewable @State var mode: ChartView.Mode = .portfolio
     @Previewable @State var path: [ChartView.Destination] = []
-    ChartView(selectedMode: $mode, path: $path)
+    ChartView(path: $path)
         .environmentObject(WalletManager())
         .environmentObject(PriceService())
         .environmentObject(PriceAlertService())

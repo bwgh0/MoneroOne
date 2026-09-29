@@ -69,6 +69,16 @@ enum PortfolioHistory {
         }
     }
 
+    /// The final sample represents the current ledger, including changes since
+    /// its price was fetched. It is Now, never a historical transaction cutoff.
+    static func historicalSelection(
+        _ point: PortfolioDataPoint?,
+        in points: [PortfolioDataPoint]
+    ) -> PortfolioDataPoint? {
+        guard let point, point.timestamp != points.last?.timestamp else { return nil }
+        return points.first { $0.timestamp == point.timestamp }
+    }
+
     /// "3 transactions" on the chart, for its VoiceOver summary; nil for none.
     static func spokenCount(in points: [PortfolioDataPoint]) -> String? {
         let count = points.reduce(0) { $0 + $1.changes.count }
@@ -155,6 +165,199 @@ final class PortfolioSeriesCache {
             markers = PortfolioHistory.markers(for: points, formatValue: formatValue)
         }
         return (points, markers)
+    }
+}
+
+/// Optional detail inside the wallet's existing balance card. The parent owns
+/// the one displayed balance and the activity cutoff through selectedPoint.
+struct BalanceHistoryChart: View {
+    let balance: Decimal
+    @ObservedObject var priceService: PriceService
+    @EnvironmentObject private var walletManager: WalletManager
+    @Binding var selectedTimeRange: ChartTimeRange
+    @Binding var selectedPoint: PortfolioDataPoint?
+    var onLedgerLoaded: (BalanceLedger) -> Void = { _ in }
+    @State private var ledger: BalanceLedger?
+    @State private var seriesCache = PortfolioSeriesCache()
+    @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 152
+
+    private var timeAxis: ChartTimeAxis {
+        ChartTimeAxis(rawValue: selectedTimeRange.apiRange) ?? .week
+    }
+
+    private var isLoading: Bool {
+        ledger == nil || priceService.loadingChartRanges.contains(selectedTimeRange.apiRange)
+    }
+
+    private var series: (points: [PortfolioDataPoint], markers: [ChartMarker]) {
+        guard let ledger else { return ([], []) }
+        return seriesCache.series(
+            prices: priceService.chartData(for: selectedTimeRange.apiRange),
+            rate: priceService.usdToSelectedRate,
+            ledger: ledger,
+            startAtFirstHolding: selectedTimeRange == .all,
+            currency: priceService.selectedCurrency,
+            formatValue: formatCurrency
+        )
+    }
+
+    private var ledgerKey: [String] {
+        [walletManager.walletSessionId.uuidString, "\(balance)"]
+            + walletManager.transactions.map {
+                "\($0.id) \($0.status) \($0.type) \($0.amount) \($0.fee) \($0.timestamp.timeIntervalSince1970)"
+            }
+    }
+
+    var body: some View {
+        let series = self.series
+        let data = series.points
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Text(selectedPoint.map { $0.timestamp.formatted(date: .abbreviated, time: .shortened) }
+                     ?? timeAxis.spokenSpan.capitalized)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("wallet.historyDate")
+                Spacer(minLength: 4)
+                if selectedPoint != nil {
+                    Button {
+                        selectedPoint = nil
+                        HapticFeedback.shared.buttonPress()
+                    } label: {
+                        Label("Now", systemImage: "clock.arrow.circlepath")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.brand)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Return to current balance and activity")
+                    .accessibilityIdentifier("wallet.historyNow")
+                } else {
+                    Text(priceService.selectedCurrency.uppercased())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(minHeight: 44)
+
+            chartContent(data, markers: series.markers)
+                .frame(height: chartHeight)
+
+            GlassSegmentedPicker(selection: $selectedTimeRange, accessibilityLabel: { range in
+                (ChartTimeAxis(rawValue: range.apiRange) ?? .week).spokenName
+            }) { $0.title }
+
+            if let knownSince = ledger?.knownSince {
+                Text("History available from \(knownSince.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+            } else if !series.markers.isEmpty {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        transferLegend
+                        Text("Transfers affect value").foregroundStyle(.secondary)
+                    }
+                    VStack(spacing: 4) {
+                        transferLegend
+                        Text("Transfers affect value").foregroundStyle(.secondary)
+                    }
+                }
+                .font(.caption2)
+                .labelStyle(.titleAndIcon)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .task(id: selectedTimeRange) {
+            await priceService.fetchChartData(range: selectedTimeRange.apiRange)
+        }
+        .task(id: ledgerKey) {
+            let session = walletManager.walletSessionId
+            if ledger == nil {
+                let recent = walletManager.recentBalanceLedger
+                ledger = recent
+                onLedgerLoaded(recent)
+            }
+            let full = await walletManager.balanceLedger()
+            guard !Task.isCancelled, session == walletManager.walletSessionId else { return }
+            ledger = full
+            onLedgerLoaded(full)
+        }
+        .onChange(of: selectedTimeRange) { _, _ in selectedPoint = nil }
+        .onChange(of: data) { _, points in
+            // A refresh keeps the same instant when its real sample survives.
+            // The replacement ledger may change its holdings or currency value.
+            selectedPoint = PortfolioHistory.historicalSelection(selectedPoint, in: points)
+        }
+    }
+
+    private var transferLegend: some View {
+        HStack(spacing: 12) {
+            Label("Received", systemImage: "circle.fill").foregroundStyle(.green)
+            Label("Sent", systemImage: "circle.fill").foregroundStyle(Color.brand)
+        }
+    }
+
+    @ViewBuilder
+    private func chartContent(_ data: [PortfolioDataPoint], markers: [ChartMarker]) -> some View {
+        if isLoading && data.count < 2 {
+            VStack(spacing: 8) {
+                ProgressView()
+                Text("Loading balance history…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if data.count >= 2, data.contains(where: { $0.balance > 0 }) {
+            SampledLineChart(
+                points: data,
+                domain: PriceService.chartYDomain(for: data.map(\.value)),
+                timestamp: \.timestamp,
+                value: \.value,
+                axes: .init(time: tickAxis(for: data), currencyCode: priceService.selectedCurrency.uppercased()),
+                markers: markers,
+                speech: ChartSpeech(
+                    title: String(localized: "Balance history"),
+                    span: timeAxis.spokenSpan,
+                    currencyCode: priceService.selectedCurrency,
+                    note: PortfolioHistory.spokenCount(in: data),
+                    markerHint: String(localized: "Adjust to explore the balance and activity at each time. Return to Now to show the current wallet.")
+                ),
+                persistsSelection: true,
+                selectedTimestamp: selectedPoint?.timestamp,
+                onSelect: { selectedPoint = PortfolioHistory.historicalSelection($0, in: data) }
+            )
+            .equatable()
+            .accessibilityIdentifier("wallet.historyChart")
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                Text(balance == 0 && ledger?.changes.isEmpty == true ? "Your history starts here" : "History unavailable for this period")
+                    .font(.subheadline.weight(.medium))
+                Text(balance == 0 && ledger?.changes.isEmpty == true ? "Receive XMR to start tracking your wallet’s value." : "Try another time range.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func tickAxis(for data: [PortfolioDataPoint]) -> ChartTimeAxis {
+        guard let first = data.first, let last = data.last else { return timeAxis }
+        return .fitting(span: last.timestamp.timeIntervalSince(first.timestamp))
+    }
+
+    private func formatCurrency(_ value: Double) -> String {
+        let formatter = FiatCurrency.formatter(for: priceService.selectedCurrency)
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 }
 
@@ -399,7 +602,7 @@ struct PortfolioChartView: View {
 
 #Preview {
     @Previewable @State var path: [ChartView.Destination] = []
-    ChartView(selectedMode: .constant(.portfolio), path: $path)
+    ChartView(path: $path)
         .environmentObject(WalletManager())
         .environmentObject(PriceService())
         .environmentObject(PriceAlertService())

@@ -308,7 +308,8 @@ enum WalletRowSurface {
 struct WalletRow: View {
     let wallet: WalletInfo
     let isActive: Bool
-    let balance: Decimal
+    /// Inactive wallets may not have a cached balance yet. Unknown is not zero.
+    let balance: Decimal?
     let address: String?
     let onTap: () -> Void
     let onRename: () -> Void
@@ -420,10 +421,18 @@ struct WalletRow: View {
         }
     }
 
-    /// "Savings, 1.2500 XMR, view-only". The Selected trait marks the
-    /// active wallet.
+    /// Names the last-known or unavailable balance on inactive wallets.
+    /// The Selected trait marks the active wallet.
     private var spokenLabel: String {
-        var parts = [wallet.name, "\(XMRFormatter.format(balance)) XMR"]
+        let amount: String
+        if let balance {
+            amount = isActive
+                ? "\(XMRFormatter.format(balance)) XMR"
+                : String(localized: "last known balance \(XMRFormatter.format(balance)) XMR", comment: "VoiceOver: inactive wallet balance from its last sync")
+        } else {
+            amount = String(localized: "balance unavailable", comment: "VoiceOver: wallet has no previously recorded balance")
+        }
+        var parts = [wallet.name, amount]
         if wallet.requiresHardwareSession {
             // The badge's link state, in the words of the balance card pill.
             parts.append(String(localized: "hardware wallet", comment: "VoiceOver: wallet kind after name and balance")
@@ -476,7 +485,7 @@ struct WalletRow: View {
                     .font(.subheadline.weight(.semibold))
 
                 HStack(spacing: 0) {
-                    Text(XMRFormatter.format(balance))
+                    Text(balance.map(XMRFormatter.format) ?? "—")
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .layoutPriority(0)
@@ -484,7 +493,7 @@ struct WalletRow: View {
                         .layoutPriority(1)
                 }
                 .font(.callout.weight(.medium))
-                .foregroundStyle(.brand)
+                .foregroundStyle(balance == nil ? Color.secondary : Color.brand)
 
                 // The 8…8 short form, as in the Receive rows and on Android.
                 if let address, !address.isEmpty {
@@ -604,6 +613,14 @@ struct WalletManagerRows: View {
                     .animation(.snappy(duration: 0.2), value: dragId)
             }
 
+            if wallets.count > 1 {
+                Text("Other wallets show their last known balance.", comment: "Wallet switcher: inactive wallets do not sync until selected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+            }
+
             addWalletButton
         }
         .background {
@@ -694,7 +711,7 @@ struct WalletManagerRows: View {
         return WalletRow(
             wallet: wallet,
             isActive: isActive,
-            balance: isActive ? walletManager.displayBalance : (wallet.cachedBalance ?? 0),
+            balance: isActive ? walletManager.displayBalance : wallet.cachedBalance,
             address: isActive ? walletManager.primaryAddress : wallet.cachedPrimaryAddress,
             onTap: {
                 guard dragId == nil, Date() > suppressTapsUntil else { return }

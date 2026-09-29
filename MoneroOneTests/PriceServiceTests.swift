@@ -607,6 +607,51 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertEqual(points.last?.changes.map(\.id), ["late"])
     }
 
+    func testHistoricalSampleIncludesBoundaryTransferAndExcludesNewerTransfers() {
+        let prices = hourlyPrices(4)
+        let cutoff = prices[1].timestamp
+        let received = tx("at-cutoff", .incoming, 2, at: cutoff)
+        let sent = tx("after-cutoff", .outgoing, d("0.5"), fee: d("0.01"), at: cutoff.addingTimeInterval(1))
+        let ledger = BalanceLedger(balance: d("2.49"), transactions: [received, sent], countsPendingIncoming: false)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger)
+
+        let selected = PortfolioHistory.historicalSelection(points[1], in: points)
+        XCTAssertEqual(selected?.timestamp, cutoff)
+        XCTAssertEqual(selected?.balance, 3)
+        XCTAssertEqual(selected?.value, 3 * prices[1].price)
+        XCTAssertEqual(ledger.changes.filter { $0.timestamp <= cutoff }.map(\.id), ["at-cutoff"])
+        XCTAssertEqual(points[2].balance, d("2.49"), "the next sample includes the send and its fee")
+    }
+
+    func testLiveTipNeverBecomesAHistoricalActivityCutoff() {
+        let prices = hourlyPrices(3)
+        let late = tx("late", .incoming, 1, at: prices[2].timestamp.addingTimeInterval(60))
+        let ledger = BalanceLedger(balance: 3, transactions: [late], countsPendingIncoming: false)
+        let points = PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger)
+
+        XCTAssertNil(PortfolioHistory.historicalSelection(points.last, in: points), "the tip includes the current ledger and means Now")
+        XCTAssertNil(PortfolioHistory.historicalSelection(nil, in: points))
+        XCTAssertEqual(PortfolioHistory.historicalSelection(points[1], in: points)?.balance, 2)
+    }
+
+    func testHistoricalSelectionRefreshesFromTheSameRealSample() {
+        let prices = hourlyPrices(4)
+        let ledger = BalanceLedger(balance: 2, changes: [])
+        let original = PortfolioHistory.points(prices: prices, rate: 1, ledger: ledger)
+        let converted = PortfolioHistory.points(prices: prices, rate: 2, ledger: ledger)
+        let selected = PortfolioHistory.historicalSelection(original[1], in: converted)
+
+        XCTAssertEqual(selected?.timestamp, original[1].timestamp)
+        XCTAssertEqual(selected?.balance, original[1].balance)
+        XCTAssertEqual(selected?.value, original[1].value * 2, "currency changes update the selected value without inventing another instant")
+
+        let bounded = PortfolioHistory.points(
+            prices: prices, rate: 1,
+            ledger: BalanceLedger(balance: 2, changes: [], knownSince: prices[2].timestamp)
+        )
+        XCTAssertNil(PortfolioHistory.historicalSelection(original[1], in: bounded), "an unknown balance must not survive a coverage boundary")
+    }
+
     func testOnlyTransactionsThatMovedTheBalanceCount() {
         let t = Date(timeIntervalSince1970: 1_800_000_000)
         XCTAssertNil(BalanceChange(tx("f", .outgoing, 1, at: t, status: .failed), countsPendingIncoming: true))

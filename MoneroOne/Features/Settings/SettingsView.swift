@@ -74,7 +74,17 @@ struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.exportViewKeyRow")
+                } header: {
+                    if let wallet = walletManager.activeWallet {
+                        Text(verbatim: "\(wallet.emoji) \(wallet.name)")
+                            .textCase(nil)
+                            .accessibilityLabel("Wallet: \(wallet.name)")
+                    } else {
+                        Text("Wallet")
+                    }
+                }
 
+                Section {
                     NavigationLink {
                         SecurityView()
                     } label: {
@@ -98,9 +108,9 @@ struct SettingsView: View {
                         walletManager.reconcileReceiveAddress()
                     }
                 } header: {
-                    Text("Wallet")
+                    Text("Privacy & Security")
                 } footer: {
-                    Text("After an address receives a payment, Receive shows a new unused address. Old addresses keep working.")
+                    Text("These preferences apply to all wallets. After an address receives a payment, Receive shows a new unused address. Old addresses keep working.")
                 }
 
                 // Display Section

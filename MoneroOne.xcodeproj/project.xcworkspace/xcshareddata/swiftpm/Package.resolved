@@ -32,8 +32,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/horizontalsystems/HdWalletKit.Swift.git",
       "state" : {
-        "revision" : "163b4e253aa763babeb6d14f246e1d81cfa0473e",
-        "version" : "1.3.0"
+        "revision" : "f01afdc9a3c444261b0ad0c1cad14cc09257e2cb",
+        "version" : "1.3.2"
       }
     },
     {

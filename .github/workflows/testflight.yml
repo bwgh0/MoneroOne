@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: bwgh0/MoneroKit.Swift
-          ref: 4b48cec0a06acf8bb4fb6da6bee1077f53890a65
+          ref: a31737cdff0400d64fc22e7191edff2eff35ae96
           path: MoneroKit.Swift
           # Required so `Monero.xcframework/**/*.a` is fetched as
           # the real binary instead of left as an LFS pointer.
@@ -163,6 +163,8 @@ jobs:
             exit 1
           fi
 
+      # The release IPA is App Store signed. A development export embeds
+      # personal certificates and device IDs in its provisioning profile.
       - name: Export IPA for sideloading
         env:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -171,11 +173,31 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath build/MoneroOne.xcarchive \
             -exportPath build/release \
-            -exportOptionsPlist ExportOptions-Dev.plist \
+            -exportOptionsPlist ExportOptions-AppStore.plist \
             -allowProvisioningUpdates \
             -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8 \
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER_ID"
+
+      - name: Check the IPA profile has no device IDs or personal certificates
+        run: |
+          rm -rf build/ipa-check
+          unzip -q build/release/MoneroOne.ipa -d build/ipa-check
+          security cms -D -i build/ipa-check/Payload/MoneroOne.app/embedded.mobileprovision > build/ipa-check/profile.plist
+          python3 - build/ipa-check/profile.plist <<'EOF'
+          import plistlib, subprocess, sys
+          profile = plistlib.load(open(sys.argv[1], 'rb'))
+          if 'ProvisionedDevices' in profile:
+              sys.exit('::error::The release IPA profile lists device IDs.')
+          certs = profile.get('DeveloperCertificates', [])
+          for der in certs:
+              subject = subprocess.run(['openssl', 'x509', '-inform', 'DER', '-noout', '-subject'],
+                                       input=der, capture_output=True, check=True).stdout.decode()
+              # Never print the subject: a failing one may hold a personal name.
+              if 'Distribution:' not in subject:
+                  sys.exit('::error::The release IPA profile holds a certificate that is not a distribution certificate.')
+          print(f'{len(certs)} distribution certificate(s), no device IDs')
+          EOF
 
       - name: Generate SHA-256 hash
         run: |

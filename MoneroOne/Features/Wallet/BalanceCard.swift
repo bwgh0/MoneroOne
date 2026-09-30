@@ -28,6 +28,10 @@ struct BalanceCard: View {
     @State private var isHistoryMounted = false
     /// The first open builds the chart closed, then opens it once laid out.
     @State private var opensHistoryOnMount = false
+    /// Where the open History sits in the card. A tap there is the chart's,
+    /// so a near miss on the chart, Now or a range does not close History.
+    @State private var historyFrame: CGRect = .null
+    private static let cardSpace = "BalanceCard"
 
     private var historicalPoint: PortfolioDataPoint? { selectedHistoryPoint.wrappedValue }
     private var displayedBalance: Decimal { historicalPoint?.balance ?? balance }
@@ -242,6 +246,15 @@ struct BalanceCard: View {
                     y: 4
                 )
         }
+        // A tap anywhere on the card opens and closes History, as the
+        // History button does. The buttons keep their own taps, the open
+        // History keeps its taps and scrub, and a drag still scrolls.
+        .contentShape(RoundedRectangle(cornerRadius: 20))
+        .onTapGesture(coordinateSpace: .named(Self.cardSpace)) { location in
+            if isHistoryExpanded.wrappedValue && historyFrame.contains(location) { return }
+            toggleHistory()
+        }
+        .coordinateSpace(.named(Self.cardSpace))
     }
 
     // MARK: - Status row
@@ -376,10 +389,7 @@ struct BalanceCard: View {
                 .clipShape(Circle())
                 .accessibilityHidden(true)
 
-            // The amount and the space beside it open and close History,
-            // as the History button does. The symbol, the chart and the
-            // controls above keep their own taps, and a drag that starts
-            // here still scrolls the page.
+            // At least 44 pt tall; a tap here is the card's, as anywhere on it.
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -412,8 +422,6 @@ struct BalanceCard: View {
                 Spacer()
             }
             .frame(minHeight: 44)
-            .contentShape(Rectangle())
-            .onTapGesture { toggleHistory() }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(balanceAccessibilityLabel)
@@ -483,6 +491,7 @@ struct BalanceCard: View {
         .padding(.top, 16)
         .fixedSize(horizontal: false, vertical: true)
         .frame(height: isHistoryExpanded.wrappedValue ? nil : 0, alignment: .top)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.cardSpace)) } action: { historyFrame = $0 }
         .clipShape(HistoryRevealClip())
         .opacity(isHistoryExpanded.wrappedValue ? 1 : 0)
         .allowsHitTesting(isHistoryExpanded.wrappedValue)

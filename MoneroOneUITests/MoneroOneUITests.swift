@@ -676,37 +676,49 @@ final class BalanceHistoryFlowTests: XCTestCase {
         XCTAssertFalse(now.exists)
     }
 
-    /// The amount opens History and closes it back at now, as the History
-    /// button does. The Monero symbol beside it does not, and a drag that
-    /// starts on the amount scrolls the page.
-    func testTappingTheAmountTogglesHistory() {
+    /// A tap anywhere on the card opens History and closes it back at now,
+    /// as the History button does. In the open History a tap is the
+    /// chart's: the line picks a time, and the date line does nothing. A
+    /// drag that starts on the amount scrolls the page.
+    func testTappingTheCardTogglesHistory() {
         launchFixture(style: "Light")
         let balance = element("wallet.balanceValue")
         let chart = element("wallet.historyChart")
         let toggle = element("wallet.historyToggle")
+        let now = element("wallet.historyNow")
         let currentBalance = balance.label
 
         balance.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 24, dy: 0)).tap()
-        XCTAssertFalse(chart.waitForExistence(timeout: 1), "The Monero symbol should not open History")
-
-        balance.tap()
-        XCTAssertTrue(chart.waitForExistence(timeout: 5), "Tapping the amount should open History")
+        XCTAssertTrue(chart.waitForExistence(timeout: 5), "Tapping the Monero symbol should open History")
         XCTAssertEqual(toggle.value as? String, "Expanded", "The History button should show the same state")
 
-        selectPast()
-        XCTAssertNotEqual(balance.label, currentBalance, "The amount should follow the selected time")
-        capture("history-amount-selected")
-        balance.tap()
-        XCTAssertTrue(chart.waitForNonExistence(timeout: 3), "Tapping the amount again should close History")
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5)).tap()
+        XCTAssertTrue(now.waitForExistence(timeout: 3), "A tap on the chart should pick a time")
+        XCTAssertEqual(toggle.value as? String, "Expanded", "A tap on the chart should leave History open")
+        let picked = balance.label
+        XCTAssertNotEqual(picked, currentBalance, "The amount should follow the selected time")
+        element("wallet.historyDate").tap()
+        XCTAssertEqual(toggle.value as? String, "Expanded", "A tap on the date line should leave History open")
+        XCTAssertEqual(balance.label, picked, "A tap on the date line should keep the time")
+        capture("history-card-tap-selected")
+
+        app.staticTexts["Historical balance"].tap()
+        XCTAssertTrue(chart.waitForNonExistence(timeout: 3), "A tap on the status row should close History")
         XCTAssertEqual(toggle.value as? String, "Collapsed")
-        XCTAssertFalse(element("wallet.historyNow").exists, "Closing History should return to now")
+        XCTAssertFalse(now.exists, "Closing History should return to now")
         XCTAssertEqual(balance.label, currentBalance, "Closing History should show the current balance")
 
-        balance.tap()
-        XCTAssertTrue(chart.waitForExistence(timeout: 3), "Tapping the amount should open History again")
-        XCTAssertFalse(element("wallet.historyNow").exists, "Reopening History should start at now")
+        // The card's bottom margin, under the amount.
+        balance.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1)).withOffset(CGVector(dx: 0, dy: 12)).tap()
+        XCTAssertTrue(chart.waitForExistence(timeout: 3), "A tap on the card's margin should open History again")
+        XCTAssertFalse(now.exists, "Reopening History should start at now")
         let header = element("wallet.activityHeader")
         XCTAssertTrue(header.label.hasSuffix("As of now"), "The list should be dated now: \(header.label)")
+
+        balance.tap()
+        XCTAssertTrue(chart.waitForNonExistence(timeout: 3), "Tapping the amount should close History")
+        balance.tap()
+        XCTAssertTrue(chart.waitForExistence(timeout: 3), "Tapping the amount should open History")
 
         // A slow drag that rests before lifting, so the page does not coast.
         let top = balance.frame.minY

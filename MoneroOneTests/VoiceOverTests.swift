@@ -227,8 +227,10 @@ final class VoiceOverTests: XCTestCase {
 
     // MARK: - Balance card
 
-    /// The amount is one element with Show history on the rotor, as a tap
-    /// on it opens History. The History button keeps its own label.
+    /// A tap on the card opens History, and VoiceOver gets one action for
+    /// it: Show history on the amount's rotor. The History button keeps
+    /// its own label, and the rest of the card gets no action and no
+    /// button trait.
     func testBalanceOffersShowHistoryOnTheRotor() throws {
         var opened: [Bool] = []
         let card = BalanceCard(
@@ -242,6 +244,10 @@ final class VoiceOverTests: XCTestCase {
         let balance = try XCTUnwrap(elements.first { $0.accessibilityLabel?.hasPrefix("Balance:") == true })
         XCTAssertEqual(balance.accessibilityCustomActions?.map(\.name), ["Show history"])
         XCTAssertTrue(elements.contains { $0.accessibilityLabel == "Balance history" }, "the History button keeps its label")
+        let actions = elements.flatMap { $0.accessibilityCustomActions ?? [] }.map(\.name)
+        XCTAssertEqual(actions, ["Show history"], "one history action on the card")
+        let status = try XCTUnwrap(elements.first { $0.accessibilityLabel == "Sync status: synced" })
+        XCTAssertFalse(status.accessibilityTraits.contains(.button), "the card's tap makes no button of its text")
 
         for action in balance.accessibilityCustomActions ?? [] {
             _ = action.actionHandler?(action)

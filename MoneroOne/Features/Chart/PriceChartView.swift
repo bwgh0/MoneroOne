@@ -441,7 +441,11 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                         AxisGridLine()
                         AxisValueLabel(collisionResolution: .greedy) {
                             if let date = mark.as(Date.self) {
-                                Text(axes.time.tickLabel(for: date))
+                                // The last date may stand into the space
+                                // between the plot and the amount labels.
+                                AxisLabelOverhang(overhang: mark.index == mark.count - 1 ? lastDateOverhang : 0) {
+                                    Text(axes.time.tickLabel(for: date))
+                                }
                             }
                         }
                     }
@@ -530,6 +534,14 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
         return CGRect(origin: .zero, size: geometry.size)
     }
 
+    /// How far the last date label may stand past the plot's right edge:
+    /// the space before the amount labels that a chart with markers keeps.
+    /// The line runs to that edge, so without it the last date often does
+    /// not fit and Swift Charts leaves it out.
+    private var lastDateOverhang: CGFloat {
+        insetsForMarkers ? ChartMarkerBadge.plotInset : 0
+    }
+
     private func xTicks(for time: ChartTimeAxis) -> [Date] {
         guard let first = points.first?[keyPath: timestamp], let last = points.last?[keyPath: timestamp],
               first <= last else { return [] }
@@ -560,6 +572,25 @@ private struct AxisLabelWidth: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}
+
+/// An axis label drawn at full width that reports itself `overhang`
+/// points narrower, so Swift Charts, which leaves out a label that does not
+/// fit the plot, keeps one that stands up to that far past its edge.
+/// Swift Charts then offers the label only the narrower width, so the
+/// label is measured and placed at its own width, or it would truncate.
+private struct AxisLabelOverhang: Layout {
+    let overhang: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let label = subviews.first else { return .zero }
+        let size = label.sizeThatFits(.unspecified)
+        return CGSize(width: max(size.width - overhang, 0), height: size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: .unspecified)
     }
 }
 

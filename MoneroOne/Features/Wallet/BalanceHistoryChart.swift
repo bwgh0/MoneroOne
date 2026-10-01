@@ -69,6 +69,28 @@ enum PortfolioHistory {
         }
     }
 
+    /// The points `range` draws. A range that starts before All does would
+    /// only add empty time before the wallet first held anything, so it
+    /// shows exactly what All shows: All's window, drawn from All's samples
+    /// (`allPrices`). A range that starts later keeps its own.
+    static func points(
+        for range: ChartTimeRange,
+        prices: [PriceDataPoint],
+        allPrices: [PriceDataPoint],
+        rate: Double,
+        ledger: BalanceLedger
+    ) -> [PortfolioDataPoint] {
+        guard range != .all else {
+            return points(prices: prices, rate: rate, ledger: ledger, startAtFirstHolding: true)
+        }
+        let own = points(prices: prices, rate: rate, ledger: ledger)
+        let all = points(prices: allPrices, rate: rate, ledger: ledger, startAtFirstHolding: true)
+        if let start = own.first?.timestamp, let allStart = all.first?.timestamp, start < allStart {
+            return all
+        }
+        return own
+    }
+
     /// The final sample represents the current ledger, including changes since
     /// its price was fetched. It is Now, never a historical transaction cutoff.
     static func historicalSelection(
@@ -174,6 +196,8 @@ final class BalanceHistoryModel {
     private struct Inputs: Equatable {
         let range: ChartTimeRange
         let prices: [PriceDataPoint]
+        /// All's samples, which a range that starts before All draws.
+        let allPrices: [PriceDataPoint]
         let rate: Double
         let currency: String
         let ledger: BalanceLedger
@@ -242,11 +266,21 @@ final class BalanceHistoryModel {
 
     /// Shows `range`: its kept series when no input changed, else a new one
     /// built off the main thread. Until then the current series stays up.
+    /// It waits for All's samples too, as a range that starts before All
+    /// draws those.
     @MainActor
-    func show(_ range: ChartTimeRange, prices: [PriceDataPoint], pricesLoaded: Bool, rate: Double, currency: String) {
+    func show(
+        _ range: ChartTimeRange,
+        prices: [PriceDataPoint],
+        pricesLoaded: Bool,
+        allPrices: [PriceDataPoint],
+        allPricesLoaded: Bool,
+        rate: Double,
+        currency: String
+    ) {
         wantedRange = range
-        guard let ledger, pricesLoaded else { return }
-        let inputs = Inputs(range: range, prices: prices, rate: rate, currency: currency, ledger: ledger)
+        guard let ledger, pricesLoaded, allPricesLoaded else { return }
+        let inputs = Inputs(range: range, prices: prices, allPrices: allPrices, rate: rate, currency: currency, ledger: ledger)
         buildTask?.cancel()
         if let kept = built[range], kept.inputs == inputs {
             display(kept.series)
@@ -282,10 +316,11 @@ final class BalanceHistoryModel {
     /// off the main thread; formats with its own currency formatter.
     private static func makeSeries(_ inputs: Inputs) -> Series {
         let points = PortfolioHistory.points(
+            for: inputs.range,
             prices: inputs.prices,
+            allPrices: inputs.allPrices,
             rate: inputs.rate,
-            ledger: inputs.ledger,
-            startAtFirstHolding: inputs.range == .all
+            ledger: inputs.ledger
         )
         let formatter = FiatCurrency.formatter(for: inputs.currency)
         formatter.minimumFractionDigits = 2
@@ -346,11 +381,16 @@ struct BalanceHistoryChart: View {
         let currency: String
         let ledgerVersion: Int
         let fetched: Bool
+        let allSampleCount: Int
+        let allFirstSample: Date?
+        let allLastSample: Date?
+        let allFetched: Bool
         let isActive: Bool
     }
 
     private var seriesKey: SeriesKey {
         let samples = priceService.chartDataCache[selectedTimeRange.apiRange]
+        let allSamples = priceService.chartDataCache[ChartTimeRange.all.apiRange]
         return SeriesKey(
             range: selectedTimeRange,
             sampleCount: samples?.count ?? 0,
@@ -362,6 +402,10 @@ struct BalanceHistoryChart: View {
             currency: priceService.selectedCurrency,
             ledgerVersion: model.ledgerVersion,
             fetched: model.fetchedRanges.contains(selectedTimeRange),
+            allSampleCount: allSamples?.count ?? 0,
+            allFirstSample: allSamples?.first?.timestamp,
+            allLastSample: allSamples?.last?.timestamp,
+            allFetched: model.fetchedRanges.contains(.all),
             isActive: isActive
         )
     }
@@ -391,7 +435,15 @@ struct BalanceHistoryChart: View {
         .task(id: isActive ? selectedTimeRange : nil) {
             guard isActive else { return }
             let range = selectedTimeRange
-            await priceService.fetchChartData(range: range.apiRange)
+            // A range that starts before All draws All's samples, so All loads too.
+            async let own: Void = priceService.fetchChartData(range: range.apiRange)
+            if range != .all {
+                await priceService.fetchChartData(range: ChartTimeRange.all.apiRange)
+                if !Task.isCancelled {
+                    model.markFetched(.all)
+                }
+            }
+            await own
             if !Task.isCancelled {
                 model.markFetched(range)
             }
@@ -402,6 +454,8 @@ struct BalanceHistoryChart: View {
                 key.range,
                 prices: priceService.chartData(for: key.range.apiRange),
                 pricesLoaded: key.sampleCount > 0 || key.fetched,
+                allPrices: priceService.chartData(for: ChartTimeRange.all.apiRange),
+                allPricesLoaded: key.allSampleCount > 0 || key.allFetched,
                 rate: key.rate,
                 currency: key.currency
             )

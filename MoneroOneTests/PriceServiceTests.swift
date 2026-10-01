@@ -711,6 +711,23 @@ final class PriceServiceTests: XCTestCase {
         XCTAssertEqual(trimmed.first?.timestamp, prices[3].timestamp)
     }
 
+    func testRangeThatStartsBeforeAllShowsWhatAllShows() {
+        let hourly = hourlyPrices(13)
+        let allPrices = stride(from: 0, through: 12, by: 3).map { hourly[$0] }
+        let first = tx("first", .incoming, 1, at: hourly[7].timestamp.addingTimeInterval(600))
+        let ledger = BalanceLedger(balance: 1, transactions: [first], countsPendingIncoming: false)
+        let all = PortfolioHistory.points(for: .all, prices: allPrices, allPrices: allPrices, rate: 1, ledger: ledger)
+        XCTAssertEqual(all.first?.timestamp, hourly[6].timestamp, "All starts one sample before the first holding")
+
+        let year = PortfolioHistory.points(for: .year, prices: hourly, allPrices: allPrices, rate: 1, ledger: ledger)
+        XCTAssertEqual(year, all, "a range that starts before All shows All's window, samples and markers")
+
+        let later = Array(hourly[8...])
+        let month = PortfolioHistory.points(for: .month, prices: later, allPrices: allPrices, rate: 1, ledger: ledger)
+        XCTAssertEqual(month, PortfolioHistory.points(prices: later, rate: 1, ledger: ledger),
+                       "a range that starts after All keeps its own samples")
+    }
+
     func testLedgerThatDoesNotAddUpNeverGoesBelowZero() {
         let prices = hourlyPrices(3)
         let receive = tx("in", .incoming, 2, at: prices[1].timestamp.addingTimeInterval(600))

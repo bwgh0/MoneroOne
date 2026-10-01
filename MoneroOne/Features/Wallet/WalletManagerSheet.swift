@@ -605,14 +605,6 @@ struct WalletManagerRows: View {
                     .animation(.snappy(duration: 0.2), value: dragId)
             }
 
-            if wallets.count > 1 {
-                Text("Other wallets show their last known balance.", comment: "Wallet switcher: inactive wallets do not sync until selected")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-            }
-
             addWalletButton
         }
         .background {

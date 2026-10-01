@@ -111,8 +111,9 @@ struct PriceChartView: View {
                     onSelect: { selectedPoint = $0 }
                 )
                 .equatable()
+                // Not clipped: an axis label on a gridline at the plot's top
+                // edge stands half above it, in the card's padding.
                 .frame(height: 240)
-                .clipped()
             }
         }
         .frame(height: 280)

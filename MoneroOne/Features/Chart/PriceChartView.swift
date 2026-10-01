@@ -398,6 +398,7 @@ final class ChartCursor {
 /// transient inspection; wallet history opts into a parent-controlled cutoff.
 /// VoiceOver sees one adjustable element and an Audio Graph of every sample.
 struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
+    /// The widest an amount label may be before it shrinks.
     @ScaledMetric(relativeTo: .caption2) private var axisLabelWidth: CGFloat = 64
     struct Axes: Equatable {
         var time: ChartTimeAxis
@@ -448,11 +449,12 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                         AxisGridLine()
                         AxisValueLabel {
                             if let amount = mark.as(Double.self) {
-                                Text(Self.compact(amount, currencyCode: axes.currencyCode, span: domain.upperBound - domain.lowerBound))
-                                    .font(.caption2)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
-                                    .frame(width: axisLabelWidth, alignment: .leading)
+                                AxisLabelWidth(maxWidth: axisLabelWidth) {
+                                    Text(Self.compact(amount, currencyCode: axes.currencyCode, span: domain.upperBound - domain.lowerBound))
+                                        .font(.caption2)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.75)
+                                }
                             }
                         }
                     }
@@ -537,6 +539,23 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
         formatter.maximumFractionDigits = span < 5 ? 2 : 0
         formatter.minimumFractionDigits = formatter.maximumFractionDigits
         return formatter.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"
+    }
+}
+
+/// An axis label as wide as its text, up to `maxWidth`. A longer label
+/// gets `maxWidth` and shrinks or truncates to fit it, so the axis column
+/// is only as wide as its widest label and the plot takes the rest.
+private struct AxisLabelWidth: Layout {
+    let maxWidth: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let label = subviews.first else { return .zero }
+        let natural = label.sizeThatFits(.unspecified)
+        return label.sizeThatFits(ProposedViewSize(width: min(natural.width, maxWidth), height: natural.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 

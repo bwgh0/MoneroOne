@@ -413,10 +413,12 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
     let axes: Axes?
     /// Badges drawn above the line and the area, each one whole.
     var markers: [ChartMarker] = []
-    /// Keeps the line far enough inside the plot's edges that a marker on
-    /// the first or last sample, or at the top or bottom, is whole. Set it
-    /// in every range of a chart that can show markers, so the plot does
-    /// not shift when a range has none.
+    /// Keeps the line far enough inside the plot's top and bottom edges,
+    /// and the amount labels far enough right of the plot, that a marker at
+    /// the top or bottom or on the last sample is whole and clear of the
+    /// labels. The line still runs the plot's full width. Set it in every
+    /// range of a chart that can show markers, so the plot does not shift
+    /// when a range has none.
     var insetsForMarkers = false
     let speech: ChartSpeech
     /// Persistent mode: a tap or drag selects until the parent sets the
@@ -447,7 +449,9 @@ struct SampledLineChart<Point: Identifiable & Equatable>: View, Equatable {
                 .chartYAxis {
                     AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { mark in
                         AxisGridLine()
-                        AxisValueLabel {
+                        // A marker on the last sample stands past the plot's
+                        // right edge; the labels start beyond it.
+                        AxisValueLabel(horizontalSpacing: insetsForMarkers ? ChartMarkerBadge.plotInset : nil) {
                             if let amount = mark.as(Double.self) {
                                 AxisLabelWidth(maxWidth: axisLabelWidth) {
                                     Text(Self.compact(amount, currencyCode: axes.currencyCode, span: domain.upperBound - domain.lowerBound))
@@ -565,7 +569,8 @@ private struct SampledChartMarks<Point: Identifiable & Equatable>: View, Equatab
     let domain: ClosedRange<Double>
     let timestamp: KeyPath<Point, Date>
     let value: KeyPath<Point, Double>
-    /// Space between the plot's edges and the line, in points.
+    /// Space between the plot's top and bottom edges and the line, in
+    /// points. The line always runs from the plot's left edge to its right.
     let inset: CGFloat
 
     private static var fill: LinearGradient {
@@ -575,7 +580,6 @@ private struct SampledChartMarks<Point: Identifiable & Equatable>: View, Equatab
     var body: some View {
         if inset > 0 {
             marks
-                .chartXScale(range: .plotDimension(padding: inset))
                 .chartYScale(domain: domain, range: .plotDimension(padding: inset))
         } else {
             marks
@@ -730,8 +734,10 @@ private struct ChartMarkerBadge: View {
     private static let disc: CGFloat = 18
     private static let ring: CGFloat = 2
     private static let selectedScale: CGFloat = 1.25
-    /// How far inside the plot's edges a marker's center stays, so a
-    /// selected badge on the first or last sample, or at the top, is whole.
+    /// How far inside the plot's top and bottom edges a marker's center
+    /// stays, and how far right of the plot the amount labels start, so a
+    /// selected badge at the top or on the last sample is whole and clear
+    /// of the labels.
     static let plotInset = ((disc + 2 * ring) * selectedScale / 2).rounded(.up)
 
     private var tint: Color { style == .received ? .green : .brand }

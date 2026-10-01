@@ -728,6 +728,32 @@ final class PriceServiceTests: XCTestCase {
                        "a range that starts after All keeps its own samples")
     }
 
+    func testOldWalletsWeekDoesNotWaitForAll() {
+        let week = hourlyPrices(168)
+        let old = tx("old", .incoming, 1, at: week[0].timestamp.addingTimeInterval(-30 * 86_400))
+        let ledger = BalanceLedger(balance: 1, transactions: [old], countsPendingIncoming: false)
+        XCTAssertFalse(PortfolioHistory.needsAll(.week, prices: week, ledger: ledger))
+        XCTAssertEqual(
+            PortfolioHistory.points(for: .week, prices: week, allPrices: [], rate: 1, ledger: ledger),
+            PortfolioHistory.points(prices: week, rate: 1, ledger: ledger),
+            "its own samples, with nothing from All"
+        )
+
+        let first = tx("first", .incoming, 1, at: week[100].timestamp.addingTimeInterval(600))
+        let young = BalanceLedger(balance: 1, transactions: [first], countsPendingIncoming: false)
+        XCTAssertTrue(PortfolioHistory.needsAll(.week, prices: week, ledger: young), "a week that starts before the first receive waits")
+        XCTAssertFalse(PortfolioHistory.needsAll(.all, prices: week, ledger: young))
+        XCTAssertFalse(PortfolioHistory.needsAll(.week, prices: week, ledger: BalanceLedger(balance: 0, changes: [])),
+                       "a wallet that never held anything")
+
+        let refilled = BalanceLedger(balance: 1, transactions: [
+            tx("in", .incoming, 1, at: week[10].timestamp),
+            tx("out", .outgoing, 1, at: week[20].timestamp),
+            tx("again", .incoming, 1, at: week[150].timestamp)
+        ], countsPendingIncoming: false)
+        XCTAssertEqual(PortfolioHistory.holdingStart(of: refilled), week[150].timestamp, "emptied and filled again: from the refill")
+    }
+
     func testLedgerThatDoesNotAddUpNeverGoesBelowZero() {
         let prices = hourlyPrices(3)
         let receive = tx("in", .incoming, 2, at: prices[1].timestamp.addingTimeInterval(600))

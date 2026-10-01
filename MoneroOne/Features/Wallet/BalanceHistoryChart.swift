@@ -69,10 +69,11 @@ enum PortfolioHistory {
         }
     }
 
-    /// The points `range` draws. A range that starts before All does would
-    /// only add empty time before the wallet first held anything, so it
-    /// shows exactly what All shows: All's window, drawn from All's samples
-    /// (`allPrices`). A range that starts later keeps its own.
+    /// The points `range` draws. A range that starts before the wallet
+    /// first held anything would only add empty time, so when it also
+    /// starts before All does, it shows exactly what All shows: All's
+    /// window, drawn from All's samples (`allPrices`). Any other range
+    /// keeps its own and needs nothing from All.
     static func points(
         for range: ChartTimeRange,
         prices: [PriceDataPoint],
@@ -84,11 +85,39 @@ enum PortfolioHistory {
             return points(prices: prices, rate: rate, ledger: ledger, startAtFirstHolding: true)
         }
         let own = points(prices: prices, rate: rate, ledger: ledger)
+        guard needsAll(range, prices: prices, ledger: ledger) else { return own }
         let all = points(prices: allPrices, rate: rate, ledger: ledger, startAtFirstHolding: true)
         if let start = own.first?.timestamp, let allStart = all.first?.timestamp, start < allStart {
             return all
         }
         return own
+    }
+
+    /// Whether `range` can show All's window, and so must wait for All's
+    /// samples: it starts before the wallet began to hold what it holds.
+    /// All starts one sample before that moment at the latest, so a range
+    /// that starts later keeps its own samples. A wallet that never held
+    /// anything keeps every range's own.
+    static func needsAll(_ range: ChartTimeRange, prices: [PriceDataPoint], ledger: BalanceLedger) -> Bool {
+        guard range != .all, let start = prices.first?.timestamp, let holding = holdingStart(of: ledger) else {
+            return false
+        }
+        return start < holding
+    }
+
+    /// When the balance last rose from nothing: the first receive, unless
+    /// the wallet was emptied and filled again since. `knownSince`, or the
+    /// distant past, when it held something before its first known change;
+    /// nil when it never held anything.
+    static func holdingStart(of ledger: BalanceLedger) -> Date? {
+        var after = ledger.balance
+        for change in ledger.changes.reversed() {
+            let before = after - change.delta
+            if before <= 0, after > 0 { return change.timestamp }
+            after = before
+        }
+        guard after > 0 else { return nil }
+        return ledger.knownSince ?? .distantPast
     }
 
     /// The final sample represents the current ledger, including changes since
@@ -196,7 +225,7 @@ final class BalanceHistoryModel {
     private struct Inputs: Equatable {
         let range: ChartTimeRange
         let prices: [PriceDataPoint]
-        /// All's samples, which a range that starts before All draws.
+        /// All's samples when the range can show All's window, else empty.
         let allPrices: [PriceDataPoint]
         let rate: Double
         let currency: String
@@ -266,8 +295,7 @@ final class BalanceHistoryModel {
 
     /// Shows `range`: its kept series when no input changed, else a new one
     /// built off the main thread. Until then the current series stays up.
-    /// It waits for All's samples too, as a range that starts before All
-    /// draws those.
+    /// A range that can show All's window waits for All's samples too.
     @MainActor
     func show(
         _ range: ChartTimeRange,
@@ -279,8 +307,17 @@ final class BalanceHistoryModel {
         currency: String
     ) {
         wantedRange = range
-        guard let ledger, pricesLoaded, allPricesLoaded else { return }
-        let inputs = Inputs(range: range, prices: prices, allPrices: allPrices, rate: rate, currency: currency, ledger: ledger)
+        guard let ledger, pricesLoaded else { return }
+        let needsAll = PortfolioHistory.needsAll(range, prices: prices, ledger: ledger)
+        guard allPricesLoaded || !needsAll else { return }
+        let inputs = Inputs(
+            range: range,
+            prices: prices,
+            allPrices: needsAll ? allPrices : [],
+            rate: rate,
+            currency: currency,
+            ledger: ledger
+        )
         buildTask?.cancel()
         if let kept = built[range], kept.inputs == inputs {
             display(kept.series)
@@ -435,17 +472,16 @@ struct BalanceHistoryChart: View {
         .task(id: isActive ? selectedTimeRange : nil) {
             guard isActive else { return }
             let range = selectedTimeRange
-            // A range that starts before All draws All's samples, so All loads too.
-            async let own: Void = priceService.fetchChartData(range: range.apiRange)
-            if range != .all {
-                await priceService.fetchChartData(range: ChartTimeRange.all.apiRange)
-                if !Task.isCancelled {
-                    model.markFetched(.all)
-                }
-            }
-            await own
+            // All loads alongside, for a range that starts before the wallet
+            // first held XMR; the range's own samples never wait for it.
+            async let all: Void = range == .all ? () : priceService.fetchChartData(range: ChartTimeRange.all.apiRange)
+            await priceService.fetchChartData(range: range.apiRange)
             if !Task.isCancelled {
                 model.markFetched(range)
+            }
+            await all
+            if range != .all, !Task.isCancelled {
+                model.markFetched(.all)
             }
         }
         .onChange(of: seriesKey, initial: true) { _, key in

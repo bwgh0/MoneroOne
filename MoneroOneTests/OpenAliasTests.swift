@@ -281,9 +281,10 @@ final class OpenAliasTests: XCTestCase {
     }
 
     func testMoneroOneLogoOnlyForOperatorNames() {
-        func summary(_ input: String, recipientName: String? = nil) -> OpenAliasSummary? {
+        func summary(_ input: String, recipientName: String? = nil,
+                     dnssec: DnssecStatus = .valid) -> OpenAliasSummary? {
             guard case .name(let name) = OpenAlias.classify(input) else { return nil }
-            return OpenAliasSummary(name: name, address: Fixture.getmoneroAddress, dnssec: .off, pin: .none,
+            return OpenAliasSummary(name: name, address: Fixture.getmoneroAddress, dnssec: dnssec, pin: .none,
                                     recipientName: recipientName)
         }
         XCTAssertEqual(summary("donate@monero.one", recipientName: "Monero One")?.showsMoneroOneLogo, true)
@@ -294,6 +295,20 @@ final class OpenAliasTests: XCTestCase {
         XCTAssertEqual(summary("donate@monero.on")?.showsMoneroOneLogo, false)
         XCTAssertFalse(OpenAlias.isOperatorName("joe@monero.one"))
         XCTAssertFalse(OpenAlias.isOperatorName("donate.monero.one"))
+    }
+
+    func testMoneroOneLogoNeedsDnssec() {
+        guard case .name(let name) = OpenAlias.classify("donate@monero.one") else {
+            return XCTFail("donate@monero.one resolves as a name")
+        }
+        let valid = OpenAliasSummary(name: name, address: Fixture.getmoneroAddress, dnssec: .valid, pin: .none,
+                                     recipientName: "Monero One")
+        XCTAssertTrue(valid.showsMoneroOneLogo)
+        // Unsigned: the monogram, like any other name.
+        let unsigned = OpenAliasSummary(name: name, address: Fixture.getmoneroAddress, dnssec: .off, pin: .none,
+                                        recipientName: "Monero One")
+        XCTAssertFalse(unsigned.showsMoneroOneLogo)
+        XCTAssertEqual(unsigned.initials, "MO")
     }
 
     func testClassifyInvalidNames() {

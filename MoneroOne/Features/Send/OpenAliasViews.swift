@@ -18,11 +18,13 @@ struct OpenAliasSummary: Equatable {
 }
 
 extension OpenAliasSummary {
-    /// Monero One's own names show the Monero One logo. The name decides,
-    /// never the record: a record that calls itself "Monero One" gets a
-    /// monogram.
+    /// Monero One's own names show the Monero One logo, but only on a
+    /// DNSSEC-valid answer: an unsigned answer can be forged on the way, and
+    /// the logo must not vouch for its address (founder, 2026-10-01). The
+    /// name decides, never the record: a record that calls itself "Monero
+    /// One" gets a monogram. The card and the review step both read this.
     var showsMoneroOneLogo: Bool {
-        OpenAlias.isOperatorName(name.display)
+        dnssec == .valid && OpenAlias.isOperatorName(name.display)
     }
 
     var initials: String? {
@@ -449,7 +451,7 @@ struct RecipientMonogram: View {
 }
 
 /// The picture of a recipient: the Monero One logo for Monero One's own
-/// names, else the monogram.
+/// names on a DNSSEC-valid answer (`showsMoneroOneLogo`), else the monogram.
 struct RecipientAvatar: View {
     let summary: OpenAliasSummary
     var diameter: CGFloat = 44

@@ -28270,6 +28270,101 @@
         }
       }
     },
+    "Description" : {
+      "comment" : "Review: the payment description in the OpenAlias record of the recipient",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beschreibung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descripción"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descrizione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "説明"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설명"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Omschrijving"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opis"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descrição"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descriere"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Описание"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Açıklama"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Опис"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "说明"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "說明"
+          }
+        }
+      }
+    },
     "Details" : {
       "localizations" : {
         "de" : {
@@ -78081,6 +78176,101 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「價格」小工具不需要此設定也能使用。"
+          }
+        }
+      }
+    },
+    "The address for %@ (%@) is different from the address you paid on %@. Check the new address with the recipient." : {
+      "comment" : "Address Changed dialog: the record name, the OpenAlias name, then the date of the last payment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Adresse für %1$@ (%2$@) unterscheidet sich von der Adresse, an die du am %3$@ gezahlt hast. Prüfe die neue Adresse mit dem Empfänger."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dirección de %1$@ (%2$@) es distinta de la dirección a la que pagaste el %3$@. Verifica la nueva dirección con el destinatario."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’adresse de %1$@ (%2$@) est différente de celle que vous avez payée le %3$@. Vérifiez la nouvelle adresse avec le destinataire."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’indirizzo di %1$@ (%2$@) è diverso da quello che hai pagato il %3$@. Verifica il nuovo indirizzo con il destinatario."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@（%2$@）のアドレスは、%3$@ に支払ったアドレスと異なります。受取人に新しいアドレスを確認してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@(%2$@)의 주소가 %3$@에 결제한 주소와 다릅니다. 받는 사람에게 새 주소를 확인하세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het adres voor %1$@ (%2$@) verschilt van het adres dat je op %3$@ hebt betaald. Controleer het nieuwe adres bij de ontvanger."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adres dla %1$@ (%2$@) różni się od adresu, na który zapłacono %3$@. Sprawdź nowy adres z odbiorcą."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O endereço de %1$@ (%2$@) é diferente do endereço que você pagou em %3$@. Confira o novo endereço com o destinatário."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresa pentru %1$@ (%2$@) diferă de adresa pe care ai plătit-o pe %3$@. Verifică noua adresă cu destinatarul."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Адрес для %1$@ (%2$@) отличается от адреса, на который вы платили %3$@. Сверьте новый адрес с получателем."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$@) için adres, %3$@ tarihinde ödeme yaptığınız adresten farklı. Yeni adresi alıcıyla doğrulayın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Адреса для %1$@ (%2$@) відрізняється від адреси, на яку ви платили %3$@. Звірте нову адресу з одержувачем."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@（%2$@）的地址与你在 %3$@ 付款时的地址不同。请与收款人核对新地址。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@（%2$@）的位址與你在 %3$@ 付款時的位址不同。請與收款人核對新位址。"
           }
         }
       }

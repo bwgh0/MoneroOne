@@ -50,9 +50,12 @@ enum OpenAliasFailure: Error, Equatable {
 
 struct OpenAliasResult: Equatable {
     let address: String
-    /// The sanitized `recipient_name`. The app shows it nowhere (the link
-    /// policy of `MoneroPaymentURI`); it stays for the record checks.
+    /// The sanitized `recipient_name`: the title of the recipient card and
+    /// the review step (founder, 2026-10-01). `monero:` links still drop
+    /// it (`MoneroPaymentURI`).
     let recipientName: String?
+    /// The sanitized `tx_description`: a row on the review step.
+    var txDescription: String? = nil
     let dnssec: DnssecStatus
 }
 
@@ -190,6 +193,7 @@ enum OpenAlias {
         /// Every `recipient_address` value, in record order.
         var addresses: [String] = []
         var recipientName: String?
+        var txDescription: String?
         var paymentID: String?
     }
 
@@ -268,6 +272,8 @@ enum OpenAlias {
             record.addresses.append(value)
         case "recipient_name":
             if record.recipientName == nil { record.recipientName = value }
+        case "tx_description":
+            if record.txDescription == nil { record.txDescription = value }
         case "tx_payment_id":
             if record.paymentID == nil { record.paymentID = value }
         default:
@@ -294,20 +300,35 @@ enum OpenAlias {
         case .invalid: return .failure(.invalidAddress)
         }
 
+        // Records that disagree give no name or description.
         let names = Set(records.compactMap { $0.recipientName.flatMap(sanitizeName) })
+        let descriptions = Set(records.compactMap { $0.txDescription.flatMap(sanitizeDescription) })
         return .success(OpenAliasResult(address: address,
                                         recipientName: names.count == 1 ? names.first : nil,
+                                        txDescription: descriptions.count == 1 ? descriptions.first : nil,
                                         dnssec: dnssec))
     }
 
-    // MARK: - recipient_name (section 4.5)
+    // MARK: - recipient_name and tx_description (section 4.5)
 
-    static let nameDisplayCap = 40
+    static let nameDisplayCap = 64
+    static let descriptionDisplayCap = 100
 
-    /// Removes control, format (bidi and zero-width) and separator
-    /// characters, turns each run of whitespace into one space, trims, and
-    /// caps the length. Nil when nothing is left.
+    /// The record name as the app shows it. See `sanitize(_:cap:)`.
     static func sanitizeName(_ raw: String) -> String? {
+        sanitize(raw, cap: nameDisplayCap)
+    }
+
+    static func sanitizeDescription(_ raw: String) -> String? {
+        sanitize(raw, cap: descriptionDisplayCap)
+    }
+
+    /// Removes control (Cc) and format (Cf) characters, which include the
+    /// bidi overrides and the zero-width characters, and the other
+    /// invisible (default-ignorable) characters, such as the Hangul filler.
+    /// Turns each run of whitespace into one space, trims, and caps the
+    /// length at `cap` characters plus "…". Nil when nothing is left.
+    private static func sanitize(_ raw: String, cap: Int) -> String? {
         var out = String.UnicodeScalarView()
         var pendingSpace = false
         for scalar in raw.unicodeScalars {
@@ -321,14 +342,45 @@ enum OpenAlias {
             default:
                 break
             }
+            if scalar.properties.isDefaultIgnorableCodePoint { continue }
             if pendingSpace, !out.isEmpty { out.append(" ") }
             pendingSpace = false
             out.append(scalar)
         }
-        let name = String(out)
-        guard !name.isEmpty else { return nil }
-        guard name.count > nameDisplayCap else { return name }
-        return String(name.prefix(nameDisplayCap)) + "…"
+        let text = String(out)
+        guard !text.isEmpty else { return nil }
+        guard text.count > cap else { return text }
+        var kept = String(text.prefix(cap))
+        while kept.last == " " { kept.removeLast() }
+        return kept + "…"
+    }
+
+    // MARK: - Monogram
+
+    /// The initials on the recipient card: the first letter of each of the
+    /// first two words of the record name that hold a letter, in capitals
+    /// ("Monero Development" gives "MD"). Without such a word, the first
+    /// letter of the local part of the name: "D" for donate@getmonero.org,
+    /// "G" for getmonero.org. Nil when neither has a letter.
+    static func initials(recipientName: String?, display: String) -> String? {
+        if let recipientName {
+            let letters = recipientName
+                .split(whereSeparator: \.isWhitespace)
+                .compactMap { $0.first(where: \.isLetter) }
+                .prefix(2)
+            if !letters.isEmpty { return letters.map(capital).joined() }
+        }
+        let local = display.contains("@")
+            ? display.prefix(while: { $0 != "@" })
+            : display.prefix(while: { $0 != "." })
+        return local.first(where: \.isLetter).map(capital)
+    }
+
+    /// One capital letter. A letter whose capital is two letters ("ß")
+    /// stays as it is.
+    private static func capital(_ letter: Character) -> String {
+        let upper = String(letter).uppercased()
+        return upper.count == 1 ? upper : String(letter)
     }
 
     // MARK: - Answer mapping (section 3.7)

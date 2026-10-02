@@ -12,6 +12,9 @@ struct SendAddressStep: View {
 
     @State private var showContent = false
     @State private var dialog: ContinueDialog?
+    @FocusState private var fieldFocused: Bool
+    /// Set by the card's clear button: the field that comes back gets the cursor.
+    @State private var focusFieldOnAppear = false
 
     /// The dialog that Continue shows on a resolved name (spec 5.2).
     private enum ContinueDialog {
@@ -31,48 +34,30 @@ struct SendAddressStep: View {
                         .accessibilityLabel("Offline: no internet connection")
                     }
 
-                    // Address field
+                    // Address field. A resolved name turns it into the
+                    // recipient card, inside the same rounded field.
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Recipient")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        HStack {
-                            // Typed text goes to the lookup from the binding: when
-                            // two keystrokes land in one frame, SwiftUI drops an
-                            // onChange call, and the lookup kept a part of the name.
-                            TextField("Enter XMR address or OpenAlias", text: Binding(
-                                get: { recipientInput },
-                                set: { newValue in
-                                    recipientInput = newValue
-                                    lookup.textChanged(newValue)
-                                }
-                            ))
-                                .font(.system(.caption, design: .monospaced))
-                                .autocapitalization(.none)
-                                .autocorrectionDisabled()
-                                .onSubmit { lookup.submit(recipientInput) }
-                                .accessibilityIdentifier("send.addressField")
-                                .accessibilityLabel("Recipient address or OpenAlias name")
-
-                            if !recipientInput.isEmpty {
-                                Button {
-                                    lookup.cancel()
-                                    recipientInput = ""
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
-                                }
-                                .accessibilityLabel("Clear address")
+                        ZStack {
+                            if let resolvedSummary {
+                                OpenAliasRecipientCard(summary: resolvedSummary, onClear: clearRecipient)
+                                    .padding(.horizontal)
+                                    .padding(.vertical, 12)
+                                    .transition(.opacity)
+                            } else {
+                                fieldRow
+                                    .padding()
+                                    .transition(.opacity)
                             }
                         }
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
 
                         // Validation indicator. On the name path the lookup
-                        // row takes its place, in a slot of the same height,
-                        // so the buttons keep their positions.
+                        // row takes its place, in a slot of the same height.
                         if !recipientInput.isEmpty {
                             ZStack(alignment: .leading) {
                                 validationRow(isValid: false)
@@ -88,14 +73,14 @@ struct SendAddressStep: View {
                                             .transition(.opacity)
                                     }
                                 case .name, .reserved, .invalidName:
-                                    OpenAliasStatusRow(lookup: lookup)
+                                    if let resolvedSummary {
+                                        OpenAliasResolvedLines(summary: resolvedSummary)
+                                            .transition(.opacity)
+                                    } else {
+                                        OpenAliasStatusRow(lookup: lookup)
+                                    }
                                 }
                             }
-                        }
-
-                        if let resolvedSummary {
-                            OpenAliasResultBlock(summary: resolvedSummary)
-                                .transition(.opacity)
                         }
                     }
 
@@ -184,10 +169,79 @@ struct SendAddressStep: View {
         } message: { dialog in
             switch dialog {
             case .changed(let summary, let pinnedAt):
-                Text("The address for \(summary.name.display) is different from the address you paid on \(DateFormatter.localizedString(from: pinnedAt, dateStyle: .medium, timeStyle: .none)). Check the new address with the recipient.")
+                let paidOn = DateFormatter.localizedString(from: pinnedAt, dateStyle: .medium, timeStyle: .none)
+                if let recipientName = summary.recipientName {
+                    Text("The address for \(recipientName) (\(summary.name.display)) is different from the address you paid on \(paidOn). Check the new address with the recipient.",
+                         comment: "Address Changed dialog: the record name, the OpenAlias name, then the date of the last payment")
+                } else {
+                    Text("The address for \(summary.name.display) is different from the address you paid on \(paidOn). Check the new address with the recipient.")
+                }
             case .unsigned(let summary):
                 Text("\(summary.name.display) has no DNSSEC signature. A DNS server between you and the owner of the name can change this answer. Check the address with the recipient before you send.")
             }
+        }
+    }
+
+    /// The text field, with the lookup spinner and the clear button.
+    private var fieldRow: some View {
+        HStack {
+            // Typed text goes to the lookup from the binding: when
+            // two keystrokes land in one frame, SwiftUI drops an
+            // onChange call, and the lookup kept a part of the name.
+            TextField("Enter XMR address or OpenAlias", text: Binding(
+                get: { recipientInput },
+                set: { newValue in
+                    recipientInput = newValue
+                    lookup.textChanged(newValue)
+                }
+            ))
+                .font(.system(.caption, design: .monospaced))
+                .autocapitalization(.none)
+                .autocorrectionDisabled()
+                .focused($fieldFocused)
+                .onSubmit { lookup.submit(recipientInput) }
+                .accessibilityIdentifier("send.addressField")
+                .accessibilityLabel("Recipient address or OpenAlias name")
+
+            if isLookingUpName {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel(Text("Looking up \(lookup.name?.display ?? "")…"))
+                    .transition(.opacity)
+            }
+
+            if !recipientInput.isEmpty {
+                Button {
+                    lookup.cancel()
+                    recipientInput = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                // Gray like the clear button of the recipient card, which
+                // takes its place: the tint made it a pale orange.
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear address")
+            }
+        }
+        .onAppear {
+            guard focusFieldOnAppear else { return }
+            focusFieldOnAppear = false
+            fieldFocused = true
+        }
+    }
+
+    private var isLookingUpName: Bool {
+        guard case .name = input else { return false }
+        return lookup.isLooking
+    }
+
+    /// The card's clear button: the empty field comes back, with the cursor.
+    private func clearRecipient() {
+        lookup.cancel()
+        focusFieldOnAppear = true
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            recipientInput = ""
         }
     }
 

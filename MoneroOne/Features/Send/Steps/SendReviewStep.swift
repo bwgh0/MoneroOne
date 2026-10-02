@@ -35,15 +35,20 @@ struct SendReviewStep: View {
 
                     // Transaction card
                     VStack(spacing: 0) {
-                        // Recipient
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.brand.opacity(0.15))
-                                    .frame(width: 40, height: 40)
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.brand)
+                        // Recipient. A name shows its monogram, the name,
+                        // the OpenAlias name and every character of the address.
+                        HStack(alignment: aliasSummary == nil ? .center : .top, spacing: 12) {
+                            if let aliasSummary {
+                                RecipientMonogram(initials: aliasSummary.initials, diameter: 40)
+                            } else {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.brand.opacity(0.15))
+                                        .frame(width: 40, height: 40)
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(.brand)
+                                }
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
@@ -51,12 +56,18 @@ struct SendReviewStep: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 if let aliasSummary {
-                                    Text(aliasSummary.name.display)
-                                        .font(.subheadline.weight(.medium))
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
+                                    if let recipientName = aliasSummary.recipientName {
+                                        Text(verbatim: recipientName)
+                                            .font(.headline)
+                                        OpenAliasNameText(name: aliasSummary.name.display)
+                                    } else {
+                                        OpenAliasNameText(name: aliasSummary.name.display, style: .headline, weight: .semibold, color: .label)
+                                    }
+                                    CodeText(recipientAddress, color: .label)
+                                        .padding(.top, 4)
+                                } else {
+                                    CodeText(formatAddress(recipientAddress), color: .label)
                                 }
-                                CodeText(formatAddress(recipientAddress), color: .label)
                             }
 
                             Spacer()
@@ -160,6 +171,14 @@ struct SendReviewStep: View {
                             .padding()
                         }
 
+                        // The description in the OpenAlias record.
+                        if let txDescription = aliasSummary?.txDescription {
+                            Divider().padding(.horizontal)
+
+                            OpenAliasDescriptionRow(text: txDescription)
+                                .padding()
+                        }
+
                         // Memo
                         if !memo.isEmpty {
                             Divider().padding(.horizontal)
@@ -236,7 +255,7 @@ struct SendReviewStep: View {
 
     private var recipientLabel: Text {
         if let aliasSummary {
-            return Text("Recipient: \(aliasSummary.name.display), address \(recipientAddress)")
+            return Text("Recipient: \(aliasSummary.spokenName), address \(recipientAddress)")
         }
         return Text("Recipient: \(recipientAddress)")
     }

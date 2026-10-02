@@ -11,6 +11,35 @@ struct OpenAliasSummary: Equatable {
     let address: String
     let dnssec: DnssecStatus
     let pin: PinState
+    /// The sanitized `recipient_name` of the record.
+    var recipientName: String? = nil
+    /// The sanitized `tx_description` of the record.
+    var txDescription: String? = nil
+}
+
+extension OpenAliasSummary {
+    var initials: String? {
+        OpenAlias.initials(recipientName: recipientName, display: name.display)
+    }
+
+    /// VoiceOver: the record name and the OpenAlias name.
+    var spokenName: String {
+        guard let recipientName else { return name.display }
+        return String(localized: "\(recipientName), \(name.display)")
+    }
+
+    var pinText: String? {
+        switch pin {
+        case .none: return nil
+        case .same: return String(localized: "Same address as your last payment")
+        case .changed: return String(localized: "Address changed since your last payment")
+        }
+    }
+
+    /// VoiceOver value of the recipient card: the DNSSEC word and the pin.
+    var spokenStatus: String {
+        [dnssec.text, pinText].compactMap { $0 }.joined(separator: ", ")
+    }
 }
 
 // MARK: - Lookup model
@@ -55,6 +84,8 @@ final class OpenAliasLookupModel: ObservableObject {
     private let pins: OpenAliasPinStore
     private let typingDelay: Duration
     private let announce: @MainActor (String) -> Void
+    /// Plays when a lookup resolves.
+    private let resolvedFeedback: @MainActor () -> Void
     /// Bumped by every new text, so a late result is ignored.
     private var generation = 0
     private var work: Task<Void, Never>?
@@ -65,17 +96,20 @@ final class OpenAliasLookupModel: ObservableObject {
     init(resolver: OpenAliasResolver = OpenAliasResolver(),
          pins: OpenAliasPinStore = OpenAliasPinStore(),
          typingDelay: Duration = OpenAliasResolver.Config.typingDelay,
-         announce: @escaping @MainActor (String) -> Void = { AccessibilityNotification.Announcement($0).post() }) {
+         announce: @escaping @MainActor (String) -> Void = { AccessibilityNotification.Announcement($0).post() },
+         resolvedFeedback: @escaping @MainActor () -> Void = { HapticFeedback.shared.softTick() }) {
         self.resolver = resolver
         self.pins = pins
         self.typingDelay = typingDelay
         self.announce = announce
+        self.resolvedFeedback = resolvedFeedback
     }
 
     /// The result, when the lookup for the current name resolved.
     var summary: OpenAliasSummary? {
         guard let name, case .resolved(let result, let pin) = phase else { return nil }
-        return OpenAliasSummary(name: name, address: result.address, dnssec: result.dnssec, pin: pin)
+        return OpenAliasSummary(name: name, address: result.address, dnssec: result.dnssec, pin: pin,
+                                recipientName: result.recipientName, txDescription: result.txDescription)
     }
 
     var isLooking: Bool { phase == .looking }
@@ -241,7 +275,10 @@ final class OpenAliasLookupModel: ObservableObject {
         switch result {
         case .success(let found):
             let pin = pins.state(query: name.query, address: found.address, network: network)
-            setPhase(.resolved(found, pin))
+            // The field turns into the recipient card with the step-forward
+            // spring: short, with no visible bounce.
+            setPhase(.resolved(found, pin), animation: .spring(response: 0.3, dampingFraction: 0.85))
+            resolvedFeedback()
             announce(String(localized: "Address found for \(name.display)") + ". " + found.dnssec.text)
         case .failure(let failure):
             setPhase(.failed(failure))
@@ -249,9 +286,10 @@ final class OpenAliasLookupModel: ObservableObject {
         }
     }
 
-    private func setPhase(_ newPhase: Phase) {
+    private func setPhase(_ newPhase: Phase,
+                          animation: Animation = .easeOut(duration: OpenAliasResolver.Config.fade)) {
         guard newPhase != phase else { return }
-        withAnimation(.easeOut(duration: OpenAliasResolver.Config.fade)) {
+        withAnimation(animation) {
             phase = newPhase
         }
     }
@@ -303,7 +341,9 @@ extension DnssecStatus {
 
 // MARK: - Views
 
-/// The lock icon and the DNSSEC word.
+/// The lock icon and the DNSSEC word. Valid is quiet: a secondary lock and
+/// text, never green and never "Verified" (D5). Off is a caution: a yellow
+/// open lock, with the text in the label color.
 struct DnssecLine: View {
     let status: DnssecStatus
 
@@ -313,39 +353,24 @@ struct DnssecLine: View {
                 .foregroundStyle(status == .valid ? Color.secondary : Color.yellow)
                 .accessibilityHidden(true)
             Text(status.text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(status == .valid ? Color.secondary : Color.primary)
         }
+        .font(.caption)
         .accessibilityElement(children: .combine)
     }
 }
 
-/// The row under the recipient field on the name path. It takes the place
-/// of the "Valid address" row.
+/// The row under the recipient field on the name path, in place of the
+/// "Valid address" row: a failed lookup or a rejected name. While a lookup
+/// runs, the spinner sits in the field. A resolved name turns the field
+/// into `OpenAliasRecipientCard`, with `OpenAliasResolvedLines` here.
 struct OpenAliasStatusRow: View {
     @ObservedObject var lookup: OpenAliasLookupModel
 
     var body: some View {
         switch lookup.phase {
-        case .idle, .pendingAddress, .address, .waiting, .pendingRejection:
-            // The address step draws the address row itself.
+        case .idle, .pendingAddress, .address, .waiting, .pendingRejection, .looking, .resolved:
             EmptyView()
-
-        case .looking:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.small)
-                    .accessibilityHidden(true)
-                Text("Looking up \(lookup.name?.display ?? "")…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .combine)
-            .transition(.opacity)
-
-        case .resolved(let result, _):
-            DnssecLine(status: result.dnssec)
-                .transition(.opacity)
 
         case .failed(let failure):
             HStack(spacing: 8) {
@@ -385,41 +410,196 @@ struct OpenAliasStatusRow: View {
     }
 }
 
-/// The resolved address under the row: all of its characters, and the pin.
-struct OpenAliasResultBlock: View {
-    let summary: OpenAliasSummary
+/// A Contacts-style monogram: up to two initials on a gray disc, or a
+/// person glyph when no letter is left. The app never fetches an image or
+/// a favicon for a name: that request would show the user's IP address to
+/// the domain.
+struct RecipientMonogram: View {
+    let initials: String?
+    var diameter: CGFloat = 44
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Address")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            // Wraps at any character, with no hyphen, and copies exactly the address.
-            CodeText(summary.address, color: .label, selectable: true)
-            switch summary.pin {
-            case .none:
-                EmptyView()
-            case .same:
-                Text("Same address as your last payment")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            case .changed:
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                        .font(.caption2)
-                        .accessibilityHidden(true)
-                    Text("Address changed since your last payment")
+        Circle()
+            .fill(Color.gray.gradient)
+            .frame(width: diameter, height: diameter)
+            .overlay {
+                Group {
+                    if let initials {
+                        Text(verbatim: initials)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                    } else {
+                        Image(systemName: "person.fill")
+                    }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                // A fixed size: the disc does not grow with Dynamic Type.
+                .font(.system(size: diameter * 0.4, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(diameter * 0.12)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// The field after a lookup resolved: the recipient, the way Mail turns an
+/// address into a contact and Apple Pay names the merchant. The record name
+/// is the title and the OpenAlias name the subtitle. Without a record name,
+/// the OpenAlias name is the title and the short address the subtitle. The
+/// address step draws the field background around it.
+struct OpenAliasRecipientCard: View {
+    let summary: OpenAliasSummary
+    let onClear: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                // Large text: the names get the full width, under the monogram.
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top) {
+                        RecipientMonogram(initials: summary.initials)
+                        Spacer(minLength: 8)
+                        clearButton
+                    }
+                    names
+                }
+            } else {
+                HStack(spacing: 12) {
+                    RecipientMonogram(initials: summary.initials)
+                    names
+                    Spacer(minLength: 0)
+                    clearButton
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
-        .accessibilityElement(children: .combine)
+        // One element: the names, the DNSSEC state, and Clear as an action.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: summary.spokenName))
+        .accessibilityValue(Text(verbatim: summary.spokenStatus))
+        .accessibilityAction(named: Text("Clear address"), onClear)
+        .accessibilityIdentifier("send.recipientCard")
+    }
+
+    private var names: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let recipientName = summary.recipientName {
+                Text(verbatim: recipientName)
+                    .font(.headline)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                OpenAliasNameText(name: summary.name.display)
+            } else {
+                OpenAliasNameText(name: summary.name.display, style: .headline, weight: .semibold, color: .label)
+                Text(verbatim: ReceiveAddressLogic.shortAddress(summary.address))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var clearButton: some View {
+        Button(action: onClear) {
+            Image(systemName: "xmark.circle.fill")
+                .foregroundStyle(.secondary)
+                // A 44 pt target around the glyph, which keeps its place.
+                .padding(12)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(-12)
+        .accessibilityLabel("Clear address")
+    }
+}
+
+/// An OpenAlias name, every character of it, with no hyphen added:
+/// "donate@get-monero.org" reads as another domain, and a cut-off name can
+/// hide the end of its domain. A long name wraps after the "@" or before a
+/// "." first, and between two characters only inside a longer part.
+struct OpenAliasNameText: View {
+    let name: String
+    var style: UIFont.TextStyle = .subheadline
+    var weight: UIFont.Weight = .regular
+    var color: UIColor = .secondaryLabel
+
+    var body: some View {
+        CodeText(
+            Self.wrappable(name),
+            style: style,
+            monospaced: false,
+            weight: weight,
+            color: color,
+            lineBreakMode: .byWordWrapping
+        )
+    }
+
+    /// The name with a zero-width space after the "@" and before each ".",
+    /// the places where a line can break.
+    static func wrappable(_ name: String) -> String {
+        var text = ""
+        for character in name {
+            if character == "." { text.append("\u{200B}") }
+            text.append(character)
+            if character == "@" { text.append("\u{200B}") }
+        }
+        return text
+    }
+}
+
+/// The quiet lines under the recipient card: the DNSSEC state, the short
+/// address (when the card shows none), and the pin state. VoiceOver reads
+/// them on the card.
+struct OpenAliasResolvedLines: View {
+    let summary: OpenAliasSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if summary.recipientName != nil {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        DnssecLine(status: summary.dnssec)
+                        Text(verbatim: "·")
+                            .foregroundStyle(.tertiary)
+                        address
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        DnssecLine(status: summary.dnssec)
+                        address
+                    }
+                }
+            } else {
+                DnssecLine(status: summary.dnssec)
+            }
+            pinLine
+        }
+        .font(.caption)
+        .accessibilityHidden(true)
+    }
+
+    private var address: some View {
+        Text(verbatim: ReceiveAddressLogic.shortAddress(summary.address))
+            .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private var pinLine: some View {
+        switch summary.pin {
+        case .none:
+            EmptyView()
+        case .same:
+            Text("Same address as your last payment")
+                .foregroundStyle(.secondary)
+        case .changed:
+            // The amount step's caution style: a yellow triangle, the text
+            // in the label color.
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.yellow)
+                Text("Address changed since your last payment")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 
@@ -445,5 +625,35 @@ struct OpenAliasReviewNotes: View {
         // Both icons at the size of the caption text.
         .font(.caption)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The `tx_description` of the record, as a row of the review card. The
+/// record's owner wrote it, like the name.
+struct OpenAliasDescriptionRow: View {
+    let text: String
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                label
+                Spacer(minLength: 0)
+                Text(verbatim: text)
+                    .multilineTextAlignment(.trailing)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                label
+                Text(verbatim: text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .font(.subheadline)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var label: some View {
+        Text("Description", comment: "Review: the payment description in the OpenAlias record of the recipient")
+            .foregroundStyle(.secondary)
     }
 }

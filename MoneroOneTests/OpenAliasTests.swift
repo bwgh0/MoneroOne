@@ -320,12 +320,14 @@ final class OpenAliasTests: XCTestCase {
 
     func testGetmoneroFixture() {
         XCTAssertEqual(select(Fixture.getmoneroRecords),
-                       .success(OpenAliasResult(address: Fixture.getmoneroAddress, recipientName: "Monero Development", dnssec: .valid)))
+                       .success(OpenAliasResult(address: Fixture.getmoneroAddress, recipientName: "Monero Development",
+                                                txDescription: "Donation to Monero Core Team", dnssec: .valid)))
     }
 
     func testOpenaliasFixture() {
         XCTAssertEqual(select(Fixture.openaliasRecords, dnssec: .off),
-                       .success(OpenAliasResult(address: Fixture.openaliasAddress, recipientName: "Monero Development", dnssec: .off)))
+                       .success(OpenAliasResult(address: Fixture.openaliasAddress, recipientName: "Monero Development",
+                                                txDescription: "Donation to Monero Core Team", dnssec: .off)))
     }
 
     func testPrefixRules() {
@@ -382,15 +384,105 @@ final class OpenAliasTests: XCTestCase {
                        .success(OpenAliasResult(address: Fixture.getmoneroAddress, recipientName: nil, dnssec: .valid)))
     }
 
+    func testTxDescription() {
+        let first = record("recipient_address=\(Fixture.getmoneroAddress); tx_description=Coffee; tx_description=Tea;")
+        XCTAssertEqual(OpenAlias.parseRecord(first)?.txDescription, "Coffee")
+        XCTAssertEqual(try select([first]).get().txDescription, "Coffee")
+
+        // Sanitized like the name.
+        let hidden = record("recipient_address=\(Fixture.getmoneroAddress); tx_description=Cof\u{202E}fee\n for  you;")
+        XCTAssertEqual(try select([hidden]).get().txDescription, "Coffee for you")
+
+        // Records that disagree give no description; a record without one does not count.
+        let second = record("recipient_address=\(Fixture.getmoneroAddress); tx_description=Lunch;")
+        let none = record("recipient_address=\(Fixture.getmoneroAddress);")
+        XCTAssertNil(try select([first, second]).get().txDescription)
+        XCTAssertEqual(try select([first, none]).get().txDescription, "Coffee")
+        XCTAssertNil(try select([none]).get().txDescription)
+    }
+
     // MARK: Sanitize (section 4.5)
 
     func testSanitizeName() {
         XCTAssertEqual(OpenAlias.sanitizeName("Mon\u{202E}ero\u{200B} Dev"), "Monero Dev")
         XCTAssertEqual(OpenAlias.sanitizeName("Monero\nDevelopment"), "Monero Development")
         XCTAssertEqual(OpenAlias.sanitizeName("  Monero \t  Dev  "), "Monero Dev")
-        let sixty = String(repeating: "abcdefghij", count: 6)
-        XCTAssertEqual(OpenAlias.sanitizeName(sixty), String(sixty.prefix(40)) + "…")
+        let seventy = String(repeating: "abcdefghij", count: 7)
+        XCTAssertEqual(OpenAlias.sanitizeName(seventy), String(seventy.prefix(64)) + "…")
         XCTAssertNil(OpenAlias.sanitizeName("\u{0001}\u{0002}\u{200B}"))
+    }
+
+    func testSanitizeRemovesInvisibleCharacters() {
+        // Bidi override and isolate, zero-width space and joiner, BOM, soft hyphen.
+        XCTAssertEqual(OpenAlias.sanitizeName("\u{202E}Mon\u{2066}ero\u{200B}\u{200D} De\u{FEFF}v\u{00AD}"), "Monero Dev")
+        // The Hangul filler is a letter, but it draws nothing.
+        XCTAssertEqual(OpenAlias.sanitizeName("Monero\u{3164}One"), "MoneroOne")
+        XCTAssertNil(OpenAlias.sanitizeName("\u{3164}\u{200B} \u{FEFF}"))
+        // Line and paragraph separators are whitespace: one space.
+        XCTAssertEqual(OpenAlias.sanitizeName("Monero\u{2028}\u{2029}One"), "Monero One")
+        // Accents and other scripts stay.
+        XCTAssertEqual(OpenAlias.sanitizeName("Cafe\u{0301} Mon\u{00E9}ro"), "Cafe\u{0301} Mon\u{00E9}ro")
+        XCTAssertEqual(OpenAlias.sanitizeName("モネロ 開発"), "モネロ 開発")
+    }
+
+    func testSanitizeCaps() {
+        let sixtyFour = String(repeating: "a", count: 64)
+        XCTAssertEqual(OpenAlias.sanitizeName(sixtyFour), sixtyFour)
+        // No space before the "…".
+        let spaced = String(repeating: "a", count: 63) + " bbbbbb"
+        XCTAssertEqual(OpenAlias.sanitizeName(spaced), String(repeating: "a", count: 63) + "…")
+        // The cap counts characters, not scalars.
+        let accents = String(repeating: "e\u{0301}", count: 64)
+        XCTAssertEqual(OpenAlias.sanitizeName(accents), accents)
+        // Descriptions cap at 100.
+        let long = String(repeating: "abcdefghij", count: 11)
+        XCTAssertEqual(OpenAlias.sanitizeDescription(long), String(long.prefix(100)) + "…")
+        XCTAssertEqual(OpenAlias.sanitizeDescription(String(long.prefix(100))), String(long.prefix(100)))
+    }
+
+    // MARK: Monogram
+
+    func testInitials() {
+        let display = "donate@getmonero.org"
+        XCTAssertEqual(OpenAlias.initials(recipientName: "Monero Development", display: display), "MD")
+        XCTAssertEqual(OpenAlias.initials(recipientName: "monero  core team", display: display), "MC")
+        XCTAssertEqual(OpenAlias.initials(recipientName: "Monero", display: display), "M")
+        XCTAssertEqual(OpenAlias.initials(recipientName: "🎉 Party Fund", display: display), "PF")
+        XCTAssertEqual(OpenAlias.initials(recipientName: "(Monero) 42 dev", display: display), "MD")
+        XCTAssertEqual(OpenAlias.initials(recipientName: "élan vital", display: display), "ÉV")
+        // A letter with a two-letter capital stays as it is.
+        XCTAssertEqual(OpenAlias.initials(recipientName: "ßar", display: display), "ß")
+    }
+
+    func testInitialsFromTheName() {
+        XCTAssertEqual(OpenAlias.initials(recipientName: nil, display: "donate@getmonero.org"), "D")
+        XCTAssertEqual(OpenAlias.initials(recipientName: "1234 !!", display: "donate@getmonero.org"), "D")
+        XCTAssertEqual(OpenAlias.initials(recipientName: nil, display: "getmonero.org"), "G")
+        XCTAssertEqual(OpenAlias.initials(recipientName: nil, display: "_pay.example.com"), "P")
+        XCTAssertNil(OpenAlias.initials(recipientName: nil, display: "1234@example.com"))
+        XCTAssertNil(OpenAlias.initials(recipientName: "42", display: "42.example.com"))
+    }
+
+    // MARK: Recipient card
+
+    func testSummaryText() {
+        let name = OpenAliasName(display: "donate@getmonero.org", query: "donate.getmonero.org")
+        let named = OpenAliasSummary(name: name, address: Fixture.getmoneroAddress, dnssec: .valid, pin: .none,
+                                     recipientName: "Monero Development")
+        XCTAssertEqual(named.spokenName, "Monero Development, donate@getmonero.org")
+        XCTAssertEqual(named.spokenStatus, "DNSSEC valid")
+        XCTAssertEqual(named.initials, "MD")
+
+        let bare = OpenAliasSummary(name: name, address: Fixture.getmoneroAddress, dnssec: .off, pin: .same(Date()))
+        XCTAssertEqual(bare.spokenName, "donate@getmonero.org")
+        XCTAssertEqual(bare.spokenStatus, "DNSSEC off, Same address as your last payment")
+        XCTAssertEqual(bare.initials, "D")
+    }
+
+    func testNameWrapPoints() {
+        XCTAssertEqual(OpenAliasNameText.wrappable("donate@getmonero.org"), "donate@\u{200B}getmonero\u{200B}.org")
+        XCTAssertEqual(OpenAliasNameText.wrappable("pay.example.com"), "pay\u{200B}.example\u{200B}.com")
+        XCTAssertEqual(OpenAliasNameText.wrappable("x"), "x")
     }
 
     // MARK: Answer mapping (section 3.7)
@@ -443,7 +535,8 @@ final class OpenAliasTests: XCTestCase {
 
     func testMapResolved() {
         XCTAssertEqual(try map(Fixture.answer(records: Fixture.getmoneroRecords)).get(),
-                       OpenAliasResult(address: Fixture.getmoneroAddress, recipientName: "Monero Development", dnssec: .valid))
+                       OpenAliasResult(address: Fixture.getmoneroAddress, recipientName: "Monero Development",
+                                       txDescription: "Donation to Monero Core Team", dnssec: .valid))
         XCTAssertEqual(try map(Fixture.answer(secure: false, records: Fixture.openaliasRecords)).get().dnssec, .off)
     }
 
@@ -520,14 +613,16 @@ final class OpenAliasTests: XCTestCase {
         }
     }
 
-    private func makeModel(_ stub: KitStub, typingDelay: Duration = .milliseconds(100)) -> (OpenAliasLookupModel, () -> [String]) {
+    private func makeModel(_ stub: KitStub, typingDelay: Duration = .milliseconds(100),
+                           resolvedFeedback: @escaping @MainActor () -> Void = {}) -> (OpenAliasLookupModel, () -> [String]) {
         var resolver = OpenAliasResolver()
         resolver.proxyAddress = { nil }
         resolver.makeTransport = { _ in FakeTransport(handler: FakeTransport.fail) }
         resolver.kitLookup = { _, _, _ in stub.lookup() }
         var announcements: [String] = []
         let model = OpenAliasLookupModel(resolver: resolver, pins: OpenAliasPinStore(defaults: defaults),
-                                         typingDelay: typingDelay, announce: { announcements.append($0) })
+                                         typingDelay: typingDelay, announce: { announcements.append($0) },
+                                         resolvedFeedback: resolvedFeedback)
         return (model, { announcements })
     }
 
@@ -546,9 +641,28 @@ final class OpenAliasTests: XCTestCase {
         await waitUntil { model.summary != nil }
         XCTAssertEqual(model.summary, OpenAliasSummary(
             name: OpenAliasName(display: "donate@getmonero.org", query: "donate.getmonero.org"),
-            address: Fixture.getmoneroAddress, dnssec: .valid, pin: .none))
+            address: Fixture.getmoneroAddress, dnssec: .valid, pin: .none,
+            recipientName: "Monero Development", txDescription: "Donation to Monero Core Team"))
         XCTAssertEqual(announcements(), ["Address found for donate@getmonero.org. DNSSEC valid"])
         XCTAssertEqual(stub.calls, 1)
+    }
+
+    func testModelResolveFiresOneHaptic() async {
+        var taps = 0
+        let stub = KitStub(json: Fixture.answer(records: Fixture.getmoneroRecords))
+        let (model, _) = makeModel(stub, typingDelay: .seconds(10), resolvedFeedback: { taps += 1 })
+        model.submit("donate@getmonero.org")
+        XCTAssertEqual(taps, 0)
+        await waitUntil { model.summary != nil }
+        XCTAssertEqual(taps, 1)
+
+        // A failed lookup plays none.
+        let empty = KitStub(json: Fixture.answer(records: []))
+        let (failing, _) = makeModel(empty, typingDelay: .seconds(10), resolvedFeedback: { taps += 1 })
+        failing.submit("donate@getmonero.org")
+        await waitUntil { failing.phase != .looking }
+        XCTAssertEqual(failing.phase, .failed(.noRecord))
+        XCTAssertEqual(taps, 1)
     }
 
     func testModelTypingWaitsForDelay() async {

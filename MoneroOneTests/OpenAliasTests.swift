@@ -268,6 +268,34 @@ final class OpenAliasTests: XCTestCase {
         }
     }
 
+    func testClassifyOperatorNames() {
+        // donate@monero.one is Monero One's own name: it resolves like any other.
+        assertName("donate@monero.one", query: "donate.monero.one", display: "donate@monero.one")
+        assertName(" DONATE@Monero.One ", query: "donate.monero.one", display: "donate@monero.one")
+        assertName("donate@monero.one.", query: "donate.monero.one", display: "donate@monero.one")
+        // Every other monero.one name stays reserved, the dotted form too.
+        for input in ["joe@monero.one", "donate.monero.one", "donate@pay.monero.one", "xdonate@monero.one",
+                      "donatex@monero.one", "@donate"] {
+            XCTAssertEqual(OpenAlias.classify(input), .reserved, input)
+        }
+    }
+
+    func testMoneroOneLogoOnlyForOperatorNames() {
+        func summary(_ input: String, recipientName: String? = nil) -> OpenAliasSummary? {
+            guard case .name(let name) = OpenAlias.classify(input) else { return nil }
+            return OpenAliasSummary(name: name, address: Fixture.getmoneroAddress, dnssec: .off, pin: .none,
+                                    recipientName: recipientName)
+        }
+        XCTAssertEqual(summary("donate@monero.one", recipientName: "Monero One")?.showsMoneroOneLogo, true)
+        XCTAssertEqual(summary("Donate@Monero.one")?.showsMoneroOneLogo, true)
+        // A record that calls itself Monero One gets a monogram.
+        XCTAssertEqual(summary("donate@getmonero.org", recipientName: "Monero One")?.showsMoneroOneLogo, false)
+        XCTAssertEqual(summary("donate@monero.one.example.com", recipientName: "Monero One")?.showsMoneroOneLogo, false)
+        XCTAssertEqual(summary("donate@monero.on")?.showsMoneroOneLogo, false)
+        XCTAssertFalse(OpenAlias.isOperatorName("joe@monero.one"))
+        XCTAssertFalse(OpenAlias.isOperatorName("donate.monero.one"))
+    }
+
     func testClassifyInvalidNames() {
         let inputs = [
             "@getmonero.org", "joe@", "a@b@c.com",

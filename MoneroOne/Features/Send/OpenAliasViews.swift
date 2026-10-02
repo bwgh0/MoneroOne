@@ -18,6 +18,13 @@ struct OpenAliasSummary: Equatable {
 }
 
 extension OpenAliasSummary {
+    /// Monero One's own names show the Monero One logo. The name decides,
+    /// never the record: a record that calls itself "Monero One" gets a
+    /// monogram.
+    var showsMoneroOneLogo: Bool {
+        OpenAlias.isOperatorName(name.display)
+    }
+
     var initials: String? {
         OpenAlias.initials(recipientName: recipientName, display: name.display)
     }
@@ -441,6 +448,39 @@ struct RecipientMonogram: View {
     }
 }
 
+/// The picture of a recipient: the Monero One logo for Monero One's own
+/// names, else the monogram.
+struct RecipientAvatar: View {
+    let summary: OpenAliasSummary
+    var diameter: CGFloat = 44
+
+    var body: some View {
+        if summary.showsMoneroOneLogo {
+            MoneroOneAvatar(diameter: diameter)
+        } else {
+            RecipientMonogram(initials: summary.initials, diameter: diameter)
+        }
+    }
+}
+
+/// The logo of Welcome and Unlock, still, clipped to the circle the same
+/// way. It comes from the app bundle: nothing is fetched.
+struct MoneroOneAvatar: View {
+    var diameter: CGFloat = 44
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Image(colorScheme == .dark ? "MoneroSymbolDark" : "MoneroSymbol")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(1.15)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
+    }
+}
+
 /// The field after a lookup resolved: the recipient, the way Mail turns an
 /// address into a contact and Apple Pay names the merchant. The record name
 /// is the title and the OpenAlias name the subtitle. Without a record name,
@@ -458,7 +498,7 @@ struct OpenAliasRecipientCard: View {
                 // Large text: the names get the full width, under the monogram.
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top) {
-                        RecipientMonogram(initials: summary.initials)
+                        RecipientAvatar(summary: summary)
                         Spacer(minLength: 8)
                         clearButton
                     }
@@ -466,7 +506,7 @@ struct OpenAliasRecipientCard: View {
                 }
             } else {
                 HStack(spacing: 12) {
-                    RecipientMonogram(initials: summary.initials)
+                    RecipientAvatar(summary: summary)
                     names
                     Spacer(minLength: 0)
                     clearButton

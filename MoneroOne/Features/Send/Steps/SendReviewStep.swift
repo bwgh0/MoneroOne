@@ -35,11 +35,11 @@ struct SendReviewStep: View {
 
                     // Transaction card
                     VStack(spacing: 0) {
-                        // Recipient. A name shows its monogram, the name,
+                        // Recipient. A name shows its picture, the name,
                         // the OpenAlias name and every character of the address.
                         HStack(alignment: aliasSummary == nil ? .center : .top, spacing: 12) {
                             if let aliasSummary {
-                                RecipientMonogram(initials: aliasSummary.initials, diameter: 40)
+                                RecipientAvatar(summary: aliasSummary, diameter: 40)
                             } else {
                                 ZStack {
                                     Circle()

@@ -2469,12 +2469,12 @@ class WalletManager: ObservableObject {
         return !isViewOnly
     }
 
-    func estimateFee(to address: String, amount: Decimal) async throws -> Decimal {
+    func estimateFee(to address: String, amount: Decimal, priority: SendPriority = .default) async throws -> Decimal {
         if isViewOnly && !isHardwareWallet { throw WalletError.viewOnlyCannotSend }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
-        return try await wallet.estimateFee(to: address, amount: amount)
+        return try await wallet.estimateFee(to: address, amount: amount, priority: priority)
     }
 
     func send(to address: String, amount: Decimal, memo: String? = nil) async throws -> String {

@@ -23,6 +23,12 @@ struct PaymentLinkDraft: Equatable {
 enum PaymentLinkFunder {
     static let memo = "Payment link"
 
+    /// The priority the claim fee reserve is sized for. Android sweeps every
+    /// claim at wallet2 priority 2 (Priority_Medium), dearer than the iOS
+    /// default, and either app can claim a link: reserve for that one. The
+    /// kit passes the raw value to wallet2 as its priority.
+    static let claimFeePriority: SendPriority = .medium
+
     /// Builds a new envelope for `amount` XMR and prices it. Generates and
     /// verifies the secret, and fails when the wallet cannot cover the amount,
     /// the network fee and the claim fee reserve.
@@ -44,9 +50,10 @@ enum PaymentLinkFunder {
             id: EnvelopeLink.newId()
         )
 
-        // The reserve is the kit's fee estimate for this funding transaction:
-        // the claim sweep (one input, one output) costs no more.
-        let reserve = try await walletManager.estimateFee(to: secret.address, amount: amount)
+        // The reserve is the kit's fee estimate for this funding transaction
+        // at the claim priority: the claim sweep (one input, one output)
+        // costs no more.
+        let reserve = try await walletManager.estimateFee(to: secret.address, amount: amount, priority: claimFeePriority)
         let reserveAtomic = EnvelopeRuntime.piconero(reserve)
         let funding = EnvelopeRuntime.xmr(atomic + reserveAtomic)
         let networkFee = try await walletManager.estimateFee(to: secret.address, amount: funding)

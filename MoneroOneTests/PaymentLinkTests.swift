@@ -240,6 +240,13 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(EnvelopeStatusRules.status(for: stale, reclaimTxid: nil), .claimed)
     }
 
+    func testClaimFeeReserveUsesWallet2PriorityTwo() {
+        // Android sweeps claims at wallet2 Priority_Medium (2); the reserve
+        // must cover that, whatever the app's send default is.
+        XCTAssertEqual(PaymentLinkFunder.claimFeePriority, .medium)
+        XCTAssertEqual(PaymentLinkFunder.claimFeePriority.rawValue, 2)
+    }
+
     func testAtomicConversion() {
         XCTAssertEqual(EnvelopeRuntime.piconero(Decimal(string: "0.5")!), 500_000_000_000)
         XCTAssertEqual(EnvelopeRuntime.piconero(Decimal(string: "0.000000000001")!), 1)

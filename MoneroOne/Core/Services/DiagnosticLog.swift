@@ -93,7 +93,8 @@ final class DiagnosticLog {
 
     func log(_ message: String) {
         let now = Date()
-        let message = Self.redactingCredentials(in: message)
+        // Payment links carry a wallet seed in the fragment.
+        let message = EnvelopeLink.redacted(in: Self.redactingCredentials(in: message))
         logger.info("\(message)")
         queue.async { [weak self] in
             self?.appendLine(message, at: now)

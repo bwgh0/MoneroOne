@@ -111,8 +111,16 @@ struct MoneroOneApp: App {
                 // `monero:` links from Safari, Messages, the camera and
                 // other apps. The dashboard opens Send once it is unlocked.
                 .onOpenURL { url in
+                    // Claim links (https://monero.one/c#...) go to Payment
+                    // Links; everything else is a `monero:` link.
+                    if PaymentLinksCoordinator.shared.handle(url: url, networkType: walletManager.networkType, activeAddress: walletManager.primaryAddress) { return }
                     walletManager.openPaymentLink(url)
                 }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    guard let url = activity.webpageURL else { return }
+                    PaymentLinksCoordinator.shared.handle(url: url, networkType: walletManager.networkType, activeAddress: walletManager.primaryAddress)
+                }
+                .presentsPaymentLinkClaims(walletManager: walletManager)
                 .alert(
                     "Can't Open Payment Link",
                     isPresented: Binding(

@@ -138,10 +138,15 @@ struct SendFlowView: View {
             guard newPhase.isSendingState, let shownPaymentRequest else { return }
             walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: true)
         }
-        .onChange(of: recipientAddress) { _, text in
+        .onChange(of: recipientAddress) { old, text in
             // A claim link pasted or scanned here opens the claim sheet. It is
             // never an address.
             guard EnvelopeLink.looksLikeClaimLink(text) else { return }
+            // Typed, the link is incomplete until its last key: wait for a
+            // whole link. A paste or scan lands in one change and gets an
+            // answer even when it is broken.
+            let pasted = text.count - old.count > 16
+            if !pasted, (try? EnvelopeLink.parse(text)) == nil { return }
             recipientAddress = ""
             PaymentLinksCoordinator.shared.handle(text: text, networkType: walletManager.networkType, activeAddress: walletManager.primaryAddress)
             dismiss()

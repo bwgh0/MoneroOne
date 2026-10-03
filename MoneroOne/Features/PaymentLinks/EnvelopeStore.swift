@@ -121,6 +121,21 @@ final class EnvelopeStore: ObservableObject {
         }
     }
 
+    /// A sent link that may still hold money.
+    var hasUnsettledSentLinks: Bool {
+        records.contains { $0.role == .sent && !$0.status.isSettled }
+    }
+
+    /// Remove All: every record and its secret leave the Keychain.
+    func removeAll() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+        ]
+        SecItemDelete(query as CFDictionary)
+        records = []
+    }
+
     func remove(_ record: EnvelopeRecord) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

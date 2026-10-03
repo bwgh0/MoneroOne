@@ -3150,6 +3150,9 @@ class WalletManager: ObservableObject {
         for id in ids {
             deleteWallet(id: id)
         }
+        // Remove All is the full wipe: payment links and their secrets too.
+        EnvelopeStore.shared.removeAll()
+        Task { await EnvelopeRuntime.shared.wipeAll() }
     }
 
     func deleteWallet(id: UUID) {

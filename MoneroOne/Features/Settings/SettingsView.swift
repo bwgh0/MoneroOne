@@ -390,7 +390,11 @@ struct SettingsView: View {
                     walletManager.deleteAllWallets()
                 }
             } message: {
-                Text("You can restore them only with their seed phrases or keys.")
+                if EnvelopeStore.shared.hasUnsettledSentLinks {
+                    Text("You can restore them only with their seed phrases or keys.\nUnclaimed payment links will be lost.")
+                } else {
+                    Text("You can restore them only with their seed phrases or keys.")
+                }
             }
         }
     }

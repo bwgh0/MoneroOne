@@ -259,6 +259,25 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertTrue(EnvelopeStore(service: service).records.isEmpty)
     }
 
+    @MainActor
+    func testRemoveAllWipesEveryRecordAndSecret() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        let sent = EnvelopeRecord(id: "0123456789abcdef", role: .sent, words: vectorWords, address: vectorAddress,
+                                  restoreHeight: 150, amount: 100_000_000_000, expiry: 1_791_000_000,
+                                  createdAt: Date(), status: .ready)
+        let received = EnvelopeRecord(id: "fedcba9876543210", role: .received, words: vectorWords, address: vectorAddress,
+                                  restoreHeight: 150, amount: 1, expiry: 1_791_000_000, createdAt: Date(), status: .created)
+        try store.save(sent)
+        try store.save(received)
+        XCTAssertTrue(store.hasUnsettledSentLinks)
+
+        store.removeAll()
+        XCTAssertTrue(store.records.isEmpty)
+        XCTAssertFalse(store.hasUnsettledSentLinks)
+        XCTAssertTrue(EnvelopeStore(service: service).records.isEmpty)
+    }
+
     // MARK: - Redaction
 
     func testDiagnosticLogRedactsClaimLinks() {

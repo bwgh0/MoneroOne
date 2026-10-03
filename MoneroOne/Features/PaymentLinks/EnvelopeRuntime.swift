@@ -235,6 +235,18 @@ final class EnvelopeRuntime: ObservableObject {
         _ = try? await serial { [self] in await closeEnvelopeNow() }
     }
 
+    /// Remove All: stops any scan and deletes every envelope's files (only
+    /// `MoneroKit/envelopes`, never the wallets' caches).
+    func wipeAll() async {
+        generation += 1
+        _ = try? await serial { [self] in
+            await closeEnvelopeNow()
+            guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("MoneroKit/envelopes", isDirectory: true) else { return }
+            try? FileManager.default.removeItem(at: dir)
+        }
+    }
+
     /// Deletes the envelope's files. Closes it first when it is open.
     func deleteFiles(id: String) async {
         _ = try? await serial { [self] in

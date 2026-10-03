@@ -153,6 +153,18 @@
 		TRZTRP00BUILD567890ABCDEF /* TrezorTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZTRP001234567890ABCDEF /* TrezorTransport.swift */; };
 		TRZPAR00BUILD567890ABCDEF /* PairTrezorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZPAR001234567890ABCDEF /* PairTrezorView.swift */; };
 		TRZHWS00BUILD567890ABCDEF /* HardwareSessionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRZHWS001234567890ABCDEF /* HardwareSessionSheet.swift */; };
+		9A7E1C0D000100000000B001 /* EnvelopeLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000100000000F001 /* EnvelopeLink.swift */; };
+		9A7E1C0D000200000000B002 /* EnvelopeStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000200000000F002 /* EnvelopeStatus.swift */; };
+		9A7E1C0D000300000000B003 /* EnvelopeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000300000000F003 /* EnvelopeStore.swift */; };
+		9A7E1C0D000400000000B004 /* EnvelopeSecret.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000400000000F004 /* EnvelopeSecret.swift */; };
+		9A7E1C0D000500000000B005 /* EnvelopeRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000500000000F005 /* EnvelopeRuntime.swift */; };
+		9A7E1C0D000600000000B006 /* EnvelopeSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000600000000F006 /* EnvelopeSession.swift */; };
+		9A7E1C0D000700000000B007 /* PaymentLinksCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000700000000F007 /* PaymentLinksCoordinator.swift */; };
+		9A7E1C0D000800000000B008 /* PaymentLinkClaimSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */; };
+		9A7E1C0D000900000000B009 /* PaymentLinkSendSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */; };
+		9A7E1C0D000A00000000B00A /* PaymentLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */; };
+		9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */; };
+		9A7E1C0D000B00000000B00B /* EnvelopeWordlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000B00000000F00B /* EnvelopeWordlist.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -343,6 +355,18 @@
 		TRZTRP001234567890ABCDEF /* TrezorTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrezorTransport.swift; sourceTree = "<group>"; };
 		TRZPAR001234567890ABCDEF /* PairTrezorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairTrezorView.swift; sourceTree = "<group>"; };
 		TRZHWS001234567890ABCDEF /* HardwareSessionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardwareSessionSheet.swift; sourceTree = "<group>"; };
+		9A7E1C0D000100000000F001 /* EnvelopeLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeLink.swift; sourceTree = "<group>"; };
+		9A7E1C0D000200000000F002 /* EnvelopeStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeStatus.swift; sourceTree = "<group>"; };
+		9A7E1C0D000300000000F003 /* EnvelopeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeStore.swift; sourceTree = "<group>"; };
+		9A7E1C0D000400000000F004 /* EnvelopeSecret.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeSecret.swift; sourceTree = "<group>"; };
+		9A7E1C0D000500000000F005 /* EnvelopeRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeRuntime.swift; sourceTree = "<group>"; };
+		9A7E1C0D000600000000F006 /* EnvelopeSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeSession.swift; sourceTree = "<group>"; };
+		9A7E1C0D000700000000F007 /* PaymentLinksCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinksCoordinator.swift; sourceTree = "<group>"; };
+		9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkClaimSheet.swift; sourceTree = "<group>"; };
+		9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkSendSteps.swift; sourceTree = "<group>"; };
+		9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinksView.swift; sourceTree = "<group>"; };
+		9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkTests.swift; sourceTree = "<group>"; };
+		9A7E1C0D000B00000000F00B /* EnvelopeWordlist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeWordlist.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -383,6 +407,7 @@
 				9698D5ECB87A0302392684C6 /* WalletIntegrationTests.swift */,
 				84E684EE43DA20220CE2D58B /* WalletManagerTests.swift */,
 				CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */,
+				9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */,
 				CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */,
 				CAC4E1D0000000000000D40T /* GethashesDeviceDiagTests.swift */,
 				DEE91100000000000000F002 /* MoneroPaymentURITests.swift */,
@@ -655,12 +680,31 @@
 			path = Steps;
 			sourceTree = "<group>";
 		};
+		9A7E1C0D0000000000000A00 /* PaymentLinks */ = {
+			isa = PBXGroup;
+			children = (
+				9A7E1C0D000100000000F001 /* EnvelopeLink.swift */,
+				9A7E1C0D000200000000F002 /* EnvelopeStatus.swift */,
+				9A7E1C0D000300000000F003 /* EnvelopeStore.swift */,
+				9A7E1C0D000400000000F004 /* EnvelopeSecret.swift */,
+				9A7E1C0D000B00000000F00B /* EnvelopeWordlist.swift */,
+				9A7E1C0D000500000000F005 /* EnvelopeRuntime.swift */,
+				9A7E1C0D000600000000F006 /* EnvelopeSession.swift */,
+				9A7E1C0D000700000000F007 /* PaymentLinksCoordinator.swift */,
+				9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */,
+				9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */,
+				9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */,
+			);
+			path = PaymentLinks;
+			sourceTree = "<group>";
+		};
 		C22A77E3D593D0FC140AF36C /* Features */ = {
 			isa = PBXGroup;
 			children = (
 				3D083592F630A320E86ED8AF /* Chart */,
 				5F86792F4E6B6750687A6910 /* Dashboard */,
 				E60BB1617649DB1D49B6DDB9 /* Onboarding */,
+				9A7E1C0D0000000000000A00 /* PaymentLinks */,
 				0DF3D7EFD61EFEAC3E7DEBC3 /* Receive */,
 				BC0EDD05073CA3C3B9CEFE47 /* Send */,
 				1BE878F172F56E925E6B5E27 /* Settings */,
@@ -932,6 +976,7 @@
 D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				DEE91100000000000000B002 /* MoneroPaymentURITests.swift in Sources */,
 				CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */,
+				9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */,
 				CAC4E1D0000000000000D10T /* AuditRemediationTests.swift in Sources */,
 				CAC4E1D0000000000000D30T /* GethashesDeviceDiagTests.swift in Sources */,
 				0078BD68A0F42B7F096CC5B0 /* BiometricAuthManagerTests.swift in Sources */,
@@ -1032,6 +1077,17 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				474B5AAD5AE116369428C61D /* SecurityView.swift in Sources */,
 				39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */,
 				A1B2C3D400000001A0000005 /* SendFlowPhase.swift in Sources */,
+				9A7E1C0D000100000000B001 /* EnvelopeLink.swift in Sources */,
+				9A7E1C0D000200000000B002 /* EnvelopeStatus.swift in Sources */,
+				9A7E1C0D000300000000B003 /* EnvelopeStore.swift in Sources */,
+				9A7E1C0D000400000000B004 /* EnvelopeSecret.swift in Sources */,
+				9A7E1C0D000B00000000B00B /* EnvelopeWordlist.swift in Sources */,
+				9A7E1C0D000500000000B005 /* EnvelopeRuntime.swift in Sources */,
+				9A7E1C0D000600000000B006 /* EnvelopeSession.swift in Sources */,
+				9A7E1C0D000700000000B007 /* PaymentLinksCoordinator.swift in Sources */,
+				9A7E1C0D000800000000B008 /* PaymentLinkClaimSheet.swift in Sources */,
+				9A7E1C0D000900000000B009 /* PaymentLinkSendSteps.swift in Sources */,
+				9A7E1C0D000A00000000B00A /* PaymentLinksView.swift in Sources */,
 				A1B2C3D400000001A0000006 /* SendFlowView.swift in Sources */,
 				A1B2C3D400000001A0000007 /* SendAddressStep.swift in Sources */,
 				A1B2C3D400000001A0000008 /* SendAmountStep.swift in Sources */,

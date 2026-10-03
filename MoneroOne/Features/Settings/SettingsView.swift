@@ -83,6 +83,17 @@ struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.exportViewKeyRow")
+
+                    NavigationLink {
+                        PaymentLinksView()
+                    } label: {
+                        SettingsRow(
+                            icon: "link",
+                            title: "Payment Links",
+                            color: .brand
+                        )
+                    }
+                    .accessibilityIdentifier("settings.paymentLinksRow")
                 } header: {
                     if let wallet = walletManager.activeWallet {
                         Text(verbatim: "\(wallet.emoji) \(wallet.name)")

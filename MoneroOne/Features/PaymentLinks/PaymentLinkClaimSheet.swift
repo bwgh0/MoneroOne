@@ -1,0 +1,356 @@
+import SwiftUI
+
+/// The sheet a claim link opens: checks the link, waits for it to unlock,
+/// claims it to the active wallet. For a link this device sent, it says so
+/// and offers Reclaim instead.
+struct PaymentLinkClaimSheet: View {
+    let presentation: PaymentLinksCoordinator.Presentation
+
+    @EnvironmentObject var walletManager: WalletManager
+    @ObservedObject private var store = EnvelopeStore.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let record = store.record(id: presentation.id, role: presentation.kind == .own ? .sent : .received) {
+                    EnvelopeSessionView(record: record, walletManager: walletManager, onClose: { dismiss() })
+                } else {
+                    PaymentLinkMessageView(
+                        systemImage: "exclamationmark.circle.fill",
+                        tint: .red,
+                        title: String(localized: "This link is not complete.")
+                    )
+                }
+            }
+            .navigationTitle(presentation.kind == .own ? String(localized: "Your Payment Link") : String(localized: "Payment Link"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                        .accessibilityLabel("Close")
+                }
+            }
+        }
+    }
+}
+
+/// Shared body of the claim sheet and a sent link's live check.
+private struct EnvelopeSessionView: View {
+    @StateObject private var session: EnvelopeSession
+    let onClose: () -> Void
+
+    init(record: EnvelopeRecord, walletManager: WalletManager, onClose: @escaping () -> Void) {
+        _session = StateObject(wrappedValue: EnvelopeSession(record: record, walletManager: walletManager))
+        self.onClose = onClose
+    }
+
+    var body: some View {
+        EnvelopeSessionContent(session: session, onClose: onClose)
+            .interactiveDismissDisabled(session.isSweeping)
+            .task { await session.start() }
+            .onDisappear { session.stop() }
+    }
+}
+
+/// Hero, text and actions for one envelope session. Used by the claim
+/// sheet and by the sent link detail.
+struct EnvelopeSessionContent: View {
+    @ObservedObject var session: EnvelopeSession
+    var onClose: (() -> Void)?
+
+    @State private var copiedHash = false
+
+    private var record: EnvelopeRecord { session.record }
+    private var isOwn: Bool { record.role == .sent }
+    private var hintAmount: Decimal { EnvelopeRuntime.xmr(record.amount) }
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer(minLength: 16)
+
+            hero
+                .frame(height: 160)
+
+            VStack(spacing: 12) {
+                text
+            }
+            .padding(.horizontal)
+            .animation(.easeOut(duration: 0.3), value: session.phase)
+
+            Spacer()
+
+            actions
+                .padding(.horizontal)
+                .padding(.bottom)
+        }
+        .padding()
+    }
+
+    // MARK: - Hero
+
+    @ViewBuilder
+    private var hero: some View {
+        switch session.phase {
+        case .idle, .checking, .waiting, .sweeping:
+            GradientSpinner()
+                .accessibilityHidden(true)
+        case .ready:
+            disc(systemImage: "envelope.open.fill", tint: .brand)
+        case .done:
+            SuccessCheckmarkView()
+                .accessibilityHidden(true)
+        case .noFunding:
+            disc(systemImage: "tray", tint: .gray)
+        case .alreadyClaimed, .reclaimed:
+            disc(systemImage: "checkmark.seal.fill", tint: .gray)
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 80))
+                .foregroundStyle(.red)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func disc(systemImage: String, tint: Color) -> some View {
+        ZStack {
+            Circle()
+                .fill(tint.opacity(0.15))
+                .frame(width: 120, height: 120)
+            Image(systemName: systemImage)
+                .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(tint)
+        }
+        .accessibilityHidden(true)
+    }
+
+    // MARK: - Text
+
+    @ViewBuilder
+    private var text: some View {
+        if isOwn, !session.phase.isTerminalForOwn {
+            Text("This is your own link")
+                .font(.title2.weight(.semibold))
+                .multilineTextAlignment(.center)
+        }
+        switch session.phase {
+        case .idle, .checking:
+            if !isOwn {
+                Text("Checking the link…")
+                    .font(.title2.weight(.semibold))
+            }
+            Text("About \(XMRFormatter.format(hintAmount)) XMR")
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+            if case .checking(let progress?) = session.phase, progress > 0, progress < 1 {
+                Text("Scanning blocks: \(Int(progress * 100))%")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            }
+
+        case .waiting(let confirmations):
+            if !isOwn {
+                Text("On its way")
+                    .font(.title2.weight(.semibold))
+            }
+            Text("About \(XMRFormatter.format(hintAmount)) XMR")
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+            Text("\(min(confirmations, EnvelopeLink.confirmationsToUnlock))/\(EnvelopeLink.confirmationsToUnlock) confirmations")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+            Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: confirmations))) min")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+        case .ready(let unlocked):
+            Text("\(XMRFormatter.format(EnvelopeRuntime.xmr(unlocked))) XMR")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            if record.isExpired() {
+                Text("Expired")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            } else if !isOwn {
+                Text("Claim by \(record.expiryDate.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            if !session.destinationWalletName.isEmpty {
+                Text(isOwn ? "Reclaim to \(session.destinationWalletName)" : "Claim to \(session.destinationWalletName)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .sweeping:
+            Text(isOwn ? "Taking the money back…" : "Claiming…")
+                .font(.title2.weight(.semibold))
+
+        case .done(let txid, let amount):
+            Text(isOwn ? "Reclaimed" : "Claimed!")
+                .font(.title.weight(.bold))
+                .foregroundStyle(.green)
+            if amount > 0 {
+                Text("\(XMRFormatter.format(EnvelopeRuntime.xmr(amount))) XMR")
+                    .font(.title3.weight(.semibold))
+                    .monospacedDigit()
+            }
+            let wallet = record.walletName ?? session.destinationWalletName
+            if !wallet.isEmpty {
+                Text("On its way to \(wallet)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            hashPill(txid)
+
+        case .noFunding:
+            Text(isOwn ? "No money in this link yet." : "No money in this link yet.")
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+            Text("It checks again every few seconds while this screen is open.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+        case .alreadyClaimed:
+            Text(isOwn ? "Already claimed" : "This link was already claimed.")
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+
+        case .reclaimed:
+            Text("This link was already claimed.")
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+
+        case .failed(let message):
+            Text("Something went wrong")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.red)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private func hashPill(_ txid: String) -> some View {
+        Button {
+            UIPasteboard.general.string = txid
+            copiedHash = true
+            HapticFeedback.shared.softTick()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedHash = false }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: copiedHash ? "checkmark" : "doc.on.doc")
+                    .font(.caption2)
+                Text(copiedHash ? "Copied!" : ReceiveAddressLogic.shortAddress(txid))
+                    .font(.system(.caption, design: .monospaced))
+            }
+            .foregroundStyle(copiedHash ? .green : .secondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(Capsule())
+        }
+        .accessibilityLabel(copiedHash ? "Transaction ID copied" : "Copy transaction ID")
+    }
+
+    // MARK: - Actions
+
+    @ViewBuilder
+    private var actions: some View {
+        VStack(spacing: 12) {
+            switch session.phase {
+            case .ready:
+                Button {
+                    HapticFeedback.shared.sendInitiated()
+                    Task { await session.sweep() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: isOwn ? "arrow.uturn.backward" : "arrow.down.left")
+                        Text(isOwn ? "Reclaim" : "Claim")
+                    }
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.brand)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                }
+                .glassButtonStyle()
+                .accessibilityLabel(isOwn ? "Reclaim the money" : "Claim the money")
+                .accessibilityHint(isOwn
+                    ? "Moves the money in this link back to \(session.destinationWalletName)"
+                    : "Moves the money in this link to \(session.destinationWalletName)")
+
+            case .failed:
+                Button {
+                    Task { await session.start() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.clockwise")
+                        Text("Retry")
+                    }
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.brand)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                }
+                .glassButtonStyle()
+                .accessibilityLabel("Retry")
+
+            case .done:
+                if let onClose {
+                    Button(action: onClose) {
+                        Text("Done")
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.brand)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                    }
+                    .glassButtonStyle()
+                    .accessibilityLabel("Done")
+                }
+
+            default:
+                EmptyView()
+            }
+        }
+    }
+}
+
+private extension EnvelopeSession.Phase {
+    /// Phases where the own-link headline would repeat the result.
+    var isTerminalForOwn: Bool {
+        switch self {
+        case .done, .alreadyClaimed, .reclaimed, .failed, .sweeping: return true
+        default: return false
+        }
+    }
+}
+
+/// A centered glyph and one line, for states with nothing else to show.
+struct PaymentLinkMessageView: View {
+    let systemImage: String
+    let tint: Color
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: systemImage)
+                .font(.system(size: 64))
+                .foregroundStyle(tint)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Spacer()
+        }
+    }
+}

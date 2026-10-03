@@ -6,6 +6,8 @@ struct SendAddressStep: View {
     let isConnected: Bool
     let isValidAddress: Bool
     let onContinue: () -> Void
+    /// Payment links: switches Send to funding a link (Features/PaymentLinks).
+    var onSendWithLink: (() -> Void)? = nil
 
     @State private var showContent = false
 
@@ -96,6 +98,10 @@ struct SendAddressStep: View {
                         }
                         .glassButtonStyle()
                         .accessibilityLabel("Paste address from clipboard")
+                    }
+
+                    if let onSendWithLink {
+                        SendWithLinkButton(action: onSendWithLink)
                     }
                 }
                 .padding()

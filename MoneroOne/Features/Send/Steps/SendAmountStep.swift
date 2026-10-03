@@ -9,6 +9,8 @@ struct SendAmountStep: View {
     let priceService: PriceService
     /// Where a filled-in amount came from; the step says so above the amount.
     var amountPrefill: AmountPrefill? = nil
+    /// Payment links: no Max and no memo, and the title names the link.
+    var isLinkMode = false
     let onContinue: () -> Void
 
     enum AmountPrefill {
@@ -163,6 +165,7 @@ struct SendAmountStep: View {
                         .background(Color.brand.opacity(0.15))
                         .clipShape(Capsule())
                         .accessibilityLabel("Send maximum amount")
+                        .removedInLinkMode(isLinkMode)
                     }
                     .padding(.horizontal, 4)
 
@@ -196,6 +199,7 @@ struct SendAmountStep: View {
                     }
                     .padding(.horizontal, 4)
                     .padding(.bottom, 8)
+                    .removedInLinkMode(isLinkMode)
                 }
                 .padding(.horizontal)
                 .opacity(showContent ? 1 : 0)
@@ -230,7 +234,7 @@ struct SendAmountStep: View {
             .padding(.horizontal)
             .padding(.bottom, 8)
         }
-        .navigationTitle("Send to \(formatAddress(recipientAddress))")
+        .navigationTitle(isLinkMode ? String(localized: "Send with a Link") : String(localized: "Send to \(formatAddress(recipientAddress))"))
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
         .onChange(of: amountString) { newValue in

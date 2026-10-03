@@ -47,6 +47,12 @@ struct SendFlowView: View {
     /// software wallets take the direct `walletManager.send` path.
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
 
+    // Payment links (Features/PaymentLinks): Send with a link funds a new
+    // envelope instead of paying an address.
+    @State private var isLinkMode = false
+    @State private var linkDraft: PaymentLinkDraft?
+    @State private var linkRecordId: String?
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -132,6 +138,14 @@ struct SendFlowView: View {
             guard newPhase.isSendingState, let shownPaymentRequest else { return }
             walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: true)
         }
+        .onChange(of: recipientAddress) { _, text in
+            // A claim link pasted or scanned here opens the claim sheet. It is
+            // never an address.
+            guard EnvelopeLink.looksLikeClaimLink(text) else { return }
+            recipientAddress = ""
+            PaymentLinksCoordinator.shared.handle(text: text, networkType: walletManager.networkType, activeAddress: walletManager.primaryAddress)
+            dismiss()
+        }
         .onDisappear {
             walletManager.isSendFlowPresented = false
             guard let shownPaymentRequest else { return }
@@ -178,6 +192,9 @@ struct SendFlowView: View {
             await MainActor.run {
                 switch outcome {
                 case .sentTransaction(let txId):
+                    if isLinkMode, let linkRecordId {
+                        PaymentLinkFunder.markFunded(id: linkRecordId, txid: txId)
+                    }
                     // Show the same confetti / success animation
                     // software-wallet sends get. Phase was set to
                     // `.sending` when the user tapped Confirm, so
@@ -199,11 +216,17 @@ struct SendFlowView: View {
                         }
                     }
                 case .failed:
+                    if isLinkMode, let linkRecordId {
+                        PaymentLinkFunder.markNotFunded(id: linkRecordId)
+                    }
                     sendInProgress = false
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         phase = .review
                     }
                 case .syncedOnly, .none:
+                    if isLinkMode, let linkRecordId {
+                        PaymentLinkFunder.markNotFunded(id: linkRecordId)
+                    }
                     // No send ran — the user cancelled or dismissed the sheet
                     // mid-session. Phase is still `.sending`, which has no
                     // toolbar button, no action area, and disables interactive
@@ -224,6 +247,19 @@ struct SendFlowView: View {
     @ViewBuilder
     private var phaseContent: some View {
         switch phase {
+        case .address where isLinkMode:
+            PaymentLinkAddressStep(
+                isConnected: networkMonitor.isConnected,
+                onUseAddress: {
+                    HapticFeedback.shared.buttonPress()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { isLinkMode = false }
+                },
+                onContinue: {
+                    HapticFeedback.shared.buttonPress()
+                    goForward(to: .amount)
+                }
+            )
+
         case .address:
             SendAddressStep(
                 recipientAddress: $recipientAddress,
@@ -233,6 +269,11 @@ struct SendFlowView: View {
                 onContinue: {
                     HapticFeedback.shared.buttonPress()
                     goForward(to: .amount)
+                },
+                onSendWithLink: {
+                    HapticFeedback.shared.buttonPress()
+                    isSendingAll = false
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { isLinkMode = true }
                 }
             )
 
@@ -245,11 +286,25 @@ struct SendFlowView: View {
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
+                isLinkMode: isLinkMode,
                 onContinue: {
                     HapticFeedback.shared.buttonPress()
                     goForward(to: .review)
                 }
             )
+
+        case .review where isLinkMode:
+            PaymentLinkReviewStep(
+                amountString: amountString,
+                draft: $linkDraft,
+                priceService: priceService,
+                walletManager: walletManager,
+                sendInProgress: sendInProgress,
+                onConfirm: confirmLink
+            )
+
+        case .success where isLinkMode && linkRecordId != nil:
+            PaymentLinkReadyStep(recordId: linkRecordId ?? "", onDone: { dismiss() })
 
         case .review:
             SendReviewStep(
@@ -312,6 +367,42 @@ struct SendFlowView: View {
                 },
                 onClose: { dismiss() }
             )
+        }
+    }
+
+    /// Confirm on the link review: authenticate, save the envelope, fund it.
+    private func confirmLink() {
+        guard !sendInProgress, let draft = linkDraft else { return }
+        sendInProgress = true
+        Task {
+            if requireAuthForSend, !walletManager.requiresHardwareSession {
+                // The link amount, its claim fee reserve and the network fee.
+                let total = XMRFormatter.format(draft.fundingAmount + draft.networkFee)
+                let approved = await biometricAuth.authenticateForTransaction(
+                    reason: String(localized: "Confirm sending \(total) XMR")
+                )
+                guard approved else {
+                    sendInProgress = false
+                    return
+                }
+            }
+            // Saved (status created) before anything is broadcast, so the
+            // words exist on this iPhone whatever happens next.
+            let record = PaymentLinkFunder.record(for: draft, wallet: walletManager.activeWallet)
+            do {
+                try PaymentLinkFunder.save(record, networkType: walletManager.networkType)
+            } catch {
+                sendInProgress = false
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    phase = .error(message: EnvelopeSession.message(for: error))
+                }
+                HapticFeedback.shared.error()
+                return
+            }
+            linkRecordId = record.id
+            HapticFeedback.shared.sendInitiated()
+            goForward(to: .sending)
+            sendTransaction()
         }
     }
 
@@ -412,6 +503,10 @@ struct SendFlowView: View {
     // MARK: - Send
 
     private func sendTransaction() {
+        if isLinkMode {
+            sendLinkFunding()
+            return
+        }
         // Hardware wallets can't sign locally — hand off to the
         // hardware-session sheet which orchestrates BLE, sidecar key-
         // image sync, device-side signing, and broadcast. Bail out of
@@ -457,6 +552,44 @@ struct SendFlowView: View {
                         memo: memo.isEmpty ? nil : memo
                     )
                 }
+                transactionHash = txHash
+                await walletManager.refresh()
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    phase = .success(txHash: txHash)
+                }
+                HapticFeedback.shared.transactionSuccess()
+                SoundFeedback.shared.playSendComplete()
+            } catch {
+                sendInProgress = false
+                let msg = friendlyErrorMessage(for: error)
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    phase = .error(message: msg)
+                }
+                HapticFeedback.shared.error()
+            }
+        }
+    }
+
+    /// Funds the saved envelope: the amount plus the claim fee reserve, to
+    /// the envelope address, through the normal send path.
+    private func sendLinkFunding() {
+        guard let linkRecordId, let record = EnvelopeStore.shared.record(id: linkRecordId, role: .sent) else {
+            sendInProgress = false
+            phase = .error(message: String(localized: "Could not make the payment link. Nothing was sent."))
+            return
+        }
+        if walletManager.requiresHardwareSession {
+            walletManager.clearTerminalSessionState()
+            hardwareSheetIntent = .send(
+                to: record.address,
+                amount: EnvelopeRuntime.xmr(record.amount + (record.feeReserve ?? 0)),
+                memo: PaymentLinkFunder.memo
+            )
+            return
+        }
+        Task {
+            do {
+                let txHash = try await PaymentLinkFunder.fund(record, walletManager: walletManager)
                 transactionHash = txHash
                 await walletManager.refresh()
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {

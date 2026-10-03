@@ -214,18 +214,30 @@ final class PaymentLinkTests: XCTestCase {
     }
 
     func testObservationFromHistory() {
-        func tx(_ id: String, _ type: MoneroTransaction.TransactionType, height: UInt64?, status: MoneroTransaction.TransactionStatus = .confirmed) -> MoneroTransaction {
-            MoneroTransaction(id: id, type: type, amount: 1, fee: 0, address: "", timestamp: Date(), confirmations: nil,
+        func tx(_ id: String, _ type: MoneroTransaction.TransactionType, height: UInt64?, status: MoneroTransaction.TransactionStatus = .confirmed,
+                amount: String = "1", fee: String = "0") -> MoneroTransaction {
+            MoneroTransaction(id: id, type: type, amount: Decimal(string: amount)!, fee: Decimal(string: fee)!, address: "", timestamp: Date(), confirmations: nil,
                               status: status, memo: nil, blockHeight: height)
         }
         let pool = EnvelopeRuntime.observation(transactions: [tx("f", .incoming, height: nil, status: .pending)], balance: 0, unlocked: 0, daemonHeight: 200)
         XCTAssertEqual(pool, obs(conf: 0))
 
         let mined = EnvelopeRuntime.observation(
-            transactions: [tx("f", .incoming, height: 190), tx("c", .outgoing, height: 199), tx("x", .outgoing, height: nil, status: .failed)],
+            transactions: [tx("f", .incoming, height: 190), tx("c", .outgoing, height: 199, amount: "0.4", fee: "0.1"), tx("x", .outgoing, height: nil, status: .failed)],
             balance: Decimal(string: "0.5")!, unlocked: Decimal(string: "0.5")!, daemonHeight: 200
         )
         XCTAssertEqual(mined, obs(conf: 10, balance: 500_000_000_000, unlocked: 500_000_000_000, spends: ["c"]))
+
+        // Reopened from its cache, the kit still stores the balance from
+        // before the claim: the history caps it at zero.
+        let stale = EnvelopeRuntime.observation(
+            transactions: [tx("f", .incoming, height: 280, amount: "0.5018432", fee: "0.0018084"),
+                           tx("c", .outgoing, height: 291, amount: "0.5000348", fee: "0.0018084")],
+            balance: Decimal(string: "0.5018432")!, unlocked: Decimal(string: "0.5018432")!, daemonHeight: 301
+        )
+        XCTAssertEqual(stale.balance, 0)
+        XCTAssertEqual(stale.unlockedBalance, 0)
+        XCTAssertEqual(EnvelopeStatusRules.status(for: stale, reclaimTxid: nil), .claimed)
     }
 
     func testAtomicConversion() {

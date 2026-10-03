@@ -150,9 +150,10 @@ struct PaymentLinkDisplay {
         var status = record.status
         var confirmations = record.confirmations
         if record.role == .sent, status == .pending || status == .created,
+           let walletManager,
            let txid = record.fundingTxid,
-           let tx = walletManager?.transactions.first(where: { $0.id == txid }),
-           let txConfirmations = tx.confirmations {
+           let tx = walletManager.transactions.first(where: { $0.id == txid }),
+           let txConfirmations = Self.confirmations(of: tx, daemonHeight: walletManager.daemonHeight) {
             confirmations = txConfirmations
             if status == .created { status = .pending }
         }
@@ -161,6 +162,15 @@ struct PaymentLinkDisplay {
         self.role = record.role
         self.claimedHere = record.role == .received && record.settleTxid != nil
         self.isExpired = EnvelopeStatusRules.isExpired(status, expiry: record.expiry, now: now)
+    }
+
+    /// A history entry's confirmation count is frozen when the list is
+    /// read; count from its block and the live daemon height instead.
+    nonisolated static func confirmations(of tx: MoneroTransaction, daemonHeight: UInt64) -> Int? {
+        if let height = tx.blockHeight, height > 0, daemonHeight > height {
+            return Int(daemonHeight - height)
+        }
+        return tx.confirmations
     }
 
     var label: String {
@@ -250,7 +260,13 @@ final class PaymentLinksStatusChecker: ObservableObject {
             for candidate in candidates {
                 guard !Task.isCancelled, let link = candidate.link,
                       var record = store.record(id: candidate.id, role: .sent) else { continue }
-                guard let observation = try? await EnvelopeRuntime.shared.check(link: link, address: record.address) else { continue }
+                let observation: EnvelopeObservation
+                do {
+                    observation = try await EnvelopeRuntime.shared.check(link: link, address: record.address)
+                } catch {
+                    DiagnosticLog.shared.log("Payment link check failed: \(error.localizedDescription)")
+                    continue
+                }
                 let status = EnvelopeStatusRules.status(
                     for: observation,
                     reclaimTxid: record.settleTxid,

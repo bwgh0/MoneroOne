@@ -189,13 +189,17 @@ final class EnvelopeRuntime: ObservableObject {
                 envelope?.startSync()
             }
             guard let wallet = envelope else { throw RuntimeError.walletBusy }
-            try await waitUntilSynced(wallet)
+            // A cached envelope reports synced at its old height before its
+            // first refresh: wait for the chain tip the main wallet last saw.
+            try await waitUntilSynced(wallet, atLeast: walletManager.daemonHeight)
             syncProgress = nil
             let runtimeAddress = wallet.primaryAddress
             if !runtimeAddress.isEmpty, runtimeAddress != address {
                 throw RuntimeError.addressMismatch
             }
-            return await observe(wallet)
+            let observation = await observe(wallet)
+            DiagnosticLog.shared.log("Envelope check: height \(wallet.walletHeight)/\(wallet.daemonHeight), funded \(observation.fundingSeen), spends \(observation.spendTxids.count), balance \(observation.balance > 0 ? "yes" : "none")")
+            return observation
         }
     }
 
@@ -281,16 +285,25 @@ final class EnvelopeRuntime: ObservableObject {
             guard tx.status == .confirmed, let height = tx.blockHeight, daemonHeight > height else { return 0 }
             return Int(daemonHeight - height)
         }.max() ?? 0
+        // A reopened kit starts from a zero balance and stores a new one only
+        // when it changes, so an envelope emptied since its last open keeps
+        // its old stored balance. The history is fresh: never report more
+        // than it leaves.
+        let outgoing = live.filter { $0.type == .outgoing }
+        let received = incoming.reduce(Decimal(0)) { $0 + $1.amount }
+        let spent = outgoing.reduce(Decimal(0)) { $0 + $1.amount + $1.fee }
+        let balance = min(balance, max(0, received - spent))
+        let unlocked = min(unlocked, balance)
         return EnvelopeObservation(
             fundingSeen: !incoming.isEmpty,
             fundingConfirmations: confirmations,
             balance: piconero(balance),
             unlockedBalance: piconero(unlocked),
-            spendTxids: live.filter { $0.type == .outgoing }.map(\.id)
+            spendTxids: outgoing.map(\.id)
         )
     }
 
-    private func waitUntilSynced(_ wallet: MoneroWallet) async throws {
+    private func waitUntilSynced(_ wallet: MoneroWallet, atLeast tip: UInt64 = 0) async throws {
         var lastHeight: UInt64 = 0
         var lastProgress = Date()
         let started = generation
@@ -298,7 +311,7 @@ final class EnvelopeRuntime: ObservableObject {
             try Task.checkCancellation()
             if generation != started { throw CancellationError() }
             switch wallet.syncState {
-            case .synced where wallet.daemonHeight > 0:
+            case .synced where wallet.daemonHeight > 0 && wallet.daemonHeight >= tip:
                 return
             case .error(let message):
                 throw RuntimeError.nodeUnreachable(message)

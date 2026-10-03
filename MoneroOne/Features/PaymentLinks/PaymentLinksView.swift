@@ -154,7 +154,7 @@ struct PaymentLinkDisplay {
            let txid = record.fundingTxid,
            let tx = walletManager.transactions.first(where: { $0.id == txid }),
            let txConfirmations = Self.confirmations(of: tx, daemonHeight: walletManager.daemonHeight) {
-            confirmations = txConfirmations
+            confirmations = max(txConfirmations, record.confirmations ?? 0)
             if status == .created { status = .pending }
         }
         self.status = status
@@ -222,8 +222,8 @@ final class PaymentLinksStatusChecker: ObservableObject {
 
     func start(walletManager: WalletManager, store: EnvelopeStore) {
         guard task == nil else { return }
-        // Pending links need no envelope: their confirmations come from the
-        // active wallet. Only links that can have moved are opened.
+        // Only links that can have moved, or still count confirmations, are
+        // opened.
         let now = Date()
         let candidates = store.sent.filter { record in
             guard record.link != nil else { return false }
@@ -237,8 +237,10 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 guard let txid = record.settleTxid else { return false }
                 return !walletManager.transactions.contains { $0.id == txid && $0.status != .failed }
             case .pending:
-                let display = PaymentLinkDisplay(record: record, walletManager: walletManager)
-                return (display.confirmations ?? 0) >= EnvelopeLink.confirmationsToUnlock
+                // The active wallet publishes a new height only when its sync
+                // state changes, so its count stalls while it stays synced.
+                // The envelope gives a fresh one.
+                return record.fundingTxid != nil
             default: return false
             }
         }

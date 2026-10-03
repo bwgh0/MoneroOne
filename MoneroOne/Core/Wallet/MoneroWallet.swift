@@ -61,9 +61,11 @@ class MoneroWallet: ObservableObject {
     ///   - node: Optional custom node
     ///   - resetSuffix: Optional suffix to force new walletId (used for reset sync)
     ///   - networkType: Mainnet or testnet
-    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet) async throws {
+    ///   - cacheIdOverride: Payment-link envelopes only: a cache id outside
+    ///     the 32-hex namespace, so the launch sweep never deletes it.
+    func create(seed: [String], restoreHeight: UInt64 = 0, node: MoneroKit.Node? = nil, resetSuffix: String? = nil, networkType: MoneroKit.NetworkType = .mainnet, cacheIdOverride: String? = nil) async throws {
         let walletNode = node ?? defaultNode(for: networkType)
-        let walletId = Self.walletCacheId(
+        let walletId = cacheIdOverride ?? Self.walletCacheId(
             seedPhrase: seed.joined(separator: " "),
             resetSuffix: resetSuffix,
             networkType: networkType

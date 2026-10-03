@@ -1591,6 +1591,33 @@ class WalletManager: ObservableObject {
         subaddresses = []
     }
 
+    // MARK: - Payment links (envelope wallets)
+
+    /// Stops the active wallet so a payment-link envelope wallet can run in
+    /// its place: MoneroKit runs one wallet at a time. Unlike the pairing
+    /// suspend it keeps the published balance and address, so the dashboard
+    /// and the widget keep their last values meanwhile. `isUnlocked` stays
+    /// true. Returns false when a hardware session holds the wallet.
+    func suspendActiveWalletForEnvelope() async -> Bool {
+        guard isUnlocked, case .idle = hardwareSessionState else { return false }
+        cancellables.removeAll()
+        if let oldWallet = moneroWallet {
+            moneroWallet = nil
+            await oldWallet.stopAsync()
+        }
+        return true
+    }
+
+    /// Starts the active wallet again after an envelope wallet ran in its
+    /// place. Same start path as unlock, without rebuilding the view tree,
+    /// so the screen the user is on stays.
+    func resumeActiveWalletAfterEnvelope() async throws {
+        guard isUnlocked, moneroWallet == nil, let pin = currentPin else { return }
+        sessionBumpedForSwitch = true
+        defer { sessionBumpedForSwitch = false }
+        try await unlock(pin: pin)
+    }
+
     /// Pair a Trezor and create the corresponding hardware-backed wallet
     /// on this device. The caller has already brought the device online
     /// over BLE/THP and pulled the watch key (address + view key) via

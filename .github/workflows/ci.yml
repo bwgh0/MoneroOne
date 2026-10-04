@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: bwgh0/MoneroKit.Swift
-          ref: bb3076591fc28d74b376f960ea2884f909d7496e
+          ref: 7b227f9480917e618480f28d84582cb23882544f
           path: MoneroKit.Swift
           # Need real `.a` content from LFS, not the pointer files.
           lfs: true

@@ -6,6 +6,7 @@ struct PaymentLinksView: View {
     @EnvironmentObject var walletManager: WalletManager
     @ObservedObject private var store = EnvelopeStore.shared
     @StateObject private var checker = PaymentLinksStatusChecker()
+    @State private var isOnScreen = false
 
     var body: some View {
         List {
@@ -74,12 +75,32 @@ struct PaymentLinksView: View {
         .navigationTitle("Payment Links")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            isOnScreen = true
             store.reload()
             PaymentLinksStatusChecker.reconcileFunding(store: store, walletManager: walletManager)
             PaymentLinksStatusChecker.forgetMinedClaimWords(store: store, walletManager: walletManager)
             checker.start(walletManager: walletManager, store: store)
         }
-        .onDisappear { checker.stop() }
+        .onDisappear {
+            isOnScreen = false
+            checker.stop()
+        }
+        // The active wallet publishes each new block, so a pending link can
+        // reach the unlock depth while the list stays open.
+        .onChange(of: unlockedPendingCounts) { _, counts in
+            guard isOnScreen, !counts.isEmpty else { return }
+            checker.start(walletManager: walletManager, store: store)
+        }
+    }
+
+    /// Live counts of the pending sent links at the unlock depth or more.
+    private var unlockedPendingCounts: [Int] {
+        store.sent.compactMap { record in
+            guard record.status == .pending,
+                  let count = PaymentLinkDisplay(record: record, walletManager: walletManager).confirmations,
+                  count >= EnvelopeLink.confirmationsToUnlock else { return nil }
+            return count
+        }
     }
 }
 
@@ -150,11 +171,10 @@ struct PaymentLinkDisplay {
         var status = record.status
         var confirmations = record.confirmations
         if record.role == .sent, status == .pending || status == .created,
-           let walletManager,
            let txid = record.fundingTxid,
-           let tx = walletManager.transactions.first(where: { $0.id == txid }),
-           let txConfirmations = Self.confirmations(of: tx, daemonHeight: walletManager.daemonHeight) {
-            confirmations = max(txConfirmations, record.confirmations ?? 0)
+           let tx = walletManager?.transactions.first(where: { $0.id == txid }),
+           let txConfirmations = tx.confirmations {
+            confirmations = txConfirmations
             if status == .created { status = .pending }
         }
         self.status = status
@@ -162,15 +182,6 @@ struct PaymentLinkDisplay {
         self.role = record.role
         self.claimedHere = record.role == .received && record.settleTxid != nil
         self.isExpired = EnvelopeStatusRules.isExpired(status, expiry: record.expiry, now: now)
-    }
-
-    /// A history entry's confirmation count is frozen when the list is
-    /// read; count from its block and the live daemon height instead.
-    nonisolated static func confirmations(of tx: MoneroTransaction, daemonHeight: UInt64) -> Int? {
-        if let height = tx.blockHeight, height > 0, daemonHeight > height {
-            return Int(daemonHeight - height)
-        }
-        return tx.confirmations
     }
 
     var label: String {
@@ -219,16 +230,21 @@ struct PaymentLinkDisplay {
 final class PaymentLinksStatusChecker: ObservableObject {
     @Published private(set) var isChecking = false
     private var task: Task<Void, Never>?
+    /// When a look at each link last failed. A failure sets no
+    /// lastCheckedAt; without this, every new block would try again.
+    private var lastFailedLook: [String: Date] = [:]
 
     func start(walletManager: WalletManager, store: EnvelopeStore) {
         guard task == nil else { return }
-        // Only links that can have moved, or still count confirmations, are
-        // opened.
+        // Pending links this wallet funded need no envelope: their
+        // confirmations come from the active wallet. Only links that can
+        // have moved are opened.
         let now = Date()
         let candidates = store.sent.filter { record in
             guard record.link != nil else { return false }
             // One look per block is enough; a scan stops the active wallet.
-            if let last = record.lastCheckedAt, now.timeIntervalSince(last) < Self.recheckInterval { return false }
+            let last = [record.lastCheckedAt, lastFailedLook[record.id]].compactMap { $0 }.max()
+            if let last, now.timeIntervalSince(last) < Self.recheckInterval { return false }
             switch record.status {
             case .ready: return true
             case .reclaimed:
@@ -237,10 +253,15 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 guard let txid = record.settleTxid else { return false }
                 return !walletManager.transactions.contains { $0.id == txid && $0.status != .failed }
             case .pending:
-                // The active wallet publishes a new height only when its sync
-                // state changes, so its count stalls while it stays synced.
-                // The envelope gives a fresh one.
-                return record.fundingTxid != nil
+                // Another wallet sent the funding: this wallet's history has
+                // no count for it, and the record keeps the one from the last
+                // look. The envelope gives a fresh one.
+                if let txid = record.fundingTxid, !walletManager.transactions.contains(where: { $0.id == txid }) {
+                    return true
+                }
+                // Unlocked by its count: the envelope tells ready from claimed.
+                let display = PaymentLinkDisplay(record: record, walletManager: walletManager)
+                return (display.confirmations ?? 0) >= EnvelopeLink.confirmationsToUnlock
             default: return false
             }
         }
@@ -267,6 +288,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
                     observation = try await EnvelopeRuntime.shared.check(link: link, address: record.address)
                 } catch {
                     DiagnosticLog.shared.log("Payment link check failed: \(error.localizedDescription)")
+                    if !Task.isCancelled { self?.lastFailedLook[candidate.id] = Date() }
                     continue
                 }
                 let status = EnvelopeStatusRules.status(

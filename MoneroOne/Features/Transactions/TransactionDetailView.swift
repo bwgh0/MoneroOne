@@ -2,11 +2,26 @@ import SwiftUI
 import SafariServices
 
 struct TransactionDetailView: View {
-    let transaction: MoneroTransaction
+    /// The row the user opened. A sheet keeps this copy for as long as it
+    /// stays open, so the view shows the wallet's current copy of the same
+    /// transaction: confirmations and status keep moving with new blocks.
+    private let openedTransaction: MoneroTransaction
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     @AppStorage("isTestnet") private var isTestnet = false
+
+    init(transaction: MoneroTransaction) {
+        openedTransaction = transaction
+    }
+
+    /// Matches the direction too: a send to self has an incoming and an
+    /// outgoing row with one hash.
+    private var transaction: MoneroTransaction {
+        walletManager.transactions.first {
+            $0.id == openedTransaction.id && $0.type == openedTransaction.type
+        } ?? openedTransaction
+    }
 
     @State private var txKey: String?
     @State private var txKeyLookedUp = false

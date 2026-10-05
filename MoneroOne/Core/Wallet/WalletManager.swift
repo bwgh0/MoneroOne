@@ -31,9 +31,6 @@ class WalletManager: ObservableObject {
     @Published var primaryAddress: String = ""
     @Published var syncState: SyncState = .idle
     @Published var transactions: [MoneroTransaction] = []
-    /// A seed restore that synced with zero transactions almost always has a
-    /// restore height that is too recent. Drives a banner on the dashboard.
-    @Published var showsEmptyRestoreHint = false
     @Published var subaddresses: [MoneroKit.SubAddress] = []
     @Published var userCreatedSubaddressIndices: Set<Int> = []
     /// True when the active wallet was opened from an address + view key and
@@ -343,7 +340,6 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
-        showsEmptyRestoreHint = false
 
         // 2/3. Open FULL via createFromDevice (uses openWallet under
         //    the hood when the cache exists) and wait for its refresh,
@@ -1593,7 +1589,6 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
-        showsEmptyRestoreHint = false
     }
 
     /// Pair a Trezor and create the corresponding hardware-backed wallet
@@ -1933,7 +1928,6 @@ class WalletManager: ObservableObject {
                         NSLog("[WalletManager] Error persisted 3s, surfacing: %@", msg)
                         #endif
                         self.syncState = newState
-                        self.evaluateEmptyRestoreHint()
                         self.updateConnectionStage()
                     }
                     return
@@ -1949,7 +1943,6 @@ class WalletManager: ObservableObject {
                 self.errorDebounceTask = nil
 
                 self.syncState = newState
-                self.evaluateEmptyRestoreHint()
 
                 // wallet2 C++ is connecting — cancel HTTP reachability checks
                 // since wallet2 handles TLS/connection independently
@@ -2004,7 +1997,6 @@ class WalletManager: ObservableObject {
             .sink { [weak self] newTransactions in
                 guard let self = self else { return }
                 self.transactions = newTransactions
-                self.evaluateEmptyRestoreHint()
                 self.saveWidgetDataIfEnabled()
                 self.reconcileReceiveAddress()
             }
@@ -2105,7 +2097,6 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
-        showsEmptyRestoreHint = false
 
         // Reset connection progress tracking
         connectionStage = .noNetwork
@@ -2362,47 +2353,6 @@ class WalletManager: ObservableObject {
             self.reachabilityRetryTask = nil
             self.testNodeReachability()
         }
-    }
-
-    // MARK: - Empty restore hint
-
-    private func emptyRestoreHintDismissedKey(_ id: UUID) -> String {
-        "emptyRestoreHintDismissed.\(id.uuidString)"
-    }
-
-    /// Shows the hint once a legacy/BIP39 seed restore (polyseed carries its
-    /// own birthday) reaches `.synced` with no transactions and a non-genesis
-    /// restore height. Cleared when transactions arrive, on lock, or when the
-    /// user dismisses it for this wallet.
-    private func evaluateEmptyRestoreHint() {
-        // Polyseed carries its own birthday, so only BIP39/legacy restores
-        // can land on a wrong height.
-        guard let wallet = activeWallet,
-              case .seed(let seedType) = wallet.source,
-              seedType != .polyseed else {
-            showsEmptyRestoreHint = false
-            return
-        }
-        if !transactions.isEmpty {
-            showsEmptyRestoreHint = false
-            return
-        }
-        guard case .synced = syncState,
-              wallet.restoreHeight > 0,
-              !UserDefaults.standard.bool(forKey: emptyRestoreHintDismissedKey(wallet.id)) else {
-            return
-        }
-        if !showsEmptyRestoreHint {
-            showsEmptyRestoreHint = true
-            DiagnosticLog.shared.log("Empty restore hint shown: restoreHeight=\(wallet.restoreHeight) seedType=\(seedType)")
-        }
-    }
-
-    func dismissEmptyRestoreHint() {
-        if let id = activeWallet?.id {
-            UserDefaults.standard.set(true, forKey: emptyRestoreHintDismissedKey(id))
-        }
-        showsEmptyRestoreHint = false
     }
 
     // MARK: - Widget Data

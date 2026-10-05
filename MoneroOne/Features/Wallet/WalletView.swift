@@ -493,16 +493,8 @@ private struct WalletHeaderContent: View {
                 }
             }
             .padding(.horizontal)
-
-            if walletManager.showsEmptyRestoreHint {
-                RestoreHeightHintBanner(restoreHeight: walletManager.activeWallet?.restoreHeight ?? 0) {
-                    walletManager.dismissEmptyRestoreHint()
-                }
-                .padding(.horizontal)
-            }
         }
         .animation(.easeInOut, value: walletManager.syncState)
-        .animation(.easeInOut, value: walletManager.showsEmptyRestoreHint)
     }
 }
 

@@ -192,15 +192,9 @@ struct CommandCenterView: View {
                     await walletManager.refresh()
                 }
             }
-            if walletManager.showsEmptyRestoreHint {
-                RestoreHeightHintBanner(restoreHeight: walletManager.activeWallet?.restoreHeight ?? 0) {
-                    walletManager.dismissEmptyRestoreHint()
-                }
-            }
         }
         .padding(.horizontal)
         .animation(.easeInOut, value: walletManager.syncState)
-        .animation(.easeInOut, value: walletManager.showsEmptyRestoreHint)
     }
 }
 

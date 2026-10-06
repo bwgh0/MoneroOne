@@ -1457,7 +1457,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 			repositoryURL = "https://github.com/horizontalsystems/HdWalletKit.Swift.git";
 			requirement = {
 				kind = exactVersion;
-				version = 1.3.0;
+				version = 1.3.2;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

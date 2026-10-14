@@ -293,6 +293,8 @@ struct PendingPaymentLinkRow: View {
                     .font(.caption)
                     .foregroundStyle(state == .ready ? Color.green : Color.secondary)
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
 
             Spacer()

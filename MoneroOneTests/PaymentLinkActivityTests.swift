@@ -87,6 +87,25 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertEqual(state(record(.received, status: .ready), 0, Date()), .ready)
     }
 
+    /// Your links says the same as the pinned row for a received link.
+    @MainActor
+    func testReceivedLinksInYourLinksMatchThePinnedRow() {
+        let empty = PaymentLinkDisplay(record: record(.received, status: .notFunded), walletManager: nil)
+        XCTAssertEqual(empty.label, PendingPaymentLinks.label(for: .noMoney))
+
+        var unlocked = record(.received, status: .pending)
+        unlocked.confirmations = 10
+        unlocked.lastCheckedAt = Date()
+        let ready = PaymentLinkDisplay(record: unlocked, walletManager: nil)
+        XCTAssertEqual(ready.status, .ready)
+        XCTAssertEqual(ready.label, PendingPaymentLinks.label(for: .ready))
+
+        var young = record(.received, status: .pending)
+        young.confirmations = 2
+        young.lastCheckedAt = Date()
+        XCTAssertEqual(PaymentLinkDisplay(record: young, walletManager: nil).label, "Pending 2/10")
+    }
+
     func testPendingCountsDownFromTheFundingHeight() {
         var pending = record(.received, status: .pending)
         pending.fundingHeight = 400

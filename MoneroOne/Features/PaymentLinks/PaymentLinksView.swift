@@ -127,11 +127,14 @@ struct PaymentLinkRow: View {
                 Text(record.createdAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
 
             Spacer()
 
             PaymentLinkStatusChip(display: display)
+                .fixedSize()
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
@@ -189,6 +192,11 @@ struct PaymentLinkDisplay {
            let daemonHeight = walletManager?.daemonHeight, daemonHeight > height {
             confirmations = max(confirmations ?? 0, Int(daemonHeight - height))
         }
+        // Same rule as the pinned row in Activity, so both say the same.
+        if record.role == .received, status == .pending,
+           PendingPaymentLinks.state(of: record, daemonHeight: walletManager?.daemonHeight ?? 0, now: now) == .ready {
+            status = .ready
+        }
         self.status = status
         self.confirmations = confirmations
         self.role = record.role
@@ -199,8 +207,10 @@ struct PaymentLinkDisplay {
     var label: String {
         if isExpired { return String(localized: "Expired") }
         switch status {
-        case .created, .notFunded:
+        case .created:
             return role == .sent ? String(localized: "Not funded") : String(localized: "Not checked")
+        case .notFunded:
+            return role == .sent ? String(localized: "Not funded") : PendingPaymentLinks.label(for: .noMoney)
         case .pending:
             if let confirmations {
                 return String(localized: "Pending \(min(confirmations, EnvelopeLink.confirmationsToUnlock))/\(EnvelopeLink.confirmationsToUnlock)")
@@ -246,14 +256,15 @@ final class PaymentLinksStatusChecker: ObservableObject {
     /// lastCheckedAt; without this, every new block would try again.
     private var lastFailedLook: [String: Date] = [:]
 
-    func start(walletManager: WalletManager, store: EnvelopeStore) {
+    /// `only`: look at that one link (its detail is on screen).
+    func start(walletManager: WalletManager, store: EnvelopeStore, only recordId: String? = nil) {
         guard task == nil else { return }
         // Pending links this wallet funded need no envelope: their
         // confirmations come from the active wallet. Only links that can
         // have moved are opened.
         let now = Date()
         let candidates = store.sent.filter { record in
-            guard record.link != nil else { return false }
+            guard record.link != nil, recordId == nil || record.id == recordId else { return false }
             // One look per block is enough; a scan stops the active wallet.
             let last = [record.lastCheckedAt, lastFailedLook[record.id]].compactMap { $0 }.max()
             if let last, now.timeIntervalSince(last) < Self.recheckInterval { return false }
@@ -378,6 +389,10 @@ struct PaymentLinkDetailView: View {
     /// Reclaim and Claim open their sheet here, not through the app root:
     /// this screen can sit inside Send or a transaction sheet.
     @State private var claimPresentation: PaymentLinksCoordinator.Presentation?
+    /// Activity opens this screen too, and no list check runs there: a sent
+    /// link looks at its envelope here, so a claim shows and Reclaim opens.
+    @StateObject private var checker = PaymentLinksStatusChecker()
+    @State private var isOnScreen = false
     @StateObject private var biometricAuth = BiometricAuthManager()
     /// Same setting as Send: re-authenticate before money leaves.
     @AppStorage("requireAuthForSend") private var requireAuthForSend = true
@@ -409,6 +424,18 @@ struct PaymentLinkDetailView: View {
         }
         .navigationTitle("Payment Link")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            isOnScreen = true
+            checkSentLink()
+        }
+        .onDisappear {
+            isOnScreen = false
+            checker.stop()
+        }
+        // A pending link can reach the unlock depth while this screen is open.
+        .onChange(of: reachedUnlockDepth) { _, reached in
+            if reached, isOnScreen { checkSentLink() }
+        }
         .sheet(item: $hardwareIntent, onDismiss: handleHardwareDismiss) { intent in
             HardwareSessionSheet(intent: intent, trezorManager: walletManager.trezorManager)
                 .environmentObject(walletManager)
@@ -417,6 +444,16 @@ struct PaymentLinkDetailView: View {
             PaymentLinkClaimSheet(presentation: presentation)
                 .environmentObject(walletManager)
         }
+    }
+
+    private func checkSentLink() {
+        guard role == .sent else { return }
+        checker.start(walletManager: walletManager, store: store, only: recordId)
+    }
+
+    private var reachedUnlockDepth: Bool {
+        guard role == .sent, let record, record.status == .pending else { return false }
+        return (display(record).confirmations ?? 0) >= EnvelopeLink.confirmationsToUnlock
     }
 
     private func content(_ record: EnvelopeRecord) -> some View {
@@ -431,9 +468,16 @@ struct PaymentLinkDetailView: View {
                         .lineLimit(1)
                     PaymentLinkStatusChip(display: display)
                     if display.status == .pending, !display.isExpired {
-                        Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: display.confirmations ?? 0))) min")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        let confirmations = display.confirmations ?? 0
+                        if confirmations < EnvelopeLink.confirmationsToUnlock {
+                            Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: confirmations))) min")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else if checker.isChecking {
+                            Text("Checking the link…")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity)

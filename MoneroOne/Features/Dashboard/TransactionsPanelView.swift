@@ -4,6 +4,8 @@ import SwiftUI
 struct TransactionsPanelView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var selectedTransaction: MoneroTransaction?
+    /// Received payment links not claimed yet sit above the transactions.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
     var onSeeAll: (() -> Void)?
     /// Shows the "As of" line for as long as History is open.
     var isHistoryOpen = false
@@ -27,6 +29,7 @@ struct TransactionsPanelView: View {
     var body: some View {
         // Filtered once per render; a scrub renders on every step.
         let activity = self.activity
+        let pendingLinks = asOf == nil ? PendingPaymentLinks.records(in: paymentLinks) : []
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
@@ -56,13 +59,16 @@ struct TransactionsPanelView: View {
             .padding(.top, 16)
 
             // Transaction list
-            if activity.isEmpty {
+            if activity.isEmpty && pendingLinks.isEmpty {
                 emptyState
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.bottom, 16)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
+                        ForEach(pendingLinks) { record in
+                            PendingPaymentLinkRow(record: record, style: .card(padding: 12))
+                        }
                         ForEach(activity) { transaction in
                             TransactionPanelRow(transaction: transaction) {
                                 selectedTransaction = transaction

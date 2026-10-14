@@ -7,6 +7,7 @@ struct TransactionListView: View {
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
     /// Minor index of the receiving subaddress to show, nil for any.
     @State private var receivingIndex: Int?
     var asOf: Date? = nil
@@ -61,6 +62,15 @@ struct TransactionListView: View {
     // sync/send), so the All Transactions screen matches the
     // Recent list on the home view instead of mis-tagging
     // outgoing sends as Received.
+    /// Received payment links not claimed yet, above the rows: now only,
+    /// with no search, and under the filters that can hold an incoming
+    /// payment that is still on its way.
+    private var pendingLinks: [EnvelopeRecord] {
+        guard asOf == nil, searchText.isEmpty, receivingIndex == nil,
+              filterType == .all || filterType == .incoming || filterType == .pending else { return [] }
+        return PendingPaymentLinks.records(in: paymentLinks)
+    }
+
     private var filteredTransactions: [MoneroTransaction] {
         TransactionListLogic.filter(
             sourceTransactions,
@@ -104,6 +114,9 @@ struct TransactionListView: View {
                     .foregroundStyle(.secondary)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+            }
+            ForEach(pendingLinks) { record in
+                PendingPaymentLinkRow(record: record, style: .listRow)
             }
             if filtered.isEmpty {
                 emptyState

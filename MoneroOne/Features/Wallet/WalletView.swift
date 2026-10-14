@@ -227,6 +227,8 @@ struct CompactActionButton: View {
 struct RecentTransactionsSection: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var selectedTransaction: MoneroTransaction?
+    /// Received payment links not claimed yet sit above the transactions.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
     /// Stretches the empty-state card to this height so it reaches the
     /// bottom of the screen instead of leaving a blank block under it.
     var emptyStateMinHeight: CGFloat? = nil
@@ -256,6 +258,8 @@ struct RecentTransactionsSection: View {
 
     var body: some View {
         let recentTransactions = self.recentTransactions
+        // Now only: History shows the past.
+        let pendingLinks = asOf == nil ? PendingPaymentLinks.records(in: paymentLinks) : []
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -282,7 +286,7 @@ struct RecentTransactionsSection: View {
                 }
             }
 
-            if recentTransactions.isEmpty {
+            if recentTransactions.isEmpty && pendingLinks.isEmpty {
                 // A card, not a button: it can stretch to fill the screen on
                 // short displays and a glass capsule would turn into an egg.
                 VStack(spacing: 12) {
@@ -327,6 +331,9 @@ struct RecentTransactionsSection: View {
                 .dashboardCard()
             } else {
                 VStack(spacing: 8) {
+                    ForEach(pendingLinks) { record in
+                        PendingPaymentLinkRow(record: record, style: .card(padding: 14))
+                    }
                     ForEach(recentTransactions) { transaction in
                         RecentTransactionCard(transaction: transaction) {
                             selectedTransaction = transaction

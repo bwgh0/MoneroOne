@@ -14,7 +14,12 @@ struct PaymentLinkClaimSheet: View {
         NavigationStack {
             Group {
                 if let record = store.record(id: presentation.id, role: presentation.kind == .own ? .sent : .received) {
-                    EnvelopeSessionView(record: record, walletManager: walletManager, onClose: { dismiss() })
+                    EnvelopeSessionView(
+                        record: record,
+                        walletManager: walletManager,
+                        claimWhenReady: presentation.autoClaim && presentation.kind == .claim,
+                        onClose: { dismiss() }
+                    )
                 } else {
                     PaymentLinkMessageView(
                         systemImage: "exclamationmark.circle.fill",
@@ -40,8 +45,10 @@ private struct EnvelopeSessionView: View {
     @StateObject private var session: EnvelopeSession
     let onClose: () -> Void
 
-    init(record: EnvelopeRecord, walletManager: WalletManager, onClose: @escaping () -> Void) {
-        _session = StateObject(wrappedValue: EnvelopeSession(record: record, walletManager: walletManager))
+    init(record: EnvelopeRecord, walletManager: WalletManager, claimWhenReady: Bool = false, onClose: @escaping () -> Void) {
+        let session = EnvelopeSession(record: record, walletManager: walletManager)
+        session.claimWhenReady = claimWhenReady
+        _session = StateObject(wrappedValue: session)
         self.onClose = onClose
     }
 

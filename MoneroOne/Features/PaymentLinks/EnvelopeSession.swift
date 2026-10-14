@@ -25,6 +25,9 @@ final class EnvelopeSession: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var record: EnvelopeRecord
+    /// A received link: claim on the first check that finds it ready (the
+    /// user tapped Claim on its row in Activity). Once only.
+    var claimWhenReady = false
 
     private let walletManager: WalletManager
     private let store: EnvelopeStore
@@ -161,6 +164,10 @@ final class EnvelopeSession: ObservableObject {
             phase = .waiting(confirmations: observation?.fundingConfirmations ?? record.confirmations ?? 0)
         case .ready:
             phase = .ready(unlocked: observation?.unlockedBalance ?? record.lastBalance ?? 0)
+            if claimWhenReady, record.role == .received, observation != nil {
+                claimWhenReady = false
+                Task { await sweep() }
+            }
         case .claimed:
             if record.role == .received, let txid = record.settleTxid {
                 phase = .done(txid: txid, amount: record.settledAmount ?? 0)

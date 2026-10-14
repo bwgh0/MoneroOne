@@ -7,7 +7,7 @@ import MoneroKit
 ///
 /// Every good link is saved as a received record in the Keychain first, so
 /// a link that arrives while the app is locked, or before any wallet exists,
-/// waits in Payment Links and opens after unlock, create or restore.
+/// waits at the top of Activity and opens after unlock, create or restore.
 @MainActor
 final class PaymentLinksCoordinator: ObservableObject {
     static let shared = PaymentLinksCoordinator()
@@ -23,6 +23,9 @@ final class PaymentLinksCoordinator: ObservableObject {
 
         let id: String
         let kind: Kind
+        /// Claim as soon as the check finds the link ready: the user
+        /// already tapped Claim on the link's row in Activity.
+        var autoClaim = false
     }
 
     /// Waiting to show, or showing.
@@ -60,9 +63,11 @@ final class PaymentLinksCoordinator: ObservableObject {
         return true
     }
 
-    /// Opens a received record from Payment Links.
-    func present(_ record: EnvelopeRecord) {
-        presentation = Presentation(id: record.id, kind: record.role == .sent ? .own : .claim)
+    /// Opens a saved record (a received link at the top of Activity).
+    /// `autoClaim`: claim a received link once its check finds it ready.
+    func present(_ record: EnvelopeRecord, autoClaim: Bool = false) {
+        let kind: Presentation.Kind = record.role == .sent ? .own : .claim
+        presentation = Presentation(id: record.id, kind: kind, autoClaim: autoClaim && kind == .claim)
     }
 
     func dismiss() {

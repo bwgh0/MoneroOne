@@ -165,3 +165,218 @@ struct PaymentLinkTransactionRow: View {
         }
     }
 }
+
+// MARK: - Received links waiting at the top of Activity
+
+/// Received links not claimed yet, pinned above the transactions until
+/// they are claimed. Their state comes from the record and the active
+/// wallet's daemon height, so the list never opens an envelope (that
+/// stops the active wallet); a tap opens the claim sheet, which does.
+enum PendingPaymentLinks {
+    enum State: Equatable {
+        /// Saved, never checked (the claim sheet closed before its check).
+        case unchecked
+        /// Checked: no money in the link yet.
+        case noMoney
+        /// Funded, not unlocked: about this many minutes left.
+        case waiting(minutes: Int)
+        /// 10 confirmations or more, as far as this device knows.
+        case ready
+    }
+
+    /// Newest first. Only links this device can still claim (it has the
+    /// secret) and that are not settled.
+    @MainActor
+    static func records(in store: EnvelopeStore) -> [EnvelopeRecord] {
+        store.received.filter { !$0.status.isSettled && $0.link != nil }
+    }
+
+    /// Confirmations come from the funding height the last check saw and
+    /// the active wallet's daemon height (2-minute blocks). Without a
+    /// height (the funding was still in the mempool), the count of the last
+    /// check less the minutes since.
+    static func state(of record: EnvelopeRecord, daemonHeight: UInt64, now: Date = Date()) -> State {
+        let unlock = EnvelopeLink.confirmationsToUnlock
+        switch record.status {
+        case .created, .claimed, .reclaimed:
+            return .unchecked
+        case .notFunded:
+            return .noMoney
+        case .ready:
+            return .ready
+        case .pending:
+            if let height = record.fundingHeight, daemonHeight > height {
+                let confirmations = Int(daemonHeight - height)
+                if confirmations >= unlock { return .ready }
+                return .waiting(minutes: max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: confirmations)))
+            }
+            let minutes = EnvelopeStatusRules.minutesUntilReady(confirmations: record.confirmations ?? 0)
+            let elapsed = record.lastCheckedAt.map { max(0, Int(now.timeIntervalSince($0) / 60)) } ?? 0
+            if elapsed >= minutes { return .ready }
+            return .waiting(minutes: max(1, minutes - elapsed))
+        }
+    }
+
+    static func label(for state: State) -> String {
+        switch state {
+        case .unchecked: return String(localized: "Tap to check", comment: "Pinned payment link row: the link was not checked yet")
+        case .noMoney: return String(localized: "No money yet", comment: "Pinned payment link row: the link holds no money yet")
+        case .waiting(let minutes): return String(localized: "Ready in about \(minutes) min")
+        case .ready: return String(localized: "Ready to claim")
+        }
+    }
+}
+
+/// One received link at the top of Activity: "Payment link", its state,
+/// the amount when known, and a Claim chip once it is ready. A tap opens
+/// the claim sheet; when ready, the sheet claims as soon as its check
+/// confirms it.
+struct PendingPaymentLinkRow: View {
+    enum Style {
+        /// A glass card, as on the Wallet tab and the iPad panel.
+        case card(padding: CGFloat)
+        /// A plain list row, as in All Transactions.
+        case listRow
+    }
+
+    let record: EnvelopeRecord
+    let style: Style
+    @EnvironmentObject var walletManager: WalletManager
+
+    private var state: PendingPaymentLinks.State {
+        PendingPaymentLinks.state(of: record, daemonHeight: walletManager.daemonHeight)
+    }
+
+    private var amountText: String? {
+        record.knownAmount.map { "+\(XMRFormatter.format(EnvelopeRuntime.xmr($0)))" }
+    }
+
+    var body: some View {
+        let state = self.state
+        switch style {
+        case .card(let padding):
+            Button { open(state) } label: {
+                content(state, iconShape: .disc)
+                    .padding(padding)
+            }
+            .glassButtonStyle()
+            .modifier(RowAccessibility(text: accessibilityText(state), hint: accessibilityHint(state), id: record.id))
+        case .listRow:
+            Button { open(state) } label: {
+                content(state, iconShape: .tile)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .modifier(RowAccessibility(text: accessibilityText(state), hint: accessibilityHint(state), id: record.id))
+        }
+    }
+
+    private enum IconShape { case disc, tile }
+
+    private func content(_ state: PendingPaymentLinks.State, iconShape: IconShape) -> some View {
+        HStack(spacing: 12) {
+            icon(iconShape)
+
+            VStack(alignment: .leading, spacing: iconShape == .disc ? 2 : 4) {
+                Text("Payment link")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .fixedSize()
+                    .foregroundStyle(.primary)
+                Text(PendingPaymentLinks.label(for: state))
+                    .font(.caption)
+                    .foregroundStyle(state == .ready ? Color.green : Color.secondary)
+                    .monospacedDigit()
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                if let amountText {
+                    Text(amountText)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.green)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                if state == .ready {
+                    Text("Claim")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.brand)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.brand.opacity(0.15))
+                        .clipShape(Capsule())
+                }
+            }
+            .layoutPriority(1)
+
+            if iconShape == .disc {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary.opacity(0.5))
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func icon(_ shape: IconShape) -> some View {
+        switch shape {
+        case .disc:
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: "link")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.green)
+            }
+            .accessibilityHidden(true)
+        case .tile:
+            Image(systemName: "link")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.green)
+                .frame(width: 36, height: 36)
+                .background(Color.green.opacity(0.15))
+                .cornerRadius(8)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func open(_ state: PendingPaymentLinks.State) {
+        PaymentLinksCoordinator.shared.present(record, autoClaim: state == .ready)
+    }
+
+    private func accessibilityText(_ state: PendingPaymentLinks.State) -> String {
+        let amount = record.knownAmount.map {
+            String(localized: "plus \(XMRFormatter.format(EnvelopeRuntime.xmr($0))) XMR", comment: "VoiceOver: amount coming in")
+        }
+        return [String(localized: "Payment link"), amount, PendingPaymentLinks.label(for: state)]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+    }
+
+    private func accessibilityHint(_ state: PendingPaymentLinks.State) -> String {
+        if state == .ready, let wallet = walletManager.activeWallet?.name, !wallet.isEmpty {
+            return String(localized: "Claims the money to \(wallet)")
+        }
+        return String(localized: "Opens the link to claim it")
+    }
+
+    private struct RowAccessibility: ViewModifier {
+        let text: String
+        let hint: String
+        let id: String
+
+        func body(content: Content) -> some View {
+            content
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(text)
+                .accessibilityHint(hint)
+                .accessibilityIdentifier("activity.paymentLink.\(id)")
+        }
+    }
+}

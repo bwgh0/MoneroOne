@@ -77,4 +77,56 @@ final class PaymentLinkActivityTests: XCTestCase {
             "Claimed link, plus 0.25 XMR, 1 min. ago, Pending"
         )
     }
+
+    // MARK: - Received links at the top of Activity
+
+    func testPendingStateFromTheRecord() {
+        let state = PendingPaymentLinks.state
+        XCTAssertEqual(state(record(.received, status: .created), 500, Date()), .unchecked)
+        XCTAssertEqual(state(record(.received, status: .notFunded), 500, Date()), .noMoney)
+        XCTAssertEqual(state(record(.received, status: .ready), 0, Date()), .ready)
+    }
+
+    func testPendingCountsDownFromTheFundingHeight() {
+        var pending = record(.received, status: .pending)
+        pending.fundingHeight = 400
+        // 4 confirmations: 6 blocks of 2 minutes left.
+        XCTAssertEqual(PendingPaymentLinks.state(of: pending, daemonHeight: 404), .waiting(minutes: 12))
+        XCTAssertEqual(PendingPaymentLinks.state(of: pending, daemonHeight: 409), .waiting(minutes: 2))
+        XCTAssertEqual(PendingPaymentLinks.state(of: pending, daemonHeight: 410), .ready)
+        XCTAssertEqual(PendingPaymentLinks.state(of: pending, daemonHeight: 450), .ready)
+    }
+
+    func testPendingWithoutAHeightCountsDownFromTheLastCheck() {
+        var pending = record(.received, status: .pending)
+        pending.confirmations = 0
+        let checked = Date(timeIntervalSince1970: 1_800_000_000)
+        pending.lastCheckedAt = checked
+        // In the mempool at the check: 20 minutes, less the time since.
+        XCTAssertEqual(PendingPaymentLinks.state(of: pending, daemonHeight: 0, now: checked), .waiting(minutes: 20))
+        XCTAssertEqual(PendingPaymentLinks.state(of: pending, daemonHeight: 0, now: checked + 5 * 60), .waiting(minutes: 15))
+        XCTAssertEqual(PendingPaymentLinks.state(of: pending, daemonHeight: 0, now: checked + 21 * 60), .ready)
+        // A daemon height below the funding height (a node behind) is not used.
+        pending.fundingHeight = 500
+        XCTAssertEqual(PendingPaymentLinks.state(of: pending, daemonHeight: 450, now: checked + 5 * 60), .waiting(minutes: 15))
+    }
+
+    @MainActor
+    func testOnlyUnsettledReceivedLinksWithASecretArePinned() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        func received(_ id: String, _ status: EnvelopeStatus, secret: Bool = true) -> EnvelopeRecord {
+            var r = record(.received, id: id, status: status)
+            if secret { r.secret = "000102030405060708090a0b0c0d0e0f" }
+            return r
+        }
+        try store.save(received("a", .pending))
+        try store.save(received("b", .created))
+        try store.save(received("c", .claimed))
+        try store.save(received("d", .reclaimed))
+        try store.save(received("e", .ready, secret: false))
+        try store.save(record(.sent, id: "f", status: .pending))
+        XCTAssertEqual(Set(PendingPaymentLinks.records(in: store).map(\.id)), ["a", "b"])
+    }
 }

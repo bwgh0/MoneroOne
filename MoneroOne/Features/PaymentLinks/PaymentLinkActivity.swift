@@ -5,11 +5,13 @@ import SwiftUI
 ///
 /// Rules (Android uses the same ones). A transaction matches a link record
 /// on this device by txid:
-/// - sent record, outgoing tx == `fundingTxid` → "Payment link" (funding)
-/// - sent record, incoming tx == `settleTxid` → "Link reclaimed"
-/// - received record, incoming tx == `settleTxid` → "Claimed link"
+/// - sent record, outgoing tx == `fundingTxid` → "Sent by Link" (funding)
+/// - sent record, incoming tx == `settleTxid` → "Reclaimed by Link"
+/// - received record, incoming tx == `settleTxid` → "Received by Link"
 /// Every other transaction keeps "Received" / "Sent". A link row shows a
 /// link glyph in the disc of its direction and opens the link's detail.
+/// Activity's Links filter shows these rows only, under the received
+/// links still waiting to be claimed.
 struct PaymentLinkActivity: Equatable {
     enum Kind: Equatable {
         /// Our send that put money in a link we made.
@@ -49,9 +51,9 @@ struct PaymentLinkActivity: Equatable {
 
     var title: String {
         switch kind {
-        case .funding: return String(localized: "Payment link", comment: "Activity row title: a send that put money in a payment link")
-        case .reclaim: return String(localized: "Link reclaimed", comment: "Activity row title: money taken back from your own payment link")
-        case .claim: return String(localized: "Claimed link", comment: "Activity row title: money claimed from a payment link someone sent you")
+        case .funding: return String(localized: "Sent by Link", comment: "Activity row title: a send that put money in a payment link")
+        case .reclaim: return String(localized: "Reclaimed by Link", comment: "Activity row title: money taken back from your own payment link")
+        case .claim: return String(localized: "Received by Link", comment: "Activity row title: money claimed from a payment link someone sent you")
         }
     }
 
@@ -78,7 +80,7 @@ struct PaymentLinkActivity: Equatable {
         return String(localized: "Waiting to be claimed", comment: "Activity row: the payment link is not claimed yet")
     }
 
-    /// VoiceOver: "Payment link, minus 0.5 XMR, waiting to be claimed,
+    /// VoiceOver: "Sent by Link, minus 0.5 XMR, waiting to be claimed,
     /// 2 hr. ago, Confirmed".
     static func accessibilityLabel(
         title: String,
@@ -384,64 +386,6 @@ struct PendingPaymentLinkRow: View {
                 .accessibilityLabel(text)
                 .accessibilityHint(hint)
                 .accessibilityIdentifier("activity.paymentLink.\(id)")
-        }
-    }
-}
-
-// MARK: - Send: "Your links"
-
-/// Under "Send with a link": every link this device made or received,
-/// with the number still open. Shown once there is at least one link.
-struct YourLinksRow: View {
-    @ObservedObject private var store = EnvelopeStore.shared
-
-    /// Links that may still hold money: funded and not settled (sent or
-    /// received), and received links not checked yet.
-    static func openCount(_ records: [EnvelopeRecord]) -> Int {
-        records.filter { record in
-            switch record.status {
-            case .pending, .ready: return true
-            case .created: return record.role == .received && record.link != nil
-            case .notFunded, .claimed, .reclaimed: return false
-            }
-        }.count
-    }
-
-    var body: some View {
-        if !store.records.isEmpty {
-            let open = Self.openCount(store.records)
-            NavigationLink {
-                PaymentLinksView()
-            } label: {
-                HStack(spacing: 6) {
-                    Text("Your links")
-                        .foregroundStyle(.primary)
-                    if open > 0 {
-                        Text(verbatim: "·")
-                            .foregroundStyle(.secondary)
-                        Text("\(open) open", comment: "Send: number of payment links that still hold money")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary.opacity(0.5))
-                        .accessibilityHidden(true)
-                }
-                .font(.subheadline)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(open > 0
-                ? String(localized: "Your links, \(open) open", comment: "VoiceOver: Send row to the payment links list")
-                : String(localized: "Your links"))
-            .accessibilityHint("Shows the payment links you made and received")
-            .accessibilityIdentifier("send.yourLinksRow")
         }
     }
 }

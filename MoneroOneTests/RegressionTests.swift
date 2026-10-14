@@ -1360,6 +1360,28 @@ final class TransactionScreenLogicTests: XCTestCase {
         XCTAssertEqual(ids(.pending), ["in-sub3-pending", "out-pending"])
     }
 
+    func testLinksFilterKeepsPaymentLinkTransactionsOnly() {
+        func link(_ role: EnvelopeRecord.Role, _ id: String, funding: String? = nil, settle: String? = nil) -> EnvelopeRecord {
+            var record = EnvelopeRecord(id: id, role: role, words: nil, address: "addr", restoreHeight: 150,
+                                        amount: 500_000_000_000, expiry: 0, createdAt: Date(), status: .pending)
+            record.fundingTxid = funding
+            record.settleTxid = settle
+            return record
+        }
+        let records = [
+            // Funding (out-one) and reclaim (in-sub3) of a link we made.
+            link(.sent, "a", funding: "out-one", settle: "in-sub3"),
+            // Claim: our sweep of a link sent to us.
+            link(.received, "b", settle: "in-main"),
+            // A settle txid never marks an outgoing row.
+            link(.received, "c", settle: "out-pending")
+        ]
+        let links = TransactionListLogic.filter(sample, type: .links, receivingIndex: nil, search: "", linkRecords: records)
+        XCTAssertEqual(links.map(\.id), ["in-main", "in-sub3", "out-one"])
+        XCTAssertEqual(TransactionListLogic.filter(sample, type: .links, receivingIndex: nil, search: ""), [])
+        XCTAssertEqual(TransactionListLogic.filter(sample, type: .links, receivingIndex: nil, search: "birthday", linkRecords: records).map(\.id), ["in-sub3"])
+    }
+
     func testReceivingFilterKeepsIncomingOnThatIndexOnly() {
         XCTAssertEqual(ids(receiving: 3), ["in-sub3", "in-sub3-pending"])
         XCTAssertEqual(ids(receiving: 0), ["in-main"])
@@ -1514,6 +1536,8 @@ final class TransactionScreenLogicTests: XCTestCase {
         XCTAssertEqual(TransactionListLogic.summaryTitle(count: 3, type: .incoming, receivingName: "Main Address"), "3 received transactions on Main Address")
         XCTAssertEqual(TransactionListLogic.summaryTitle(count: 0, type: .pending, receivingName: nil), "0 pending transactions")
         XCTAssertEqual(TransactionListLogic.summaryTitle(count: 2, type: .outgoing, receivingName: nil), "2 sent transactions")
+        XCTAssertEqual(TransactionListLogic.summaryTitle(count: 1, type: .links, receivingName: nil), "1 link transaction")
+        XCTAssertEqual(TransactionListLogic.summaryTitle(count: 4, type: .links, receivingName: nil), "4 link transactions")
     }
 
     // MARK: Subaddress naming

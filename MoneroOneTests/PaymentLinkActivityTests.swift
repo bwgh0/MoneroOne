@@ -46,9 +46,9 @@ final class PaymentLinkActivityTests: XCTestCase {
     }
 
     func testTitles() {
-        XCTAssertEqual(PaymentLinkActivity(kind: .funding, record: record(.sent)).title, "Payment link")
-        XCTAssertEqual(PaymentLinkActivity(kind: .reclaim, record: record(.sent)).title, "Link reclaimed")
-        XCTAssertEqual(PaymentLinkActivity(kind: .claim, record: record(.received)).title, "Claimed link")
+        XCTAssertEqual(PaymentLinkActivity(kind: .funding, record: record(.sent)).title, "Sent by Link")
+        XCTAssertEqual(PaymentLinkActivity(kind: .reclaim, record: record(.sent)).title, "Reclaimed by Link")
+        XCTAssertEqual(PaymentLinkActivity(kind: .claim, record: record(.received)).title, "Received by Link")
     }
 
     // MARK: - Funding row status line
@@ -67,14 +67,14 @@ final class PaymentLinkActivityTests: XCTestCase {
 
     func testAccessibilityLabel() {
         XCTAssertEqual(
-            PaymentLinkActivity.accessibilityLabel(title: "Payment link", isIncoming: false, amountSpoken: "0.5 XMR",
+            PaymentLinkActivity.accessibilityLabel(title: "Sent by Link", isIncoming: false, amountSpoken: "0.5 XMR",
                                                    statusLine: "Waiting to be claimed", date: "2 hr. ago", transactionStatus: "Confirmed"),
-            "Payment link, minus 0.5 XMR, Waiting to be claimed, 2 hr. ago, Confirmed"
+            "Sent by Link, minus 0.5 XMR, Waiting to be claimed, 2 hr. ago, Confirmed"
         )
         XCTAssertEqual(
-            PaymentLinkActivity.accessibilityLabel(title: "Claimed link", isIncoming: true, amountSpoken: "0.25 XMR",
+            PaymentLinkActivity.accessibilityLabel(title: "Received by Link", isIncoming: true, amountSpoken: "0.25 XMR",
                                                    statusLine: nil, date: "1 min. ago", transactionStatus: "Pending"),
-            "Claimed link, plus 0.25 XMR, 1 min. ago, Pending"
+            "Received by Link, plus 0.25 XMR, 1 min. ago, Pending"
         )
     }
 
@@ -87,9 +87,9 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertEqual(state(record(.received, status: .ready), 0, Date()), .ready)
     }
 
-    /// Your links says the same as the pinned row for a received link.
+    /// A received link's detail says the same as its pinned row.
     @MainActor
-    func testReceivedLinksInYourLinksMatchThePinnedRow() {
+    func testReceivedLinkDetailMatchesThePinnedRow() {
         let empty = PaymentLinkDisplay(record: record(.received, status: .notFunded), walletManager: nil)
         XCTAssertEqual(empty.label, PendingPaymentLinks.label(for: .noMoney))
 
@@ -147,27 +147,5 @@ final class PaymentLinkActivityTests: XCTestCase {
         try store.save(received("e", .ready, secret: false))
         try store.save(record(.sent, id: "f", status: .pending))
         XCTAssertEqual(Set(PendingPaymentLinks.records(in: store).map(\.id)), ["a", "b"])
-    }
-
-    // MARK: - Send: Your links
-
-    func testOpenCountCountsLinksThatMayHoldMoney() {
-        var unchecked = record(.received, id: "r1", status: .created)
-        unchecked.secret = "000102030405060708090a0b0c0d0e0f"
-        let records = [
-            record(.sent, id: "s1", status: .pending),
-            record(.sent, id: "s2", status: .ready),
-            record(.sent, id: "s3", status: .created),
-            record(.sent, id: "s4", status: .notFunded),
-            record(.sent, id: "s5", status: .claimed),
-            record(.sent, id: "s6", status: .reclaimed),
-            unchecked,
-            record(.received, id: "r2", status: .created),
-            record(.received, id: "r3", status: .pending),
-            record(.received, id: "r4", status: .claimed),
-        ]
-        // s1, s2, r1 (unchecked with its secret), r3.
-        XCTAssertEqual(YourLinksRow.openCount(records), 4)
-        XCTAssertEqual(YourLinksRow.openCount([]), 0)
     }
 }

@@ -1857,6 +1857,29 @@
     "%lld" : {
       "shouldTranslate" : false
     },
+    "%lld link transactions" : {
+      "comment" : "Activity summary under the Links filter: payment link transactions",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld link transaction"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld link transactions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld locations" : {
       "localizations" : {
         "de" : {

@@ -2471,8 +2471,8 @@ class WalletManager: ObservableObject {
 
     func estimateFee(to address: String, amount: Decimal, priority: SendPriority = .default) async throws -> Decimal {
         if isViewOnly && !isHardwareWallet { throw WalletError.viewOnlyCannotSend }
-        // A payment-link screen in Send (Your links) may have just let go of
-        // the wallet: wait for it to start again.
+        // A payment-link check (Activity's Links filter or a link's detail)
+        // may have just let go of the wallet: wait for it to start again.
         if moneroWallet == nil { await EnvelopeRuntime.shared.waitForActiveWallet() }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked

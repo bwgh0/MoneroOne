@@ -1,153 +1,7 @@
 import SwiftUI
 import MoneroKit
 
-/// Send > Your links: links this device sent and links it received.
-struct PaymentLinksView: View {
-    @EnvironmentObject var walletManager: WalletManager
-    @ObservedObject private var store = EnvelopeStore.shared
-    @StateObject private var checker = PaymentLinksStatusChecker()
-    @State private var isOnScreen = false
-
-    var body: some View {
-        List {
-            if store.records.isEmpty {
-                Section {
-                    VStack(spacing: 12) {
-                        Image(systemName: "link")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
-                        Text("No payment links yet")
-                            .font(.headline)
-                        Text("In Send, tap Send with a link to make one.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
-                    .accessibilityElement(children: .combine)
-                }
-            }
-
-            if !store.sent.isEmpty {
-                Section {
-                    ForEach(store.sent) { record in
-                        NavigationLink {
-                            PaymentLinkDetailView(recordId: record.id)
-                        } label: {
-                            PaymentLinkRow(record: record, display: PaymentLinkDisplay(record: record, walletManager: walletManager))
-                        }
-                    }
-                } header: {
-                    Text("Sent")
-                } footer: {
-                    if checker.isChecking {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.mini)
-                            Text("Checking links…")
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-                }
-            }
-
-            if !store.received.isEmpty {
-                Section("Received") {
-                    ForEach(store.received) { record in
-                        NavigationLink {
-                            PaymentLinkDetailView(recordId: record.id, role: .received)
-                        } label: {
-                            PaymentLinkRow(record: record, display: PaymentLinkDisplay(record: record, walletManager: walletManager))
-                        }
-                        .swipeActions {
-                            if record.isDone {
-                                Button("Remove", role: .destructive) {
-                                    store.remove(record)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Your Links")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            isOnScreen = true
-            store.reload()
-            PaymentLinksStatusChecker.reconcileFunding(store: store, walletManager: walletManager)
-            PaymentLinksStatusChecker.forgetMinedClaimWords(store: store, walletManager: walletManager)
-            checker.start(walletManager: walletManager, store: store)
-        }
-        .onDisappear {
-            isOnScreen = false
-            checker.stop()
-        }
-        // The active wallet publishes each new block, so a pending link can
-        // reach the unlock depth while the list stays open.
-        .onChange(of: unlockedPendingCounts) { _, counts in
-            guard isOnScreen, !counts.isEmpty else { return }
-            checker.start(walletManager: walletManager, store: store)
-        }
-    }
-
-    /// Live counts of the pending sent links at the unlock depth or more.
-    private var unlockedPendingCounts: [Int] {
-        store.sent.compactMap { record in
-            guard record.status == .pending,
-                  let count = PaymentLinkDisplay(record: record, walletManager: walletManager).confirmations,
-                  count >= EnvelopeLink.confirmationsToUnlock else { return nil }
-            return count
-        }
-    }
-}
-
-// MARK: - Row
-
-struct PaymentLinkRow: View {
-    let record: EnvelopeRecord
-    let display: PaymentLinkDisplay
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(display.tint.opacity(0.15))
-                    .frame(width: 40, height: 40)
-                Image(systemName: record.role == .sent ? "arrow.up.right" : "arrow.down.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(record.role == .sent ? Color.brand : Color.green)
-            }
-            .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(amountText)
-                    .font(.body.weight(.semibold))
-                    .monospacedDigit()
-                Text(record.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-
-            Spacer()
-
-            PaymentLinkStatusChip(display: display)
-                .fixedSize()
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(record.role == .sent ? String(localized: "Sent") : String(localized: "Received")) \(amountText), \(record.createdAt.formatted(date: .abbreviated, time: .shortened)), \(display.label)")
-    }
-
-    /// A received v2 link carries no amount: "Checking…" until a check
-    /// sees the envelope's balance.
-    private var amountText: String {
-        guard let amount = record.knownAmount else { return String(localized: "Checking…") }
-        return "\(XMRFormatter.format(EnvelopeRuntime.xmr(amount))) XMR"
-    }
-}
+// MARK: - Status
 
 struct PaymentLinkStatusChip: View {
     let display: PaymentLinkDisplay
@@ -165,7 +19,7 @@ struct PaymentLinkStatusChip: View {
 
 /// Label and colors for a record's status. Sent links that are not on chain
 /// long enough read their confirmations from the active wallet's own
-/// funding transaction, so the list stays current without opening the
+/// funding transaction, so Activity stays current without opening the
 /// envelope.
 struct PaymentLinkDisplay {
     let status: EnvelopeStatus
@@ -247,7 +101,8 @@ struct PaymentLinkDisplay {
 // MARK: - Background status check
 
 /// Opens each sent link that someone could have claimed since the last look,
-/// one at a time, while Payment Links is on screen.
+/// one at a time, while Activity shows its Links filter or a link's detail
+/// is on screen.
 @MainActor
 final class PaymentLinksStatusChecker: ObservableObject {
     @Published private(set) var isChecking = false
@@ -372,8 +227,8 @@ final class PaymentLinksStatusChecker: ObservableObject {
 
 // MARK: - Link detail
 
-/// One link: its status, amount, transactions and actions. Opened from
-/// Your links and from the link's transactions in Activity.
+/// One link: its status, amount, transactions and actions. Opened from the
+/// link's transactions in Activity.
 struct PaymentLinkDetailView: View {
     let recordId: String
     var role: EnvelopeRecord.Role = .sent
@@ -389,8 +244,8 @@ struct PaymentLinkDetailView: View {
     /// Reclaim and Claim open their sheet here, not through the app root:
     /// this screen can sit inside Send or a transaction sheet.
     @State private var claimPresentation: PaymentLinksCoordinator.Presentation?
-    /// Activity opens this screen too, and no list check runs there: a sent
-    /// link looks at its envelope here, so a claim shows and Reclaim opens.
+    /// Activity checks every link only under its Links filter: a sent link
+    /// looks at its envelope here too, so a claim shows and Reclaim opens.
     @StateObject private var checker = PaymentLinksStatusChecker()
     @State private var isOnScreen = false
     @StateObject private var biometricAuth = BiometricAuthManager()

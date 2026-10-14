@@ -159,121 +159,38 @@ enum PaymentLinkFunder {
 
 // MARK: - Address step (link mode)
 
-/// The recipient step in link mode: no address, just who can claim.
-struct PaymentLinkAddressStep: View {
-    let isConnected: Bool
-    let onUseAddress: () -> Void
-    let onContinue: () -> Void
-
+/// Send's Link segment: no address, just who can claim.
+struct PaymentLinkRecipientCard: View {
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 24) {
-                    if !isConnected {
-                        ErrorBanner(
-                            message: String(localized: "No internet connection. Cannot send."),
-                            type: .offline
-                        )
-                        .accessibilityLabel("Offline: no internet connection")
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Recipient")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Recipient")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.brand.opacity(0.15))
-                                    .frame(width: 40, height: 40)
-                                Image(systemName: "link")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.brand)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Anyone with the link")
-                                    .font(.headline)
-                                Text("You get a link to send in a chat. The first person to open it can claim the money.")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                        .accessibilityElement(children: .combine)
-                    }
-
-                    Button(action: onUseAddress) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "person.fill")
-                            Text("Send to an address")
-                        }
-                        .font(.callout.weight(.semibold))
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.brand.opacity(0.15))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "link")
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.brand)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                    }
-                    .glassButtonStyle()
-                    .accessibilityLabel("Send to an address instead")
                 }
-                .padding()
-            }
-
-            Button(action: onContinue) {
-                HStack(spacing: 8) {
-                    Text("Continue")
-                        .font(.callout.weight(.semibold))
-                    Image(systemName: "arrow.right")
-                        .font(.callout.weight(.semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Anyone with the link")
+                        .font(.headline)
+                    Text("You get a link to send in a chat. The first person to open it can claim the money.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .foregroundStyle(isConnected ? .brand : .gray)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                Spacer(minLength: 0)
             }
-            .glassButtonStyle()
-            .disabled(!isConnected)
             .padding()
-            .accessibilityLabel("Continue")
-            .accessibilityHint("Proceed to enter amount")
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+            .accessibilityElement(children: .combine)
         }
-        .navigationTitle("Send with a Link")
-        .navigationBarTitleDisplayMode(.inline)
-        .horizontalBarsOnDuo()
-    }
-}
-
-/// The "Send with a link" control under Scan QR and Paste, and under it
-/// the way to the links already made (`YourLinksRow`, shown once there is
-/// one).
-struct SendWithLinkButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-            sendWithLink
-            YourLinksRow()
-        }
-    }
-
-    private var sendWithLink: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: "link")
-                Text("Send with a link")
-            }
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(.brand)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-        }
-        .glassButtonStyle()
-        .accessibilityLabel("Send with a link")
-        .accessibilityHint("Makes a link that anyone you send it to can claim")
-        .accessibilityIdentifier("send.withLinkButton")
     }
 }
 

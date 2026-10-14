@@ -305,6 +305,28 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertTrue(after.contains { $0.accessibilityLabel == "Behind" }, "the screen is back")
     }
 
+    // MARK: - Send: Address | Link
+
+    /// The two segments read as on screen, and Link says what it does.
+    func testSendModeSegmentsReadAddressAndLink() {
+        let step = SendAddressStep(
+            recipientAddress: .constant(""),
+            showScanner: .constant(false),
+            mode: .constant(.address),
+            isConnected: true,
+            isValidAddress: false,
+            onContinue: {}
+        )
+        let elements = accessibilityElements(in: host(NavigationStack { step }, height: 600))
+        let address = elements.first { $0.accessibilityLabel == "Address" }
+        let link = elements.first { $0.accessibilityLabel == "Link" }
+        XCTAssertNotNil(address)
+        XCTAssertNotNil(link)
+        XCTAssertEqual(link?.accessibilityHint, "Send money as a link anyone can claim")
+        XCTAssertTrue(address?.accessibilityTraits.contains(.selected) ?? false)
+        XCTAssertEqual(address?.accessibilityHint, "Currently selected")
+    }
+
     // MARK: - Helpers
 
     private func wallet(_ name: String, emoji: String = "💰", source: WalletSource, address: String) -> WalletInfo {

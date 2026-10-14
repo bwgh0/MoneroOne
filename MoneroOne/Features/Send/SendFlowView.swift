@@ -47,11 +47,23 @@ struct SendFlowView: View {
     /// software wallets take the direct `walletManager.send` path.
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
 
-    // Payment links (Features/PaymentLinks): Send with a link funds a new
+    // Payment links (Features/PaymentLinks): the Link segment funds a new
     // envelope instead of paying an address.
     @State private var isLinkMode = false
     @State private var linkDraft: PaymentLinkDraft?
     @State private var linkRecordId: String?
+
+    /// The Address | Link control. Link clears Send All: a link holds the
+    /// amount typed in.
+    private var recipientMode: Binding<SendRecipientMode> {
+        Binding(
+            get: { isLinkMode ? .link : .address },
+            set: { mode in
+                if mode == .link { isSendingAll = false }
+                isLinkMode = mode == .link
+            }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -252,33 +264,16 @@ struct SendFlowView: View {
     @ViewBuilder
     private var phaseContent: some View {
         switch phase {
-        case .address where isLinkMode:
-            PaymentLinkAddressStep(
-                isConnected: networkMonitor.isConnected,
-                onUseAddress: {
-                    HapticFeedback.shared.buttonPress()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { isLinkMode = false }
-                },
-                onContinue: {
-                    HapticFeedback.shared.buttonPress()
-                    goForward(to: .amount)
-                }
-            )
-
         case .address:
             SendAddressStep(
                 recipientAddress: $recipientAddress,
                 showScanner: $showScanner,
+                mode: recipientMode,
                 isConnected: networkMonitor.isConnected,
                 isValidAddress: walletManager.isValidAddress(recipientAddress),
                 onContinue: {
                     HapticFeedback.shared.buttonPress()
                     goForward(to: .amount)
-                },
-                onSendWithLink: {
-                    HapticFeedback.shared.buttonPress()
-                    isSendingAll = false
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { isLinkMode = true }
                 }
             )
 
@@ -489,6 +484,8 @@ struct SendFlowView: View {
     /// confirms the amount before Send is one tap away.
     private func apply(_ request: WalletManager.PaymentRequest, animated: Bool) {
         shownPaymentRequest = request
+        // A `monero:` link pays its address, not a payment link.
+        isLinkMode = false
         recipientAddress = request.address
         amountString = request.amount ?? ""
         amountPrefill = request.amount == nil ? nil : .paymentLink

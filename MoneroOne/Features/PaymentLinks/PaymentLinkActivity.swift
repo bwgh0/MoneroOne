@@ -43,7 +43,7 @@ struct PaymentLinkActivity: Equatable {
     }
 
     @MainActor
-    static func match(_ transaction: MoneroTransaction, store: EnvelopeStore = .shared) -> PaymentLinkActivity? {
+    static func match(_ transaction: MoneroTransaction, store: EnvelopeStore) -> PaymentLinkActivity? {
         match(transactionId: transaction.id, isIncoming: transaction.type == .incoming, records: store.records)
     }
 
@@ -103,6 +103,9 @@ struct ActivityRowText {
     let title: String
     let systemImage: String
     let subtitle: String
+    /// The subtitle is a link's status, not the date. It stays on one
+    /// line: the row's even split with the spacer wrapped "Ready to claim".
+    let subtitleIsStatus: Bool
     let accessibilityLabel: String
 
     @MainActor
@@ -113,6 +116,7 @@ struct ActivityRowText {
             title = link.title
             systemImage = "link"
             subtitle = statusLine ?? date
+            subtitleIsStatus = statusLine != nil
             accessibilityLabel = PaymentLinkActivity.accessibilityLabel(
                 title: link.title,
                 isIncoming: isIncoming,
@@ -125,6 +129,7 @@ struct ActivityRowText {
             title = isIncoming ? String(localized: "Received") : String(localized: "Sent")
             systemImage = isIncoming ? "arrow.down.left" : "arrow.up.right"
             subtitle = date
+            subtitleIsStatus = false
             accessibilityLabel = "\(title) \(amount.spoken), \(date), \(transaction.displayStatusText)"
         }
     }

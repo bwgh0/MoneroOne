@@ -416,6 +416,7 @@ struct RecentTransactionCard: View {
                     Text(row.subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .fixedSize(horizontal: row.subtitleIsStatus, vertical: false)
                 }
 
                 Spacer()

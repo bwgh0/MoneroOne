@@ -23,9 +23,6 @@ final class PaymentLinkV2Tests: XCTestCase {
     private let reducedK = "ade11baac32c1fd6a72d6050d89f2aaced5462acadae8a6967b62cfdd0229d10"
     private let reducedSpend = "c00d264da9c90c7ed19068adf9a54b97ed5462acadae8a6967b62cfdd0229d00"
     private let reducedAddress = "48vAo8XgJkBXtD3HqhVCvF9vpavqBuGK2WSPXTQSMeyXAy6xzEmgFHZiwkKYcnNv2fDsW9S31nnpHN6J3pMGrRiTR3NC7nL"
-    /// What the words of the unreduced k restore to: same spend key, other
-    /// view key. The wrong wallet.
-    private let unreducedAddress = "48vAo8XgJkBXtD3HqhVCvF9vpavqBuGK2WSPXTQSMeyXAx8P6Ap3hRX7Li7dnM4KsM6Bs7zNgVaF71rcS7ny1K1nNYDGj6Y"
     private let reducedId = "a6e2ad8e98af4322"
 
     private func bytes(_ hex: String) throws -> [UInt8] {
@@ -92,16 +89,17 @@ final class PaymentLinkV2Tests: XCTestCase {
         XCTAssertEqual(EnvelopeSecret.address(for: reduced.words, networkType: .mainnet), reducedAddress)
     }
 
-    /// The trap the spec warns about: wallet2 derives the view key from the
-    /// exact bytes it restores from, so the words of an unreduced k give
-    /// another wallet. Every platform restores from sc_reduce32(k).
+    /// wallet2 reduces what it restores and hashes the reduced spend key
+    /// for the view key (account.cpp), so the words of an unreduced k open
+    /// the same wallet. The app's own address check takes canonical keys
+    /// only, so the app never makes or accepts such words.
     @MainActor
-    func testUnreducedKGivesAnotherWallet() async throws {
+    func testUnreducedKWordsOpenTheSameWalletInWallet2() async throws {
         let k = EnvelopeV2.k(secret: try bytes(reducedSecretHex))
         let unreducedWords = try XCTUnwrap(EnvelopeWords.encode(k))
         let address = try await restoredAddress(words: unreducedWords)
-        XCTAssertNotEqual(address, reducedAddress)
-        XCTAssertEqual(address, unreducedAddress)
+        XCTAssertEqual(address, reducedAddress)
+        XCTAssertNil(EnvelopeSecret.address(for: unreducedWords, networkType: .mainnet))
     }
 
     // MARK: - Parse errors

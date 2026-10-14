@@ -16,10 +16,11 @@ import Security
 /// Derivation, the same on iOS and Android (labels are UTF-8):
 /// - `k = SHA-256("monero.one payment link v2 spend" || secret)`
 /// - envelope spend key = `sc_reduce32(k)`; the wallet restores from the 25
-///   legacy (Electrum, English) words of that reduced key. Restore from the
-///   reduced key only: wallet2 derives the view key from the exact 32 bytes
-///   it restores from, so the words of an unreduced `k` (k ≥ l for 15 of 16
-///   secrets) give a different wallet.
+///   legacy (Electrum, English) words of that reduced key. `k ≥ l` for about
+///   15 of 16 secrets. wallet2 reduces what it restores and hashes the
+///   reduced key for the view key, so it would open the same wallet from
+///   the words of `k`; a port that derives the keys itself must hash the
+///   reduced key too (hashing `k` gives another address, spec vector 2).
 /// - envelope id = lowercase hex of the first 8 bytes of
 ///   `SHA-256("monero.one payment link v2 id" || secret)`.
 ///

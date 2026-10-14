@@ -184,6 +184,13 @@ struct PaymentLinkDisplay {
             confirmations = txConfirmations
             if status == .created { status = .pending }
         }
+        // A received link: the funding height of the last check and the
+        // active wallet's daemon height give a live count.
+        if record.role == .received, status == .pending,
+           let height = record.fundingHeight,
+           let daemonHeight = walletManager?.daemonHeight, daemonHeight > height {
+            confirmations = max(confirmations ?? 0, Int(daemonHeight - height))
+        }
         self.status = status
         self.confirmations = confirmations
         self.role = record.role
@@ -354,10 +361,13 @@ final class PaymentLinksStatusChecker: ObservableObject {
     }
 }
 
-// MARK: - Sent link detail
+// MARK: - Link detail
 
+/// One link: its status, amount, transactions and actions. Opened from
+/// Your links and from the link's transactions in Activity.
 struct PaymentLinkDetailView: View {
     let recordId: String
+    var role: EnvelopeRecord.Role = .sent
 
     @EnvironmentObject var walletManager: WalletManager
     @ObservedObject private var store = EnvelopeStore.shared
@@ -367,11 +377,14 @@ struct PaymentLinkDetailView: View {
     @State private var retryError: String?
     @State private var hardwareIntent: HardwareSessionSheet.Intent?
     @State private var showRetryConfirmation = false
+    /// Reclaim and Claim open their sheet here, not through the app root:
+    /// this screen can sit inside Send or a transaction sheet.
+    @State private var claimPresentation: PaymentLinksCoordinator.Presentation?
     @StateObject private var biometricAuth = BiometricAuthManager()
     /// Same setting as Send: re-authenticate before money leaves.
     @AppStorage("requireAuthForSend") private var requireAuthForSend = true
 
-    private var record: EnvelopeRecord? { store.record(id: recordId, role: .sent) }
+    private var record: EnvelopeRecord? { store.record(id: recordId, role: role) }
 
     /// A link funded from another wallet: only that wallet can see whether
     /// the funding went out, so only it may retry.
@@ -387,7 +400,11 @@ struct PaymentLinkDetailView: View {
     var body: some View {
         Group {
             if let record {
-                content(record)
+                if record.role == .received {
+                    receivedContent(record)
+                } else {
+                    content(record)
+                }
             } else {
                 PaymentLinkMessageView(systemImage: "link", tint: .gray, title: String(localized: "This link was removed."))
             }
@@ -396,6 +413,10 @@ struct PaymentLinkDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $hardwareIntent, onDismiss: handleHardwareDismiss) { intent in
             HardwareSessionSheet(intent: intent, trezorManager: walletManager.trezorManager)
+                .environmentObject(walletManager)
+        }
+        .sheet(item: $claimPresentation) { presentation in
+            PaymentLinkClaimSheet(presentation: presentation)
                 .environmentObject(walletManager)
         }
     }
@@ -431,10 +452,10 @@ struct PaymentLinkDetailView: View {
                     detailRow(String(localized: "Claim fee reserve"), "\(XMRFormatter.format(EnvelopeRuntime.xmr(reserve))) XMR")
                 }
                 if let txid = record.fundingTxid {
-                    detailRow(String(localized: "Funding transaction"), ReceiveAddressLogic.shortAddress(txid), mono: true)
+                    transactionRow(String(localized: "Funding transaction"), txid: txid, incoming: false)
                 }
                 if let txid = record.settleTxid {
-                    detailRow(String(localized: "Reclaim transaction"), ReceiveAddressLogic.shortAddress(txid), mono: true)
+                    transactionRow(String(localized: "Reclaim transaction"), txid: txid, incoming: true)
                 }
             }
 
@@ -471,11 +492,7 @@ struct PaymentLinkDetailView: View {
                 dismiss()
             }
         } message: {
-            if record.status.isSettled {
-                Text("The link holds no money. This removes it from this list.")
-            } else {
-                Text("If the link holds money, this iPhone can no longer take it back. Anyone who has the link can still claim it.")
-            }
+            removeMessage(record)
         }
     }
 
@@ -520,7 +537,7 @@ struct PaymentLinkDetailView: View {
 
     private func reclaimButton(_ record: EnvelopeRecord, enabled: Bool) -> some View {
         Button {
-            PaymentLinksCoordinator.shared.present(record)
+            claimPresentation = .init(id: record.id, kind: .own)
         } label: {
             Label("Reclaim", systemImage: "arrow.uturn.backward")
                 .foregroundStyle(enabled ? Color.brand : Color.gray)
@@ -542,6 +559,105 @@ struct PaymentLinkDetailView: View {
 
     private func display(_ record: EnvelopeRecord) -> PaymentLinkDisplay {
         PaymentLinkDisplay(record: record, walletManager: walletManager)
+    }
+
+    @ViewBuilder
+    private func removeMessage(_ record: EnvelopeRecord) -> some View {
+        if record.status.isSettled {
+            Text("The link holds no money. This removes it from this list.")
+        } else if record.role == .received {
+            Text("If the link holds money, open the link again to claim it.")
+        } else {
+            Text("If the link holds money, this iPhone can no longer take it back. Anyone who has the link can still claim it.")
+        }
+    }
+
+    /// A transaction row; it opens the transaction when this wallet has it.
+    @ViewBuilder
+    private func transactionRow(_ title: String, txid: String, incoming: Bool) -> some View {
+        if let transaction = walletManager.transactions.first(where: { $0.id == txid && ($0.type == .incoming) == incoming }) {
+            NavigationLink {
+                TransactionDetailView(transaction: transaction)
+            } label: {
+                detailRow(title, ReceiveAddressLogic.shortAddress(txid), mono: true)
+            }
+            .accessibilityHint("Shows the transaction")
+        } else {
+            detailRow(title, ReceiveAddressLogic.shortAddress(txid), mono: true)
+        }
+    }
+
+    // MARK: - Received link
+
+    private func receivedContent(_ record: EnvelopeRecord) -> some View {
+        let display = PaymentLinkDisplay(record: record, walletManager: walletManager)
+        let amount = record.settledAmount ?? record.knownAmount
+        let canClaim = !record.status.isSettled && record.link != nil
+        return List {
+            Section {
+                VStack(spacing: 8) {
+                    Text(amount.map { "\(XMRFormatter.format(EnvelopeRuntime.xmr($0))) XMR" } ?? String(localized: "Payment link"))
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                    PaymentLinkStatusChip(display: display)
+                    if display.status == .pending, (display.confirmations ?? 0) < EnvelopeLink.confirmationsToUnlock {
+                        Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: display.confirmations ?? 0))) min")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .accessibilityElement(children: .combine)
+            }
+
+            Section {
+                detailRow(String(localized: "Received"), record.createdAt.formatted(date: .abbreviated, time: .shortened))
+                if canClaim, let expiryDate = record.expiryDate {
+                    detailRow(String(localized: "Claim by"), expiryDate.formatted(date: .abbreviated, time: .omitted))
+                }
+                if let txid = record.settleTxid {
+                    transactionRow(String(localized: "Claim transaction"), txid: txid, incoming: true)
+                }
+                if record.settleTxid != nil, let wallet = record.walletName, !wallet.isEmpty {
+                    detailRow(String(localized: "Claimed to"), wallet)
+                }
+            }
+
+            Section {
+                if canClaim {
+                    Button {
+                        claimPresentation = .init(id: record.id, kind: .claim)
+                    } label: {
+                        Label("Claim", systemImage: "arrow.down.left")
+                            .foregroundStyle(.brand)
+                    }
+                    .accessibilityLabel("Claim the money")
+                    .accessibilityHint("Opens the link and claims it when it is ready")
+                }
+                removeButton
+            } footer: {
+                if canClaim, display.status == .pending {
+                    Text("Claim opens when the link is ready, after 10 confirmations.")
+                }
+            }
+        }
+        .confirmationDialog(
+            "Remove this link?",
+            isPresented: $showRemoveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                let id = record.id
+                store.remove(record)
+                Task { await EnvelopeRuntime.shared.deleteFiles(id: id) }
+                dismiss()
+            }
+        } message: {
+            removeMessage(record)
+        }
     }
 
     private func detailRow(_ title: String, _ value: String, mono: Bool = false) -> some View {

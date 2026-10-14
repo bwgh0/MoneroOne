@@ -117,7 +117,7 @@ struct TransactionListView: View {
 
                 ForEach(filtered) { transaction in
                     NavigationLink {
-                        TransactionDetailView(transaction: transaction)
+                        ActivityDetailView(transaction: transaction)
                     } label: {
                         TransactionRow(transaction: transaction)
                     }
@@ -606,11 +606,15 @@ struct TransactionRow: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
+    /// Payment link transactions read "Payment link" and so on.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
 
     var body: some View {
+        let amount = self.amount
+        let row = ActivityRowText(transaction: transaction, date: formattedDate, amount: amount, walletManager: walletManager, store: paymentLinks)
         HStack(spacing: 12) {
             // Icon
-            Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
+            Image(systemName: row.systemImage)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(transaction.type == .incoming ? .green : .brand)
                 .frame(width: 36, height: 36)
@@ -622,14 +626,14 @@ struct TransactionRow: View {
 
             // Details
             VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.type == .incoming ? "Received" : "Sent")
+                Text(row.title)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     // Whole: next to a long amount, "Получено" broke with a
                     // hyphen; the amount column gives way instead.
                     .fixedSize()
 
-                Text(formattedDate)
+                Text(row.subtitle)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -641,7 +645,7 @@ struct TransactionRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel(row.accessibilityLabel)
     }
 
     private var amount: TransactionAmountText {

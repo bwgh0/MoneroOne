@@ -337,7 +337,7 @@ struct RecentTransactionsSection: View {
         }
         .sheet(item: $selectedTransaction) { transaction in
             NavigationStack {
-                TransactionDetailView(transaction: transaction)
+                ActivityDetailView(transaction: transaction)
             }
             .closesForPaymentLink()
             .presentationDetents([.fraction(0.75), .large])
@@ -379,8 +379,12 @@ struct RecentTransactionCard: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
+    /// Payment link transactions read "Payment link" and so on.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
 
     var body: some View {
+        let amount = self.amount
+        let row = ActivityRowText(transaction: transaction, date: formattedDate, amount: amount, walletManager: walletManager, store: paymentLinks)
         Button(action: onTap) {
             HStack(spacing: 12) {
                 ZStack {
@@ -388,13 +392,13 @@ struct RecentTransactionCard: View {
                         .fill(iconColor.opacity(0.15))
                         .frame(width: 40, height: 40)
 
-                    Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
+                    Image(systemName: row.systemImage)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(iconColor)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(transaction.type == .incoming ? "Received" : "Sent")
+                    Text(row.title)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         // Whole: next to a long amount, "Получено" broke with a
@@ -402,7 +406,7 @@ struct RecentTransactionCard: View {
                         .fixedSize()
                         .foregroundColor(.primary)
 
-                    Text(formattedDate)
+                    Text(row.subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -420,7 +424,7 @@ struct RecentTransactionCard: View {
         }
         .glassButtonStyle()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel(row.accessibilityLabel)
         .accessibilityHint("Shows transaction details")
         .accessibilityIdentifier("wallet.transaction.\(transaction.id)")
     }

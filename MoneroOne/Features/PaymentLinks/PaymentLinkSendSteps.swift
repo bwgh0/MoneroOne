@@ -246,11 +246,20 @@ struct PaymentLinkAddressStep: View {
     }
 }
 
-/// The "Send with a link" control under Scan QR and Paste.
+/// The "Send with a link" control under Scan QR and Paste, and under it
+/// the way to the links already made (`YourLinksRow`, shown once there is
+/// one).
 struct SendWithLinkButton: View {
     let action: () -> Void
 
     var body: some View {
+        VStack(spacing: 12) {
+            sendWithLink
+            YourLinksRow()
+        }
+    }
+
+    private var sendWithLink: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: "link")

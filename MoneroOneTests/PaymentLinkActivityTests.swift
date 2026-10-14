@@ -129,4 +129,26 @@ final class PaymentLinkActivityTests: XCTestCase {
         try store.save(record(.sent, id: "f", status: .pending))
         XCTAssertEqual(Set(PendingPaymentLinks.records(in: store).map(\.id)), ["a", "b"])
     }
+
+    // MARK: - Send: Your links
+
+    func testOpenCountCountsLinksThatMayHoldMoney() {
+        var unchecked = record(.received, id: "r1", status: .created)
+        unchecked.secret = "000102030405060708090a0b0c0d0e0f"
+        let records = [
+            record(.sent, id: "s1", status: .pending),
+            record(.sent, id: "s2", status: .ready),
+            record(.sent, id: "s3", status: .created),
+            record(.sent, id: "s4", status: .notFunded),
+            record(.sent, id: "s5", status: .claimed),
+            record(.sent, id: "s6", status: .reclaimed),
+            unchecked,
+            record(.received, id: "r2", status: .created),
+            record(.received, id: "r3", status: .pending),
+            record(.received, id: "r4", status: .claimed),
+        ]
+        // s1, s2, r1 (unchecked with its secret), r3.
+        XCTAssertEqual(YourLinksRow.openCount(records), 4)
+        XCTAssertEqual(YourLinksRow.openCount([]), 0)
+    }
 }

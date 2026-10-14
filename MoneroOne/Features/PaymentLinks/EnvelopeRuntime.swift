@@ -130,6 +130,16 @@ final class EnvelopeRuntime: ObservableObject {
         }
     }
 
+    /// Waits while the last payment-link screen lets go of the active
+    /// wallet (the short delay, then the restart), so Send does not meet a
+    /// stopped wallet after a visit to Your links. Returns at once while a
+    /// screen still holds the wallet or nothing waits to restart.
+    func waitForActiveWallet() async {
+        guard leases == 0 else { return }
+        await resumeTask?.value
+        await resumeInFlight?.value
+    }
+
     private func resumeMain() async {
         await closeEnvelope()
         guard mainSuspended else { return }

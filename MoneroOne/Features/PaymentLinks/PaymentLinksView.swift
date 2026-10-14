@@ -1,7 +1,7 @@
 import SwiftUI
 import MoneroKit
 
-/// Settings > Payment Links: links this device sent and links it received.
+/// Send > Your links: links this device sent and links it received.
 struct PaymentLinksView: View {
     @EnvironmentObject var walletManager: WalletManager
     @ObservedObject private var store = EnvelopeStore.shared
@@ -54,13 +54,11 @@ struct PaymentLinksView: View {
             if !store.received.isEmpty {
                 Section("Received") {
                     ForEach(store.received) { record in
-                        Button {
-                            PaymentLinksCoordinator.shared.present(record)
+                        NavigationLink {
+                            PaymentLinkDetailView(recordId: record.id, role: .received)
                         } label: {
                             PaymentLinkRow(record: record, display: PaymentLinkDisplay(record: record, walletManager: walletManager))
                         }
-                        .foregroundStyle(.primary)
-                        .accessibilityHint(record.isDone ? "" : "Opens the link to claim it")
                         .swipeActions {
                             if record.isDone {
                                 Button("Remove", role: .destructive) {
@@ -72,7 +70,7 @@ struct PaymentLinksView: View {
                 }
             }
         }
-        .navigationTitle("Payment Links")
+        .navigationTitle("Your Links")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             isOnScreen = true

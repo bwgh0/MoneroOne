@@ -380,3 +380,61 @@ struct PendingPaymentLinkRow: View {
         }
     }
 }
+
+// MARK: - Send: "Your links"
+
+/// Under "Send with a link": every link this device made or received,
+/// with the number still open. Shown once there is at least one link.
+struct YourLinksRow: View {
+    @ObservedObject private var store = EnvelopeStore.shared
+
+    /// Links that may still hold money: funded and not settled (sent or
+    /// received), and received links not checked yet.
+    static func openCount(_ records: [EnvelopeRecord]) -> Int {
+        records.filter { record in
+            switch record.status {
+            case .pending, .ready: return true
+            case .created: return record.role == .received && record.link != nil
+            case .notFunded, .claimed, .reclaimed: return false
+            }
+        }.count
+    }
+
+    var body: some View {
+        if !store.records.isEmpty {
+            let open = Self.openCount(store.records)
+            NavigationLink {
+                PaymentLinksView()
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Your links")
+                        .foregroundStyle(.primary)
+                    if open > 0 {
+                        Text(verbatim: "·")
+                            .foregroundStyle(.secondary)
+                        Text("\(open) open", comment: "Send: number of payment links that still hold money")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary.opacity(0.5))
+                        .accessibilityHidden(true)
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(open > 0
+                ? String(localized: "Your links, \(open) open", comment: "VoiceOver: Send row to the payment links list")
+                : String(localized: "Your links"))
+            .accessibilityHint("Shows the payment links you made and received")
+            .accessibilityIdentifier("send.yourLinksRow")
+        }
+    }
+}

@@ -92,19 +92,23 @@ final class PaymentLinksCoordinator: ObservableObject {
                 // first; a link id is meant to be unique.
                 throw EnvelopeLink.ParseError.incomplete
             }
-            // Words are kept until a claim is mined; put them back so a
+            // The secret is kept until a claim is mined; put it back so a
             // claim that never confirmed can run again.
-            if existing.words == nil {
-                existing.words = link.words
+            if existing.link == nil {
+                existing.setSecret(from: link)
             }
-            existing.amount = link.amount
-            existing.expiry = link.expiry
+            // Only v1 links carry an amount and an expiry; a v2 record keeps
+            // what its checks learned.
+            if link.format == .v1 {
+                existing.amount = link.amount
+                existing.expiry = link.expiry
+            }
             try store.save(existing)
         } else {
-            let record = EnvelopeRecord(
+            var record = EnvelopeRecord(
                 id: link.id,
                 role: .received,
-                words: link.words,
+                words: nil,
                 address: address,
                 restoreHeight: link.restoreHeight,
                 amount: link.amount,
@@ -112,6 +116,7 @@ final class PaymentLinksCoordinator: ObservableObject {
                 createdAt: Date(),
                 status: .created
             )
+            record.setSecret(from: link)
             try store.save(record)
         }
         presentation = Presentation(id: link.id, kind: .claim)

@@ -164,7 +164,9 @@
 		9A7E1C0D000900000000B009 /* PaymentLinkSendSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */; };
 		9A7E1C0D000A00000000B00A /* PaymentLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */; };
 		9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */; };
+		9A7E1C0D00FE00000000B0FE /* PaymentLinkV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D00FE00000000F0FE /* PaymentLinkV2Tests.swift */; };
 		9A7E1C0D000B00000000B00B /* EnvelopeWordlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000B00000000F00B /* EnvelopeWordlist.swift */; };
+		9A7E1C0D000C00000000B00C /* EnvelopeLinkV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -366,7 +368,9 @@
 		9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkSendSteps.swift; sourceTree = "<group>"; };
 		9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinksView.swift; sourceTree = "<group>"; };
 		9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkTests.swift; sourceTree = "<group>"; };
+		9A7E1C0D00FE00000000F0FE /* PaymentLinkV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkV2Tests.swift; sourceTree = "<group>"; };
 		9A7E1C0D000B00000000F00B /* EnvelopeWordlist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeWordlist.swift; sourceTree = "<group>"; };
+		9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeLinkV2.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -408,6 +412,7 @@
 				84E684EE43DA20220CE2D58B /* WalletManagerTests.swift */,
 				CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */,
 				9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */,
+				9A7E1C0D00FE00000000F0FE /* PaymentLinkV2Tests.swift */,
 				CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */,
 				CAC4E1D0000000000000D40T /* GethashesDeviceDiagTests.swift */,
 				DEE91100000000000000F002 /* MoneroPaymentURITests.swift */,
@@ -684,6 +689,7 @@
 			isa = PBXGroup;
 			children = (
 				9A7E1C0D000100000000F001 /* EnvelopeLink.swift */,
+				9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */,
 				9A7E1C0D000200000000F002 /* EnvelopeStatus.swift */,
 				9A7E1C0D000300000000F003 /* EnvelopeStore.swift */,
 				9A7E1C0D000400000000F004 /* EnvelopeSecret.swift */,
@@ -977,6 +983,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				DEE91100000000000000B002 /* MoneroPaymentURITests.swift in Sources */,
 				CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */,
 				9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */,
+				9A7E1C0D00FE00000000B0FE /* PaymentLinkV2Tests.swift in Sources */,
 				CAC4E1D0000000000000D10T /* AuditRemediationTests.swift in Sources */,
 				CAC4E1D0000000000000D30T /* GethashesDeviceDiagTests.swift in Sources */,
 				0078BD68A0F42B7F096CC5B0 /* BiometricAuthManagerTests.swift in Sources */,
@@ -1078,6 +1085,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				39C989BB4F59CE711C164B58 /* SeedPhraseView.swift in Sources */,
 				A1B2C3D400000001A0000005 /* SendFlowPhase.swift in Sources */,
 				9A7E1C0D000100000000B001 /* EnvelopeLink.swift in Sources */,
+				9A7E1C0D000C00000000B00C /* EnvelopeLinkV2.swift in Sources */,
 				9A7E1C0D000200000000B002 /* EnvelopeStatus.swift in Sources */,
 				9A7E1C0D000300000000B003 /* EnvelopeStore.swift in Sources */,
 				9A7E1C0D000400000000B004 /* EnvelopeSecret.swift in Sources */,

@@ -6,17 +6,23 @@ import MoneroKit
 /// A payment link built at review and not funded yet. Lives only in memory
 /// until the user confirms; then it becomes a saved record.
 struct PaymentLinkDraft: Equatable {
+    /// A v2 link: it carries neither the amount nor the expiry.
     let link: EnvelopeLink
     let address: String
+    /// The amount the recipient gets, piconero.
+    let atomicAmount: UInt64
+    /// Unix seconds; kept in the sender's record only.
+    let expiry: Int64
     /// Claim fee reserve, piconero.
     let feeReserve: UInt64
     /// Fee of the funding transaction, XMR.
     let networkFee: Decimal
 
-    var amount: Decimal { EnvelopeRuntime.xmr(link.amount) }
+    var amount: Decimal { EnvelopeRuntime.xmr(atomicAmount) }
     var reserve: Decimal { EnvelopeRuntime.xmr(feeReserve) }
     /// What the funding transaction sends to the envelope.
-    var fundingAmount: Decimal { EnvelopeRuntime.xmr(link.amount + feeReserve) }
+    var fundingAmount: Decimal { EnvelopeRuntime.xmr(atomicAmount + feeReserve) }
+    var expiryDate: Date { Date(timeIntervalSince1970: TimeInterval(expiry)) }
 }
 
 @MainActor
@@ -42,13 +48,11 @@ enum PaymentLinkFunder {
         let secret = try await Task.detached { try EnvelopeSecret.generate(networkType: networkType) }.value
 
         let restoreHeight = daemonHeight > EnvelopeLink.restoreHeightMargin ? daemonHeight - EnvelopeLink.restoreHeightMargin : 0
-        let link = EnvelopeLink(
-            words: secret.words,
-            restoreHeight: restoreHeight,
-            amount: atomic,
-            expiry: Int64(now.timeIntervalSince1970 + EnvelopeLink.defaultLifetime),
-            id: EnvelopeLink.newId()
-        )
+        // New links are always v2.
+        guard let link = EnvelopeLink(secret: secret.linkSecret, restoreHeight: restoreHeight),
+              link.words == secret.words else {
+            throw EnvelopeSecret.Failure.generationFailed
+        }
 
         // The reserve is the kit's fee estimate for this funding transaction
         // at the claim priority: the claim sweep (one input, one output)
@@ -60,33 +64,42 @@ enum PaymentLinkFunder {
         guard funding + networkFee <= walletManager.displayUnlockedBalance else {
             throw FundingError.insufficientFunds
         }
-        return PaymentLinkDraft(link: link, address: secret.address, feeReserve: reserveAtomic, networkFee: networkFee)
+        return PaymentLinkDraft(
+            link: link,
+            address: secret.address,
+            atomicAmount: atomic,
+            expiry: Int64(now.timeIntervalSince1970 + EnvelopeLink.defaultLifetime),
+            feeReserve: reserveAtomic,
+            networkFee: networkFee
+        )
     }
 
     /// The record saved before the funding broadcast.
     static func record(for draft: PaymentLinkDraft, wallet: WalletInfo?, now: Date = Date()) -> EnvelopeRecord {
-        EnvelopeRecord(
+        var record = EnvelopeRecord(
             id: draft.link.id,
             role: .sent,
-            words: draft.link.words,
+            words: nil,
             address: draft.address,
             restoreHeight: draft.link.restoreHeight,
-            amount: draft.link.amount,
-            expiry: draft.link.expiry,
+            amount: draft.atomicAmount,
+            expiry: draft.expiry,
             createdAt: now,
             status: .created,
             feeReserve: draft.feeReserve,
             walletName: wallet?.name,
             walletId: wallet?.id.uuidString
         )
+        record.setSecret(from: draft.link)
+        return record
     }
 
     /// Saves the record, checks the words once more, then funds through the
     /// normal send path (software wallets). Hardware wallets fund through
     /// `HardwareSessionSheet` and report back with `markFunded`.
     static func save(_ record: EnvelopeRecord, store: EnvelopeStore = .shared, networkType: MoneroKit.NetworkType) throws {
-        guard let words = record.words else { throw EnvelopeSecret.Failure.verificationFailed }
-        try EnvelopeSecret.verify(words: words, address: record.address, networkType: networkType)
+        guard let link = record.link, link.id == record.id else { throw EnvelopeSecret.Failure.verificationFailed }
+        try EnvelopeSecret.verify(words: link.words, address: record.address, networkType: networkType)
         try store.save(record)
     }
 
@@ -300,7 +313,7 @@ struct PaymentLinkReviewStep: View {
                                 Text("Expires")
                                     .foregroundStyle(.secondary)
                                 Spacer()
-                                Text(draft.link.expiryDate.formatted(date: .abbreviated, time: .omitted))
+                                Text(draft.expiryDate.formatted(date: .abbreviated, time: .omitted))
                                     .fontWeight(.medium)
                             }
                             .font(.subheadline)
@@ -348,7 +361,7 @@ struct PaymentLinkReviewStep: View {
         .task {
             // Same amount as before: keep the envelope already built, so
             // Back and Review again do not make a new secret each time.
-            if let draft, draft.link.amount == EnvelopeRuntime.piconero(amount) { return }
+            if let draft, draft.atomicAmount == EnvelopeRuntime.piconero(amount) { return }
             draft = nil
             do {
                 draft = try await PaymentLinkFunder.makeDraft(amount: amount, walletManager: walletManager)

@@ -1,25 +1,32 @@
 import Foundation
 import Security
 
-/// One payment link this device sent or received. The words are a bearer
-/// secret: the record lives only in the Keychain (this device only), never
-/// in UserDefaults, logs or backups.
+/// One payment link this device sent or received. The secret (v2) or the
+/// words (v1) are a bearer secret: the record lives only in the Keychain
+/// (this device only), never in UserDefaults, logs or backups.
 struct EnvelopeRecord: Codable, Identifiable, Equatable {
     enum Role: String, Codable {
         case sent
         case received
     }
 
-    /// The envelope id `n`.
+    /// The envelope id (v1 `n`, v2 derived from the secret).
     let id: String
     let role: Role
-    /// The 25 words. Nil once a received link is claimed here.
+    /// v1 links: the 25 words. Nil for v2 links, and once a received link
+    /// is claimed here.
     var words: [String]?
+    /// v2 links: the 16-byte link secret, lowercase hex. Nil for v1 links,
+    /// and once a received link is claimed here.
+    var secret: String?
     /// The envelope's primary address.
     var address: String
     var restoreHeight: UInt64
-    /// `a`, piconero.
+    /// Piconero. Sent: the amount the sender meant. Received: `a` of a v1
+    /// link; 0 for a v2 link until a check sees the envelope's balance.
     var amount: UInt64
+    /// Unix seconds. Sent: creation + 30 days. Received: `e` of a v1 link;
+    /// 0 (none) for a v2 link, which carries no expiry.
     var expiry: Int64
     var createdAt: Date
     var status: EnvelopeStatus
@@ -41,14 +48,47 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     /// Last envelope sync.
     var lastBalance: UInt64?
     var confirmations: Int?
+    /// Block height of the funding the last check saw mined. With the active
+    /// wallet's daemon height it gives a live confirmation count without
+    /// opening the envelope again.
+    var fundingHeight: UInt64?
     var lastCheckedAt: Date?
 
     var link: EnvelopeLink? {
+        if let secret, let bytes = [UInt8](hex: secret) {
+            return EnvelopeLink(secret: bytes, restoreHeight: restoreHeight)
+        }
         guard let words else { return nil }
         return EnvelopeLink(words: words, restoreHeight: restoreHeight, amount: amount, expiry: expiry, id: id)
     }
 
-    var expiryDate: Date { Date(timeIntervalSince1970: TimeInterval(expiry)) }
+    /// Stores the secret of `link`: the v2 secret, or the v1 words.
+    mutating func setSecret(from link: EnvelopeLink) {
+        if let bytes = link.secret {
+            secret = bytes.hexString
+            words = nil
+        } else {
+            words = link.words
+            secret = nil
+        }
+    }
+
+    /// Drops the link secret (a received link once its claim is mined).
+    mutating func forgetSecret() {
+        words = nil
+        secret = nil
+    }
+
+    /// Nil when the link has no expiry (a received v2 link).
+    var expiryDate: Date? { expiry > 0 ? Date(timeIntervalSince1970: TimeInterval(expiry)) : nil }
+
+    /// What the link holds as far as this device knows, piconero: the
+    /// amount meant, else the balance the last check saw. Nil when unknown.
+    var knownAmount: UInt64? {
+        if amount > 0 { return amount }
+        if let lastBalance, lastBalance > 0 { return lastBalance }
+        return nil
+    }
 
     /// Status for display: Expired over pending and ready.
     func isExpired(now: Date = Date()) -> Bool {
@@ -179,6 +219,24 @@ final class EnvelopeStore: ObservableObject {
             guard let account = item[kSecAttrAccount as String] as? String else { return nil }
             return loadOne(account: account)
         }
+    }
+}
+
+extension Array where Element == UInt8 {
+    /// Bytes from lowercase or uppercase hex; nil for an odd length or a
+    /// non-hex character.
+    init?(hex: String) {
+        guard hex.count % 2 == 0 else { return nil }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(hex.count / 2)
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let next = hex.index(index, offsetBy: 2)
+            guard let byte = UInt8(hex[index..<next], radix: 16) else { return nil }
+            bytes.append(byte)
+            index = next
+        }
+        self = bytes
     }
 }
 

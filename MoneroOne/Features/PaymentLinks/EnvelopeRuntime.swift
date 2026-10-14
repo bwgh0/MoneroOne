@@ -294,12 +294,14 @@ final class EnvelopeRuntime: ObservableObject {
         let spent = outgoing.reduce(Decimal(0)) { $0 + $1.amount + $1.fee }
         let balance = min(balance, max(0, received - spent))
         let unlocked = min(unlocked, balance)
+        let fundingHeight = incoming.compactMap { $0.status == .confirmed ? $0.blockHeight : nil }.min()
         return EnvelopeObservation(
             fundingSeen: !incoming.isEmpty,
             fundingConfirmations: confirmations,
             balance: piconero(balance),
             unlockedBalance: piconero(unlocked),
-            spendTxids: outgoing.map(\.id)
+            spendTxids: outgoing.map(\.id),
+            fundingHeight: fundingHeight
         )
     }
 

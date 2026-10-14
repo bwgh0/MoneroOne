@@ -34,6 +34,9 @@ struct EnvelopeObservation: Equatable {
     var unlockedBalance: UInt64
     /// Hashes of outgoing transfers (claims or reclaims) the envelope saw.
     var spendTxids: [String]
+    /// Block height of the oldest mined incoming transfer; nil while every
+    /// funding waits in the pool.
+    var fundingHeight: UInt64? = nil
 
     static let empty = EnvelopeObservation(fundingSeen: false, fundingConfirmations: 0, balance: 0, unlockedBalance: 0, spendTxids: [])
 }
@@ -78,8 +81,9 @@ enum EnvelopeStatusRules {
 
     /// "Expired" is a label over pending and ready, not a stored status:
     /// the money is still there and the sender should take it back.
+    /// An expiry of 0 means none (a received v2 link carries no expiry).
     static func isExpired(_ status: EnvelopeStatus, expiry: Int64, now: Date) -> Bool {
-        guard status == .pending || status == .ready else { return false }
+        guard expiry > 0, status == .pending || status == .ready else { return false }
         return now.timeIntervalSince1970 > TimeInterval(expiry)
     }
 

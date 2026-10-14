@@ -1,13 +1,27 @@
 import Foundation
 
-/// A payment link ("envelope"): the seed of a one-time wallet that holds the
-/// money, plus hints for the claim. Both apps build and parse the same bytes:
+/// A payment link ("envelope"): the secret of a one-time wallet that holds
+/// the money, plus hints for the claim. Both apps build and parse the same
+/// bytes. New links are v2 (`EnvelopeV2`, about 48 characters):
+///
+///     https://monero.one/c#2<secret><height>
+///
+/// v1 links still parse and claim (links funded before v2 must keep working):
 ///
 ///     https://monero.one/c#v=1&s=<words>&h=<height>&a=<atomic>&e=<expiry>&n=<id>
 ///
 /// The secret lives only in the URL fragment, so it never reaches a server.
-/// Spec: docs/2026-10-03-payment-links-spec.md, "Link format".
+/// Spec: docs/2026-10-03-payment-links-spec.md, "Link format" and "Link
+/// format v2".
 struct EnvelopeLink: Equatable {
+    enum Format: Equatable {
+        /// The 25 words are in the link.
+        case v1
+        /// A 16-byte secret is in the link; the words derive from it.
+        case v2(secret: [UInt8])
+    }
+
+    /// The key-value format's version (`v=1`).
     static let version = 1
     static let wordCount = 25
     /// Days a new link stays claimable. Advisory: nothing on chain enforces it.
@@ -17,21 +31,54 @@ struct EnvelopeLink: Equatable {
     /// Blocks subtracted from the sender's daemon height for `h`.
     static let restoreHeightMargin: UInt64 = 10
 
-    /// The 25-word legacy (English) mnemonic, lowercase.
+    let format: Format
+    /// The 25-word legacy (English) mnemonic the envelope wallet restores
+    /// from, lowercase. v1: from the link; v2: derived from the secret.
     let words: [String]
     /// `h`: restore height for the envelope scan.
     let restoreHeight: UInt64
     /// `a`: the amount the sender meant, in piconero. A display hint only.
+    /// 0 in v2, which carries no amount.
     let amount: UInt64
-    /// `e`: expiry, unix seconds.
+    /// `e`: expiry, unix seconds. 0 in v2, which carries no expiry.
     let expiry: Int64
-    /// `n`: envelope id, 16 lowercase hex characters.
+    /// Envelope id, 16 lowercase hex characters. v1: `n`; v2: derived.
     let id: String
+
+    /// A v1 link.
+    init(words: [String], restoreHeight: UInt64, amount: UInt64, expiry: Int64, id: String) {
+        self.format = .v1
+        self.words = words
+        self.restoreHeight = restoreHeight
+        self.amount = amount
+        self.expiry = expiry
+        self.id = id
+    }
+
+    /// A v2 link. Nil when `secret` is not 16 bytes (or, never in practice,
+    /// derives a zero spend key).
+    init?(secret: [UInt8], restoreHeight: UInt64) {
+        guard secret.count == EnvelopeV2.secretByteCount,
+              let words = EnvelopeV2.words(secret: secret) else { return nil }
+        self.format = .v2(secret: secret)
+        self.words = words
+        self.restoreHeight = restoreHeight
+        self.amount = 0
+        self.expiry = 0
+        self.id = EnvelopeV2.id(secret: secret)
+    }
+
+    /// The v2 secret, nil for a v1 link.
+    var secret: [UInt8]? {
+        if case .v2(let secret) = format { return secret }
+        return nil
+    }
 
     enum ParseError: Error, Equatable {
         /// Not a claim link at all (another URL, an address, free text).
         case notClaimLink
-        /// `v` is present but not 1.
+        /// A version this app does not know (`v` other than 1, or a short
+        /// link whose first character is not `2`).
         case unsupportedVersion
         /// A key is missing or holds a bad value.
         case incomplete
@@ -50,12 +97,18 @@ struct EnvelopeLink: Equatable {
 
     // MARK: - Build
 
-    /// The link string. Keys in the order v, s, h, a, e, n.
+    /// The link string. v1 keys in the order v, s, h, a, e, n.
     var url: String {
-        "https://monero.one/c#v=\(Self.version)&s=\(words.joined(separator: "-"))&h=\(restoreHeight)&a=\(amount)&e=\(expiry)&n=\(id)"
+        switch format {
+        case .v1:
+            return "https://monero.one/c#v=\(Self.version)&s=\(words.joined(separator: "-"))&h=\(restoreHeight)&a=\(amount)&e=\(expiry)&n=\(id)"
+        case .v2(let secret):
+            return "https://monero.one/c#" + (EnvelopeV2.fragment(secret: secret, restoreHeight: restoreHeight) ?? "")
+        }
     }
 
-    var expiryDate: Date { Date(timeIntervalSince1970: TimeInterval(expiry)) }
+    /// Nil when the link carries no expiry (v2).
+    var expiryDate: Date? { expiry > 0 ? Date(timeIntervalSince1970: TimeInterval(expiry)) : nil }
 
     // MARK: - Parse
 
@@ -68,9 +121,12 @@ struct EnvelopeLink: Equatable {
 
     /// Parses a claim link. Accepts `https://monero.one/c#...` and
     /// `monero.one/c#...` (pasted without a scheme). Rejects `http`.
-    /// Unknown keys are ignored.
+    /// A fragment with `=` is the v1 key-value format (unknown keys are
+    /// ignored); one without is the short format, whose first character is
+    /// the version.
     static func parse(_ text: String) throws -> EnvelopeLink {
         guard let fragment = fragment(of: text) else { throw ParseError.notClaimLink }
+        guard fragment.contains("=") else { return try parseShort(fragment) }
 
         var fields: [String: String] = [:]
         for pair in fragment.split(separator: "&", omittingEmptySubsequences: true) {
@@ -95,6 +151,22 @@ struct EnvelopeLink: Equatable {
             throw ParseError.incomplete
         }
         return EnvelopeLink(words: words, restoreHeight: h, amount: a, expiry: Int64(eRaw), id: n)
+    }
+
+    /// The short format: `2<secret><height>`.
+    private static func parseShort(_ fragment: String) throws -> EnvelopeLink {
+        guard let first = fragment.first else { throw ParseError.incomplete }
+        guard first == EnvelopeV2.versionCharacter else {
+            // Another version character: a newer link. Anything else
+            // (a cut or mangled link) is incomplete.
+            throw first.isASCII && (first.isLetter || first.isNumber) ? ParseError.unsupportedVersion : ParseError.incomplete
+        }
+        guard let body = EnvelopeV2.parseBody(fragment.dropFirst()),
+              let link = EnvelopeLink(secret: body.secret, restoreHeight: body.restoreHeight)
+        else {
+            throw ParseError.incomplete
+        }
+        return link
     }
 
     /// 16 lowercase hex characters.

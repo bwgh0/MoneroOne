@@ -226,7 +226,9 @@ final class PaymentLinkTests: XCTestCase {
             transactions: [tx("f", .incoming, height: 190), tx("c", .outgoing, height: 199, amount: "0.4", fee: "0.1"), tx("x", .outgoing, height: nil, status: .failed)],
             balance: Decimal(string: "0.5")!, unlocked: Decimal(string: "0.5")!, daemonHeight: 200
         )
-        XCTAssertEqual(mined, obs(conf: 10, balance: 500_000_000_000, unlocked: 500_000_000_000, spends: ["c"]))
+        var expected = obs(conf: 10, balance: 500_000_000_000, unlocked: 500_000_000_000, spends: ["c"])
+        expected.fundingHeight = 190
+        XCTAssertEqual(mined, expected)
 
         // Reopened from its cache, the kit still stores the balance from
         // before the claim: the history caps it at zero.

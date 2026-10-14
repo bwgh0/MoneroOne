@@ -63,7 +63,9 @@ struct EnvelopeSessionContent: View {
 
     private var record: EnvelopeRecord { session.record }
     private var isOwn: Bool { record.role == .sent }
-    private var hintAmount: Decimal { EnvelopeRuntime.xmr(record.amount) }
+    /// The v1 link's amount, or the balance a check saw; nil for a v2 link
+    /// not checked yet.
+    private var hintAmount: Decimal? { record.knownAmount.map(EnvelopeRuntime.xmr) }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -139,9 +141,11 @@ struct EnvelopeSessionContent: View {
                 Text("Checking the link…")
                     .font(.title2.weight(.semibold))
             }
-            Text("About \(XMRFormatter.format(hintAmount)) XMR")
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
+            if let hintAmount {
+                Text("About \(XMRFormatter.format(hintAmount)) XMR")
+                    .font(.title3.weight(.semibold))
+                    .monospacedDigit()
+            }
             if case .checking(let progress?) = session.phase, progress > 0, progress < 1 {
                 Text("Scanning blocks: \(Int(progress * 100))%")
                     .font(.subheadline)
@@ -155,9 +159,11 @@ struct EnvelopeSessionContent: View {
                 Text("On its way")
                     .font(.title2.weight(.semibold))
             }
-            Text("About \(XMRFormatter.format(hintAmount)) XMR")
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
+            if let hintAmount {
+                Text("About \(XMRFormatter.format(hintAmount)) XMR")
+                    .font(.title3.weight(.semibold))
+                    .monospacedDigit()
+            }
             Text("\(min(confirmations, EnvelopeLink.confirmationsToUnlock))/\(EnvelopeLink.confirmationsToUnlock) confirmations")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -177,8 +183,8 @@ struct EnvelopeSessionContent: View {
                 Text("Expired")
                     .font(.headline)
                     .foregroundStyle(.secondary)
-            } else if !isOwn {
-                Text("Claim by \(record.expiryDate.formatted(date: .abbreviated, time: .omitted))")
+            } else if !isOwn, let expiryDate = record.expiryDate {
+                Text("Claim by \(expiryDate.formatted(date: .abbreviated, time: .omitted))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

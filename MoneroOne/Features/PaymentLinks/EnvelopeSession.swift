@@ -143,6 +143,7 @@ final class EnvelopeSession: ObservableObject {
         )
         record.lastBalance = observation.balance
         record.confirmations = observation.fundingConfirmations
+        record.fundingHeight = observation.fundingHeight
         record.lastCheckedAt = Date()
         record.status = status
         try? store.save(record)

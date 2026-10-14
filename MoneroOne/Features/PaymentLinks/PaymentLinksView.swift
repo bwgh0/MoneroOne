@@ -123,7 +123,7 @@ struct PaymentLinkRow: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(XMRFormatter.format(EnvelopeRuntime.xmr(record.amount))) XMR")
+                Text(amountText)
                     .font(.body.weight(.semibold))
                     .monospacedDigit()
                 Text(record.createdAt.formatted(date: .abbreviated, time: .shortened))
@@ -137,7 +137,14 @@ struct PaymentLinkRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(record.role == .sent ? String(localized: "Sent") : String(localized: "Received")) \(XMRFormatter.format(EnvelopeRuntime.xmr(record.amount))) XMR, \(record.createdAt.formatted(date: .abbreviated, time: .shortened)), \(display.label)")
+        .accessibilityLabel("\(record.role == .sent ? String(localized: "Sent") : String(localized: "Received")) \(amountText), \(record.createdAt.formatted(date: .abbreviated, time: .shortened)), \(display.label)")
+    }
+
+    /// A received v2 link carries no amount: "Checking…" until a check
+    /// sees the envelope's balance.
+    private var amountText: String {
+        guard let amount = record.knownAmount else { return String(localized: "Checking…") }
+        return "\(XMRFormatter.format(EnvelopeRuntime.xmr(amount))) XMR"
     }
 }
 
@@ -299,6 +306,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 record.status = status
                 record.lastBalance = observation.balance
                 record.confirmations = observation.fundingConfirmations
+                record.fundingHeight = observation.fundingHeight
                 record.lastCheckedAt = Date()
                 try? store.save(record)
                 if status.isSettled {
@@ -318,10 +326,10 @@ final class PaymentLinksStatusChecker: ObservableObject {
     /// that dropped can run again. Once the active wallet shows the claim
     /// confirmed, the words go.
     static func forgetMinedClaimWords(store: EnvelopeStore, walletManager: WalletManager) {
-        for var record in store.received where record.status == .claimed && record.words != nil {
+        for var record in store.received where record.status == .claimed && record.link != nil {
             guard let txid = record.settleTxid,
                   walletManager.transactions.contains(where: { $0.id == txid && $0.status == .confirmed }) else { continue }
-            record.words = nil
+            record.forgetSecret()
             try? store.save(record)
         }
     }
@@ -416,7 +424,9 @@ struct PaymentLinkDetailView: View {
 
             Section {
                 detailRow(String(localized: "Created"), record.createdAt.formatted(date: .abbreviated, time: .shortened))
-                detailRow(String(localized: "Expires"), record.expiryDate.formatted(date: .abbreviated, time: .omitted))
+                if let expiryDate = record.expiryDate {
+                    detailRow(String(localized: "Expires"), expiryDate.formatted(date: .abbreviated, time: .omitted))
+                }
                 if let reserve = record.feeReserve {
                     detailRow(String(localized: "Claim fee reserve"), "\(XMRFormatter.format(EnvelopeRuntime.xmr(reserve))) XMR")
                 }

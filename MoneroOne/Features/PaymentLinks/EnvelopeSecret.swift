@@ -2,8 +2,9 @@ import Foundation
 import Security
 import MoneroKit
 
-/// The secret of one envelope: a random 25-word legacy mnemonic and the
-/// address it restores to.
+/// The secret of one envelope: a random 16-byte link secret (link format
+/// v2), the 25-word legacy mnemonic it derives, and the address that
+/// mnemonic restores to.
 ///
 /// The kit's offline helpers (`Kit.address`, `Kit.key`, `bytesToWords`) are
 /// stubs in this library build, so the envelope does the math itself with
@@ -14,6 +15,8 @@ import MoneroKit
 /// key, and wallet2 (`addressValid`, `keyValid`) confirms that the address
 /// is valid and that both secret keys belong to it.
 struct EnvelopeSecret: Equatable {
+    /// The 16 bytes that go in a v2 link.
+    let linkSecret: [UInt8]
     let words: [String]
     let address: String
 
@@ -31,22 +34,16 @@ struct EnvelopeSecret: Equatable {
         }
     }
 
-    /// A new random envelope, verified.
+    /// A new random envelope for a v2 link, verified.
     static func generate(networkType: MoneroKit.NetworkType) throws -> EnvelopeSecret {
-        var seed = [UInt8](repeating: 0, count: 32)
-        defer { seed.resetBytes() }
-        guard SecRandomCopyBytes(kSecRandomDefault, seed.count, &seed) == errSecSuccess else {
-            throw Failure.generationFailed
-        }
-        let spend = EnvelopeCrypto.reduce(seed)
-        guard EnvelopeCrypto.isCanonicalNonZero(spend),
-              let words = EnvelopeWords.encode(spend),
-              let address = EnvelopeCrypto.address(spendKey: spend, networkType: networkType)
+        guard let secret = EnvelopeV2.newSecret(),
+              let words = EnvelopeV2.words(secret: secret),
+              let address = EnvelopeCrypto.address(spendKey: EnvelopeV2.spendKey(secret: secret), networkType: networkType)
         else {
             throw Failure.generationFailed
         }
         try verify(words: words, address: address, networkType: networkType)
-        return EnvelopeSecret(words: words, address: address)
+        return EnvelopeSecret(linkSecret: secret, words: words, address: address)
     }
 
     /// Restores `words` and checks that they give `address`: 25 words that

@@ -149,9 +149,10 @@ struct EnvelopeSessionContent: View {
                     .font(.title2.weight(.semibold))
             }
             if let hintAmount {
-                Text("About \(XMRFormatter.format(hintAmount)) XMR")
+                Text("~\(XMRFormatter.format(hintAmount)) XMR", comment: "Claim sheet: the link's amount from its last check, an estimate")
                     .font(.title3.weight(.semibold))
                     .monospacedDigit()
+                    .accessibilityLabel(Text("About \(XMRFormatter.format(hintAmount)) XMR", comment: "VoiceOver: the link's estimated amount"))
             }
             if case .checking(let progress?) = session.phase, progress > 0, progress < 1 {
                 Text("Scanning blocks: \(Int(progress * 100))%")
@@ -167,9 +168,10 @@ struct EnvelopeSessionContent: View {
                     .font(.title2.weight(.semibold))
             }
             if let hintAmount {
-                Text("About \(XMRFormatter.format(hintAmount)) XMR")
+                Text("~\(XMRFormatter.format(hintAmount)) XMR", comment: "Claim sheet: the link's amount from its last check, an estimate")
                     .font(.title3.weight(.semibold))
                     .monospacedDigit()
+                    .accessibilityLabel(Text("About \(XMRFormatter.format(hintAmount)) XMR", comment: "VoiceOver: the link's estimated amount"))
             }
             Text("\(min(confirmations, EnvelopeLink.confirmationsToUnlock))/\(EnvelopeLink.confirmationsToUnlock) confirmations")
                 .font(.subheadline)

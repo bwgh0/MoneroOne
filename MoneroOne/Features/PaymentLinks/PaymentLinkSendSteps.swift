@@ -159,14 +159,14 @@ enum PaymentLinkFunder {
 
 // MARK: - Address step (link mode)
 
-/// Send's Link segment: no address, just who can claim.
-struct PaymentLinkRecipientCard: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Recipient")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+/// Send's recipient when Link is chosen: a token in place of the address
+/// field, the same height, so nothing below it moves. ✕ brings the field
+/// back with the address typed before.
+struct PaymentLinkRecipientToken: View {
+    let onRemove: () -> Void
 
+    var body: some View {
+        HStack(spacing: 12) {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
@@ -176,21 +176,33 @@ struct PaymentLinkRecipientCard: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.brand)
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Anyone with the link")
-                        .font(.headline)
-                    Text("You get a link to send in a chat. The first person to open it can claim the money.")
-                        .font(.subheadline)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Payment link")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Anyone with the link can claim it")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding()
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(12)
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Recipient, payment link. Anyone with the link can claim it")
+            .accessibilityIdentifier("send.linkToken")
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove payment link")
         }
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .padding(.vertical, 4)
+        .frame(minHeight: 54)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

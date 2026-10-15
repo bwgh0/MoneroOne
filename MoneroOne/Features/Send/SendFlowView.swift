@@ -47,20 +47,20 @@ struct SendFlowView: View {
     /// software wallets take the direct `walletManager.send` path.
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
 
-    // Payment links (Features/PaymentLinks): the Link segment funds a new
+    // Payment links (Features/PaymentLinks): the Link recipient funds a new
     // envelope instead of paying an address.
     @State private var isLinkMode = false
     @State private var linkDraft: PaymentLinkDraft?
     @State private var linkRecordId: String?
 
-    /// The Address | Link control. Link clears Send All: a link holds the
-    /// amount typed in.
-    private var recipientMode: Binding<SendRecipientMode> {
+    /// Link as the recipient. It clears Send All: a link holds the amount
+    /// typed in.
+    private var linkModeBinding: Binding<Bool> {
         Binding(
-            get: { isLinkMode ? .link : .address },
-            set: { mode in
-                if mode == .link { isSendingAll = false }
-                isLinkMode = mode == .link
+            get: { isLinkMode },
+            set: { isOn in
+                if isOn { isSendingAll = false }
+                isLinkMode = isOn
             }
         )
     }
@@ -117,6 +117,8 @@ struct SendFlowView: View {
             }
             .sheet(isPresented: $showScanner) {
                 QRScannerView { scannedAddress, scannedAmount in
+                    // A scanned address replaces a chosen link.
+                    isLinkMode = false
                     recipientAddress = scannedAddress
                     if let amount = scannedAmount {
                         amountString = amount
@@ -268,7 +270,7 @@ struct SendFlowView: View {
             SendAddressStep(
                 recipientAddress: $recipientAddress,
                 showScanner: $showScanner,
-                mode: recipientMode,
+                isLinkMode: linkModeBinding,
                 isConnected: networkMonitor.isConnected,
                 isValidAddress: walletManager.isValidAddress(recipientAddress),
                 onContinue: {

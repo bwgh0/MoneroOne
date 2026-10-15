@@ -5,9 +5,6 @@ import SwiftUI
 struct GlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.AllCases: RandomAccessCollection {
     @Binding var selection: T
     var accessibilityLabel: ((T) -> String)? = nil
-    /// A hint that says what a segment does, in place of the default
-    /// "Double tap to select" (nil keeps the default).
-    var accessibilityHint: ((T) -> String?)? = nil
     let label: (T) -> String
 
     @Namespace private var namespace
@@ -35,7 +32,7 @@ struct GlassSegmentedPicker<T: Hashable & CaseIterable>: View where T.AllCases: 
                 .buttonStyle(.plain)
                 .accessibilityLabel(accessibilityLabel?(item) ?? label(item))
                 .accessibilityAddTraits(selection == item ? .isSelected : [])
-                .accessibilityHint(accessibilityHint?(item) ?? (selection == item ? "Currently selected" : "Double tap to select"))
+                .accessibilityHint(selection == item ? "Currently selected" : "Double tap to select")
             }
         }
         .padding(4)

@@ -290,6 +290,16 @@ class NodeManager: ObservableObject {
         saveCustomNodes()
     }
 
+    /// True when an edit changes how the wallet reaches the node. The kit
+    /// reads the URL and login only at start, so a change to either needs a
+    /// restart. A rename keeps the connection. An empty login and no login
+    /// are the same, as in `NodeCredentialStore`.
+    static func needsReconnect(from old: MoneroNode, to new: MoneroNode) -> Bool {
+        old.url != new.url
+            || (old.login ?? "") != (new.login ?? "")
+            || (old.password ?? "") != (new.password ?? "")
+    }
+
     func setProxy(_ address: String) {
         let trimmed = address.trimmingCharacters(in: .whitespaces)
         proxyAddress = trimmed

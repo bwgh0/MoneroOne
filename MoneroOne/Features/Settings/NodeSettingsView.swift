@@ -112,14 +112,22 @@ struct NodeSettingsView: View {
         }
         .sheet(item: $editingNode) { node in
             EditCustomNodeView(node: node) { name, url, login, password in
+                let updatedNode = MoneroNode(name: name, url: url, login: login, password: password)
+                let needsReconnect = NodeManager.needsReconnect(from: node, to: updatedNode)
                 nodeManager.updateCustomNode(oldURL: node.url, name: name, url: url, login: login, password: password)
                 if nodeManager.selectedNode.id == node.id {
-                    let updatedNode = MoneroNode(name: name, url: url, login: login, password: password)
+                    // Keeps the selection on the node with its new name.
                     nodeManager.selectNode(updatedNode)
-                    walletManager.setNode(url: url, login: login, password: password)
+                    if needsReconnect {
+                        walletManager.setNode(url: url, login: login, password: password)
+                    }
                 }
-                Task {
-                    await nodeManager.refreshStats()
+                // Measure again only after a connection change. A measurement
+                // re-runs auto-select, which can switch nodes.
+                if needsReconnect {
+                    Task {
+                        await nodeManager.refreshStats()
+                    }
                 }
             }
         }

@@ -112,4 +112,35 @@ final class NodeManagerTests: XCTestCase {
         XCTAssertEqual(newManager.customNodes.count, 1, "Custom nodes should persist")
         XCTAssertEqual(newManager.customNodes[0].name, "Persistent")
     }
+
+    // MARK: - Edit Reconnect Tests
+
+    private let editedNode = MoneroNode(name: "Home", url: "https://home.node:18089", login: "user", password: "pass")
+
+    func testRenameDoesNotNeedReconnect() {
+        let renamed = MoneroNode(name: "Basement", url: editedNode.url, login: "user", password: "pass")
+        XCTAssertFalse(NodeManager.needsReconnect(from: editedNode, to: renamed),
+                       "A rename alone should keep the wallet on its connection")
+    }
+
+    func testURLChangeNeedsReconnect() {
+        let moved = MoneroNode(name: editedNode.name, url: "https://other.node:18089", login: "user", password: "pass")
+        XCTAssertTrue(NodeManager.needsReconnect(from: editedNode, to: moved))
+    }
+
+    func testLoginChangeNeedsReconnect() {
+        let newUser = MoneroNode(name: editedNode.name, url: editedNode.url, login: "admin", password: "pass")
+        let newPassword = MoneroNode(name: editedNode.name, url: editedNode.url, login: "user", password: "secret")
+        let noLogin = MoneroNode(name: editedNode.name, url: editedNode.url)
+        XCTAssertTrue(NodeManager.needsReconnect(from: editedNode, to: newUser))
+        XCTAssertTrue(NodeManager.needsReconnect(from: editedNode, to: newPassword))
+        XCTAssertTrue(NodeManager.needsReconnect(from: editedNode, to: noLogin))
+    }
+
+    func testEmptyLoginMatchesNoLogin() {
+        // The edit sheet saves an empty field as nil.
+        let stored = MoneroNode(name: "Open", url: "https://open.node:18089", login: "", password: "")
+        let renamed = MoneroNode(name: "Open Node", url: stored.url)
+        XCTAssertFalse(NodeManager.needsReconnect(from: stored, to: renamed))
+    }
 }

@@ -13,6 +13,8 @@ struct MoneroNode: Identifiable, Codable, Equatable {
     let name: String
     let url: String
     let isTrusted: Bool
+    /// Held in memory only. A custom node's login lives in the Keychain
+    /// (`NodeCredentialStore`), and `encode(to:)` leaves it out.
     let login: String?
     let password: String?
 
@@ -27,6 +29,82 @@ struct MoneroNode: Identifiable, Codable, Equatable {
     var hasCredentials: Bool {
         login != nil && !(login?.isEmpty ?? true)
     }
+
+    var credentials: NodeCredentials {
+        NodeCredentials(login: login, password: password)
+    }
+
+    /// The same node with another login.
+    func with(_ credentials: NodeCredentials) -> MoneroNode {
+        MoneroNode(name: name, url: url, isTrusted: isTrusted, login: credentials.login, password: credentials.password)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, url, isTrusted, login, password
+    }
+
+    // Decoding still reads `login` and `password`. Lists that earlier builds
+    // saved hold them in plain text, and the launch migration moves them
+    // into the Keychain.
+
+    /// Writes the name, the URL and the trust flag only, so no encoded node
+    /// carries a login.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(url, forKey: .url)
+        try container.encode(isTrusted, forKey: .isTrusted)
+    }
+}
+
+extension MoneroNode: CustomStringConvertible, CustomDebugStringConvertible {
+    // Leaves the login out, so a log line that prints a node cannot leak it.
+    var description: String {
+        "MoneroNode(name: \(name), url: \(url), hasCredentials: \(hasCredentials))"
+    }
+
+    var debugDescription: String { description }
+}
+
+/// A custom node as the UserDefaults list stores it: the same fields that
+/// earlier builds wrote. It carries a login only while that login's
+/// Keychain write has not gone through.
+private struct StoredCustomNode: Encodable {
+    let name: String
+    let url: String
+    let isTrusted: Bool
+    let login: String?
+    let password: String?
+
+    init(_ node: MoneroNode, keepsLogin: Bool) {
+        name = node.name
+        url = node.url
+        isTrusted = node.isTrusted
+        login = keepsLogin ? node.credentials.login : nil
+        password = keepsLogin ? node.credentials.password : nil
+    }
+}
+
+/// A node's RPC login and password. Empty fields count as none, as in
+/// `NodeCredentialStore`.
+struct NodeCredentials: Equatable {
+    let login: String?
+    let password: String?
+
+    init(login: String?, password: String?) {
+        self.login = login?.isEmpty == false ? login : nil
+        self.password = password?.isEmpty == false ? password : nil
+    }
+
+    static let none = NodeCredentials(login: nil, password: nil)
+
+    var isEmpty: Bool { login == nil && password == nil }
+}
+
+extension NodeCredentials: CustomStringConvertible, CustomDebugStringConvertible {
+    // Never prints the values, so a log line or a test failure cannot leak them.
+    var description: String { isEmpty ? "NodeCredentials(none)" : "NodeCredentials(***)" }
+    var debugDescription: String { description }
 }
 
 struct NodeStats {
@@ -64,24 +142,127 @@ struct NodeStats {
 // MARK: - Secure Node Credential Storage
 
 /// Stores node RPC credentials in the Keychain instead of UserDefaults.
+///
+/// It keeps two kinds of item in one service:
+/// - The selected node's login (`nodeLogin` and `nodePassword`, one pair per
+///   network). The wallet reads it when it starts.
+/// - One item per custom node, which holds that node's login and password.
+///   The node list in UserDefaults keeps only the name, the URL and the
+///   trust flag.
 struct NodeCredentialStore {
     private static let service = "one.monero.MoneroOne.nodeCredentials"
 
-    static func save(login: String?, password: String?, isTestnet: Bool) {
-        let loginKey = isTestnet ? "testnetNodeLogin" : "nodeLogin"
-        let passwordKey = isTestnet ? "testnetNodePassword" : "nodePassword"
-        set(loginKey, value: login)
-        set(passwordKey, value: password)
+    /// Item access by account within the store's service. `live` is the
+    /// Keychain. Tests pass a fake that can fail a write.
+    struct Keychain {
+        var read: (_ account: String) -> Data?
+        /// True when the write went through.
+        var write: (_ account: String, _ data: Data) -> Bool
+        var delete: (_ account: String) -> Void
+
+        /// Generic-password items that open after the first unlock and stay
+        /// on this device. A write updates the item in place, so a write
+        /// that fails leaves the earlier value.
+        static let live = Keychain(
+            read: { account in
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: service,
+                    kSecAttrAccount as String: account,
+                    kSecReturnData as String: true,
+                    kSecMatchLimit as String: kSecMatchLimitOne,
+                ]
+                var result: AnyObject?
+                let status = SecItemCopyMatching(query as CFDictionary, &result)
+                guard status == errSecSuccess else { return nil }
+                return result as? Data
+            },
+            write: { account, data in
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: service,
+                    kSecAttrAccount as String: account,
+                ]
+                let attributes: [String: Any] = [
+                    kSecValueData as String: data,
+                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                ]
+                var status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+                if status == errSecItemNotFound {
+                    let addQuery = query.merging(attributes) { _, new in new }
+                    status = SecItemAdd(addQuery as CFDictionary, nil)
+                }
+                return status == errSecSuccess
+            },
+            delete: { account in
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: service,
+                    kSecAttrAccount as String: account,
+                ]
+                SecItemDelete(query as CFDictionary)
+            }
+        )
     }
 
-    static func load(isTestnet: Bool) -> (login: String?, password: String?) {
+    static func save(login: String?, password: String?, isTestnet: Bool, keychain: Keychain = .live) {
         let loginKey = isTestnet ? "testnetNodeLogin" : "nodeLogin"
         let passwordKey = isTestnet ? "testnetNodePassword" : "nodePassword"
-        return (get(loginKey), get(passwordKey))
+        set(loginKey, value: login, keychain: keychain)
+        set(passwordKey, value: password, keychain: keychain)
     }
 
-    static func clear(isTestnet: Bool) {
-        save(login: nil, password: nil, isTestnet: isTestnet)
+    static func load(isTestnet: Bool, keychain: Keychain = .live) -> (login: String?, password: String?) {
+        let loginKey = isTestnet ? "testnetNodeLogin" : "nodeLogin"
+        let passwordKey = isTestnet ? "testnetNodePassword" : "nodePassword"
+        return (get(loginKey, keychain: keychain), get(passwordKey, keychain: keychain))
+    }
+
+    static func clear(isTestnet: Bool, keychain: Keychain = .live) {
+        save(login: nil, password: nil, isTestnet: isTestnet, keychain: keychain)
+    }
+
+    // MARK: Custom Node Logins
+
+    /// The item of one custom node: the network, then the URL exactly as the
+    /// node list stores it. The app matches nodes by that exact string
+    /// everywhere else (node ids, the selected URL), so a looser form could
+    /// give two listed nodes one item.
+    static func nodeAccount(url: String, isTestnet: Bool) -> String {
+        (isTestnet ? "node.testnet." : "node.mainnet.") + url
+    }
+
+    /// The login stored for a custom node, or nil when it has none.
+    static func loadNode(url: String, isTestnet: Bool, keychain: Keychain = .live) -> NodeCredentials? {
+        guard let data = keychain.read(nodeAccount(url: url, isTestnet: isTestnet)),
+              let item = try? JSONDecoder().decode(NodeLoginItem.self, from: data) else { return nil }
+        let credentials = NodeCredentials(login: item.login, password: item.password)
+        return credentials.isEmpty ? nil : credentials
+    }
+
+    /// Stores a custom node's login and password as one item, then reads the
+    /// item back. True only when that read returns the same login. A node
+    /// with no login gets its item removed.
+    @discardableResult
+    static func saveNode(url: String, credentials: NodeCredentials, isTestnet: Bool, keychain: Keychain = .live) -> Bool {
+        guard !credentials.isEmpty else {
+            removeNode(url: url, isTestnet: isTestnet, keychain: keychain)
+            return loadNode(url: url, isTestnet: isTestnet, keychain: keychain) == nil
+        }
+        let item = NodeLoginItem(login: credentials.login, password: credentials.password)
+        guard let data = try? JSONEncoder().encode(item) else { return false }
+        _ = keychain.write(nodeAccount(url: url, isTestnet: isTestnet), data)
+        return loadNode(url: url, isTestnet: isTestnet, keychain: keychain) == credentials
+    }
+
+    static func removeNode(url: String, isTestnet: Bool, keychain: Keychain = .live) {
+        keychain.delete(nodeAccount(url: url, isTestnet: isTestnet))
+    }
+
+    /// The data of a custom node's item.
+    private struct NodeLoginItem: Codable {
+        let login: String?
+        let password: String?
     }
 
     /// One-time migration from UserDefaults to Keychain
@@ -103,40 +284,18 @@ struct NodeCredentialStore {
         UserDefaults.standard.set(true, forKey: "nodeCredsMigratedToKeychain")
     }
 
-    private static func set(_ key: String, value: String?) {
-        let account = key
+    private static func set(_ key: String, value: String?, keychain: Keychain) {
         // Delete existing
-        let deleteQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        SecItemDelete(deleteQuery as CFDictionary)
+        keychain.delete(key)
 
         guard let value = value, !value.isEmpty,
               let data = value.data(using: .utf8) else { return }
 
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        SecItemAdd(addQuery as CFDictionary, nil)
+        _ = keychain.write(key, data)
     }
 
-    private static func get(_ key: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
+    private static func get(_ key: String, keychain: Keychain) -> String? {
+        guard let data = keychain.read(key) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 }
@@ -182,6 +341,9 @@ class NodeManager: ObservableObject {
     private var uptimeCacheTime: Date?
     private let uptimeCacheDuration: TimeInterval = 3600 // 1 hour
 
+    /// Where node logins live. Tests pass a fake.
+    private let keychain: NodeCredentialStore.Keychain
+
     static let defaultNodes: [MoneroNode] = [
         MoneroNode(name: "Monero One", url: "https://node.monero.one:443"),
         MoneroNode(name: "Hashvault", url: "https://nodes.hashvault.pro:18081"),
@@ -207,9 +369,15 @@ class NodeManager: ObservableObject {
     #endif
 
     private var selectedNodeKey: String {
-        isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
+        Self.selectedNodeKey(isTestnet: isTestnet)
     }
     private var customNodesKey: String {
+        Self.customNodesKey(isTestnet: isTestnet)
+    }
+    private static func selectedNodeKey(isTestnet: Bool) -> String {
+        isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL"
+    }
+    private static func customNodesKey(isTestnet: Bool) -> String {
         isTestnet ? "customTestnetNodes" : "customNodes"
     }
     private var autoSelectKey: String {
@@ -223,9 +391,13 @@ class NodeManager: ObservableObject {
         isTestnet ? Self.defaultTestnetNodes : Self.defaultNodes
     }
 
-    init() {
-        // Migrate node credentials from UserDefaults to Keychain
+    init(keychain: NodeCredentialStore.Keychain = .live) {
+        self.keychain = keychain
+
+        // Migrate node credentials from UserDefaults to Keychain. The app
+        // also runs both at launch; here they are quick no-ops.
         NodeCredentialStore.migrateFromUserDefaultsIfNeeded()
+        Self.migrateCustomNodeLogins(keychain: keychain)
 
         // Determine which node list to use based on network
         let testnet = UserDefaults.standard.bool(forKey: "isTestnet")
@@ -263,18 +435,25 @@ class NodeManager: ObservableObject {
         selectedNode = node
         UserDefaults.standard.set(node.url, forKey: selectedNodeKey)
         // Persist credentials securely in Keychain
-        NodeCredentialStore.save(login: node.login, password: node.password, isTestnet: isTestnet)
+        NodeCredentialStore.save(login: node.login, password: node.password, isTestnet: isTestnet, keychain: keychain)
     }
 
     func addCustomNode(name: String, url: String, isTrusted: Bool = false, login: String? = nil, password: String? = nil) {
-        let node = MoneroNode(name: name, url: url, isTrusted: isTrusted, login: login, password: password)
-        customNodes.append(node)
+        var credentials = NodeCredentials(login: login, password: password)
+        // A copy added with no login takes the login its URL already has.
+        if credentials.isEmpty, let listed = listedLogin(of: url) {
+            credentials = listed
+        }
+        customNodes.append(MoneroNode(name: name, url: url, isTrusted: isTrusted))
+        setLogin(credentials, of: url)
         saveCustomNodes()
     }
 
     func removeCustomNode(_ node: MoneroNode) {
         customNodes.removeAll { $0.id == node.id }
         saveCustomNodes()
+        // No listed node has this URL now, so its login goes too.
+        NodeCredentialStore.removeNode(url: node.url, isTestnet: isTestnet, keychain: keychain)
 
         // If removed node was selected, switch to default
         if selectedNode.id == node.id {
@@ -284,10 +463,66 @@ class NodeManager: ObservableObject {
         }
     }
 
-    func updateCustomNode(oldURL: String, name: String, url: String, login: String? = nil, password: String? = nil) {
-        guard let index = customNodes.firstIndex(where: { $0.url == oldURL }) else { return }
-        customNodes[index] = MoneroNode(name: name, url: url, login: login, password: password)
+    /// Returns the saved node, which has the login its URL now has.
+    @discardableResult
+    func updateCustomNode(oldURL: String, name: String, url: String, login: String? = nil, password: String? = nil) -> MoneroNode? {
+        guard let index = customNodes.firstIndex(where: { $0.url == oldURL }) else { return nil }
+        var others = customNodes
+        others.remove(at: index)
+        var credentials = NodeCredentials(login: login, password: password)
+        // A node moved with no login onto a listed URL takes that URL's login.
+        // On the same URL, an empty login removes the login from every copy.
+        if credentials.isEmpty, url != oldURL, let listed = listedLogin(of: url) {
+            credentials = listed
+        }
+        customNodes[index] = MoneroNode(name: name, url: url)
+        let stored = setLogin(credentials, of: url)
         saveCustomNodes()
+        // The login moves with the URL. The old item goes only after the new
+        // one holds the login, and only when no other listed node uses it.
+        if url != oldURL, stored, !others.contains(where: { $0.url == oldURL }) {
+            NodeCredentialStore.removeNode(url: oldURL, isTestnet: isTestnet, keychain: keychain)
+        }
+        return customNodes[index]
+    }
+
+    /// The login of the listed copies of a URL, or nil when no copy has the
+    /// URL. When the copies have none, the item's login: a Keychain read that
+    /// failed when the list loaded leaves the copies without it.
+    private func listedLogin(of url: String) -> NodeCredentials? {
+        guard let listed = customNodes.first(where: { $0.url == url }) else { return nil }
+        guard listed.credentials.isEmpty else { return listed.credentials }
+        return NodeCredentialStore.loadNode(url: url, isTestnet: isTestnet, keychain: keychain) ?? NodeCredentials.none
+    }
+
+    /// A URL is one node: ids, the selection and deletes all go by URL. So
+    /// every listed copy of a URL has the same login.
+    ///
+    /// Writes the login of a URL to its Keychain item, or removes the item
+    /// when the login is empty, then gives every listed copy of the URL that
+    /// login. False when the item does not hold the login; `saveCustomNodes`
+    /// then keeps the login in the list.
+    @discardableResult
+    private func setLogin(_ credentials: NodeCredentials, of url: String) -> Bool {
+        let stored = NodeCredentialStore.saveNode(url: url, credentials: credentials, isTestnet: isTestnet, keychain: keychain)
+        customNodes = customNodes.map { $0.url == url ? $0.with(credentials) : $0 }
+        // The wallet reads the selected node's login when it starts, and the
+        // launch migration lets that login win. So it follows the URL's login.
+        if url == selectedNode.url {
+            NodeCredentialStore.save(login: credentials.login, password: credentials.password, isTestnet: isTestnet, keychain: keychain)
+        }
+        return stored
+    }
+
+    /// The node for the edit sheet. Its login comes from the Keychain: the
+    /// list loads it from there, and this reads the item again when the
+    /// listed copy has none.
+    func nodeForEditing(_ node: MoneroNode) -> MoneroNode {
+        guard node.credentials.isEmpty,
+              let stored = NodeCredentialStore.loadNode(url: node.url, isTestnet: isTestnet, keychain: keychain) else {
+            return node
+        }
+        return node.with(stored)
     }
 
     /// True when an edit changes how the wallet reaches the node. The kit
@@ -298,6 +533,21 @@ class NodeManager: ObservableObject {
         old.url != new.url
             || (old.login ?? "") != (new.login ?? "")
             || (old.password ?? "") != (new.password ?? "")
+    }
+
+    /// `needsReconnect(from:to:)` against the Keychain copy of the login.
+    /// For the selected node, that is the login the kit read at start. So
+    /// when a restored phone has lost that login, saving the node's login
+    /// again reconnects.
+    func needsReconnect(editing node: MoneroNode, to edited: MoneroNode) -> Bool {
+        let stored: NodeCredentials
+        if selectedNode.id == node.id {
+            let kit = NodeCredentialStore.load(isTestnet: isTestnet, keychain: keychain)
+            stored = NodeCredentials(login: kit.login, password: kit.password)
+        } else {
+            stored = NodeCredentialStore.loadNode(url: node.url, isTestnet: isTestnet, keychain: keychain) ?? .none
+        }
+        return Self.needsReconnect(from: node.with(stored), to: edited)
     }
 
     func setProxy(_ address: String) {
@@ -427,12 +677,127 @@ class NodeManager: ObservableObject {
               let nodes = try? JSONDecoder().decode([MoneroNode].self, from: data) else {
             return
         }
-        customNodes = nodes
+        // Logins come from the Keychain, one per URL. A login still in the
+        // list is waiting for its Keychain write, so it is newer than the
+        // item. When copies differ, the last one wins, as in the migration.
+        var waiting: [String: NodeCredentials] = [:]
+        for node in nodes where !node.credentials.isEmpty {
+            waiting[node.url] = node.credentials
+        }
+        customNodes = nodes.map { node in
+            node.with(waiting[node.url]
+                ?? NodeCredentialStore.loadNode(url: node.url, isTestnet: isTestnet, keychain: keychain)
+                ?? .none)
+        }
     }
 
     private func saveCustomNodes() {
-        guard let data = try? JSONEncoder().encode(customNodes) else { return }
+        // The list keeps a login only while its URL's Keychain item does not
+        // hold it, so a failed write loses nothing. The launch migration
+        // moves it later. No copy keeps a login once the item holds the
+        // login of any copy of its URL.
+        let inKeychain = Set(customNodes.filter { node in
+            !node.credentials.isEmpty
+                && NodeCredentialStore.loadNode(url: node.url, isTestnet: isTestnet, keychain: keychain) == node.credentials
+        }.map(\.url))
+        let stored = customNodes.map { node in
+            StoredCustomNode(node, keepsLogin: !node.credentials.isEmpty && !inKeychain.contains(node.url))
+        }
+        guard let data = try? JSONEncoder().encode(stored) else { return }
         UserDefaults.standard.set(data, forKey: customNodesKey)
+    }
+
+    // MARK: - Login Migration
+
+    /// Moves custom node logins out of the UserDefaults node lists, where
+    /// earlier builds kept them in plain text, into one Keychain item per
+    /// URL. Runs at launch, for both networks.
+    ///
+    /// A login leaves the list only after a read of its item returns it.
+    /// When a write fails, the login stays in the list and the next launch
+    /// tries again, so no path loses a login. Once no list holds a login, a
+    /// run only reads the lists and the selected node's login.
+    static func migrateCustomNodeLogins(defaults: UserDefaults = .standard, keychain: NodeCredentialStore.Keychain = .live) {
+        for isTestnet in [false, true] {
+            migrateCustomNodeLogins(isTestnet: isTestnet, defaults: defaults, keychain: keychain)
+        }
+    }
+
+    private static func migrateCustomNodeLogins(isTestnet: Bool, defaults: UserDefaults, keychain: NodeCredentialStore.Keychain) {
+        let listKey = customNodesKey(isTestnet: isTestnet)
+        // Plain JSON objects, so the rewrite removes the two login fields and
+        // changes nothing else.
+        guard let data = defaults.data(forKey: listKey),
+              var entries = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return }
+
+        let selectedURL = defaults.string(forKey: selectedNodeKey(isTestnet: isTestnet))
+        let kit = NodeCredentialStore.load(isTestnet: isTestnet, keychain: keychain)
+        let kitCredentials = NodeCredentials(login: kit.login, password: kit.password)
+
+        if moveLogins(of: &entries, selectedURL: selectedURL, kitCredentials: kitCredentials,
+                      isTestnet: isTestnet, keychain: keychain),
+           let newData = try? JSONSerialization.data(withJSONObject: entries) {
+            defaults.set(newData, forKey: listKey)
+        }
+
+        // After a downgrade, an earlier build clears the selected node's
+        // login when the user selects or saves that node, because its list
+        // has no logins. The node's item stays, so it gives the wallet the
+        // login back. Only when the item holds the URL's login: no copy may
+        // still wait for its write.
+        if kitCredentials.isEmpty, let selectedURL {
+            let copies = entries.filter { $0["url"] as? String == selectedURL }
+            if !copies.isEmpty, !copies.contains(where: holdsLogin),
+               let stored = NodeCredentialStore.loadNode(url: selectedURL, isTestnet: isTestnet, keychain: keychain) {
+                NodeCredentialStore.save(login: stored.login, password: stored.password, isTestnet: isTestnet, keychain: keychain)
+            }
+        }
+    }
+
+    /// Moves the logins that `entries` hold into the Keychain, one per URL,
+    /// and removes them from every copy of a URL once its item holds the
+    /// login. True when it changed `entries`.
+    private static func moveLogins(of entries: inout [[String: Any]], selectedURL: String?, kitCredentials: NodeCredentials,
+                                   isTestnet: Bool, keychain: NodeCredentialStore.Keychain) -> Bool {
+        var urls: [String] = []
+        var listed: [String: NodeCredentials] = [:]
+        for entry in entries where holdsLogin(entry) {
+            guard let url = entry["url"] as? String else { continue }
+            if !urls.contains(url) { urls.append(url) }
+            let credentials = NodeCredentials(login: entry["login"] as? String, password: entry["password"] as? String)
+            // When copies of a URL differ, the last one wins: Add appends, so it is the newest.
+            if !credentials.isEmpty { listed[url] = credentials }
+        }
+
+        var moved: Set<String> = []
+        for url in urls {
+            // A URL with only empty fields has no secret, and the fields simply go.
+            if let login = listed[url] {
+                // The wallet connects with the selected node's Keychain login,
+                // so that login wins. Elsewhere the list's login wins over the
+                // item: only an earlier build or a failed write puts a login
+                // in the list, so it is the newer one.
+                let wanted = url == selectedURL && !kitCredentials.isEmpty ? kitCredentials : login
+                let inKeychain = NodeCredentialStore.loadNode(url: url, isTestnet: isTestnet, keychain: keychain) == wanted
+                    || NodeCredentialStore.saveNode(url: url, credentials: wanted, isTestnet: isTestnet, keychain: keychain)
+                guard inKeychain else { continue }
+            }
+            moved.insert(url)
+        }
+
+        var changed = false
+        for index in entries.indices where holdsLogin(entries[index]) {
+            guard let url = entries[index]["url"] as? String, moved.contains(url) else { continue }
+            entries[index].removeValue(forKey: "login")
+            entries[index].removeValue(forKey: "password")
+            changed = true
+        }
+        return changed
+    }
+
+    /// True when a list entry has a login or a password field, even an empty one.
+    private static func holdsLogin(_ entry: [String: Any]) -> Bool {
+        entry["login"] != nil || entry["password"] != nil
     }
 
     // MARK: - Uptime Stats

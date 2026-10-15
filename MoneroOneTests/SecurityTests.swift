@@ -395,3 +395,70 @@ final class NodeManagerSafetyTests: XCTestCase {
         XCTAssertFalse(manager.selectedNode.url.isEmpty)
     }
 }
+
+// MARK: - Node Login Keychain Safety Tests
+
+final class NodeLoginKeychainSafetyTests: XCTestCase {
+
+    private let url = "https://keychain-test.node.invalid:18089"
+    private let credentials = NodeCredentials(login: "alice", password: "hunter2")
+
+    override func setUp() {
+        NodeCredentialStore.removeNode(url: url, isTestnet: false)
+        NodeCredentialStore.removeNode(url: url, isTestnet: true)
+    }
+
+    override func tearDown() {
+        NodeCredentialStore.removeNode(url: url, isTestnet: false)
+        NodeCredentialStore.removeNode(url: url, isTestnet: true)
+    }
+
+    func testKeychainRoundTrip() {
+        XCTAssertTrue(NodeCredentialStore.saveNode(url: url, credentials: credentials, isTestnet: false))
+        XCTAssertEqual(NodeCredentialStore.loadNode(url: url, isTestnet: false), credentials)
+        XCTAssertNil(NodeCredentialStore.loadNode(url: url, isTestnet: true), "Each network has its own items")
+
+        let changed = NodeCredentials(login: "alice", password: "changed")
+        XCTAssertTrue(NodeCredentialStore.saveNode(url: url, credentials: changed, isTestnet: false))
+        XCTAssertEqual(NodeCredentialStore.loadNode(url: url, isTestnet: false), changed)
+
+        NodeCredentialStore.removeNode(url: url, isTestnet: false)
+        XCTAssertNil(NodeCredentialStore.loadNode(url: url, isTestnet: false))
+    }
+
+    func testNodeLoginStaysOnThisDevice() throws {
+        XCTAssertTrue(NodeCredentialStore.saveNode(url: url, credentials: credentials, isTestnet: false))
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "one.monero.MoneroOne.nodeCredentials",
+            kSecAttrAccount as String: NodeCredentialStore.nodeAccount(url: url, isTestnet: false),
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        XCTAssertEqual(SecItemCopyMatching(query as CFDictionary, &result), errSecSuccess)
+        let attributes = try XCTUnwrap(result as? [String: Any])
+        XCTAssertEqual(attributes[kSecAttrAccessible as String] as? String,
+                       kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String,
+                       "A node login must not leave the device")
+    }
+
+    func testEncodedNodeHoldsNoLogin() throws {
+        let node = MoneroNode(name: "Home", url: "https://home.node:18089", login: "alice", password: "hunter2")
+
+        let json = String(decoding: try JSONEncoder().encode(node), as: UTF8.self)
+
+        XCTAssertFalse(json.contains("alice"))
+        XCTAssertFalse(json.contains("hunter2"))
+    }
+
+    func testPrintedNodeHoldsNoLogin() {
+        let node = MoneroNode(name: "Home", url: "https://home.node:18089", login: "alice", password: "hunter2")
+
+        for text in [String(describing: node), String(reflecting: node), String(describing: node.credentials)] {
+            XCTAssertFalse(text.contains("alice"))
+            XCTAssertFalse(text.contains("hunter2"))
+        }
+    }
+}

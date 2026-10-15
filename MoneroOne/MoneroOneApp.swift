@@ -60,6 +60,11 @@ struct MoneroOneApp: App {
         KeychainStorage().migrateKeychainAccessibilityIfNeeded()
         KeychainStorage().migrateRateLimitIfNeeded()
 
+        // Move node logins out of plain-text UserDefaults into the Keychain,
+        // before any wallet starts. Quick no-ops once nothing is left to move.
+        NodeCredentialStore.migrateFromUserDefaultsIfNeeded()
+        NodeManager.migrateCustomNodeLogins()
+
         // Register background task for price checking
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.priceCheckTaskId,

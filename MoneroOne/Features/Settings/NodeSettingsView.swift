@@ -113,13 +113,15 @@ struct NodeSettingsView: View {
         .sheet(item: $editingNode) { node in
             EditCustomNodeView(node: node) { name, url, login, password in
                 let updatedNode = MoneroNode(name: name, url: url, login: login, password: password)
-                let needsReconnect = NodeManager.needsReconnect(from: node, to: updatedNode)
-                nodeManager.updateCustomNode(oldURL: node.url, name: name, url: url, login: login, password: password)
+                // Compared with the Keychain copy, which is what the kit reads.
+                let needsReconnect = nodeManager.needsReconnect(editing: node, to: updatedNode)
+                // The saved node has the one login its URL now has.
+                let saved = nodeManager.updateCustomNode(oldURL: node.url, name: name, url: url, login: login, password: password) ?? updatedNode
                 if nodeManager.selectedNode.id == node.id {
                     // Keeps the selection on the node with its new name.
-                    nodeManager.selectNode(updatedNode)
+                    nodeManager.selectNode(saved)
                     if needsReconnect {
-                        walletManager.setNode(url: url, login: login, password: password)
+                        walletManager.setNode(url: url, login: saved.login, password: saved.password)
                     }
                 }
                 // Measure again only after a connection change. A measurement
@@ -172,7 +174,7 @@ struct NodeSettingsView: View {
         HStack {
             nodeRow(node: node)
             Button {
-                editingNode = node
+                editingNode = nodeManager.nodeForEditing(node)
             } label: {
                 Image(systemName: "pencil")
                     .font(.caption)

@@ -565,24 +565,19 @@ final class PaymentLinkShareItem: NSObject, UIActivityItemSource {
     }
 
     func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
-        let scale = activityViewController.traitCollection.displayScale
-        return linkMetadata(displayScale: scale > 0 ? scale : UITraitCollection.current.displayScale)
+        linkMetadata()
     }
 
-    /// Built here, never fetched (no LPMetadataProvider): the wide card for
-    /// the Messages bubble, the square for the share sheet header.
-    func linkMetadata(displayScale: CGFloat) -> LPLinkMetadata {
+    /// Built here, never fetched (no LPMetadataProvider): one square card
+    /// for the Messages bubble and the share sheet header.
+    func linkMetadata() -> LPLinkMetadata {
         if let metadata { return metadata }
         let metadata = LPLinkMetadata()
         metadata.originalURL = url
         metadata.url = url
         metadata.title = Self.title
-        let cards = PaymentLinkCard.images(amount: amount, displayScale: displayScale)
-        if let wide = cards.wide {
-            metadata.imageProvider = NSItemProvider(object: wide)
-        }
-        if let square = cards.square {
-            metadata.iconProvider = NSItemProvider(object: square)
+        if let card = PaymentLinkCard.image(amount: amount) {
+            metadata.imageProvider = NSItemProvider(object: card)
         }
         self.metadata = metadata
         return metadata

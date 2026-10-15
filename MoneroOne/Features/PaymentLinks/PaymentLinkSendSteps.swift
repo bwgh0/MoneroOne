@@ -526,28 +526,30 @@ extension View {
 // MARK: - Sharing a link
 
 /// What the share sheet gets for a payment link. Messages gets the bare
-/// URL with our own preview (the app icon, "Claim 0.0500 XMR",
-/// monero.one), so it shows a card without fetching the page. Every other
-/// app gets the usual text with the link. Nothing here loads the URL: its
-/// secret is in the fragment.
+/// URL with our own preview ("Claim your Monero", monero.one, the orange
+/// card with the amount), so it shows a card without fetching the page.
+/// Every other app gets the usual text with the link. Nothing here loads
+/// the URL: its secret is in the fragment.
 @MainActor
 final class PaymentLinkShareItem: NSObject, UIActivityItemSource {
     let url: URL
     let text: String
-    let title: String
+    /// Piconero, as the card shows it.
+    let amount: UInt64
+    /// Drawn on the first request of a share, then reused.
+    private var metadata: LPLinkMetadata?
 
     init?(record: EnvelopeRecord) {
         guard let link = record.link, let url = URL(string: link.url),
               let text = PaymentLinkFunder.shareText(for: record) else { return nil }
         self.url = url
         self.text = text
-        self.title = Self.title(amount: record.amount)
+        self.amount = record.amount
     }
 
-    /// "Claim 0.0500 XMR": the preview title in Messages.
-    static func title(amount: UInt64) -> String {
-        String(localized: "Claim \(XMRFormatter.format(EnvelopeRuntime.xmr(amount))) XMR",
-               comment: "Messages preview title of a shared payment link")
+    /// The preview title in Messages and the share sheet.
+    static var title: String {
+        String(localized: "Claim your Monero", comment: "Title of a shared payment link's preview in Messages and the share sheet")
     }
 
     static func isMessages(_ activityType: UIActivity.ActivityType?) -> Bool {
@@ -563,28 +565,28 @@ final class PaymentLinkShareItem: NSObject, UIActivityItemSource {
     }
 
     func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
-        linkMetadata()
+        let scale = activityViewController.traitCollection.displayScale
+        return linkMetadata(displayScale: scale > 0 ? scale : UITraitCollection.current.displayScale)
     }
 
-    /// Built here, never fetched (no LPMetadataProvider).
-    func linkMetadata() -> LPLinkMetadata {
+    /// Built here, never fetched (no LPMetadataProvider): the wide card for
+    /// the Messages bubble, the square for the share sheet header.
+    func linkMetadata(displayScale: CGFloat) -> LPLinkMetadata {
+        if let metadata { return metadata }
         let metadata = LPLinkMetadata()
         metadata.originalURL = url
         metadata.url = url
-        metadata.title = title
-        if let icon = Self.appIcon {
-            metadata.iconProvider = NSItemProvider(object: icon)
+        metadata.title = Self.title
+        let cards = PaymentLinkCard.images(amount: amount, displayScale: displayScale)
+        if let wide = cards.wide {
+            metadata.imageProvider = NSItemProvider(object: wide)
         }
+        if let square = cards.square {
+            metadata.iconProvider = NSItemProvider(object: square)
+        }
+        self.metadata = metadata
         return metadata
     }
-
-    /// The home screen icon, from the bundle's primary icon files.
-    private static let appIcon: UIImage? = {
-        let icons = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any]
-        let primary = icons?["CFBundlePrimaryIcon"] as? [String: Any]
-        let files = primary?["CFBundleIconFiles"] as? [String]
-        return files?.lazy.compactMap { UIImage(named: $0) }.last
-    }()
 }
 
 /// A control that opens the share sheet for a payment link (one helper for

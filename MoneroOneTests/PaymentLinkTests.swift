@@ -333,7 +333,7 @@ final class PaymentLinkTests: XCTestCase {
                                     createdAt: Date(), status: .pending)
         let item = try XCTUnwrap(PaymentLinkShareItem(record: record))
         XCTAssertEqual(item.url.absoluteString, vectorLink)
-        XCTAssertEqual(item.title, "Claim 0.1000 XMR")
+        XCTAssertEqual(PaymentLinkShareItem.title, "Claim your Monero")
 
         let controller = UIActivityViewController(activityItems: [], applicationActivities: nil)
         XCTAssertEqual(item.activityViewController(controller, itemForActivityType: .message) as? URL, item.url)
@@ -341,10 +341,58 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(item.activityViewController(controller, itemForActivityType: .copyToPasteboard) as? String, item.text)
         XCTAssertTrue(item.text.hasSuffix(vectorLink))
 
-        let metadata = item.linkMetadata()
-        XCTAssertEqual(metadata.title, "Claim 0.1000 XMR")
+        let metadata = item.linkMetadata(displayScale: 3)
+        XCTAssertEqual(metadata.title, "Claim your Monero")
         XCTAssertEqual(metadata.url, item.url)
         XCTAssertEqual(metadata.originalURL, item.url)
-        XCTAssertNil(metadata.imageProvider)
+        XCTAssertNotNil(metadata.imageProvider)
+        XCTAssertNotNil(metadata.iconProvider)
+        XCTAssertTrue(metadata.imageProvider?.canLoadObject(ofClass: UIImage.self) ?? false)
+        XCTAssertTrue(metadata.iconProvider?.canLoadObject(ofClass: UIImage.self) ?? false)
+        // Drawn once per share.
+        XCTAssertTrue(item.linkMetadata(displayScale: 3) === metadata)
+    }
+
+    /// The wide card is 1200 x 630 px; the square is 60 pt at the device's scale.
+    @MainActor
+    func testLinkCardImageSizes() throws {
+        let cards = PaymentLinkCard.images(amount: 50_000_000_000, displayScale: 3)
+        let wide = try XCTUnwrap(cards.wide)
+        XCTAssertEqual(wide.size.width * wide.scale, 1200)
+        XCTAssertEqual(wide.size.height * wide.scale, 630)
+        let square = try XCTUnwrap(cards.square)
+        XCTAssertEqual(square.size.width * square.scale, 180, accuracy: 0.5)
+        XCTAssertEqual(square.size.height * square.scale, 180, accuracy: 0.5)
+    }
+
+    func testLinkCardShowsTheFullAmount() {
+        XCTAssertEqual(PaymentLinkCard.amountText(50_000_000_000), "0.05")
+        XCTAssertEqual(PaymentLinkCard.amountText(1_000_000_000_000), "1")
+        XCTAssertEqual(PaymentLinkCard.amountText(12_345_678_901_200), "12.3456789012")
+        XCTAssertEqual(PaymentLinkCard.wideScale(for: "0.05"), 1)
+        XCTAssertLessThan(PaymentLinkCard.wideScale(for: "12.3456789012"), 1)
+    }
+
+    /// The square shrinks the amount first, then rounds it with "~", and
+    /// never shows "XMR" alone.
+    func testLinkCardSquareShrinksThenRounds() {
+        // 30 per character: 144 fits 4.8 characters, 40% fits 12.
+        let width: (String) -> CGFloat = { CGFloat($0.count) * 30 }
+        func square(_ piconero: UInt64) -> PaymentLinkCard.SquareAmount {
+            PaymentLinkCard.squareAmount(piconero, width: width)
+        }
+        XCTAssertEqual(square(50_000_000_000), .init(text: "0.05", scale: 1))
+        XCTAssertEqual(square(25_404_800_000).text, "0.0254048")
+        XCTAssertEqual(square(25_404_800_000).scale, 144 / 270, accuracy: 0.0001)
+        XCTAssertEqual(square(12_345_678_901_200).text, "~12.35")
+        XCTAssertEqual(square(123_456_789).text, "~0.00012")
+        XCTAssertEqual(square(1_234_567_891_234_000_000).text, "~1,234,568")
+        let tiny = square(1)
+        XCTAssertEqual(tiny.text, "0.000000000001")
+        XCTAssertLessThan(tiny.scale, PaymentLinkCard.squareMinimumScale)
+        XCTAssertGreaterThan(tiny.scale, 0)
+
+        // With the real font, 0.05 fits at full size.
+        XCTAssertEqual(PaymentLinkCard.squareAmount(50_000_000_000).scale, 1)
     }
 }

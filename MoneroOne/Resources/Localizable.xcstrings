@@ -18461,13 +18461,13 @@
         }
       }
     },
-    "Claim %@ XMR" : {
-      "comment" : "Messages preview title of a shared payment link",
+    "Claim your Monero" : {
+      "comment" : "Title of a shared payment link's preview in Messages and the share sheet",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claim %@ XMR"
+            "value" : "Claim your Monero"
           }
         }
       }

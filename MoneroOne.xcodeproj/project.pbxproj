@@ -162,6 +162,7 @@
 		9A7E1C0D000700000000B007 /* PaymentLinksCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000700000000F007 /* PaymentLinksCoordinator.swift */; };
 		9A7E1C0D000800000000B008 /* PaymentLinkClaimSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */; };
 		9A7E1C0D000900000000B009 /* PaymentLinkSendSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */; };
+		9A7E1C0D000F00000000B00F /* PaymentLinkCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000F00000000F00F /* PaymentLinkCard.swift */; };
 		9A7E1C0D000A00000000B00A /* PaymentLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */; };
 		9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */; };
 		9A7E1C0D00FE00000000B0FE /* PaymentLinkV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D00FE00000000F0FE /* PaymentLinkV2Tests.swift */; };
@@ -369,6 +370,7 @@
 		9A7E1C0D000700000000F007 /* PaymentLinksCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinksCoordinator.swift; sourceTree = "<group>"; };
 		9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkClaimSheet.swift; sourceTree = "<group>"; };
 		9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkSendSteps.swift; sourceTree = "<group>"; };
+		9A7E1C0D000F00000000F00F /* PaymentLinkCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkCard.swift; sourceTree = "<group>"; };
 		9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinksView.swift; sourceTree = "<group>"; };
 		9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkTests.swift; sourceTree = "<group>"; };
 		9A7E1C0D00FE00000000F0FE /* PaymentLinkV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkV2Tests.swift; sourceTree = "<group>"; };
@@ -708,6 +710,7 @@
 				9A7E1C0D000700000000F007 /* PaymentLinksCoordinator.swift */,
 				9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */,
 				9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */,
+				9A7E1C0D000F00000000F00F /* PaymentLinkCard.swift */,
 				9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */,
 			);
 			path = PaymentLinks;
@@ -1107,6 +1110,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				9A7E1C0D000700000000B007 /* PaymentLinksCoordinator.swift in Sources */,
 				9A7E1C0D000800000000B008 /* PaymentLinkClaimSheet.swift in Sources */,
 				9A7E1C0D000900000000B009 /* PaymentLinkSendSteps.swift in Sources */,
+				9A7E1C0D000F00000000B00F /* PaymentLinkCard.swift in Sources */,
 				9A7E1C0D000A00000000B00A /* PaymentLinksView.swift in Sources */,
 				A1B2C3D400000001A0000006 /* SendFlowView.swift in Sources */,
 				A1B2C3D400000001A0000007 /* SendAddressStep.swift in Sources */,

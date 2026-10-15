@@ -210,7 +210,7 @@ final class EnvelopeRuntime: ObservableObject {
             }
             var observation = await observe(wallet)
             if estimateSweepFee { observation.sweepFee = await sweepFee(wallet, balance: observation.balance) }
-            DiagnosticLog.shared.log("Envelope check: height \(wallet.walletHeight)/\(wallet.daemonHeight), funded \(observation.fundingSeen), spends \(observation.spendTxids.count), balance \(observation.balance > 0 ? "yes" : "none")")
+            DiagnosticLog.shared.log("Envelope check: height \(wallet.walletHeight)/\(wallet.daemonHeight), funded \(observation.fundingSeen), spends \(observation.spendTxids.count), balance \(observation.balance > 0 ? "yes" : "none"), unlocked \(observation.unlockedBalance > 0 ? "yes" : "none"), confirmations \(observation.fundingConfirmations)")
             return observation
         }
     }

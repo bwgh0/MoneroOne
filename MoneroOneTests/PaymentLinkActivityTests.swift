@@ -87,6 +87,58 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertEqual(state(record(.received, status: .ready), 0, Date()), .ready)
     }
 
+    /// The founder's bug: a sent link's funding had 10 confirmations, its
+    /// record still said pending (no check had seen the unlock), and the row
+    /// said "Ready to claim" while the detail said "Pending 10/10" with
+    /// Reclaim off. The row, the detail and Reclaim now read one status.
+    func testSentLinkIsReadyAtTheUnlockDepthWhateverTheLastCheck() {
+        func display(_ record: EnvelopeRecord, funding: Int?, daemonHeight: UInt64? = nil, now: Date = Date()) -> PaymentLinkDisplay {
+            PaymentLinkDisplay(record: record, fundingConfirmations: funding, daemonHeight: daemonHeight, now: now)
+        }
+        func row(_ display: PaymentLinkDisplay) -> String {
+            PaymentLinkActivity.fundingStatusLine(status: display.status, isExpired: display.isExpired, confirmations: display.confirmations)
+        }
+        var stale = record(.sent, status: .pending, fundingTxid: "fund")
+        stale.confirmations = 2
+        stale.lastCheckedAt = Date(timeIntervalSinceNow: -3600)
+
+        let ready = display(stale, funding: 10)
+        XCTAssertEqual(ready.status, .ready)
+        XCTAssertEqual(ready.label, "Ready")
+        XCTAssertEqual(row(ready), "Ready to claim")
+        XCTAssertTrue(ready.canReclaim)
+
+        let young = display(stale, funding: 9)
+        XCTAssertEqual(young.status, .pending)
+        XCTAssertEqual(young.label, "Pending 9/10")
+        XCTAssertEqual(row(young), "Waiting to be claimed")
+        XCTAssertFalse(young.canReclaim)
+
+        // Another wallet funded it: the funding height of the last check and
+        // the daemon height give the count.
+        var elsewhere = stale
+        elsewhere.fundingHeight = 1_000
+        XCTAssertTrue(display(elsewhere, funding: nil, daemonHeight: 1_010).canReclaim)
+        XCTAssertFalse(display(elsewhere, funding: nil, daemonHeight: 1_009).canReclaim)
+
+        // Past its expiry it reads Expired, and Reclaim is on.
+        stale.expiry = Int64(Date().timeIntervalSince1970) - 60
+        let expired = display(stale, funding: 12)
+        XCTAssertEqual(expired.label, "Expired")
+        XCTAssertEqual(row(expired), "Expired")
+        XCTAssertTrue(expired.canReclaim)
+
+        // A check that saw the claim wins over the count.
+        let claimed = display(record(.sent, status: .claimed, fundingTxid: "fund"), funding: 30)
+        XCTAssertEqual(claimed.status, .claimed)
+        XCTAssertFalse(claimed.canReclaim)
+        // Never on a received link.
+        var received = record(.received, status: .pending)
+        received.confirmations = 10
+        received.lastCheckedAt = Date()
+        XCTAssertFalse(display(received, funding: nil).canReclaim)
+    }
+
     /// A received link's detail says the same as its pinned row.
     @MainActor
     func testReceivedLinkDetailMatchesThePinnedRow() {

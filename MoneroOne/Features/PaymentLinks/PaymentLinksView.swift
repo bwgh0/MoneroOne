@@ -30,25 +30,47 @@ struct PaymentLinkDisplay {
 
     @MainActor
     init(record: EnvelopeRecord, walletManager: WalletManager?, now: Date = Date()) {
+        var fundingConfirmations: Int?
+        if record.role == .sent, record.status == .pending || record.status == .created,
+           let txid = record.fundingTxid,
+           let tx = walletManager?.transactions.first(where: { $0.id == txid }) {
+            fundingConfirmations = tx.confirmations
+        }
+        self.init(record: record, fundingConfirmations: fundingConfirmations, daemonHeight: walletManager?.daemonHeight, now: now)
+    }
+
+    /// - Parameters:
+    ///   - fundingConfirmations: a sent link's funding in the active
+    ///     wallet's history, its live count; nil when that wallet did not
+    ///     fund it.
+    ///   - daemonHeight: the active wallet's.
+    init(record: EnvelopeRecord, fundingConfirmations: Int?, daemonHeight: UInt64?, now: Date = Date()) {
         var status = record.status
         var confirmations = record.confirmations
-        if record.role == .sent, status == .pending || status == .created,
-           let txid = record.fundingTxid,
-           let tx = walletManager?.transactions.first(where: { $0.id == txid }),
-           let txConfirmations = tx.confirmations {
-            confirmations = txConfirmations
+        if record.role == .sent, status == .pending || status == .created, let fundingConfirmations {
+            confirmations = fundingConfirmations
             if status == .created { status = .pending }
         }
-        // A received link: the funding height of the last check and the
-        // active wallet's daemon height give a live count.
-        if record.role == .received, status == .pending,
+        // A received link, or a sent link another wallet funded: the funding
+        // height of the last check and the active wallet's daemon height give
+        // a live count.
+        if status == .pending, record.role == .received || fundingConfirmations == nil,
            let height = record.fundingHeight,
-           let daemonHeight = walletManager?.daemonHeight, daemonHeight > height {
+           let daemonHeight, daemonHeight > height {
             confirmations = max(confirmations ?? 0, Int(daemonHeight - height))
         }
         // Same rule as the Open Links row in Activity, so both say the same.
         if record.role == .received, status == .pending,
-           PendingPaymentLinks.state(of: record, daemonHeight: walletManager?.daemonHeight ?? 0, now: now) == .ready {
+           PendingPaymentLinks.state(of: record, daemonHeight: daemonHeight ?? 0, now: now) == .ready {
+            status = .ready
+        }
+        // A sent link unlocks with its funding: at 10 confirmations it is
+        // ready, whatever the last check said (a check that failed, or ran
+        // before the unlock). Its Activity row, this label and Reclaim then
+        // agree. The reclaim sheet opens the envelope and tells ready from
+        // claimed before anything moves; the next check corrects the record.
+        if record.role == .sent, status == .pending,
+           (confirmations ?? 0) >= EnvelopeLink.confirmationsToUnlock {
             status = .ready
         }
         self.status = status
@@ -57,6 +79,9 @@ struct PaymentLinkDisplay {
         self.claimedHere = record.role == .received && record.settleTxid != nil
         self.isExpired = EnvelopeStatusRules.isExpired(status, expiry: record.expiry, now: now)
     }
+
+    /// A sent link's Reclaim button is on.
+    var canReclaim: Bool { role == .sent && status == .ready }
 
     var label: String {
         if isExpired { return String(localized: "Expired") }
@@ -164,6 +189,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 try await EnvelopeRuntime.shared.acquire(walletManager)
                 leased = true
             } catch {
+                DiagnosticLog.shared.log("Payment link check skipped: \(error.localizedDescription)")
                 return
             }
             for candidate in candidates {
@@ -351,17 +377,11 @@ struct PaymentLinkDetailView: View {
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
                     PaymentLinkStatusChip(display: display)
+                    // Pending is under 10 confirmations: at 10 the link reads Ready.
                     if display.status == .pending, !display.isExpired {
-                        let confirmations = display.confirmations ?? 0
-                        if confirmations < EnvelopeLink.confirmationsToUnlock {
-                            Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: confirmations))) min")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        } else if checker.isChecking {
-                            Text("Checking the link…")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: display.confirmations ?? 0))) min")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -438,11 +458,11 @@ struct PaymentLinkDetailView: View {
             removeButton
         case .pending, .ready:
             if display.isExpired {
-                reclaimButton(record, enabled: display.status == .ready)
+                reclaimButton(record, enabled: display.canReclaim)
                 if canShare { shareButton(record) }
             } else {
                 if canShare { shareButton(record) }
-                reclaimButton(record, enabled: display.status == .ready)
+                reclaimButton(record, enabled: display.canReclaim)
             }
         case .claimed, .reclaimed:
             removeButton

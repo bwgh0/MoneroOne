@@ -18461,6 +18461,17 @@
         }
       }
     },
+    "Claim %@ XMR" : {
+      "comment" : "Messages preview title of a shared payment link",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claim %@ XMR"
+          }
+        }
+      }
+    },
     "Clear address" : {
       "localizations" : {
         "de" : {

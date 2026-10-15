@@ -432,8 +432,8 @@ struct OpenPaymentLinkRow: View {
             .buttonStyle(.plain)
             .accessibilityHint(Text("Moves the money in this link back to your wallet"))
         case .waiting, .ready:
-            if let text = PaymentLinkFunder.shareText(for: record) {
-                ShareLink(item: text) {
+            if let item = PaymentLinkShareItem(record: record) {
+                PaymentLinkShareButton(item: item) {
                     chipLabel(String(localized: "Share", comment: "Open payment link chip: share the link again"), systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.plain)

@@ -1,4 +1,6 @@
 import XCTest
+import UIKit
+import LinkPresentation
 import MoneroKit
 @testable import MoneroOne
 
@@ -318,5 +320,31 @@ final class PaymentLinkTests: XCTestCase {
         // The launch sweep deletes only 32-hex directory names.
         XCTAssertFalse(id.count == 32 && id.allSatisfy(\.isHexDigit))
         XCTAssertTrue(EnvelopeRuntime.directory(for: "0123456789abcdef")?.path.hasSuffix("MoneroKit/envelopes/0123456789abcdef") ?? false)
+    }
+
+    // MARK: - Sharing
+
+    /// Messages gets the bare link with our own preview; every other app
+    /// gets the usual text. The preview is built here, never fetched.
+    @MainActor
+    func testShareItemGivesMessagesTheLinkWithItsOwnPreview() throws {
+        let record = EnvelopeRecord(id: "0123456789abcdef", role: .sent, words: vectorWords, address: vectorAddress,
+                                    restoreHeight: 150, amount: 100_000_000_000, expiry: 1_791_000_000,
+                                    createdAt: Date(), status: .pending)
+        let item = try XCTUnwrap(PaymentLinkShareItem(record: record))
+        XCTAssertEqual(item.url.absoluteString, vectorLink)
+        XCTAssertEqual(item.title, "Claim 0.1000 XMR")
+
+        let controller = UIActivityViewController(activityItems: [], applicationActivities: nil)
+        XCTAssertEqual(item.activityViewController(controller, itemForActivityType: .message) as? URL, item.url)
+        XCTAssertEqual(item.activityViewController(controller, itemForActivityType: .mail) as? String, item.text)
+        XCTAssertEqual(item.activityViewController(controller, itemForActivityType: .copyToPasteboard) as? String, item.text)
+        XCTAssertTrue(item.text.hasSuffix(vectorLink))
+
+        let metadata = item.linkMetadata()
+        XCTAssertEqual(metadata.title, "Claim 0.1000 XMR")
+        XCTAssertEqual(metadata.url, item.url)
+        XCTAssertEqual(metadata.originalURL, item.url)
+        XCTAssertNil(metadata.imageProvider)
     }
 }

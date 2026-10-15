@@ -1,4 +1,5 @@
 import SwiftUI
+import LinkPresentation
 import MoneroKit
 
 // MARK: - Draft and funding
@@ -468,8 +469,8 @@ struct PaymentLinkReadyStep: View {
             Spacer()
 
             VStack(spacing: 12) {
-                if let record, let text = PaymentLinkFunder.shareText(for: record) {
-                    ShareLink(item: text) {
+                if let record, let item = PaymentLinkShareItem(record: record) {
+                    PaymentLinkShareButton(item: item) {
                         HStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up")
                             Text("Share")
@@ -519,5 +520,120 @@ extension View {
     /// Leaves the view out while Send makes a payment link (Max, memo).
     func removedInLinkMode(_ isLinkMode: Bool) -> some View {
         modifier(RemovedInLinkMode(removed: isLinkMode))
+    }
+}
+
+// MARK: - Sharing a link
+
+/// What the share sheet gets for a payment link. Messages gets the bare
+/// URL with our own preview (the app icon, "Claim 0.0500 XMR",
+/// monero.one), so it shows a card without fetching the page. Every other
+/// app gets the usual text with the link. Nothing here loads the URL: its
+/// secret is in the fragment.
+@MainActor
+final class PaymentLinkShareItem: NSObject, UIActivityItemSource {
+    let url: URL
+    let text: String
+    let title: String
+
+    init?(record: EnvelopeRecord) {
+        guard let link = record.link, let url = URL(string: link.url),
+              let text = PaymentLinkFunder.shareText(for: record) else { return nil }
+        self.url = url
+        self.text = text
+        self.title = Self.title(amount: record.amount)
+    }
+
+    /// "Claim 0.0500 XMR": the preview title in Messages.
+    static func title(amount: UInt64) -> String {
+        String(localized: "Claim \(XMRFormatter.format(EnvelopeRuntime.xmr(amount))) XMR",
+               comment: "Messages preview title of a shared payment link")
+    }
+
+    static func isMessages(_ activityType: UIActivity.ActivityType?) -> Bool {
+        activityType == .message
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        text
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+        Self.isMessages(activityType) ? url : text
+    }
+
+    func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
+        linkMetadata()
+    }
+
+    /// Built here, never fetched (no LPMetadataProvider).
+    func linkMetadata() -> LPLinkMetadata {
+        let metadata = LPLinkMetadata()
+        metadata.originalURL = url
+        metadata.url = url
+        metadata.title = title
+        if let icon = Self.appIcon {
+            metadata.iconProvider = NSItemProvider(object: icon)
+        }
+        return metadata
+    }
+
+    /// The home screen icon, from the bundle's primary icon files.
+    private static let appIcon: UIImage? = {
+        let icons = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any]
+        let primary = icons?["CFBundlePrimaryIcon"] as? [String: Any]
+        let files = primary?["CFBundleIconFiles"] as? [String]
+        return files?.lazy.compactMap { UIImage(named: $0) }.last
+    }()
+}
+
+/// A control that opens the share sheet for a payment link (one helper for
+/// every share point). The sheet comes from UIKit, anchored on the control
+/// for the iPad popover.
+struct PaymentLinkShareButton<Label: View>: View {
+    let item: PaymentLinkShareItem
+    @ViewBuilder let label: () -> Label
+    @State private var anchor = ShareAnchor()
+
+    var body: some View {
+        Button {
+            anchor.present(item)
+        } label: {
+            label()
+        }
+        .background(ShareAnchorView(anchor: anchor))
+    }
+}
+
+/// The UIKit view the share sheet is presented from.
+@MainActor
+final class ShareAnchor {
+    weak var view: UIView?
+
+    func present(_ item: PaymentLinkShareItem) {
+        guard let view, var top = view.window?.rootViewController else { return }
+        while let presented = top.presentedViewController, !presented.isBeingDismissed {
+            top = presented
+        }
+        let controller = UIActivityViewController(activityItems: [item], applicationActivities: nil)
+        controller.popoverPresentationController?.sourceView = view
+        controller.popoverPresentationController?.sourceRect = view.bounds
+        top.present(controller, animated: true)
+    }
+}
+
+private struct ShareAnchorView: UIViewRepresentable {
+    let anchor: ShareAnchor
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        anchor.view = view
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        anchor.view = uiView
     }
 }

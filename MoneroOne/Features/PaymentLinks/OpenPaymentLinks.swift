@@ -37,8 +37,9 @@ enum OpenPaymentLinks {
         /// detail shows it.
         var sentAmount: UInt64 = 0
         var toClaimCount = 0
-        /// Piconero waiting to be claimed; nil while a link's amount is
-        /// not known yet (a v2 link before its first check).
+        /// Piconero the waiting claims deliver (`EnvelopeRecord.claimAmount`);
+        /// nil while a link's amount is not known yet (a v2 link before its
+        /// first check).
         var toClaimAmount: UInt64? = 0
 
         var isEmpty: Bool { sentCount == 0 && toClaimCount == 0 }
@@ -68,7 +69,7 @@ enum OpenPaymentLinks {
                 if record.isExpired(now: now) { summary.expiredCount += 1 }
             } else if isWaitingToClaim(record) {
                 summary.toClaimCount += 1
-                if let amount = record.knownAmount, let total = summary.toClaimAmount {
+                if let amount = record.claimAmount, let total = summary.toClaimAmount {
                     summary.toClaimAmount = total + amount
                 } else {
                     summary.toClaimAmount = nil
@@ -330,7 +331,7 @@ struct OpenPaymentLinkRow: View {
 
     /// "0.05" for ours, "+0.03" for one sent to us, as Activity rows read.
     private var amountText: String? {
-        guard let amount = isReceived ? record.knownAmount : record.amount else { return nil }
+        guard let amount = isReceived ? record.claimAmount : record.amount else { return nil }
         let xmr = XMRFormatter.format(EnvelopeRuntime.xmr(amount))
         return isReceived ? "+\(xmr)" : xmr
     }
@@ -462,7 +463,7 @@ struct OpenPaymentLinkRow: View {
     private var accessibilityText: String {
         let amount: String?
         if isReceived {
-            amount = record.knownAmount.map {
+            amount = record.claimAmount.map {
                 String(localized: "plus \(XMRFormatter.format(EnvelopeRuntime.xmr($0))) XMR", comment: "VoiceOver: amount coming in")
             }
         } else {
@@ -564,6 +565,7 @@ struct OpenPaymentLinksChecks: ViewModifier {
         // From the active wallet's history alone: no envelope, every time.
         PaymentLinksStatusChecker.reconcileFunding(store: store, walletManager: walletManager)
         PaymentLinksStatusChecker.forgetMinedClaimWords(store: store, walletManager: walletManager)
+        PaymentLinksStatusChecker.fillNetAmounts(store: store, walletManager: walletManager)
         guard Self.isLookDue(isDue: isDue, lastLook: lastLook, now: now) else { return }
         isDue = false
         let activeId = walletManager.activeWallet?.id.uuidString

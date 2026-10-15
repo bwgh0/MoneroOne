@@ -37,6 +37,10 @@ struct EnvelopeObservation: Equatable {
     /// Block height of the oldest mined incoming transfer; nil while every
     /// funding waits in the pool.
     var fundingHeight: UInt64? = nil
+    /// wallet2's fee estimate for a sweep of the balance, piconero. Nil when
+    /// the check did not ask for one, the envelope is empty or the estimate
+    /// failed.
+    var sweepFee: UInt64? = nil
 
     static let empty = EnvelopeObservation(fundingSeen: false, fundingConfirmations: 0, balance: 0, unlockedBalance: 0, spendTxids: [])
 }

@@ -227,6 +227,77 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertNil(summary.toClaimAmount)
     }
 
+    // MARK: - Net claim amount
+
+    func testNetAmountIsTheBalanceLessTheSweepFee() {
+        XCTAssertEqual(EnvelopeRecord.net(balance: 27_200_000_000, fee: 7_100_000_000), 20_100_000_000)
+        XCTAssertNil(EnvelopeRecord.net(balance: 7_100_000_000, fee: 7_100_000_000))
+        XCTAssertNil(EnvelopeRecord.net(balance: 0, fee: 1))
+    }
+
+    func testACheckStoresTheNetAmountOfAReceivedLinkOnly() {
+        var received = open(.received, .pending, amount: 0)
+        received.noteBalance(27_200_000_000, sweepFee: 7_100_000_000)
+        XCTAssertEqual(received.lastBalance, 27_200_000_000)
+        XCTAssertEqual(received.netAmount, 20_100_000_000)
+        XCTAssertEqual(received.claimAmount, 20_100_000_000)
+        // No estimate this time: the net amount holds while the balance does.
+        received.noteBalance(27_200_000_000, sweepFee: nil)
+        XCTAssertEqual(received.netAmount, 20_100_000_000)
+        received.noteBalance(30_000_000_000, sweepFee: nil)
+        XCTAssertNil(received.netAmount)
+        XCTAssertEqual(received.claimAmount, 30_000_000_000)
+
+        var sent = open(.sent, .ready, amount: 20_000_000_000)
+        sent.noteBalance(27_200_000_000, sweepFee: 7_100_000_000)
+        XCTAssertEqual(sent.lastBalance, 27_200_000_000)
+        XCTAssertNil(sent.netAmount)
+    }
+
+    func testClaimAmountPrefersTheNetThenTheV1AmountThenTheBalance() {
+        var v2 = open(.received, .ready, amount: 0)
+        XCTAssertNil(v2.claimAmount)
+        v2.lastBalance = 27_200_000_000
+        XCTAssertEqual(v2.claimAmount, 27_200_000_000)
+        v2.netAmount = 20_100_000_000
+        XCTAssertEqual(v2.claimAmount, 20_100_000_000)
+
+        var v1 = open(.received, .ready, amount: 20_000_000_000)
+        v1.lastBalance = 27_200_000_000
+        XCTAssertEqual(v1.claimAmount, 20_000_000_000)
+        v1.netAmount = 20_100_000_000
+        XCTAssertEqual(v1.claimAmount, 20_100_000_000)
+    }
+
+    func testOnlyV2LinksCheckedWithoutANetAmountNeedTheActiveWalletsEstimate() {
+        var old = open(.received, .ready, amount: 0)
+        old.lastBalance = 27_200_000_000
+        XCTAssertTrue(old.needsNetAmount)
+
+        var netted = old
+        netted.netAmount = 20_100_000_000
+        XCTAssertFalse(netted.needsNetAmount)
+        var claimed = old
+        claimed.status = .claimed
+        XCTAssertFalse(claimed.needsNetAmount)
+        var v1 = open(.received, .ready, amount: 20_000_000_000)
+        v1.lastBalance = 27_200_000_000
+        XCTAssertFalse(v1.needsNetAmount)
+        var sent = open(.sent, .ready, amount: 0)
+        sent.lastBalance = 27_200_000_000
+        XCTAssertFalse(sent.needsNetAmount)
+        XCTAssertFalse(open(.received, .created, amount: 0).needsNetAmount)
+    }
+
+    func testSummaryCountsWhatTheClaimsDeliverAndWhatWasSent() {
+        var checked = open(.received, .ready, amount: 0)
+        checked.noteBalance(27_200_000_000, sweepFee: 7_100_000_000)
+        let records = [checked, open(.received, .pending, amount: 30_000_000_000), open(.sent, .pending, amount: 20_000_000_000)]
+        let summary = OpenPaymentLinks.summary(of: records, activeWalletId: "w1")
+        XCTAssertEqual(summary.toClaimAmount, 50_100_000_000)
+        XCTAssertEqual(summary.sentAmount, 20_000_000_000)
+    }
+
     func testSentLineText() {
         XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 50_000_000_000, count: 1, expired: 0), "0.0500 XMR in 1 open link")
         XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 150_000_000_000, count: 2, expired: 0), "0.1500 XMR in 2 open links")

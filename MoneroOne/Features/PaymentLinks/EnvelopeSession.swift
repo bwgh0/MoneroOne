@@ -81,7 +81,7 @@ final class EnvelopeSession: ObservableObject {
                 }
             }
             watchProgress()
-            let observation = try await runtime.check(link: link, address: record.address)
+            let observation = try await runtime.check(link: link, address: record.address, estimateSweepFee: record.role == .received)
             progressTask?.cancel()
             update(with: observation)
             guard !stopped else { return }
@@ -144,7 +144,7 @@ final class EnvelopeSession: ObservableObject {
             reclaimTxid: reclaimTxid,
             reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) }
         )
-        record.lastBalance = observation.balance
+        record.noteBalance(observation.balance, sweepFee: observation.sweepFee)
         record.confirmations = observation.fundingConfirmations
         record.fundingHeight = observation.fundingHeight
         record.lastCheckedAt = Date()
@@ -198,7 +198,7 @@ final class EnvelopeSession: ObservableObject {
                 try? await Task.sleep(for: Self.pollInterval)
                 guard !Task.isCancelled, let self else { return }
                 if case .sweeping = self.phase { return }
-                guard let observation = try? await self.runtime.poll(), !Task.isCancelled else { continue }
+                guard let observation = try? await self.runtime.poll(estimateSweepFee: self.record.role == .received), !Task.isCancelled else { continue }
                 self.update(with: observation)
                 if self.record.status.isSettled { return }
             }

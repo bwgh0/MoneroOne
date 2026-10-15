@@ -179,7 +179,8 @@ final class EnvelopeRuntime: ObservableObject {
 
     /// Opens the envelope of `link` (closing any other) and syncs it to the
     /// chain tip. Checks that the running wallet's address is `address`.
-    func check(link: EnvelopeLink, address: String) async throws -> EnvelopeObservation {
+    /// With `estimateSweepFee`, the observation carries the claim sweep's fee.
+    func check(link: EnvelopeLink, address: String, estimateSweepFee: Bool = false) async throws -> EnvelopeObservation {
         try await serial { [self] in
             guard let walletManager, mainSuspended else { throw RuntimeError.walletBusy }
             if openEnvelopeId != link.id {
@@ -207,20 +208,23 @@ final class EnvelopeRuntime: ObservableObject {
             if !runtimeAddress.isEmpty, runtimeAddress != address {
                 throw RuntimeError.addressMismatch
             }
-            let observation = await observe(wallet)
+            var observation = await observe(wallet)
+            if estimateSweepFee { observation.sweepFee = await sweepFee(wallet, balance: observation.balance) }
             DiagnosticLog.shared.log("Envelope check: height \(wallet.walletHeight)/\(wallet.daemonHeight), funded \(observation.fundingSeen), spends \(observation.spendTxids.count), balance \(observation.balance > 0 ? "yes" : "none")")
             return observation
         }
     }
 
     /// Looks for new blocks on the open envelope and returns what it sees.
-    func poll() async throws -> EnvelopeObservation? {
+    func poll(estimateSweepFee: Bool = false) async throws -> EnvelopeObservation? {
         try await serial { [self] in
             guard let wallet = envelope else { return nil }
             wallet.startSync()
             try await Task.sleep(for: .seconds(2))
             try await waitUntilSynced(wallet)
-            return await observe(wallet)
+            var observation = await observe(wallet)
+            if estimateSweepFee { observation.sweepFee = await sweepFee(wallet, balance: observation.balance) }
+            return observation
         }
     }
 
@@ -286,6 +290,21 @@ final class EnvelopeRuntime: ObservableObject {
         try? await Task.sleep(for: .milliseconds(1500))
         let txs = await wallet.fetchTransactionsBlocking()
         return Self.observation(transactions: txs, balance: wallet.balance, unlocked: wallet.unlockedBalance, daemonHeight: wallet.daemonHeight)
+    }
+
+    /// wallet2's fee estimate for the claim sweep: one input, two outputs
+    /// (a sweep to one address adds a dummy change output), at the priority
+    /// `sweep` uses. Nothing is built or sent.
+    private func sweepFee(_ wallet: MoneroWallet, balance: UInt64) async -> UInt64? {
+        guard balance > 0 else { return nil }
+        let address = destination?.address ?? wallet.primaryAddress
+        do {
+            let fee = try await wallet.estimateFee(to: address, amount: Self.xmr(balance), priority: .default)
+            return Self.piconero(fee)
+        } catch {
+            DiagnosticLog.shared.log("Envelope sweep fee estimate failed: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     nonisolated static func observation(transactions: [MoneroTransaction], balance: Decimal, unlocked: Decimal, daemonHeight: UInt64) -> EnvelopeObservation {

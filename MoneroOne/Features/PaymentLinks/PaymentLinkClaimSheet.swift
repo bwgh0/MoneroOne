@@ -70,9 +70,12 @@ struct EnvelopeSessionContent: View {
 
     private var record: EnvelopeRecord { session.record }
     private var isOwn: Bool { record.role == .sent }
-    /// The v1 link's amount, or the balance a check saw; nil for a v2 link
-    /// not checked yet.
-    private var hintAmount: Decimal? { record.knownAmount.map(EnvelopeRuntime.xmr) }
+    /// Ours: the amount sent. Sent to us: what the claim delivers (the
+    /// balance a check saw less the sweep fee), else the v1 link's amount.
+    /// Nil for a v2 link not checked yet.
+    private var hintAmount: Decimal? {
+        (isOwn ? record.knownAmount : record.claimAmount).map(EnvelopeRuntime.xmr)
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -183,7 +186,7 @@ struct EnvelopeSessionContent: View {
                 .foregroundStyle(.secondary)
 
         case .ready(let unlocked):
-            Text("\(XMRFormatter.format(EnvelopeRuntime.xmr(unlocked))) XMR")
+            readyAmount(unlocked: unlocked)
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.6)
@@ -274,6 +277,20 @@ struct EnvelopeSessionContent: View {
             .clipShape(Capsule())
         }
         .accessibilityLabel(copiedHash ? "Transaction ID copied" : "Copy transaction ID")
+    }
+
+    /// Sent to us: what the claim delivers, an estimate (the sweep fee is
+    /// wallet2's estimate, no transaction is built). Ours, or with no net
+    /// amount: the unlocked balance.
+    @ViewBuilder
+    private func readyAmount(unlocked: UInt64) -> some View {
+        if !isOwn, let net = record.netAmount {
+            let amount = XMRFormatter.format(EnvelopeRuntime.xmr(net))
+            Text("~\(amount) XMR", comment: "Claim sheet: the link's amount from its last check, an estimate")
+                .accessibilityLabel(Text("About \(amount) XMR", comment: "VoiceOver: the link's estimated amount"))
+        } else {
+            Text("\(XMRFormatter.format(EnvelopeRuntime.xmr(unlocked))) XMR")
+        }
     }
 
     // MARK: - Actions

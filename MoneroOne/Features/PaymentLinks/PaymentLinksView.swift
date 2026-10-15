@@ -213,6 +213,27 @@ final class PaymentLinksStatusChecker: ObservableObject {
         }
     }
 
+    private static var lastNetAmountFill: Date?
+
+    /// Received links checked before records had a net amount: their last
+    /// balance less the active wallet's fee estimate (one input, two
+    /// outputs, as the claim sweep). The claim sheet's next check replaces
+    /// it with the envelope's own estimate. At most every 10 minutes.
+    static func fillNetAmounts(store: EnvelopeStore, walletManager: WalletManager, now: Date = Date()) {
+        guard let balance = store.received.first(where: \.needsNetAmount)?.lastBalance,
+              walletManager.syncState == .synced,
+              let wallet = walletManager.moneroWallet else { return }
+        if let last = lastNetAmountFill, now.timeIntervalSince(last) < 10 * 60 { return }
+        lastNetAmountFill = now
+        Task {
+            guard let fee = try? await wallet.estimateFee(to: walletManager.primaryAddress, amount: EnvelopeRuntime.xmr(balance)) else { return }
+            for var record in store.received where record.needsNetAmount {
+                record.netAmount = EnvelopeRecord.net(balance: record.lastBalance ?? 0, fee: EnvelopeRuntime.piconero(fee))
+                try? store.save(record)
+            }
+        }
+    }
+
     /// A sent record saved but not marked funded (the app quit during the
     /// broadcast, or the error came after the node took it): adopt a
     /// funding transaction the active wallet sent to the envelope address.
@@ -496,7 +517,7 @@ struct PaymentLinkDetailView: View {
 
     private func receivedContent(_ record: EnvelopeRecord) -> some View {
         let display = PaymentLinkDisplay(record: record, walletManager: walletManager)
-        let amount = record.settledAmount ?? record.knownAmount
+        let amount = record.settledAmount ?? record.claimAmount
         let canClaim = !record.status.isSettled && record.link != nil
         return List {
             Section {

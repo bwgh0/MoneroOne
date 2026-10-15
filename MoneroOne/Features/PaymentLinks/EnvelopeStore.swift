@@ -53,6 +53,11 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     /// opening the envelope again.
     var fundingHeight: UInt64?
     var lastCheckedAt: Date?
+    /// A received link: what a claim delivers, piconero. The last balance
+    /// less wallet2's fee estimate for the claim sweep. Nil until a check
+    /// (or the active wallet's estimate, for a record checked before this
+    /// field) saw the link funded.
+    var netAmount: UInt64?
 
     var link: EnvelopeLink? {
         if let secret, let bytes = [UInt8](hex: secret) {
@@ -88,6 +93,40 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
         if amount > 0 { return amount }
         if let lastBalance, lastBalance > 0 { return lastBalance }
         return nil
+    }
+
+    /// A received link before its claim: what the claim delivers, piconero.
+    /// The net amount when known, else the v1 link's amount (the sender
+    /// put the claim fee on top), else the last balance. Nil when unknown.
+    var claimAmount: UInt64? {
+        if let netAmount, netAmount > 0 { return netAmount }
+        return knownAmount
+    }
+
+    /// The balance less the claim sweep's fee; nil when the fee takes it all.
+    static func net(balance: UInt64, fee: UInt64) -> UInt64? {
+        balance > fee ? balance - fee : nil
+    }
+
+    /// Notes the balance a check saw. A received link also gets its net
+    /// amount from `sweepFee`; with no fee estimate it keeps the old net
+    /// amount only while the balance holds.
+    mutating func noteBalance(_ balance: UInt64, sweepFee: UInt64?) {
+        if role == .received {
+            if let sweepFee {
+                netAmount = Self.net(balance: balance, fee: sweepFee)
+            } else if balance != lastBalance {
+                netAmount = nil
+            }
+        }
+        lastBalance = balance
+    }
+
+    /// A received link checked before the net amount existed: the active
+    /// wallet's fee estimate stands in for the envelope's.
+    var needsNetAmount: Bool {
+        role == .received && !status.isSettled && link != nil && netAmount == nil
+            && amount == 0 && (lastBalance ?? 0) > 0
     }
 
     /// Status for display: Expired over pending and ready.

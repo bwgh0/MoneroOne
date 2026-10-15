@@ -947,6 +947,18 @@ class WalletManager: ObservableObject {
     /// Phase 1 of a switch already rebuilt the tree for the target wallet;
     /// the start path that follows must not rebuild it a second time.
     private var sessionBumpedForSwitch = false
+    /// Set while the active wallet starts again after a payment-link check:
+    /// its history stays on screen until the restarted wallet loads it.
+    private var historyHeldForWalletId: UUID?
+    /// Set while the active wallet starts again after a payment-link check
+    /// that found it synced. "Synced" stays on screen until the restarted
+    /// wallet is synced again, fails, or a minute passes: each check stops
+    /// and starts the wallet, and its connection steps are not news.
+    private var syncedHeldForWalletId: UUID?
+    private var syncedHoldTimeout: Task<Void, Never>?
+    private var isHoldingSynced: Bool {
+        syncedHeldForWalletId != nil && syncedHeldForWalletId == activeWallet?.id && syncState == .synced
+    }
 
     private func bumpSessionUnlessSwitching() {
         if sessionBumpedForSwitch {
@@ -1613,9 +1625,50 @@ class WalletManager: ObservableObject {
     /// so the screen the user is on stays.
     func resumeActiveWalletAfterEnvelope() async throws {
         guard isUnlocked, moneroWallet == nil, let pin = currentPin else { return }
+        historyHeldForWalletId = activeWallet?.id
+        if syncState == .synced { holdSyncedThroughRestart() }
         sessionBumpedForSwitch = true
         defer { sessionBumpedForSwitch = false }
-        try await unlock(pin: pin)
+        do {
+            try await unlock(pin: pin)
+        } catch {
+            if syncedHeldForWalletId != nil {
+                endSyncedHold()
+                syncState = .connecting
+            }
+            throw error
+        }
+    }
+
+    private func holdSyncedThroughRestart() {
+        syncedHeldForWalletId = activeWallet?.id
+        syncedHoldTimeout?.cancel()
+        syncedHoldTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            guard let self, !Task.isCancelled else { return }
+            let wasHolding = self.isHoldingSynced
+            self.endSyncedHold()
+            guard wasHolding else { return }
+            // Not synced again after a minute: show where the wallet is.
+            self.syncState = self.moneroWallet.map { Self.syncState(from: $0.syncState) } ?? .connecting
+            self.updateConnectionStage()
+        }
+    }
+
+    private func endSyncedHold() {
+        syncedHeldForWalletId = nil
+        syncedHoldTimeout?.cancel()
+        syncedHoldTimeout = nil
+    }
+
+    private static func syncState(from state: MoneroWallet.SyncState) -> SyncState {
+        switch state {
+        case .idle: return .idle
+        case .connecting: return .connecting
+        case .syncing(let progress, let remaining): return .syncing(progress: progress, remaining: remaining)
+        case .synced: return .synced
+        case .error(let msg): return .error(msg)
+        }
     }
 
     /// Pair a Trezor and create the corresponding hardware-backed wallet
@@ -1787,7 +1840,7 @@ class WalletManager: ObservableObject {
         // tripping the same crash. Guard with an equality check so the
         // publisher only fires when the state genuinely transitioned (i.e.
         // we entered through `unlock`, not `switchToWallet`).
-        if syncState != .connecting {
+        if syncState != .connecting, !isHoldingSynced {
             syncState = .connecting
         }
 
@@ -1838,7 +1891,7 @@ class WalletManager: ObservableObject {
         // @Published resets and only nudge `syncState` if it actually
         // changed, otherwise the redundant publisher fire races the
         // collapsing wallet-switcher sheet's AttributeGraph teardown.
-        if syncState != .connecting {
+        if syncState != .connecting, !isHoldingSynced {
             syncState = .connecting
         }
 
@@ -1908,20 +1961,24 @@ class WalletManager: ObservableObject {
                 // (wallet2 may fire trailing callbacks after pauseRefresh)
                 if self.isSyncBlocked { return }
 
-                let newState: SyncState
-                switch state {
-                case .idle: newState = .idle
-                case .connecting: newState = .connecting
-                case .syncing(let progress, let remaining):
-                    newState = .syncing(progress: progress, remaining: remaining)
-                case .synced: newState = .synced
-                case .error(let msg): newState = .error(msg)
-                }
+                let newState = Self.syncState(from: state)
 
                 #if DEBUG
                 NSLog("[WalletManager] wallet2 syncState: %@ (current: %@)", "\(state)", "\(self.syncState)")
                 #endif
                 DiagnosticLog.shared.log("Sync: \(state)")
+
+                // The wallet starting again after a payment-link check:
+                // "Synced" stays until it is synced again or fails.
+                if self.syncedHeldForWalletId != nil {
+                    switch newState {
+                    case .idle, .connecting, .syncing:
+                        if self.isHoldingSynced { return }
+                    case .synced, .error:
+                        break
+                    }
+                    self.endSyncedHold()
+                }
 
                 // Don't let the wallet's initial .idle publish regress from .connecting
                 // during a restart — restartWallet() sets .connecting manually before
@@ -2023,6 +2080,13 @@ class WalletManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newTransactions in
                 guard let self = self else { return }
+                // The same wallet starting again after a payment-link check
+                // publishes an empty history before it loads its own; keep
+                // the one on screen.
+                if let heldId = self.historyHeldForWalletId {
+                    if newTransactions.isEmpty, heldId == self.activeWallet?.id { return }
+                    self.historyHeldForWalletId = nil
+                }
                 self.transactions = newTransactions
                 self.saveWidgetDataIfEnabled()
                 self.reconcileReceiveAddress()
@@ -3251,6 +3315,8 @@ class WalletManager: ObservableObject {
         balance = target.cachedBalance ?? 0
         primaryAddress = target.cachedPrimaryAddress ?? ""
         address = target.cachedPrimaryAddress ?? ""
+        historyHeldForWalletId = nil
+        endSyncedHold()
         syncState = .connecting
         currentSeed = nil
         connectionStage = .connecting

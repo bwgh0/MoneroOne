@@ -268,4 +268,18 @@ final class PaymentLinkActivityTests: XCTestCase {
         ])
         XCTAssertEqual(ordered.map(\.record.id), ["claim", "expired", "waitingNew", "waitingOld", "ready"])
     }
+
+    /// A look stops the active wallet: the dashboard looks when a look is
+    /// due (it appeared, the app came back, the wallet changed), else at
+    /// most every 10 minutes. Never per block.
+    @MainActor
+    func testDashboardLooksWhenDueElseEveryTenMinutes() {
+        let now = Date()
+        typealias Checks = OpenPaymentLinksChecks
+        XCTAssertTrue(Checks.isLookDue(isDue: true, lastLook: now, now: now))
+        XCTAssertTrue(Checks.isLookDue(isDue: false, lastLook: nil, now: now))
+        XCTAssertFalse(Checks.isLookDue(isDue: false, lastLook: now.addingTimeInterval(-2 * 60), now: now))
+        XCTAssertFalse(Checks.isLookDue(isDue: false, lastLook: now.addingTimeInterval(-9 * 60), now: now))
+        XCTAssertTrue(Checks.isLookDue(isDue: false, lastLook: now.addingTimeInterval(-10 * 60), now: now))
+    }
 }

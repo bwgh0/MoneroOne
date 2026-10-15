@@ -485,20 +485,33 @@ struct OpenPaymentLinkRow: View {
 // MARK: - Checks on the dashboard
 
 /// Keeps the balance card's open-link lines true while the dashboard is on
-/// screen: when it appears and on each new block, it looks at the sent
-/// links someone could have claimed (`PaymentLinksStatusChecker`, at most
-/// one look per link every `recheckInterval`), only the active wallet's
-/// open ones the lines count. A look stops the active wallet for a moment,
-/// so it runs only on a synced wallet with its history loaded (the checker
-/// reads the funding from it), at Now, with no sheet open.
+/// screen. A look at a link (`PaymentLinksStatusChecker`) opens its
+/// envelope, which stops the active wallet while it runs, so the dashboard
+/// looks seldom: once when it appears, when the app comes back to the
+/// foreground and after a wallet switch, then at most every 10 minutes
+/// while one of the active wallet's links is open. Each look waits for a
+/// synced wallet with its history loaded (the checker reads the funding
+/// from it), at Now, with no sheet open. Never per block.
 struct OpenPaymentLinksChecks: ViewModifier {
     /// False while History is open, a sheet is up or the wallet list shows.
     let isActive: Bool
     @EnvironmentObject private var walletManager: WalletManager
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var store = EnvelopeStore.shared
     @ObservedObject private var coordinator = PaymentLinksCoordinator.shared
     @StateObject private var checker = PaymentLinksStatusChecker()
     @State private var isOnScreen = false
+    /// The dashboard appeared, the app came back or the wallet changed:
+    /// look once the wallet allows it.
+    @State private var isDue = false
+    @State private var lastLook: Date?
+
+    static let lookInterval: TimeInterval = 10 * 60
+
+    static func isLookDue(isDue: Bool, lastLook: Date?, now: Date) -> Bool {
+        guard !isDue, let lastLook else { return true }
+        return now.timeIntervalSince(lastLook) >= lookInterval
+    }
 
     private var canCheck: Bool { isActive && coordinator.presentation == nil }
 
@@ -506,30 +519,56 @@ struct OpenPaymentLinksChecks: ViewModifier {
         content
             .onAppear {
                 isOnScreen = true
+                isDue = true
                 store.reload()
                 check()
             }
             .onDisappear {
                 isOnScreen = false
-                checker.stop()
+                stop()
+            }
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(60))
+                    check()
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                isDue = true
+                check()
+            }
+            .onChange(of: walletManager.activeWallet?.id) { _, _ in
+                isDue = true
+                check()
             }
             .onChange(of: walletManager.daemonHeight) { _, _ in check() }
             .onChange(of: walletManager.syncState) { _, _ in check() }
             .onChange(of: walletManager.transactions.isEmpty) { _, _ in check() }
             .onChange(of: canCheck) { _, can in
-                if can { check() } else { checker.stop() }
+                if can { check() } else { stop() }
             }
     }
 
-    private func check() {
+    private func stop() {
+        // A look cut short runs again once the wallet allows it.
+        if checker.isChecking { isDue = true }
+        checker.stop()
+    }
+
+    private func check(now: Date = Date()) {
         // An empty history right after a start is not loaded yet: the
         // checker would take every pending link for one funded elsewhere.
         guard isOnScreen, canCheck, walletManager.syncState == .synced,
               !walletManager.transactions.isEmpty else { return }
+        // From the active wallet's history alone: no envelope, every time.
         PaymentLinksStatusChecker.reconcileFunding(store: store, walletManager: walletManager)
         PaymentLinksStatusChecker.forgetMinedClaimWords(store: store, walletManager: walletManager)
+        guard Self.isLookDue(isDue: isDue, lastLook: lastLook, now: now) else { return }
+        isDue = false
         let activeId = walletManager.activeWallet?.id.uuidString
         guard store.sent.contains(where: { OpenPaymentLinks.isOpenSent($0, activeWalletId: activeId) }) else { return }
+        lastLook = now
         checker.start(walletManager: walletManager, store: store, matching: {
             OpenPaymentLinks.isOpenSent($0, activeWalletId: activeId)
         })

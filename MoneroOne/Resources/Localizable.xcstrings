@@ -1880,6 +1880,29 @@
         }
       }
     },
+    "%lld links to claim" : {
+      "comment" : "Balance card: payment links sent to you, amount not known yet",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld link to claim"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld links to claim"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld locations" : {
       "localizations" : {
         "de" : {
@@ -2207,6 +2230,29 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld 個位置"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld open links" : {
+      "comment" : "Balance card: payment links you sent that nobody claimed yet",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld open link"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld open links"
                 }
               }
             }

@@ -46,7 +46,7 @@ struct PaymentLinkDisplay {
            let daemonHeight = walletManager?.daemonHeight, daemonHeight > height {
             confirmations = max(confirmations ?? 0, Int(daemonHeight - height))
         }
-        // Same rule as the pinned row in Activity, so both say the same.
+        // Same rule as the Open Links row in Activity, so both say the same.
         if record.role == .received, status == .pending,
            PendingPaymentLinks.state(of: record, daemonHeight: walletManager?.daemonHeight ?? 0, now: now) == .ready {
             status = .ready
@@ -101,8 +101,8 @@ struct PaymentLinkDisplay {
 // MARK: - Background status check
 
 /// Opens each sent link that someone could have claimed since the last look,
-/// one at a time, while Activity shows its Links filter or a link's detail
-/// is on screen.
+/// one at a time, while the dashboard (the balance card's open-link lines),
+/// Activity's Links filter or a link's detail is on screen.
 @MainActor
 final class PaymentLinksStatusChecker: ObservableObject {
     @Published private(set) var isChecking = false
@@ -112,14 +112,22 @@ final class PaymentLinksStatusChecker: ObservableObject {
     private var lastFailedLook: [String: Date] = [:]
 
     /// `only`: look at that one link (its detail is on screen).
-    func start(walletManager: WalletManager, store: EnvelopeStore, only recordId: String? = nil) {
+    /// `matching`: look only at the links it accepts (the dashboard: the
+    /// active wallet's open links).
+    func start(
+        walletManager: WalletManager,
+        store: EnvelopeStore,
+        only recordId: String? = nil,
+        matching include: ((EnvelopeRecord) -> Bool)? = nil
+    ) {
         guard task == nil else { return }
         // Pending links this wallet funded need no envelope: their
         // confirmations come from the active wallet. Only links that can
         // have moved are opened.
         let now = Date()
         let candidates = store.sent.filter { record in
-            guard record.link != nil, recordId == nil || record.id == recordId else { return false }
+            guard record.link != nil, recordId == nil || record.id == recordId,
+                  include?(record) ?? true else { return false }
             // One look per block is enough; a scan stops the active wallet.
             let last = [record.lastCheckedAt, lastFailedLook[record.id]].compactMap { $0 }.max()
             if let last, now.timeIntervalSince(last) < Self.recheckInterval { return false }
@@ -244,8 +252,8 @@ struct PaymentLinkDetailView: View {
     /// Reclaim and Claim open their sheet here, not through the app root:
     /// this screen can sit inside Send or a transaction sheet.
     @State private var claimPresentation: PaymentLinksCoordinator.Presentation?
-    /// Activity checks every link only under its Links filter: a sent link
-    /// looks at its envelope here too, so a claim shows and Reclaim opens.
+    /// The dashboard and Activity's Links filter check every link: a sent
+    /// link looks at its envelope here too, so a claim shows and Reclaim opens.
     @StateObject private var checker = PaymentLinksStatusChecker()
     @State private var isOnScreen = false
     @StateObject private var biometricAuth = BiometricAuthManager()

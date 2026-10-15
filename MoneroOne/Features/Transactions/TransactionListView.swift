@@ -13,8 +13,22 @@ struct TransactionListView: View {
     @State private var isOnScreen = false
     /// Minor index of the receiving subaddress to show, nil for any.
     @State private var receivingIndex: Int?
+    /// An open link's detail, opened from the Open Links group.
+    @State private var openedLink: OpenedLink?
     var asOf: Date? = nil
     var historyTransactions: [MoneroTransaction]? = nil
+
+    /// `initialFilter`: Links when the balance card's open-link lines open it.
+    init(asOf: Date? = nil, historyTransactions: [MoneroTransaction]? = nil, initialFilter: FilterType = .all) {
+        self.asOf = asOf
+        self.historyTransactions = historyTransactions
+        _filterType = State(initialValue: initialFilter)
+    }
+
+    private struct OpenedLink: Hashable {
+        let id: String
+        let role: EnvelopeRecord.Role
+    }
 
     private var sourceTransactions: [MoneroTransaction] {
         asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
@@ -78,13 +92,11 @@ struct TransactionListView: View {
     // sync/send), so the All Transactions screen matches the
     // Recent list on the home view instead of mis-tagging
     // outgoing sends as Received.
-    /// Received payment links not claimed yet, above the rows: now only,
-    /// with no search, and under the filters that can hold an incoming
-    /// payment that is still on its way.
-    private var pendingLinks: [EnvelopeRecord] {
-        guard asOf == nil, searchText.isEmpty, receivingIndex == nil,
-              filterType != .outgoing else { return [] }
-        return PendingPaymentLinks.records(in: paymentLinks)
+    /// Under Links, the links that still hold money, above the summary:
+    /// now only, with no search.
+    private var openLinks: [OpenPaymentLinks.Item] {
+        guard filterType == .links, asOf == nil, searchText.isEmpty, receivingIndex == nil else { return [] }
+        return OpenPaymentLinks.items(in: paymentLinks, walletManager: walletManager)
     }
 
     private var filteredTransactions: [MoneroTransaction] {
@@ -118,7 +130,7 @@ struct TransactionListView: View {
 
     var body: some View {
         let filtered = filteredTransactions
-        let pendingLinks = self.pendingLinks
+        let openLinks = self.openLinks
         let totals = TransactionListLogic.totals(of: filtered)
         // Fiat Mode leads with fiat totals priced like the rows below them.
         let fiatTotals = priceService.showFiatFirst
@@ -133,12 +145,22 @@ struct TransactionListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            ForEach(pendingLinks) { record in
-                PendingPaymentLinkRow(record: record, style: .listRow)
+            if !openLinks.isEmpty {
+                Text("Open Links", comment: "Activity, Links filter: header over the payment links that still hold money")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                ForEach(openLinks) { item in
+                    OpenPaymentLinkRow(item: item) {
+                        openedLink = OpenedLink(id: item.record.id, role: item.record.role)
+                    }
+                }
             }
             if filtered.isEmpty {
-                // Under Links, a received link waiting above is a link.
-                if !(filterType == .links && !pendingLinks.isEmpty) {
+                // Under Links, an open link above is a link.
+                if openLinks.isEmpty {
                     emptyState
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -160,6 +182,9 @@ struct TransactionListView: View {
         }
         .listStyle(.plain)
         .animation(.easeInOut(duration: 0.25), value: filtered.isEmpty)
+        .navigationDestination(item: $openedLink) { link in
+            PaymentLinkDetailView(recordId: link.id, role: link.role)
+        }
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()

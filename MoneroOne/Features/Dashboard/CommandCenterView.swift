@@ -8,6 +8,10 @@ struct CommandCenterView: View {
     @State private var showReceive = false
     @State private var showSend = false
     @State private var showAllTransactions = false
+    /// All Transactions opens on this filter: Links from the balance
+    /// card's open-link lines, else All.
+    @State private var allTransactionsFilter: TransactionListView.FilterType = .all
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
     /// Wallet switcher expanded: the greeting slides out, the switcher pill
     /// stretches, and the wallet rows replace the balance column (same
     /// choreography as WalletView on iPhone).
@@ -39,6 +43,10 @@ struct CommandCenterView: View {
                 await walletManager.refresh()
                 await priceService.fetchPrice()
             }
+            // Looks at sent links on new blocks, so a claimed link leaves
+            // the balance card's line. Never during History or a sheet.
+            .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil && !isHistoryExpanded
+                                    && !showSend && !showReceive && !showAllTransactions && !showWalletManager)
         }
         .onChange(of: walletManager.walletSessionId) { _, _ in
             selectedHistoryPoint = nil
@@ -60,7 +68,7 @@ struct CommandCenterView: View {
         .presentsSendRequests(from: walletManager, showSend: $showSend)
         .sheet(isPresented: $showAllTransactions) {
             NavigationStack {
-                TransactionListView(asOf: selectedHistoryPoint?.timestamp, historyTransactions: pastTransactions)
+                TransactionListView(asOf: selectedHistoryPoint?.timestamp, historyTransactions: pastTransactions, initialFilter: allTransactionsFilter)
             }
             .closesForPaymentLink()
         }
@@ -138,6 +146,14 @@ struct CommandCenterView: View {
             selectedHistoryPoint: $selectedHistoryPoint,
             selectedHistoryRange: $selectedHistoryRange,
             historyModel: historyModel,
+            openLinks: OpenPaymentLinks.summary(
+                of: paymentLinks.records,
+                activeWalletId: walletManager.activeWallet?.id.uuidString
+            ),
+            onOpenLinks: {
+                allTransactionsFilter = .links
+                showAllTransactions = true
+            },
             onHardwareSyncTap: {
                 // Clear a finished run's .complete/.failed state so the sheet
                 // opens to a fresh bringup. This stays at the tap site, as in
@@ -163,7 +179,10 @@ struct CommandCenterView: View {
 
     private var transactionsPanel: some View {
         TransactionsPanelView(
-            onSeeAll: { showAllTransactions = true },
+            onSeeAll: {
+                allTransactionsFilter = .all
+                showAllTransactions = true
+            },
             isHistoryOpen: isHistoryExpanded,
             asOf: selectedHistoryPoint?.timestamp,
             historyTransactions: pastTransactions

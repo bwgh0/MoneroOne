@@ -148,4 +148,124 @@ final class PaymentLinkActivityTests: XCTestCase {
         try store.save(record(.sent, id: "f", status: .pending))
         XCTAssertEqual(Set(PendingPaymentLinks.records(in: store).map(\.id)), ["a", "b"])
     }
+
+    // MARK: - Open links (balance card lines, Open Links group)
+
+    private func open(
+        _ role: EnvelopeRecord.Role,
+        _ status: EnvelopeStatus,
+        id: String = UUID().uuidString,
+        amount: UInt64 = 50_000_000_000,
+        walletId: String? = "w1",
+        expiry: Int64 = 0,
+        secret: Bool = true,
+        fundingTxid: String? = "tx"
+    ) -> EnvelopeRecord {
+        var r = EnvelopeRecord(id: id, role: role, words: nil, address: "addr", restoreHeight: 150,
+                               amount: amount, expiry: expiry, createdAt: Date(), status: status)
+        r.walletId = role == .sent ? walletId : nil
+        r.fundingTxid = role == .sent ? fundingTxid : nil
+        if secret { r.secret = "000102030405060708090a0b0c0d0e0f" }
+        return r
+    }
+
+    func testOpenSentLinksArePendingOrReadyFromThisWallet() {
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(open(.sent, .pending), activeWalletId: "w1"))
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(open(.sent, .ready), activeWalletId: "w1"))
+        // Expired is a label over pending and ready: still open.
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(open(.sent, .ready, expiry: 1), activeWalletId: "w1"))
+        // Settled, or never funded: nothing in the link.
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .claimed), activeWalletId: "w1"))
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .reclaimed), activeWalletId: "w1"))
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .notFunded, fundingTxid: nil), activeWalletId: "w1"))
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .created, fundingTxid: nil), activeWalletId: "w1"))
+        // Another wallet's link is that wallet's money; an old record without
+        // a wallet id counts everywhere.
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .pending, walletId: "w2"), activeWalletId: "w1"))
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(open(.sent, .pending, walletId: nil), activeWalletId: "w1"))
+        // A received link is never one of ours.
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.received, .ready), activeWalletId: "w1"))
+    }
+
+    func testLinksToClaimAreUnsettledReceivedLinksWithTheirSecret() {
+        XCTAssertTrue(OpenPaymentLinks.isWaitingToClaim(open(.received, .pending)))
+        XCTAssertTrue(OpenPaymentLinks.isWaitingToClaim(open(.received, .ready)))
+        XCTAssertTrue(OpenPaymentLinks.isWaitingToClaim(open(.received, .created)))
+        XCTAssertFalse(OpenPaymentLinks.isWaitingToClaim(open(.received, .claimed)))
+        XCTAssertFalse(OpenPaymentLinks.isWaitingToClaim(open(.received, .reclaimed)))
+        XCTAssertFalse(OpenPaymentLinks.isWaitingToClaim(open(.received, .ready, secret: false)))
+        XCTAssertFalse(OpenPaymentLinks.isWaitingToClaim(open(.sent, .ready)))
+    }
+
+    func testSummaryAddsTheOpenLinks() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let records = [
+            open(.sent, .pending, amount: 50_000_000_000),
+            open(.sent, .ready, amount: 250_000_000_000),
+            open(.sent, .ready, amount: 100_000_000_000, expiry: 1_000_000),
+            open(.sent, .claimed, amount: 900_000_000_000),
+            open(.sent, .pending, amount: 900_000_000_000, walletId: "w2"),
+            open(.received, .ready, amount: 30_000_000_000),
+            open(.received, .claimed, amount: 900_000_000_000),
+        ]
+        let summary = OpenPaymentLinks.summary(of: records, activeWalletId: "w1", now: now)
+        XCTAssertEqual(summary.sentCount, 3)
+        XCTAssertEqual(summary.sentAmount, 400_000_000_000)
+        XCTAssertEqual(summary.expiredCount, 1)
+        XCTAssertEqual(summary.toClaimCount, 1)
+        XCTAssertEqual(summary.toClaimAmount, 30_000_000_000)
+        XCTAssertFalse(summary.isEmpty)
+
+        XCTAssertTrue(OpenPaymentLinks.summary(of: [open(.sent, .claimed)], activeWalletId: "w1").isEmpty)
+        XCTAssertTrue(OpenPaymentLinks.summary(of: [], activeWalletId: "w1").isEmpty)
+    }
+
+    func testSummaryClaimAmountIsUnknownWhileALinkHasNoAmount() {
+        let records = [open(.received, .ready, amount: 30_000_000_000), open(.received, .created, amount: 0)]
+        let summary = OpenPaymentLinks.summary(of: records, activeWalletId: nil)
+        XCTAssertEqual(summary.toClaimCount, 2)
+        XCTAssertNil(summary.toClaimAmount)
+    }
+
+    func testSentLineText() {
+        XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 50_000_000_000, count: 1, expired: 0), "0.0500 XMR in 1 open link")
+        XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 150_000_000_000, count: 2, expired: 0), "0.1500 XMR in 2 open links")
+        XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 400_000_000_000, count: 3, expired: 1), "0.4000 XMR in 3 open links · 1 expired")
+        XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 400_000_000_000, count: 3, expired: 2), "0.4000 XMR in 3 open links · 2 expired")
+    }
+
+    func testSentLineAccessibilityLabel() {
+        XCTAssertEqual(OpenPaymentLinks.sentAccessibilityLabel(amount: 150_000_000_000, count: 2, expired: 1), "0.1500 XMR in 2 open links, 1 expired")
+        XCTAssertEqual(OpenPaymentLinks.sentAccessibilityLabel(amount: 50_000_000_000, count: 1, expired: 0), "0.0500 XMR in 1 open link")
+    }
+
+    func testClaimLineText() {
+        XCTAssertEqual(OpenPaymentLinks.claimLineText(amount: 30_000_000_000, count: 1), "0.0300 XMR to claim")
+        XCTAssertEqual(OpenPaymentLinks.claimLineText(amount: nil, count: 1), "1 link to claim")
+        XCTAssertEqual(OpenPaymentLinks.claimLineText(amount: nil, count: 2), "2 links to claim")
+    }
+
+    func testOpenLinksGoMostUrgentFirst() {
+        XCTAssertEqual(OpenPaymentLinks.kind(role: .received, status: .pending, isExpired: false, confirmations: 2), .toClaim)
+        XCTAssertEqual(OpenPaymentLinks.kind(role: .sent, status: .ready, isExpired: true, confirmations: 12), .expired)
+        XCTAssertEqual(OpenPaymentLinks.kind(role: .sent, status: .pending, isExpired: false, confirmations: 3), .waiting)
+        XCTAssertEqual(OpenPaymentLinks.kind(role: .sent, status: .pending, isExpired: false, confirmations: 10), .ready)
+        XCTAssertEqual(OpenPaymentLinks.kind(role: .sent, status: .ready, isExpired: false, confirmations: nil), .ready)
+
+        let older = Date(timeIntervalSince1970: 1_000)
+        let newer = Date(timeIntervalSince1970: 2_000)
+        func item(_ id: String, _ kind: OpenPaymentLinks.Kind, _ date: Date) -> OpenPaymentLinks.Item {
+            var r = open(kind == .toClaim ? .received : .sent, .pending, id: id)
+            r.createdAt = date
+            return OpenPaymentLinks.Item(record: r, kind: kind)
+        }
+        let ordered = OpenPaymentLinks.ordered([
+            item("ready", .ready, newer),
+            item("waitingOld", .waiting, older),
+            item("waitingNew", .waiting, newer),
+            item("expired", .expired, older),
+            item("claim", .toClaim, older),
+        ])
+        XCTAssertEqual(ordered.map(\.record.id), ["claim", "expired", "waitingNew", "waitingOld", "ready"])
+    }
 }

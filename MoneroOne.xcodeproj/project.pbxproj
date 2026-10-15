@@ -169,6 +169,7 @@
 		9A7E1C0D000B00000000B00B /* EnvelopeWordlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000B00000000F00B /* EnvelopeWordlist.swift */; };
 		9A7E1C0D000C00000000B00C /* EnvelopeLinkV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */; };
 		9A7E1C0D000D00000000B00D /* PaymentLinkActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000D00000000F00D /* PaymentLinkActivity.swift */; };
+		9A7E1C0D000E00000000B00E /* OpenPaymentLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000E00000000F00E /* OpenPaymentLinks.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -375,6 +376,7 @@
 		9A7E1C0D000B00000000F00B /* EnvelopeWordlist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeWordlist.swift; sourceTree = "<group>"; };
 		9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeLinkV2.swift; sourceTree = "<group>"; };
 		9A7E1C0D000D00000000F00D /* PaymentLinkActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkActivity.swift; sourceTree = "<group>"; };
+		9A7E1C0D000E00000000F00E /* OpenPaymentLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenPaymentLinks.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -696,6 +698,7 @@
 				9A7E1C0D000100000000F001 /* EnvelopeLink.swift */,
 				9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */,
 				9A7E1C0D000D00000000F00D /* PaymentLinkActivity.swift */,
+				9A7E1C0D000E00000000F00E /* OpenPaymentLinks.swift */,
 				9A7E1C0D000200000000F002 /* EnvelopeStatus.swift */,
 				9A7E1C0D000300000000F003 /* EnvelopeStore.swift */,
 				9A7E1C0D000400000000F004 /* EnvelopeSecret.swift */,
@@ -1094,6 +1097,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				9A7E1C0D000100000000B001 /* EnvelopeLink.swift in Sources */,
 				9A7E1C0D000C00000000B00C /* EnvelopeLinkV2.swift in Sources */,
 				9A7E1C0D000D00000000B00D /* PaymentLinkActivity.swift in Sources */,
+				9A7E1C0D000E00000000B00E /* OpenPaymentLinks.swift in Sources */,
 				9A7E1C0D000200000000B002 /* EnvelopeStatus.swift in Sources */,
 				9A7E1C0D000300000000B003 /* EnvelopeStore.swift in Sources */,
 				9A7E1C0D000400000000B004 /* EnvelopeSecret.swift in Sources */,

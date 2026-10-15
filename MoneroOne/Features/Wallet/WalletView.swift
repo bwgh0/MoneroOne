@@ -12,6 +12,9 @@ struct WalletView: View {
     @State private var selectedHistoryPoint: PortfolioDataPoint?
     @State private var selectedHistoryRange: ChartTimeRange = .week
     @State private var historyModel = BalanceHistoryModel()
+    /// The balance card's open-link lines open Activity's Links filter.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    @State private var showLinks = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Viewport and above-activity heights, so the empty activity card can
     /// fill the leftover height on short screens (iPhone Duo cover).
@@ -82,6 +85,11 @@ struct WalletView: View {
                             selectedHistoryPoint: $selectedHistoryPoint,
                             selectedHistoryRange: $selectedHistoryRange,
                             historyModel: historyModel,
+                            openLinks: OpenPaymentLinks.summary(
+                                of: paymentLinks.records,
+                                activeWalletId: walletManager.activeWallet?.id.uuidString
+                            ),
+                            onOpenLinks: { showLinks = true },
                             onHardwareSyncTap: {
                                 // Clear any leftover .complete/.failed
                                 // state from the prior run so the
@@ -140,6 +148,13 @@ struct WalletView: View {
                 Color.clear.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
             }
             .walletHeader(showWalletManager: $showWalletManager)
+            .navigationDestination(isPresented: $showLinks) {
+                TransactionListView(initialFilter: .links)
+            }
+            // Looks at sent links on new blocks, so a claimed link leaves
+            // the balance card's line. Never during History or a sheet.
+            .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil && !isHistoryExpanded
+                                    && !showSend && !showReceive && !showWalletManager)
             .onChange(of: walletManager.walletSessionId) { _, _ in
                 selectedHistoryPoint = nil
                 historyModel = BalanceHistoryModel()
@@ -227,8 +242,6 @@ struct CompactActionButton: View {
 struct RecentTransactionsSection: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var selectedTransaction: MoneroTransaction?
-    /// Received payment links not claimed yet sit above the transactions.
-    @ObservedObject private var paymentLinks = EnvelopeStore.shared
     /// Stretches the empty-state card to this height so it reaches the
     /// bottom of the screen instead of leaving a blank block under it.
     var emptyStateMinHeight: CGFloat? = nil
@@ -258,8 +271,6 @@ struct RecentTransactionsSection: View {
 
     var body: some View {
         let recentTransactions = self.recentTransactions
-        // Now only: History shows the past.
-        let pendingLinks = asOf == nil ? PendingPaymentLinks.records(in: paymentLinks) : []
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -286,7 +297,7 @@ struct RecentTransactionsSection: View {
                 }
             }
 
-            if recentTransactions.isEmpty && pendingLinks.isEmpty {
+            if recentTransactions.isEmpty {
                 // A card, not a button: it can stretch to fill the screen on
                 // short displays and a glass capsule would turn into an egg.
                 VStack(spacing: 12) {
@@ -331,9 +342,6 @@ struct RecentTransactionsSection: View {
                 .dashboardCard()
             } else {
                 VStack(spacing: 8) {
-                    ForEach(pendingLinks) { record in
-                        PendingPaymentLinkRow(record: record, style: .card(padding: 14))
-                    }
                     ForEach(recentTransactions) { transaction in
                         RecentTransactionCard(transaction: transaction) {
                             selectedTransaction = transaction

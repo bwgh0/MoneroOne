@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The sheet a claim link opens: checks the link, waits for it to unlock,
-/// claims it to the active wallet. For a link this device sent, it says so
-/// and offers Reclaim instead.
+/// claims it to the active wallet or another one the user picks. For a link
+/// this device sent, it says so and offers Reclaim instead.
 struct PaymentLinkClaimSheet: View {
     let presentation: PaymentLinksCoordinator.Presentation
 
@@ -200,7 +200,9 @@ struct EnvelopeSessionContent: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            if !session.destinationWalletName.isEmpty {
+            if session.destinations.count > 1 {
+                destinationMenu
+            } else if !session.destinationWalletName.isEmpty {
                 Text(isOwn ? "Reclaim to \(session.destinationWalletName)" : "Claim to \(session.destinationWalletName)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -255,6 +257,47 @@ struct EnvelopeSessionContent: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
+    }
+
+    /// Two or more wallets can take the money: the line picks one. The
+    /// chosen wallet stays closed; the app stays on the open one.
+    private var destinationMenu: some View {
+        let name = session.destinationWalletName
+        return Menu {
+            Picker(selection: $session.destinationId) {
+                ForEach(session.destinations) { destination in
+                    Text(destination.name).tag(Optional(destination.walletId))
+                }
+            } label: {
+                EmptyView()
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 4) {
+                Text(destinationLine(name))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.brand)
+            }
+            .font(.subheadline)
+            .multilineTextAlignment(.center)
+        }
+        .disabled(session.isSweeping)
+        .accessibilityLabel(isOwn
+            ? Text("Reclaim to", comment: "VoiceOver: the claim sheet's wallet menu on a sent link; the wallet name follows as the value")
+            : Text("Claim to", comment: "VoiceOver: the claim sheet's wallet menu; the wallet name follows as the value"))
+        .accessibilityValue(name)
+    }
+
+    /// "Claim to Savings" with the wallet name in the brand color, as a
+    /// menu's current value.
+    private func destinationLine(_ name: String) -> AttributedString {
+        var line = AttributedString(isOwn ? String(localized: "Reclaim to \(name)") : String(localized: "Claim to \(name)"))
+        line.foregroundColor = .secondary
+        if let range = line.range(of: name, options: .backwards) {
+            line[range].foregroundColor = .brand
+        }
+        return line
     }
 
     private func hashPill(_ txid: String) -> some View {

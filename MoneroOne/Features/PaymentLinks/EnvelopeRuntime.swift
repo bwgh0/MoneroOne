@@ -16,11 +16,13 @@ import MoneroKit
 final class EnvelopeRuntime: ObservableObject {
     static let shared = EnvelopeRuntime()
 
-    /// Where a claim or reclaim sends the money: the active wallet's current
-    /// receive address (the one Receive shows), read before the wallet stops.
+    /// The active wallet's current receive address (the one Receive shows),
+    /// read before the wallet stops. A claim or reclaim goes here unless the
+    /// user picks another wallet (`PaymentLinkClaimDestinations`).
     struct Destination: Equatable {
         let address: String
         let walletName: String
+        var walletId: UUID? = nil
     }
 
     enum RuntimeError: LocalizedError, Equatable {
@@ -102,7 +104,7 @@ final class EnvelopeRuntime: ObservableObject {
             leases -= 1
             throw RuntimeError.noDestination
         }
-        destination = Destination(address: address, walletName: walletManager.activeWallet?.name ?? "")
+        destination = Destination(address: address, walletName: walletManager.activeWallet?.name ?? "", walletId: walletManager.activeWallet?.id)
         guard await walletManager.suspendActiveWalletForEnvelope() else {
             leases -= 1
             destination = nil

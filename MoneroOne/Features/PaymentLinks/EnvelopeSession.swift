@@ -28,6 +28,11 @@ final class EnvelopeSession: ObservableObject {
     /// A received link: claim on the first check that finds it ready (the
     /// user tapped Claim on its row in Activity). Once only.
     var claimWhenReady = false
+    /// The wallets the money can go to. The sheet offers a choice when
+    /// there are two or more.
+    @Published private(set) var destinations: [PaymentLinkClaimDestination] = []
+    /// The wallet the money goes to.
+    @Published var destinationId: UUID?
 
     private let walletManager: WalletManager
     private let store: EnvelopeStore
@@ -53,7 +58,16 @@ final class EnvelopeSession: ObservableObject {
     }
 
     var destinationWalletName: String {
-        runtime.destination?.walletName ?? walletManager.activeWallet?.name ?? ""
+        sweepTarget?.walletName ?? walletManager.activeWallet?.name ?? ""
+    }
+
+    /// The chosen wallet; with no list (none could be read), the active
+    /// wallet's receive address as before.
+    private var sweepTarget: (address: String, walletName: String)? {
+        if let chosen = destinations.first(where: { $0.walletId == destinationId }) {
+            return (chosen.address, chosen.name)
+        }
+        return runtime.destination.map { ($0.address, $0.walletName) }
     }
 
     // MARK: - Lifecycle
@@ -80,6 +94,7 @@ final class EnvelopeSession: ObservableObject {
                     return
                 }
             }
+            loadDestinations()
             watchProgress()
             let observation = try await runtime.check(link: link, address: record.address, estimateSweepFee: record.role == .received)
             progressTask?.cancel()
@@ -107,9 +122,10 @@ final class EnvelopeSession: ObservableObject {
     }
 
     /// Claim (received link) or reclaim (sent link): sweep everything
-    /// unlocked to the active wallet's receive address.
+    /// unlocked to the chosen wallet. A closed wallet stays closed; the
+    /// money shows when it next syncs.
     func sweep() async {
-        guard case .ready = phase, let destination = runtime.destination else { return }
+        guard case .ready = phase, let destination = sweepTarget else { return }
         pollTask?.cancel()
         phase = .sweeping
         do {
@@ -132,6 +148,25 @@ final class EnvelopeSession: ObservableObject {
             await runtime.deleteFiles(id: record.id)
         } catch {
             phase = .failed(Self.message(for: error))
+        }
+    }
+
+    /// Reads the wallets the money can go to. Keeps the user's pick when
+    /// it is still in the list, else takes the default.
+    private func loadDestinations() {
+        let list = PaymentLinkClaimDestinations.eligible(
+            wallets: walletManager.wallets,
+            active: runtime.destination,
+            isValidAddress: { walletManager.isValidAddress($0) }
+        )
+        destinations = list
+        if !list.contains(where: { $0.walletId == destinationId }) {
+            destinationId = PaymentLinkClaimDestinations.defaultChoice(
+                among: list,
+                role: record.role,
+                fundingWalletId: record.walletId,
+                activeWalletId: runtime.destination?.walletId
+            )?.walletId
         }
     }
 
@@ -220,5 +255,56 @@ final class EnvelopeSession: ObservableObject {
 
     static func message(for error: Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+}
+
+/// A wallet a claim or reclaim can send the money to.
+struct PaymentLinkClaimDestination: Identifiable, Equatable {
+    let walletId: UUID
+    let name: String
+    let address: String
+
+    var id: UUID { walletId }
+}
+
+/// Which wallets a payment link can be claimed into, and the one it goes to
+/// unless the user picks another. Choosing a wallet does not open it: the
+/// sweep goes to its address and the money shows when it next syncs.
+enum PaymentLinkClaimDestinations {
+    /// In wallet list order. The open wallet takes its live receive address
+    /// (the one Receive shows). Every other wallet takes its saved main
+    /// address, when that address is valid on this network; a wallet
+    /// without one is left out. View-only and hardware wallets can receive,
+    /// so they stay in.
+    static func eligible(
+        wallets: [WalletInfo],
+        active: EnvelopeRuntime.Destination?,
+        isValidAddress: (String) -> Bool
+    ) -> [PaymentLinkClaimDestination] {
+        wallets.compactMap { wallet in
+            if let active, active.walletId == wallet.id {
+                return PaymentLinkClaimDestination(walletId: wallet.id, name: wallet.name, address: active.address)
+            }
+            guard let address = wallet.cachedPrimaryAddress?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !address.isEmpty,
+                  !NullKeyAddress.isNullKey(address),
+                  isValidAddress(address) else { return nil }
+            return PaymentLinkClaimDestination(walletId: wallet.id, name: wallet.name, address: address)
+        }
+    }
+
+    /// Claim: the open wallet. Reclaim: the wallet that funded the link, when
+    /// it can still receive, else the open wallet.
+    static func defaultChoice(
+        among destinations: [PaymentLinkClaimDestination],
+        role: EnvelopeRecord.Role,
+        fundingWalletId: String?,
+        activeWalletId: UUID?
+    ) -> PaymentLinkClaimDestination? {
+        if role == .sent, let fundingId = fundingWalletId.flatMap(UUID.init(uuidString:)),
+           let funding = destinations.first(where: { $0.walletId == fundingId }) {
+            return funding
+        }
+        return destinations.first { $0.walletId == activeWalletId }
     }
 }

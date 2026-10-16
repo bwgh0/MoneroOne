@@ -18461,6 +18461,17 @@
         }
       }
     },
+    "Claim to" : {
+      "comment" : "VoiceOver: the claim sheet's wallet menu; the wallet name follows as the value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claim to"
+          }
+        }
+      }
+    },
     "Claim your Monero" : {
       "comment" : "Title of a shared payment link's preview in Messages and the share sheet",
       "localizations" : {
@@ -60733,6 +60744,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收款人：%@"
+          }
+        }
+      }
+    },
+    "Reclaim to" : {
+      "comment" : "VoiceOver: the claim sheet's wallet menu on a sent link; the wallet name follows as the value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reclaim to"
           }
         }
       }

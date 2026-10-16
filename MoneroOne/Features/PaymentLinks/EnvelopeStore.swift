@@ -58,6 +58,32 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     /// (or the active wallet's estimate, for a record checked before this
     /// field) saw the link funded.
     var netAmount: UInt64?
+    /// This iPhone's number for the link ("Link 7"), from one counter that
+    /// sent and received links share. The store assigns it on the first
+    /// save; nil only in a record that was never saved.
+    var number: Int?
+    /// The name the user gave the link. Local only: it never goes into the
+    /// link, its URL, the share text or a transaction memo. Empty or nil
+    /// means "use the number".
+    var note: String?
+
+    /// The name the app shows: the note, else "Link 7".
+    var displayName: String {
+        Self.displayName(note: note, number: number)
+    }
+
+    static func displayName(note: String?, number: Int?) -> String {
+        if let note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            return note
+        }
+        if let number { return linkName(number) }
+        return String(localized: "Payment link")
+    }
+
+    /// "Link 7": the default name for link number 7.
+    static func linkName(_ number: Int) -> String {
+        String(localized: "Link \(number)")
+    }
 
     var link: EnvelopeLink? {
         if let secret, let bytes = [UInt8](hex: secret) {
@@ -170,11 +196,63 @@ final class EnvelopeStore: ObservableObject {
 
     func reload() {
         records = loadAll()
+        numberUnnumberedRecords()
+    }
+
+    /// The number the next new link gets ("Link 9"). One counter for sent
+    /// and received links; it never goes back, so a removed link's number
+    /// is not used again.
+    var nextNumber: Int {
+        max(lastNumber, records.compactMap(\.number).max() ?? 0) + 1
     }
 
     /// Saves or replaces a record. Throws when the Keychain refuses it: the
     /// sender must not fund an envelope whose words are not saved.
+    ///
+    /// The number and the note belong to the store: a saved record keeps its
+    /// own, whatever the caller's copy holds, so a copy taken before a rename
+    /// cannot undo it. A new record gets the next number; its note is kept.
+    /// Use `setNote` to rename.
     func save(_ record: EnvelopeRecord) throws {
+        var record = record
+        if let stored = self.record(id: record.id, role: record.role) {
+            record.number = stored.number ?? record.number
+            record.note = stored.note
+        }
+        if record.number == nil {
+            record.number = nextNumber
+        }
+        try write(record)
+        if let number = record.number, number > lastNumber {
+            lastNumber = number
+        }
+    }
+
+    /// Renames a link. An empty note goes back to "Link 7".
+    func setNote(_ note: String, id: String, role: EnvelopeRecord.Role) throws {
+        guard var record = record(id: id, role: role) else { return }
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        record.note = trimmed.isEmpty ? nil : trimmed
+        try write(record)
+    }
+
+    /// Gives every record saved before link numbers its number, oldest first.
+    private func numberUnnumberedRecords() {
+        let unnumbered = records
+            .filter { $0.number == nil }
+            .sorted { ($0.createdAt, $0.role.rawValue, $0.id) < ($1.createdAt, $1.role.rawValue, $1.id) }
+        for var record in unnumbered {
+            let number = nextNumber
+            record.number = number
+            lastNumber = number
+            if (try? write(record)) == nil, let index = index(of: record) {
+                // The Keychain refused it: the number holds for this run.
+                records[index] = record
+            }
+        }
+    }
+
+    private func write(_ record: EnvelopeRecord) throws {
         let data = try JSONEncoder().encode(record)
         let account = Self.account(for: record)
         let query: [String: Any] = [
@@ -193,12 +271,25 @@ final class EnvelopeStore: ObservableObject {
         guard status == errSecSuccess else { throw EnvelopeStoreError.keychain(status) }
         // Read back: the funding path relies on the words being there.
         guard loadOne(account: account) == record else { throw EnvelopeStoreError.verifyFailed }
-        if let index = records.firstIndex(where: { $0.id == record.id && $0.role == record.role }) {
+        if let index = index(of: record) {
             records[index] = record
         } else {
             records.append(record)
         }
     }
+
+    private func index(of record: EnvelopeRecord) -> Int? {
+        records.firstIndex { $0.id == record.id && $0.role == record.role }
+    }
+
+    /// The highest number given out, kept apart from the records so that a
+    /// removed link's number is not used again.
+    private var lastNumber: Int {
+        get { UserDefaults.standard.integer(forKey: lastNumberKey) }
+        set { UserDefaults.standard.set(newValue, forKey: lastNumberKey) }
+    }
+
+    private var lastNumberKey: String { "\(service).lastNumber" }
 
     /// A sent link that may still hold money.
     var hasUnsettledSentLinks: Bool {
@@ -213,6 +304,7 @@ final class EnvelopeStore: ObservableObject {
         ]
         SecItemDelete(query as CFDictionary)
         records = []
+        UserDefaults.standard.removeObject(forKey: lastNumberKey)
     }
 
     func remove(_ record: EnvelopeRecord) {

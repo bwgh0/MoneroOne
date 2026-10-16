@@ -41705,6 +41705,17 @@
         }
       }
     },
+    "Link %lld" : {
+      "comment" : "Default name of a payment link: its number on this iPhone",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link %lld"
+          }
+        }
+      }
+    },
     "Loading balance history…" : {
       "localizations" : {
         "de" : {

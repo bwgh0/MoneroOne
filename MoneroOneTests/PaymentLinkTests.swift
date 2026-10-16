@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import Security
 import LinkPresentation
 import MoneroKit
 @testable import MoneroOne
@@ -274,6 +275,8 @@ final class PaymentLinkTests: XCTestCase {
         try store.save(updated)
 
         let reloaded = EnvelopeStore(service: service)
+        // The store numbers a new record ("Link 1").
+        updated.number = 1
         XCTAssertEqual(reloaded.records, [updated])
         XCTAssertEqual(reloaded.record(id: record.id, role: .sent)?.link, vector)
         XCTAssertNil(reloaded.record(id: record.id, role: .received))
@@ -299,6 +302,127 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertTrue(store.records.isEmpty)
         XCTAssertFalse(store.hasUnsettledSentLinks)
         XCTAssertTrue(EnvelopeStore(service: service).records.isEmpty)
+    }
+
+    // MARK: - Numbers and notes
+
+    private func storeRecord(_ id: String, _ role: EnvelopeRecord.Role, createdAt: Date = Date(), note: String? = nil) -> EnvelopeRecord {
+        var record = EnvelopeRecord(id: id, role: role, words: vectorWords, address: vectorAddress,
+                                    restoreHeight: 150, amount: 100_000_000_000, expiry: 1_791_000_000,
+                                    createdAt: createdAt, status: .created)
+        record.note = note
+        return record
+    }
+
+    @MainActor
+    func testSentAndReceivedLinksShareOneCounter() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        XCTAssertEqual(store.nextNumber, 1)
+        try store.save(storeRecord("a", .sent))
+        try store.save(storeRecord("b", .received))
+        try store.save(storeRecord("c", .sent))
+        XCTAssertEqual(store.record(id: "a", role: .sent)?.number, 1)
+        XCTAssertEqual(store.record(id: "b", role: .received)?.number, 2)
+        XCTAssertEqual(store.record(id: "c", role: .sent)?.number, 3)
+
+        // A caller's copy without the number keeps the stored number.
+        var copy = storeRecord("a", .sent)
+        copy.status = .pending
+        try store.save(copy)
+        XCTAssertEqual(store.record(id: "a", role: .sent)?.number, 1)
+        XCTAssertEqual(store.record(id: "a", role: .sent)?.status, .pending)
+
+        // A removed link's number is not used again, after a relaunch too.
+        store.remove(try XCTUnwrap(store.record(id: "c", role: .sent)))
+        let relaunched = EnvelopeStore(service: service)
+        XCTAssertEqual(relaunched.nextNumber, 4)
+        try relaunched.save(storeRecord("d", .received))
+        XCTAssertEqual(relaunched.record(id: "d", role: .received)?.number, 4)
+
+        // Remove All starts again at 1.
+        relaunched.removeAll()
+        XCTAssertEqual(EnvelopeStore(service: service).nextNumber, 1)
+    }
+
+    @MainActor
+    func testRecordsFromBeforeNumbersGetThemOnceOldestFirst() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        // Written as an older build wrote them: no number, no note.
+        for (id, role, offset) in [("new", EnvelopeRecord.Role.sent, 300.0), ("old", .received, 100), ("mid", .sent, 200)] {
+            let data = try JSONEncoder().encode(storeRecord(id, role, createdAt: base.addingTimeInterval(offset)))
+            let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+            XCTAssertFalse(json.contains("number"))
+            let add: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: "\(role.rawValue).\(id)",
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            ]
+            XCTAssertEqual(SecItemAdd(add as CFDictionary, nil), errSecSuccess)
+        }
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        XCTAssertEqual(store.record(id: "old", role: .received)?.number, 1)
+        XCTAssertEqual(store.record(id: "mid", role: .sent)?.number, 2)
+        XCTAssertEqual(store.record(id: "new", role: .sent)?.number, 3)
+        XCTAssertEqual(store.nextNumber, 4)
+
+        // Saved: the next launch reads the same numbers.
+        let relaunched = EnvelopeStore(service: service)
+        XCTAssertEqual(relaunched.record(id: "old", role: .received)?.displayName, "Link 1")
+        XCTAssertEqual(relaunched.record(id: "new", role: .sent)?.displayName, "Link 3")
+        XCTAssertEqual(relaunched.nextNumber, 4)
+    }
+
+    @MainActor
+    func testNoteNamesTheLinkAndOnlyARenameChangesIt() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        try store.save(storeRecord("a", .sent, note: "Dinner"))
+        XCTAssertEqual(store.record(id: "a", role: .sent)?.displayName, "Dinner")
+
+        // A copy taken before a rename cannot undo it.
+        let stale = try XCTUnwrap(store.record(id: "a", role: .sent))
+        try store.setNote("  Rent  ", id: "a", role: .sent)
+        try store.save(stale)
+        XCTAssertEqual(store.record(id: "a", role: .sent)?.note, "Rent")
+        XCTAssertEqual(EnvelopeStore(service: service).record(id: "a", role: .sent)?.displayName, "Rent")
+
+        // Clearing the note goes back to the number.
+        try store.setNote("   ", id: "a", role: .sent)
+        XCTAssertNil(store.record(id: "a", role: .sent)?.note)
+        XCTAssertEqual(store.record(id: "a", role: .sent)?.displayName, "Link 1")
+    }
+
+    func testDisplayNameFallsBackToTheNumber() {
+        XCTAssertEqual(EnvelopeRecord.displayName(note: "Dinner", number: 7), "Dinner")
+        XCTAssertEqual(EnvelopeRecord.displayName(note: " Dinner\n", number: 7), "Dinner")
+        XCTAssertEqual(EnvelopeRecord.displayName(note: "  ", number: 7), "Link 7")
+        XCTAssertEqual(EnvelopeRecord.displayName(note: nil, number: 7), "Link 7")
+        XCTAssertEqual(EnvelopeRecord.displayName(note: nil, number: nil), "Payment link")
+    }
+
+    @MainActor
+    func testNoteNeverLeavesThisIPhone() throws {
+        let note = "Rent for Sam"
+        var record = storeRecord("0123456789abcdef", .sent, note: note)
+        record.number = 7
+        let url = try XCTUnwrap(record.link?.url)
+        XCTAssertFalse(url.contains("Rent"))
+        XCTAssertFalse(url.contains("Sam"))
+        let share = try XCTUnwrap(PaymentLinkFunder.shareText(for: record))
+        XCTAssertFalse(share.contains("Rent"))
+        XCTAssertFalse(share.contains("Sam"))
+        XCTAssertFalse(share.contains("Link 7"))
+        XCTAssertEqual(PaymentLinkFunder.memo, "Payment link")
+        // The link is the same with or without a note.
+        record.note = nil
+        XCTAssertEqual(record.link?.url, url)
     }
 
     // MARK: - Redaction

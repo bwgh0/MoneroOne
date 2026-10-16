@@ -733,29 +733,30 @@ struct TransactionRow: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
-    /// Payment link transactions read "Sent by Link" and so on.
+    /// Payment link transactions show the link's name, amount and state.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
 
     var body: some View {
-        let amount = self.amount
-        let row = ActivityRowText(transaction: transaction, date: formattedDate, amount: amount, walletManager: walletManager, store: paymentLinks)
+        let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
+        let amount = amount(row.xmr)
         ActivityRowLayout(
             systemImage: row.systemImage,
             isIncoming: transaction.type == .incoming,
+            showsLinkBadge: row.showsLinkBadge,
             title: row.title,
-            subtitle: row.subtitle,
-            subtitleIsStatus: row.subtitleIsStatus
+            subtitle: row.subtitle
         ) { alignment in
-            TransactionAmountColumn(transaction: transaction, amount: amount, alignment: alignment)
+            TransactionAmountColumn(transaction: transaction, amount: amount, linkStatus: row.linkStatus, alignment: alignment)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(row.accessibilityLabel)
+        .accessibilityLabel(row.accessibilityLabel(amount: amount))
     }
 
-    private var amount: TransactionAmountText {
+    private func amount(_ xmr: Decimal) -> TransactionAmountText {
         TransactionAmountText(
-            transaction: transaction,
-            fiatAtTime: fiatAtTime,
+            isIncoming: transaction.type == .incoming,
+            xmr: xmr,
+            fiatAtTime: fiatAtTime(xmr),
             fiatFirst: priceService.showFiatFirst,
             receivedOn: receivedOn
         )
@@ -776,8 +777,8 @@ struct TransactionRow: View {
 
     /// What the amount was worth when the transaction happened, in the
     /// selected currency. Nil until price history has loaded.
-    private var fiatAtTime: String? {
-        priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+    private func fiatAtTime(_ xmr: Decimal) -> String? {
+        priceHistoryService.fiatValue(xmr: xmr, at: transaction.timestamp)
             .map { priceService.formatFiat($0) }
     }
 }
@@ -785,17 +786,17 @@ struct TransactionRow: View {
 // MARK: - Row layout (shared by Activity's rows)
 
 /// One Activity row: the direction's glyph in its tinted tile, the title
-/// with its second line, and the amount column at the end. A transaction
+/// with the date under it, and the amount column at the end. A transaction
 /// and a payment link waiting to be claimed both use it, so they read
 /// alike.
 struct ActivityRowLayout<Amount: View>: View {
     let systemImage: String
     let isIncoming: Bool
+    /// A payment link's row: the tile gets the link badge.
+    var showsLinkBadge = false
+    /// "Received", "Sent", or a payment link's name.
     let title: String
     let subtitle: String
-    /// The subtitle is a status, not the date: it stays on one line next
-    /// to the amount.
-    let subtitleIsStatus: Bool
     /// The amount column, aligned for where it sits.
     @ViewBuilder let amount: (HorizontalAlignment) -> Amount
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -838,6 +839,7 @@ struct ActivityRowLayout<Amount: View>: View {
             .frame(width: 36, height: 36)
             .background(tint.opacity(0.15))
             .cornerRadius(8)
+            .paymentLinkBadge(tint, isShown: showsLinkBadge)
     }
 
     private func details(stacked: Bool) -> some View {
@@ -848,14 +850,15 @@ struct ActivityRowLayout<Amount: View>: View {
                 // The label color inside a Button too, which would tint it.
                 .foregroundStyle(.primary)
                 // Whole: next to a long amount, "Получено" broke with a
-                // hyphen; the amount column gives way instead. Stacked, the
-                // title has the row's width and wraps if it must.
-                .fixedSize(horizontal: !stacked, vertical: true)
+                // hyphen; the amount column gives way instead. A link's
+                // name can be long: it ends in "…" before the amount does.
+                // Stacked, the title has the row's width and wraps if it must.
+                .fixedSize(horizontal: !stacked && !showsLinkBadge, vertical: true)
+                .lineLimit(stacked ? nil : 1)
 
             Text(subtitle)
                 .font(.caption)
                 .foregroundColor(.secondary)
-                .fixedSize(horizontal: subtitleIsStatus && !stacked, vertical: false)
         }
     }
 }
@@ -946,24 +949,33 @@ struct TransactionAmountText: Equatable {
 struct TransactionAmountColumn: View {
     let amount: TransactionAmountText
     let isIncoming: Bool
-    /// The transaction whose status shows under the amount; nil for a row
-    /// whose second line already says where it stands.
+    /// The transaction whose status shows under the amount.
     let transaction: MoneroTransaction?
+    /// A payment link's state, shown in place of the transaction's status.
+    let linkStatus: PaymentLinkRowStatus?
     /// Leading when the column sits under the title (accessibility sizes).
     var alignment: HorizontalAlignment = .trailing
 
-    init(transaction: MoneroTransaction, amount: TransactionAmountText, alignment: HorizontalAlignment = .trailing) {
+    init(
+        transaction: MoneroTransaction,
+        amount: TransactionAmountText,
+        linkStatus: PaymentLinkRowStatus? = nil,
+        alignment: HorizontalAlignment = .trailing
+    ) {
         self.amount = amount
         self.isIncoming = transaction.type == .incoming
         self.transaction = transaction
+        self.linkStatus = linkStatus
         self.alignment = alignment
     }
 
-    /// No status: the amount and the other currency only.
-    init(amount: TransactionAmountText, isIncoming: Bool, alignment: HorizontalAlignment = .trailing) {
+    /// No transaction yet (a link sent to us, not claimed): the link's
+    /// state under the amount.
+    init(amount: TransactionAmountText, isIncoming: Bool, linkStatus: PaymentLinkRowStatus, alignment: HorizontalAlignment = .trailing) {
         self.amount = amount
         self.isIncoming = isIncoming
         self.transaction = nil
+        self.linkStatus = linkStatus
         self.alignment = alignment
     }
 
@@ -1006,7 +1018,9 @@ struct TransactionAmountColumn: View {
 
     @ViewBuilder
     private var status: some View {
-        if let transaction {
+        if let linkStatus {
+            PaymentLinkStatusLabel(status: linkStatus)
+        } else if let transaction {
             status(of: transaction)
         }
     }

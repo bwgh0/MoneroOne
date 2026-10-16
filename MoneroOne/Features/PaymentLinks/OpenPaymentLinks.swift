@@ -288,12 +288,12 @@ struct OpenPaymentLinkLines: View {
 
 // MARK: - Links to claim in Activity
 
-/// A link sent to us that waits to be claimed, at the top of Activity's
-/// Links filter. Its claim is not a transaction yet, so it is drawn as
-/// money coming in, with the transaction rows' layout: the link glyph in a
-/// green tile, "Payment link", where it stands ("Ready in about 12 min",
-/// "Ready to claim") and what the claim brings, an estimate that follows
-/// Fiat Mode. A tap opens the claim sheet, where the wallet is chosen.
+/// A link sent to us that waits to be claimed, in Activity. Its claim is
+/// not a transaction yet, so it is drawn as money coming in, with the
+/// transaction rows' layout: the green arrow with the link badge, the
+/// link's name, the date it was opened, what the claim brings (an
+/// estimate that follows Fiat Mode) and where it stands (Ready to claim,
+/// Waiting). A tap opens the claim sheet, where the wallet is chosen.
 struct PaymentLinkToClaimRow: View {
     let record: EnvelopeRecord
     @EnvironmentObject var walletManager: WalletManager
@@ -310,21 +310,31 @@ struct PaymentLinkToClaimRow: View {
         return .incomingEstimate(xmr: xmr, fiatNow: priceService.formatFiatValue(xmr), fiatFirst: priceService.showFiatFirst)
     }
 
+    /// As the transaction rows write it.
+    private var date: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: record.createdAt)
+    }
+
     var body: some View {
-        let status = PendingPaymentLinks.label(for: state)
+        let status = PaymentLinkRowStatus.toClaim(state)
         let amount = self.amount
         Button {
             PaymentLinksCoordinator.shared.present(record)
         } label: {
             ActivityRowLayout(
-                systemImage: "link",
+                systemImage: "arrow.down.left",
                 isIncoming: true,
-                title: String(localized: "Payment link"),
-                subtitle: status,
-                subtitleIsStatus: true
+                showsLinkBadge: true,
+                title: record.displayName,
+                subtitle: date
             ) { alignment in
                 if let amount {
-                    TransactionAmountColumn(amount: amount, isIncoming: true, alignment: alignment)
+                    TransactionAmountColumn(amount: amount, isIncoming: true, linkStatus: status, alignment: alignment)
+                } else {
+                    PaymentLinkStatusLabel(status: status)
                 }
             }
             // The chevron the transaction rows' links get, so the amounts
@@ -332,20 +342,22 @@ struct PaymentLinkToClaimRow: View {
             .listRowDisclosure()
             .contentShape(Rectangle())
         }
-        .accessibilityLabel(Self.accessibilityLabel(amountSpoken: amount?.spoken, status: status))
+        .accessibilityLabel(Self.accessibilityLabel(name: record.displayName, amountSpoken: amount?.spoken, status: status.text, date: date))
         .accessibilityHint(String(localized: "Opens the link to claim it"))
         .accessibilityIdentifier("links.toClaim.\(record.id)")
     }
 
-    /// "Payment link, plus about 0.0154 XMR, worth about $2.47, Ready to
-    /// claim".
-    static func accessibilityLabel(amountSpoken: String?, status: String) -> String {
-        let amount = amountSpoken.map {
-            String(localized: "plus \($0)", comment: "VoiceOver: amount coming in")
-        }
-        return [String(localized: "Payment link"), amount, status]
-            .compactMap { $0 }
-            .joined(separator: ", ")
+    /// "Payment link, Link 7, plus about 0.0154 XMR, worth about $2.47,
+    /// Ready to claim, Oct 16, 2026 at 8:12 PM".
+    static func accessibilityLabel(name: String, amountSpoken: String?, status: String, date: String) -> String {
+        PaymentLinkActivity.accessibilityLabel(
+            kind: String(localized: "Payment link"),
+            name: name,
+            isIncoming: true,
+            amountSpoken: amountSpoken,
+            status: status,
+            date: date
+        )
     }
 }
 

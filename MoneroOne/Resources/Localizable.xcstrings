@@ -86251,6 +86251,17 @@
         }
       }
     },
+    "Waiting" : {
+      "comment" : "Activity row: the payment link is not claimed yet, or not ready",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting"
+          }
+        }
+      }
+    },
     "Waiting for fee estimate" : {
       "localizations" : {
         "de" : {

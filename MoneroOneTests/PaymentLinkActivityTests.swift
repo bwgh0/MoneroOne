@@ -51,30 +51,83 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertEqual(PaymentLinkActivity(kind: .claim, record: record(.received)).title, "Received by Link")
     }
 
-    // MARK: - Funding row status line
+    // MARK: - Row status and amount
 
-    func testFundingStatusLine() {
-        let line = PaymentLinkActivity.fundingStatusLine
-        XCTAssertEqual(line(.created, false, nil), "Waiting to be claimed")
-        XCTAssertEqual(line(.notFunded, false, nil), "Waiting to be claimed")
-        XCTAssertEqual(line(.pending, false, 3), "Waiting to be claimed")
-        XCTAssertEqual(line(.pending, false, 10), "Ready to claim")
-        XCTAssertEqual(line(.ready, false, 12), "Ready to claim")
-        XCTAssertEqual(line(.ready, true, 12), "Expired")
-        XCTAssertEqual(line(.claimed, true, nil), "Claimed")
-        XCTAssertEqual(line(.reclaimed, false, nil), "Reclaimed")
+    func testFundingRowShowsTheLinkState() {
+        let state = PaymentLinkRowStatus.funding
+        XCTAssertEqual(state(.created, false, nil), .waiting)
+        XCTAssertEqual(state(.notFunded, false, nil), .waiting)
+        XCTAssertEqual(state(.pending, false, 3), .waiting)
+        XCTAssertEqual(state(.pending, false, 10), .ready)
+        XCTAssertEqual(state(.ready, false, 12), .ready)
+        XCTAssertEqual(state(.ready, true, 12), .expired)
+        XCTAssertEqual(state(.pending, true, 3), .expired)
+        XCTAssertEqual(state(.claimed, true, nil), .claimed)
+        XCTAssertEqual(state(.reclaimed, false, nil), .reclaimed)
+
+        XCTAssertEqual(PaymentLinkRowStatus.waiting.text, "Waiting")
+        XCTAssertEqual(PaymentLinkRowStatus.ready.text, "Ready")
+        XCTAssertEqual(PaymentLinkRowStatus.claimed.text, "Claimed")
+        XCTAssertEqual(PaymentLinkRowStatus.reclaimed.text, "Reclaimed")
+        XCTAssertEqual(PaymentLinkRowStatus.expired.text, "Expired")
+        XCTAssertEqual(PaymentLinkRowStatus.readyToClaim.text, "Ready to claim")
+    }
+
+    func testRowStatusColours() {
+        XCTAssertEqual(PaymentLinkRowStatus.waiting.dotColor, .brand)
+        XCTAssertEqual(PaymentLinkRowStatus.ready.dotColor, .green)
+        XCTAssertEqual(PaymentLinkRowStatus.claimed.dotColor, .green)
+        XCTAssertEqual(PaymentLinkRowStatus.readyToClaim.dotColor, .green)
+        XCTAssertEqual(PaymentLinkRowStatus.reclaimed.dotColor, .gray)
+        // Caution: a yellow dot, the text in the label colour.
+        XCTAssertEqual(PaymentLinkRowStatus.expired.dotColor, .yellow)
+        XCTAssertEqual(PaymentLinkRowStatus.expired.textColor, .primary)
+        XCTAssertEqual(PaymentLinkRowStatus.waiting.textColor, .brand)
+    }
+
+    func testLinkToClaimIsReadyOrWaiting() {
+        XCTAssertEqual(PaymentLinkRowStatus.toClaim(.ready), .readyToClaim)
+        XCTAssertEqual(PaymentLinkRowStatus.toClaim(.waiting(minutes: 4)), .waiting)
+        XCTAssertEqual(PaymentLinkRowStatus.toClaim(.unchecked), .waiting)
+        XCTAssertEqual(PaymentLinkRowStatus.toClaim(.noMoney), .waiting)
+    }
+
+    /// Reclaim and claim rows, and a funding transaction that failed, show
+    /// the transaction's status.
+    @MainActor
+    func testOnlyFundingRowsShowTheLinkState() {
+        let sent = record(.sent, status: .claimed, fundingTxid: "fund", settleTxid: "back")
+        XCTAssertEqual(PaymentLinkActivity(kind: .funding, record: sent).rowStatus(transactionFailed: false, walletManager: nil), .claimed)
+        XCTAssertNil(PaymentLinkActivity(kind: .funding, record: sent).rowStatus(transactionFailed: true, walletManager: nil))
+        XCTAssertNil(PaymentLinkActivity(kind: .reclaim, record: sent).rowStatus(transactionFailed: false, walletManager: nil))
+        let received = record(.received, status: .claimed, settleTxid: "claim")
+        XCTAssertNil(PaymentLinkActivity(kind: .claim, record: received).rowStatus(transactionFailed: false, walletManager: nil))
+    }
+
+    /// One amount per link: a funding row shows what the recipient gets,
+    /// not the funding transaction (amount + claim fee reserve).
+    func testFundingRowShowsTheLinkAmount() {
+        var sent = record(.sent, fundingTxid: "fund", settleTxid: "back")
+        sent.amount = 20_000_000_000
+        sent.feeReserve = 31_000_000
+        let funding = Decimal(string: "0.020031")!
+        XCTAssertEqual(PaymentLinkActivity(kind: .funding, record: sent).rowAmount(transactionAmount: funding), Decimal(string: "0.02")!)
+        // What came back or came in stays the transaction's.
+        let back = Decimal(string: "0.02001")!
+        XCTAssertEqual(PaymentLinkActivity(kind: .reclaim, record: sent).rowAmount(transactionAmount: back), back)
+        XCTAssertEqual(PaymentLinkActivity(kind: .claim, record: record(.received)).rowAmount(transactionAmount: back), back)
     }
 
     func testAccessibilityLabel() {
         XCTAssertEqual(
-            PaymentLinkActivity.accessibilityLabel(title: "Sent by Link", isIncoming: false, amountSpoken: "0.5 XMR",
-                                                   statusLine: "Waiting to be claimed", date: "2 hr. ago", transactionStatus: "Confirmed"),
-            "Sent by Link, minus 0.5 XMR, Waiting to be claimed, 2 hr. ago, Confirmed"
+            PaymentLinkActivity.accessibilityLabel(kind: "Sent by Link", name: "Dinner", isIncoming: false,
+                                                   amountSpoken: "0.02 XMR", status: "Waiting", date: "Oct 16"),
+            "Sent by Link, Dinner, minus 0.02 XMR, Waiting, Oct 16"
         )
         XCTAssertEqual(
-            PaymentLinkActivity.accessibilityLabel(title: "Received by Link", isIncoming: true, amountSpoken: "0.25 XMR",
-                                                   statusLine: nil, date: "1 min. ago", transactionStatus: "Pending"),
-            "Received by Link, plus 0.25 XMR, 1 min. ago, Pending"
+            PaymentLinkActivity.accessibilityLabel(kind: "Received by Link", name: "Link 3", isIncoming: true,
+                                                   amountSpoken: "0.25 XMR", status: "Pending", date: "1 min. ago"),
+            "Received by Link, Link 3, plus 0.25 XMR, Pending, 1 min. ago"
         )
     }
 
@@ -95,8 +148,8 @@ final class PaymentLinkActivityTests: XCTestCase {
         func display(_ record: EnvelopeRecord, funding: Int?, daemonHeight: UInt64? = nil, now: Date = Date()) -> PaymentLinkDisplay {
             PaymentLinkDisplay(record: record, fundingConfirmations: funding, daemonHeight: daemonHeight, now: now)
         }
-        func row(_ display: PaymentLinkDisplay) -> String {
-            PaymentLinkActivity.fundingStatusLine(status: display.status, isExpired: display.isExpired, confirmations: display.confirmations)
+        func row(_ display: PaymentLinkDisplay) -> PaymentLinkRowStatus {
+            PaymentLinkRowStatus.funding(status: display.status, isExpired: display.isExpired, confirmations: display.confirmations)
         }
         var stale = record(.sent, status: .pending, fundingTxid: "fund")
         stale.confirmations = 2
@@ -105,13 +158,13 @@ final class PaymentLinkActivityTests: XCTestCase {
         let ready = display(stale, funding: 10)
         XCTAssertEqual(ready.status, .ready)
         XCTAssertEqual(ready.label, "Ready")
-        XCTAssertEqual(row(ready), "Ready to claim")
+        XCTAssertEqual(row(ready), .ready)
         XCTAssertTrue(ready.canReclaim)
 
         let young = display(stale, funding: 9)
         XCTAssertEqual(young.status, .pending)
         XCTAssertEqual(young.label, "Pending 9/10")
-        XCTAssertEqual(row(young), "Waiting to be claimed")
+        XCTAssertEqual(row(young), .waiting)
         XCTAssertFalse(young.canReclaim)
 
         // Another wallet funded it: the funding height of the last check and
@@ -125,7 +178,7 @@ final class PaymentLinkActivityTests: XCTestCase {
         stale.expiry = Int64(Date().timeIntervalSince1970) - 60
         let expired = display(stale, funding: 12)
         XCTAssertEqual(expired.label, "Expired")
-        XCTAssertEqual(row(expired), "Expired")
+        XCTAssertEqual(row(expired), .expired)
         XCTAssertTrue(expired.canReclaim)
 
         // A check that saw the claim wins over the count.
@@ -429,12 +482,13 @@ final class PaymentLinkActivityTests: XCTestCase {
     @MainActor
     func testLinkToClaimRowSpeaksAmountAndStatus() {
         XCTAssertEqual(
-            PaymentLinkToClaimRow.accessibilityLabel(amountSpoken: "about 0.0154024 XMR, worth about $2.47", status: "Ready to claim"),
-            "Payment link, plus about 0.0154024 XMR, worth about $2.47, Ready to claim"
+            PaymentLinkToClaimRow.accessibilityLabel(name: "Link 7", amountSpoken: "about 0.0154024 XMR, worth about $2.47",
+                                                     status: "Ready to claim", date: "Oct 16, 2026 at 8:12 PM"),
+            "Payment link, Link 7, plus about 0.0154024 XMR, worth about $2.47, Ready to claim, Oct 16, 2026 at 8:12 PM"
         )
         XCTAssertEqual(
-            PaymentLinkToClaimRow.accessibilityLabel(amountSpoken: nil, status: PendingPaymentLinks.label(for: .unchecked)),
-            "Payment link, Tap to check"
+            PaymentLinkToClaimRow.accessibilityLabel(name: "Rent", amountSpoken: nil, status: PaymentLinkRowStatus.toClaim(.unchecked).text, date: "Oct 16"),
+            "Payment link, Rent, Waiting, Oct 16"
         )
     }
 

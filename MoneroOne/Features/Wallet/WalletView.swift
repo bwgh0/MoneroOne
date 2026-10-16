@@ -394,12 +394,12 @@ struct RecentTransactionCard: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
-    /// Payment link transactions read "Payment link" and so on.
+    /// Payment link transactions show the link's name, amount and state.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
 
     var body: some View {
-        let amount = self.amount
-        let row = ActivityRowText(transaction: transaction, date: formattedDate, amount: amount, walletManager: walletManager, store: paymentLinks)
+        let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
+        let amount = amount(row.xmr)
         Button(action: onTap) {
             HStack(spacing: 12) {
                 ZStack {
@@ -411,25 +411,27 @@ struct RecentTransactionCard: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(iconColor)
                 }
+                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.title)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         // Whole: next to a long amount, "Получено" broke with a
-                        // hyphen; the amount column gives way instead.
-                        .fixedSize()
+                        // hyphen; the amount column gives way instead. A
+                        // link's name can be long: it ends in "…".
+                        .fixedSize(horizontal: !row.showsLinkBadge, vertical: true)
+                        .lineLimit(1)
                         .foregroundColor(.primary)
 
                     Text(row.subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .fixedSize(horizontal: row.subtitleIsStatus, vertical: false)
                 }
 
                 Spacer()
 
-                TransactionAmountColumn(transaction: transaction, amount: amount)
+                TransactionAmountColumn(transaction: transaction, amount: amount, linkStatus: row.linkStatus)
 
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -440,15 +442,16 @@ struct RecentTransactionCard: View {
         }
         .glassButtonStyle()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(row.accessibilityLabel)
+        .accessibilityLabel(row.accessibilityLabel(amount: amount))
         .accessibilityHint("Shows transaction details")
         .accessibilityIdentifier("wallet.transaction.\(transaction.id)")
     }
 
-    private var amount: TransactionAmountText {
+    private func amount(_ xmr: Decimal) -> TransactionAmountText {
         TransactionAmountText(
-            transaction: transaction,
-            fiatAtTime: fiatAtTime,
+            isIncoming: transaction.type == .incoming,
+            xmr: xmr,
+            fiatAtTime: fiatAtTime(xmr),
             fiatFirst: priceService.showFiatFirst,
             receivedOn: receivedOn
         )
@@ -466,8 +469,8 @@ struct RecentTransactionCard: View {
 
     /// What the amount was worth when the transaction happened, in the
     /// selected currency. Nil until price history has loaded.
-    private var fiatAtTime: String? {
-        priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+    private func fiatAtTime(_ xmr: Decimal) -> String? {
+        priceHistoryService.fiatValue(xmr: xmr, at: transaction.timestamp)
             .map { priceService.formatFiat($0) }
     }
 

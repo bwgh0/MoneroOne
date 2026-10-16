@@ -349,7 +349,7 @@ struct PaymentLinkToClaimRow: View {
     }
 }
 
-private extension View {
+extension View {
     /// A trailing chevron like a List row's NavigationLink.
     func listRowDisclosure() -> some View {
         HStack(spacing: 0) {

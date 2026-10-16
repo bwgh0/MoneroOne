@@ -234,7 +234,7 @@ final class EnvelopeStore: ObservableObject {
     /// Renames a link. An empty note goes back to "Link 7".
     func setNote(_ note: String, id: String, role: EnvelopeRecord.Role) throws {
         guard var record = record(id: id, role: role) else { return }
-        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(EnvelopeRecord.noteLimit))
         record.note = trimmed.isEmpty ? nil : trimmed
         try write(record)
     }

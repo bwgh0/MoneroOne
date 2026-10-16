@@ -289,9 +289,12 @@ struct PaymentLinkDetailView: View {
     var role: EnvelopeRecord.Role = .sent
 
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var priceService: PriceService
     @ObservedObject private var store = EnvelopeStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showRemoveConfirmation = false
+    @State private var showRename = false
+    @State private var noteDraft = ""
     @State private var retrying = false
     @State private var retryError: String?
     @State private var hardwareIntent: HardwareSessionSheet.Intent?
@@ -354,6 +357,102 @@ struct PaymentLinkDetailView: View {
             PaymentLinkClaimSheet(presentation: presentation)
                 .environmentObject(walletManager)
         }
+        .alert("Name this link", isPresented: $showRename) {
+            TextField(record?.number.map(EnvelopeRecord.linkName) ?? "", text: $noteDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                try? store.setNote(noteDraft, id: recordId, role: role)
+            }
+        } message: {
+            Text("Only this iPhone keeps the note.")
+        }
+    }
+
+    /// The link's name over its amount, as a card shows a payment.
+    private func hero(_ record: EnvelopeRecord, amount: UInt64?, display: PaymentLinkDisplay, showsReadyTime: Bool) -> some View {
+        VStack(spacing: 6) {
+            Text(record.displayName)
+                .font(.headline)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            if let amount {
+                Text("\(XMRFormatter.format(EnvelopeRuntime.xmr(amount))) XMR")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+            }
+            PaymentLinkStatusChip(display: display)
+            // Pending is under 10 confirmations: at 10 the link reads Ready.
+            if showsReadyTime {
+                Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: display.confirmations ?? 0))) min")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The note; a tap renames the link.
+    private func noteRow(_ record: EnvelopeRecord) -> some View {
+        let note = record.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasNote = !(note ?? "").isEmpty
+        return Button {
+            noteDraft = note ?? ""
+            showRename = true
+        } label: {
+            HStack {
+                Text("Note")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(hasNote ? (note ?? "") : String(localized: "Add"))
+                    .foregroundStyle(hasNote ? Color.primary : Color(uiColor: .tertiaryLabel))
+                    .lineLimit(1)
+            }
+            .font(.subheadline)
+            .contentShape(Rectangle())
+            .listRowDisclosure()
+        }
+        .accessibilityLabel(hasNote ? Text("Note, \(note ?? "")") : Text("Note, none"))
+        .accessibilityHint("Renames the link")
+    }
+
+    /// An amount with its value now under it. The total is the label colour
+    /// and semibold, its amount in brand.
+    private func amountRow(_ title: String, _ xmr: Decimal, isTotal: Bool = false) -> some View {
+        let amount = "\(XMRFormatter.format(xmr)) XMR"
+        let fiat = priceService.formatFiatValue(xmr)
+        return HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .foregroundStyle(isTotal ? Color.primary : Color.secondary)
+                .fontWeight(isTotal ? .semibold : .regular)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(amount)
+                    .fontWeight(isTotal ? .semibold : .regular)
+                    .foregroundStyle(isTotal ? Color.brand : Color.primary)
+                    .monospacedDigit()
+                if let fiat {
+                    Text("≈ \(fiat)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+        }
+        .font(.subheadline)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([title, amount, fiat.map { String(localized: "about \($0)") }].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    /// The funding transaction's network fee, when this wallet has it.
+    private func networkFee(_ record: EnvelopeRecord) -> Decimal? {
+        guard let txid = record.fundingTxid,
+              let transaction = walletManager.transactions.first(where: { $0.id == txid && $0.type == .outgoing }),
+              transaction.fee > 0 else { return nil }
+        return transaction.fee
     }
 
     private func checkSentLink() {
@@ -368,34 +467,30 @@ struct PaymentLinkDetailView: View {
 
     private func content(_ record: EnvelopeRecord) -> some View {
         let display = PaymentLinkDisplay(record: record, walletManager: walletManager)
+        let networkFee = networkFee(record)
+        let reserve = record.feeReserve.map(EnvelopeRuntime.xmr)
         return List {
             Section {
-                VStack(spacing: 8) {
-                    Text("\(XMRFormatter.format(EnvelopeRuntime.xmr(record.amount))) XMR")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                    PaymentLinkStatusChip(display: display)
-                    // Pending is under 10 confirmations: at 10 the link reads Ready.
-                    if display.status == .pending, !display.isExpired {
-                        Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: display.confirmations ?? 0))) min")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .accessibilityElement(children: .combine)
+                hero(record, amount: record.amount, display: display,
+                     showsReadyTime: display.status == .pending && !display.isExpired)
             }
 
             Section {
+                noteRow(record)
                 detailRow(String(localized: "Created"), record.createdAt.formatted(date: .abbreviated, time: .shortened))
                 if let expiryDate = record.expiryDate {
                     detailRow(String(localized: "Expires"), expiryDate.formatted(date: .abbreviated, time: .omitted))
                 }
-                if let reserve = record.feeReserve {
-                    detailRow(String(localized: "Claim fee reserve"), "\(XMRFormatter.format(EnvelopeRuntime.xmr(reserve))) XMR")
+                // What left the wallet: the amount, the network fee and the
+                // claim fee reserve. Only here; rows show the amount alone.
+                if let networkFee {
+                    amountRow(String(localized: "Network fee"), networkFee)
+                }
+                if let reserve {
+                    amountRow(String(localized: "Claim fee reserve"), reserve)
+                }
+                if let networkFee {
+                    amountRow(String(localized: "Total"), EnvelopeRuntime.xmr(record.amount) + (reserve ?? 0) + networkFee, isTotal: true)
                 }
                 if let txid = record.fundingTxid {
                     transactionRow(String(localized: "Funding transaction"), txid: txid, incoming: false)
@@ -541,25 +636,12 @@ struct PaymentLinkDetailView: View {
         let canClaim = !record.status.isSettled && record.link != nil
         return List {
             Section {
-                VStack(spacing: 8) {
-                    Text(amount.map { "\(XMRFormatter.format(EnvelopeRuntime.xmr($0))) XMR" } ?? String(localized: "Payment link"))
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                    PaymentLinkStatusChip(display: display)
-                    if display.status == .pending, (display.confirmations ?? 0) < EnvelopeLink.confirmationsToUnlock {
-                        Text("Ready in about \(max(1, EnvelopeStatusRules.minutesUntilReady(confirmations: display.confirmations ?? 0))) min")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .accessibilityElement(children: .combine)
+                hero(record, amount: amount, display: display,
+                     showsReadyTime: display.status == .pending && (display.confirmations ?? 0) < EnvelopeLink.confirmationsToUnlock)
             }
 
             Section {
+                noteRow(record)
                 detailRow(String(localized: "Received"), record.createdAt.formatted(date: .abbreviated, time: .shortened))
                 if canClaim, let expiryDate = record.expiryDate {
                     detailRow(String(localized: "Claim by"), expiryDate.formatted(date: .abbreviated, time: .omitted))

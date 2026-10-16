@@ -45810,6 +45810,17 @@
         }
       }
     },
+    "Name this link" : {
+      "comment" : "Payment link rename: alert title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name this link"
+          }
+        }
+      }
+    },
     "Name, number, or address" : {
       "localizations" : {
         "de" : {
@@ -46466,6 +46477,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "網路錯誤。請檢查你的連線。"
+          }
+        }
+      }
+    },
+    "Network fee" : {
+      "comment" : "Payment link detail: the funding transaction's network fee",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network fee"
           }
         }
       }
@@ -50253,6 +50275,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Note, %@"
+          }
+        }
+      }
+    },
+    "Note, none" : {
+      "comment" : "VoiceOver: a payment link with no note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note, none"
           }
         }
       }
@@ -61879,6 +61912,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新命名，%@"
+          }
+        }
+      }
+    },
+    "Renames the link" : {
+      "comment" : "VoiceOver hint: the payment link's Note row",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renames the link"
           }
         }
       }

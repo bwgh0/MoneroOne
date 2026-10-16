@@ -282,6 +282,8 @@ struct EnvelopeSessionContent: View {
             .font(.subheadline)
             .multilineTextAlignment(.center)
         }
+        // Same order as the wallet switcher, wherever the menu opens.
+        .menuOrder(.fixed)
         .disabled(session.isSweeping)
         .accessibilityLabel(isOwn
             ? Text("Reclaim to", comment: "VoiceOver: the claim sheet's wallet menu on a sent link; the wallet name follows as the value")

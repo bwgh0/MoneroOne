@@ -1107,6 +1107,17 @@
         }
       }
     },
+    "%@ · %lld open" : {
+      "comment" : "Activity, Links filter card: how many links, then how many still hold money",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %lld open"
+          }
+        }
+      }
+    },
     "%@ • Live" : {
       "comment" : "Hardware wallet pill: device name, then that the link is up",
       "localizations" : {
@@ -1873,6 +1884,29 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld link transactions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld links" : {
+      "comment" : "Activity, Links filter card: how many payment links",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld link"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld links"
                 }
               }
             }
@@ -51242,6 +51276,17 @@
         }
       }
     },
+    "Open" : {
+      "comment" : "Activity, Links filter: links that still hold money",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open"
+          }
+        }
+      }
+    },
     "Open Settings" : {
       "localizations" : {
         "de" : {
@@ -70783,6 +70828,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全螢幕顯示代碼。可用動作：儲存到「照片」或分享"
+          }
+        }
+      }
+    },
+    "Shows the link" : {
+      "comment" : "VoiceOver hint: the balance card's line for one open payment link",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the link"
           }
         }
       }

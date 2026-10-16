@@ -22,8 +22,25 @@ enum OpenPaymentLinks {
         /// nil while a link's amount is not known yet (a v2 link before its
         /// first check).
         var toClaimAmount: UInt64? = 0
+        /// The open sent link, when there is only one.
+        var onlySentLinkId: String?
 
         var isEmpty: Bool { sentCount == 0 && toClaimCount == 0 }
+    }
+
+    /// Where a tap on a balance card line goes.
+    enum Destination: Equatable {
+        /// One open link: its detail.
+        case sentLink(id: String)
+        /// Activity's Links filter.
+        case linksFilter
+    }
+
+    /// The sent line: one open link opens its detail; more open the Links
+    /// filter, which lists them.
+    static func sentLineDestination(_ summary: Summary) -> Destination {
+        if summary.sentCount == 1, let id = summary.onlySentLinkId { return .sentLink(id: id) }
+        return .linksFilter
     }
 
     /// A link this wallet funded that nobody claimed or reclaimed: pending or
@@ -46,6 +63,7 @@ enum OpenPaymentLinks {
         for record in records {
             if isOpenSent(record, activeWalletId: activeWalletId) {
                 summary.sentCount += 1
+                summary.onlySentLinkId = summary.sentCount == 1 ? record.id : nil
                 summary.sentAmount += record.amount
                 if record.isExpired(now: now) { summary.expiredCount += 1 }
             } else if isWaitingToClaim(record) {
@@ -136,12 +154,13 @@ enum OpenPaymentLinks {
 
 /// The balance card's open-link lines, under the balance: the money in
 /// links this wallet sent that nobody claimed yet, and the money in links
-/// sent to this device waiting to be claimed. A tap opens Activity's Links
-/// filter; Claim claims the one link waiting, or opens the filter when
-/// there are more.
+/// sent to this device waiting to be claimed. A tap on the sent line opens
+/// the one open link, or Activity's Links filter when there are more; the
+/// claim line opens the filter. Claim claims the one link waiting, or
+/// opens the filter when there are more.
 struct OpenPaymentLinkLines: View {
     let summary: OpenPaymentLinks.Summary
-    let onOpenLinks: () -> Void
+    let onOpenLinks: (OpenPaymentLinks.Destination) -> Void
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @ObservedObject private var store = EnvelopeStore.shared
@@ -167,7 +186,10 @@ struct OpenPaymentLinkLines: View {
     }
 
     private var sentLine: some View {
-        Button(action: onOpenLinks) {
+        let destination = OpenPaymentLinks.sentLineDestination(summary)
+        return Button {
+            onOpenLinks(destination)
+        } label: {
             HStack(spacing: 10) {
                 glyph(.secondary)
                 sentText
@@ -184,7 +206,9 @@ struct OpenPaymentLinkLines: View {
         .accessibilityLabel(OpenPaymentLinks.sentAccessibilityLabel(
             amount: summary.sentAmount, fiat: fiat(summary.sentAmount), count: summary.sentCount, expired: summary.expiredCount
         ))
-        .accessibilityHint(Text("Shows your payment links", comment: "VoiceOver hint: the balance card's open links line"))
+        .accessibilityHint(destination == .linksFilter
+            ? Text("Shows your payment links", comment: "VoiceOver hint: the balance card's open links line")
+            : Text("Shows the link", comment: "VoiceOver hint: the balance card's line for one open payment link"))
         .accessibilityIdentifier("wallet.openLinks.sent")
     }
 
@@ -204,7 +228,9 @@ struct OpenPaymentLinkLines: View {
 
     private var claimLine: some View {
         HStack(spacing: 10) {
-            Button(action: onOpenLinks) {
+            Button {
+                onOpenLinks(.linksFilter)
+            } label: {
                 HStack(spacing: 10) {
                     glyph(.green)
                     claimText
@@ -272,7 +298,7 @@ struct OpenPaymentLinkLines: View {
     /// the link ready. More: the Links filter lists them.
     private func claim() {
         guard let record = onlyLinkToClaim else {
-            onOpenLinks()
+            onOpenLinks(.linksFilter)
             return
         }
         PaymentLinksCoordinator.shared.present(record, autoClaim: isReady(record))

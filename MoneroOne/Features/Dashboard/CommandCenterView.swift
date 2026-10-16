@@ -11,6 +11,12 @@ struct CommandCenterView: View {
     /// All Transactions opens on this filter: Links from the balance
     /// card's open-link lines, else All.
     @State private var allTransactionsFilter: TransactionListView.FilterType = .all
+    /// The balance card's line for one open link opens it in a sheet.
+    @State private var openSentLink: SentLinkRoute?
+
+    private struct SentLinkRoute: Identifiable {
+        let id: String
+    }
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
     /// Wallet switcher expanded: the greeting slides out, the switcher pill
     /// stretches, and the wallet rows replace the balance column (same
@@ -46,7 +52,7 @@ struct CommandCenterView: View {
             // Looks at sent links on new blocks, so a claimed link leaves
             // the balance card's line. Never during History or a sheet.
             .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil && !isHistoryExpanded
-                                    && !showSend && !showReceive && !showAllTransactions && !showWalletManager)
+                                    && !showSend && !showReceive && !showAllTransactions && openSentLink == nil && !showWalletManager)
         }
         .onChange(of: walletManager.walletSessionId) { _, _ in
             selectedHistoryPoint = nil
@@ -69,6 +75,12 @@ struct CommandCenterView: View {
         .sheet(isPresented: $showAllTransactions) {
             NavigationStack {
                 TransactionListView(asOf: selectedHistoryPoint?.timestamp, historyTransactions: pastTransactions, initialFilter: allTransactionsFilter)
+            }
+            .closesForPaymentLink()
+        }
+        .sheet(item: $openSentLink) { route in
+            NavigationStack {
+                PaymentLinkDetailView(recordId: route.id, role: .sent)
             }
             .closesForPaymentLink()
         }
@@ -150,9 +162,14 @@ struct CommandCenterView: View {
                 of: paymentLinks.records,
                 activeWalletId: walletManager.activeWallet?.id.uuidString
             ),
-            onOpenLinks: {
-                allTransactionsFilter = .links
-                showAllTransactions = true
+            onOpenLinks: { destination in
+                switch destination {
+                case .sentLink(let id):
+                    openSentLink = SentLinkRoute(id: id)
+                case .linksFilter:
+                    allTransactionsFilter = .links
+                    showAllTransactions = true
+                }
             },
             onHardwareSyncTap: {
                 // Clear a finished run's .complete/.failed state so the sheet

@@ -15,6 +15,8 @@ struct WalletView: View {
     /// The balance card's open-link lines open Activity's Links filter.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
     @State private var showLinks = false
+    /// The balance card's line for one open link opens it here.
+    @State private var openSentLinkId: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Viewport and above-activity heights, so the empty activity card can
     /// fill the leftover height on short screens (iPhone Duo cover).
@@ -89,7 +91,12 @@ struct WalletView: View {
                                 of: paymentLinks.records,
                                 activeWalletId: walletManager.activeWallet?.id.uuidString
                             ),
-                            onOpenLinks: { showLinks = true },
+                            onOpenLinks: { destination in
+                                switch destination {
+                                case .sentLink(let id): openSentLinkId = id
+                                case .linksFilter: showLinks = true
+                                }
+                            },
                             onHardwareSyncTap: {
                                 // Clear any leftover .complete/.failed
                                 // state from the prior run so the
@@ -150,6 +157,9 @@ struct WalletView: View {
             .walletHeader(showWalletManager: $showWalletManager)
             .navigationDestination(isPresented: $showLinks) {
                 TransactionListView(initialFilter: .links)
+            }
+            .navigationDestination(item: $openSentLinkId) { id in
+                PaymentLinkDetailView(recordId: id, role: .sent)
             }
             // Looks at sent links on new blocks, so a claimed link leaves
             // the balance card's line. Never during History or a sheet.

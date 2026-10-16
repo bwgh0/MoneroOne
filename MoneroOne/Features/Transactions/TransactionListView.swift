@@ -126,7 +126,7 @@ struct TransactionListView: View {
 
     var body: some View {
         let filtered = filteredTransactions
-        let linksToClaim = self.linksToClaim
+        let items = TransactionListLogic.items(transactions: filtered, linksToClaim: linksToClaim)
         let totals = TransactionListLogic.totals(of: filtered)
         // Fiat Mode leads with fiat totals priced like the rows below them.
         let fiatTotals = priceService.showFiatFirst
@@ -141,36 +141,40 @@ struct TransactionListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            // Not transactions yet: above the summary, whose totals are the
-            // transactions under it.
-            ForEach(linksToClaim) { record in
-                PaymentLinkToClaimRow(record: record)
-                    .listRowSeparator(.hidden, edges: record.id == linksToClaim.first?.id ? .top : [])
-            }
-            if filtered.isEmpty {
-                // Under Links, a link waiting to be claimed is a link.
-                if linksToClaim.isEmpty {
-                    emptyState
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+            if items.isEmpty {
+                emptyState
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else if filterType == .links {
+                // The card first, then the links that still hold money, then
+                // the rest.
+                let sections = TransactionListLogic.linkSections(items, records: paymentLinks.records)
+                summaryCard(
+                    totals,
+                    fiatTotals: fiatTotals,
+                    title: TransactionListLogic.linksSummaryTitle(items, openCount: sections.open.count, records: paymentLinks.records)
+                )
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                if !sections.open.isEmpty {
+                    sectionHeader(String(localized: "Open", comment: "Activity, Links filter: links that still hold money"))
+                    rows(sections.open)
+                }
+                if !sections.history.isEmpty {
+                    sectionHeader(String(localized: "History", comment: "Activity, Links filter: links that are done"))
+                    rows(sections.history)
                 }
             } else {
                 summaryCard(totals, fiatTotals: fiatTotals)
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-
-                ForEach(filtered) { transaction in
-                    NavigationLink {
-                        ActivityDetailView(transaction: transaction)
-                    } label: {
-                        TransactionRow(transaction: transaction)
-                    }
-                }
+                rows(items)
             }
         }
         .listStyle(.plain)
-        .animation(.easeInOut(duration: 0.25), value: filtered.isEmpty)
+        .animation(.easeInOut(duration: 0.25), value: items.isEmpty)
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
@@ -304,19 +308,48 @@ struct TransactionListView: View {
         return hint
     }
 
+    // MARK: - Rows
+
+    @ViewBuilder
+    private func rows(_ items: [ActivityListItem]) -> some View {
+        ForEach(items) { item in
+            switch item {
+            case .transaction(let transaction):
+                NavigationLink {
+                    ActivityDetailView(transaction: transaction)
+                } label: {
+                    TransactionRow(transaction: transaction)
+                }
+            case .linkToClaim(let record):
+                PaymentLinkToClaimRow(record: record)
+            }
+        }
+    }
+
+    /// "Open", "History": a heading row, as Wallet's Recent Activity.
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+            .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 6, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     // MARK: - Summary card
 
     /// Totals for the rows on screen. Review-card style (radius 16,
     /// `secondarySystemBackground`) like the send review, since it is a
     /// table of amounts, not a hero. `fiatTotals` (Fiat Mode, every row
     /// priced) puts fiat on top of each column.
-    private func summaryCard(_ totals: TransactionTotals, fiatTotals: FiatTotals?) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(TransactionListLogic.summaryTitle(
-                count: totals.count,
-                type: filterType,
-                receivingName: receivingFilterName
-            ))
+    private func summaryCard(_ totals: TransactionTotals, fiatTotals: FiatTotals?, title: String? = nil) -> some View {
+        let title = title ?? TransactionListLogic.summaryTitle(
+            count: totals.count,
+            type: filterType,
+            receivingName: receivingFilterName
+        )
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(title)
             .font(.subheadline)
             .fontWeight(.semibold)
             .contentTransition(.numericText())
@@ -349,7 +382,7 @@ struct TransactionListView: View {
         .cornerRadius(16)
         .animation(.easeInOut(duration: 0.2), value: totals)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(summaryAccessibilityLabel(totals, fiatTotals: fiatTotals))
+        .accessibilityLabel(summaryAccessibilityLabel(totals, fiatTotals: fiatTotals, title: title))
     }
 
     /// One column of the summary card. XMR on top with today's fiat value
@@ -395,12 +428,8 @@ struct TransactionListView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func summaryAccessibilityLabel(_ totals: TransactionTotals, fiatTotals: FiatTotals?) -> String {
-        var parts = [TransactionListLogic.summaryTitle(
-            count: totals.count,
-            type: filterType,
-            receivingName: receivingFilterName
-        )]
+    private func summaryAccessibilityLabel(_ totals: TransactionTotals, fiatTotals: FiatTotals?, title: String) -> String {
+        var parts = [title]
         if let fiatTotals {
             parts.append(String(localized: "received \(priceService.formatFiat(fiatTotals.received)) at the time, \(XMRFormatter.format(totals.received)) XMR", comment: "VoiceOver: Fiat Mode total received in the list, fiat at each transaction's date, then XMR"))
             if receivingIndex == nil {
@@ -618,11 +647,12 @@ enum TransactionListLogic {
         }
     }
 
-    /// Under Links, the links sent to us that wait to be claimed, newest
-    /// first: their claim is no transaction yet, so each gets a row of its
-    /// own above the summary and the transactions. Now only, with no search
-    /// or address filter. Our open links are not here: their "Sent by Link"
-    /// rows say where each one stands, so every link shows once.
+    /// Under All and Links, the links sent to us that wait to be claimed,
+    /// newest first: their claim is no transaction yet, so each gets a row
+    /// of its own among the transactions, at the date it was opened. Now
+    /// only, with no search or address filter. Our open links are not here:
+    /// their funding rows say where each one stands, so every link shows
+    /// once.
     static func linksToClaim(
         _ records: [EnvelopeRecord],
         type: TransactionListView.FilterType,
@@ -630,10 +660,62 @@ enum TransactionListLogic {
         search: String,
         asOf: Date?
     ) -> [EnvelopeRecord] {
-        guard type == .links, asOf == nil, search.isEmpty, receivingIndex == nil else { return [] }
+        guard type == .all || type == .links, asOf == nil, search.isEmpty, receivingIndex == nil else { return [] }
         return records
             .filter(OpenPaymentLinks.isWaitingToClaim)
             .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The transactions and the links to claim in one list, newest first.
+    static func items(transactions: [MoneroTransaction], linksToClaim: [EnvelopeRecord]) -> [ActivityListItem] {
+        guard !linksToClaim.isEmpty else { return transactions.map(ActivityListItem.transaction) }
+        let all = transactions.map(ActivityListItem.transaction) + linksToClaim.map(ActivityListItem.linkToClaim)
+        // Stable: transactions keep their order among equal dates.
+        return all.enumerated()
+            .sorted { $0.element.date != $1.element.date ? $0.element.date > $1.element.date : $0.offset < $1.offset }
+            .map(\.element)
+    }
+
+    /// The Links filter's two groups. Open: the links that still hold
+    /// money (our funding rows that are Waiting, Ready or Expired, and the
+    /// links sent to us not claimed yet). History: every other link row.
+    /// Each newest first; every row once.
+    static func linkSections(_ items: [ActivityListItem], records: [EnvelopeRecord]) -> (open: [ActivityListItem], history: [ActivityListItem]) {
+        var open: [ActivityListItem] = []
+        var history: [ActivityListItem] = []
+        for item in items {
+            switch item {
+            case .linkToClaim:
+                open.append(item)
+            case .transaction(let tx):
+                let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: tx.type == .incoming, records: records)
+                if let link, link.kind == .funding, !link.record.status.isSettled, tx.status != .failed {
+                    open.append(item)
+                } else {
+                    history.append(item)
+                }
+            }
+        }
+        return (open, history)
+    }
+
+    /// The Links filter's card: "7 links · 4 open", counting each link once
+    /// (a reclaimed link has a funding row and a reclaim row).
+    static func linksSummaryTitle(_ items: [ActivityListItem], openCount: Int, records: [EnvelopeRecord]) -> String {
+        var links = Set<String>()
+        for item in items {
+            switch item {
+            case .linkToClaim(let record):
+                links.insert(EnvelopeStore.account(for: record))
+            case .transaction(let tx):
+                if let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: tx.type == .incoming, records: records) {
+                    links.insert(EnvelopeStore.account(for: link.record))
+                }
+            }
+        }
+        let count = String(localized: "\(links.count) links", comment: "Activity, Links filter card: how many payment links")
+        guard openCount > 0 else { return count }
+        return String(localized: "\(count) · \(openCount) open", comment: "Activity, Links filter card: how many links, then how many still hold money")
     }
 
     /// Received and sent (amount plus fee) over `transactions`. Failed
@@ -725,6 +807,31 @@ enum TransactionListLogic {
     }
 }
 
+
+// MARK: - List items
+
+/// One Activity row: a transaction, or a link sent to us that waits to be
+/// claimed (no transaction yet).
+enum ActivityListItem: Identifiable, Equatable {
+    case transaction(MoneroTransaction)
+    case linkToClaim(EnvelopeRecord)
+
+    var id: String {
+        switch self {
+        case .transaction(let tx): return "tx.\(tx.id).\(tx.type == .incoming ? "in" : "out")"
+        case .linkToClaim(let record): return "link.\(record.id)"
+        }
+    }
+
+    /// Where the row sits: the transaction's date, or when the link was
+    /// opened here.
+    var date: Date {
+        switch self {
+        case .transaction(let tx): return tx.timestamp
+        case .linkToClaim(let record): return record.createdAt
+        }
+    }
+}
 
 // MARK: - Transaction Row (Standard List Style)
 
@@ -859,6 +966,10 @@ struct ActivityRowLayout<Amount: View>: View {
             Text(subtitle)
                 .font(.caption)
                 .foregroundColor(.secondary)
+                // The date on one line at the usual sizes: next to a link's
+                // "Ready to claim" it broke after "at". The amount column
+                // puts its status over the value instead.
+                .fixedSize(horizontal: !stacked && dynamicTypeSize <= .large, vertical: false)
         }
     }
 }

@@ -403,6 +403,80 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertEqual(summary.sentAmount, 20_000_000_000)
     }
 
+    // MARK: - Home line
+
+    func testOneOpenLinkOpensItsDetailMoreOpenTheLinksFilter() {
+        let one = OpenPaymentLinks.summary(of: [open(.sent, .pending, id: "a"), open(.received, .ready, id: "r")], activeWalletId: "w1")
+        XCTAssertEqual(one.sentCount, 1)
+        XCTAssertEqual(OpenPaymentLinks.sentLineDestination(one), .sentLink(id: "a"))
+
+        let two = OpenPaymentLinks.summary(of: [open(.sent, .pending, id: "a"), open(.sent, .ready, id: "b")], activeWalletId: "w1")
+        XCTAssertEqual(two.sentCount, 2)
+        XCTAssertNil(two.onlySentLinkId)
+        XCTAssertEqual(OpenPaymentLinks.sentLineDestination(two), .linksFilter)
+
+        // A link from another wallet is not this wallet's open link.
+        let other = OpenPaymentLinks.summary(of: [open(.sent, .pending, id: "a", walletId: "w2"), open(.sent, .pending, id: "b")], activeWalletId: "w1")
+        XCTAssertEqual(OpenPaymentLinks.sentLineDestination(other), .sentLink(id: "b"))
+        XCTAssertEqual(OpenPaymentLinks.sentLineDestination(OpenPaymentLinks.Summary()), .linksFilter)
+    }
+
+    // MARK: - Links filter
+
+    private func tx(_ id: String, _ type: MoneroTransaction.TransactionType, at seconds: TimeInterval,
+                    status: MoneroTransaction.TransactionStatus = .confirmed) -> MoneroTransaction {
+        MoneroTransaction(id: id, type: type, amount: 1, fee: 0, address: "", timestamp: Date(timeIntervalSince1970: seconds),
+                          confirmations: 20, status: status, memo: nil, blockHeight: 1)
+    }
+
+    /// Open: links that still hold money. History: everything else. Each
+    /// row once, newest first; the card counts each link once.
+    func testLinksFilterSplitsOpenAndHistoryWithEachRowOnce() {
+        var waiting = open(.sent, .pending, id: "waiting", fundingTxid: "f-waiting")
+        waiting.createdAt = Date(timeIntervalSince1970: 900)
+        let expired = open(.sent, .ready, id: "expired", expiry: 1, fundingTxid: "f-expired")
+        let claimed = open(.sent, .claimed, id: "claimed", fundingTxid: "f-claimed")
+        var reclaimed = open(.sent, .reclaimed, id: "reclaimed", fundingTxid: "f-reclaimed")
+        reclaimed.settleTxid = "s-reclaimed"
+        var received = open(.received, .claimed, id: "received", secret: false)
+        received.settleTxid = "s-received"
+        let failed = open(.sent, .pending, id: "failed", fundingTxid: "f-failed")
+        var toClaim = open(.received, .ready, id: "toClaim")
+        toClaim.createdAt = Date(timeIntervalSince1970: 650)
+        let records = [waiting, expired, claimed, reclaimed, received, failed, toClaim]
+
+        let transactions = [
+            tx("f-waiting", .outgoing, at: 900),
+            tx("s-received", .incoming, at: 800),
+            tx("f-expired", .outgoing, at: 700),
+            tx("s-reclaimed", .incoming, at: 600),
+            tx("f-failed", .outgoing, at: 550, status: .failed),
+            tx("f-reclaimed", .outgoing, at: 500),
+            tx("f-claimed", .outgoing, at: 400),
+        ]
+        let linksToClaim = TransactionListLogic.linksToClaim(records, type: .links, receivingIndex: nil, search: "", asOf: nil)
+        let items = TransactionListLogic.items(transactions: transactions, linksToClaim: linksToClaim)
+        XCTAssertEqual(items.map(\.id), [
+            "tx.f-waiting.out", "tx.s-received.in", "tx.f-expired.out", "link.toClaim",
+            "tx.s-reclaimed.in", "tx.f-failed.out", "tx.f-reclaimed.out", "tx.f-claimed.out",
+        ])
+
+        let sections = TransactionListLogic.linkSections(items, records: records)
+        XCTAssertEqual(sections.open.map(\.id), ["tx.f-waiting.out", "tx.f-expired.out", "link.toClaim"])
+        XCTAssertEqual(sections.history.map(\.id), [
+            "tx.s-received.in", "tx.s-reclaimed.in", "tx.f-failed.out", "tx.f-reclaimed.out", "tx.f-claimed.out",
+        ])
+        // No row twice, none left out.
+        let all = sections.open.map(\.id) + sections.history.map(\.id)
+        XCTAssertEqual(Set(all).count, all.count)
+        XCTAssertEqual(Set(all), Set(items.map(\.id)))
+
+        // 7 links (the reclaimed one has two rows), 3 open.
+        XCTAssertEqual(TransactionListLogic.linksSummaryTitle(items, openCount: sections.open.count, records: records), "7 links · 3 open")
+        XCTAssertEqual(TransactionListLogic.linksSummaryTitle(sections.history, openCount: 0, records: records), "4 links")
+        XCTAssertEqual(TransactionListLogic.linksSummaryTitle([items[0]], openCount: 1, records: records), "1 link · 1 open")
+    }
+
     func testSentLineText() {
         XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 50_000_000_000, count: 1, expired: 0), "0.0500 XMR in 1 open link")
         XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 150_000_000_000, count: 2, expired: 0), "0.1500 XMR in 2 open links")
@@ -452,7 +526,11 @@ final class PaymentLinkActivityTests: XCTestCase {
             TransactionListLogic.linksToClaim(records, type: type, receivingIndex: receivingIndex, search: search, asOf: asOf).map(\.id)
         }
         XCTAssertEqual(rows(), ["newer", "older"])
-        XCTAssertEqual(rows(.all), [])
+        // All shows them too, among the transactions; the other filters
+        // list transactions only.
+        XCTAssertEqual(rows(.all), ["newer", "older"])
+        XCTAssertEqual(rows(.incoming), [])
+        XCTAssertEqual(rows(.pending), [])
         XCTAssertEqual(rows(search: "abc"), [])
         XCTAssertEqual(rows(receivingIndex: 1), [])
         XCTAssertEqual(rows(asOf: Date()), [])

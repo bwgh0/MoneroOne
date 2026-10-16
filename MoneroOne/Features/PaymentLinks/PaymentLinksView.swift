@@ -404,8 +404,9 @@ struct PaymentLinkDetailView: View {
             showRename = true
         } label: {
             HStack {
+                // Concrete colours: a Button would tint hierarchical ones.
                 Text("Note")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondary)
                 Spacer()
                 Text(hasNote ? (note ?? "") : String(localized: "Add"))
                     .foregroundStyle(hasNote ? Color.primary : Color(uiColor: .tertiaryLabel))

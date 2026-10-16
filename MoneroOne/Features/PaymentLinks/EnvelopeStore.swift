@@ -67,6 +67,9 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     /// means "use the number".
     var note: String?
 
+    /// The longest note, in characters.
+    static let noteLimit = 40
+
     /// The name the app shows: the note, else "Link 7".
     var displayName: String {
         Self.displayName(note: note, number: number)

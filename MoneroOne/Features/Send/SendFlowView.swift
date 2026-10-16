@@ -51,6 +51,9 @@ struct SendFlowView: View {
     @State private var isLinkMode = false
     @State private var linkDraft: PaymentLinkDraft?
     @State private var linkRecordId: String?
+    /// The link's note: a name that stays on this iPhone, never in the link
+    /// or the funding transaction's memo.
+    @State private var linkNote = ""
 
     /// Link as the recipient. It clears Send All: a link holds the amount
     /// typed in.
@@ -267,13 +270,14 @@ struct SendFlowView: View {
         case .amount:
             SendAmountStep(
                 amountString: $amountString,
-                memo: $memo,
+                memo: isLinkMode ? $linkNote : $memo,
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
                 isLinkMode: isLinkMode,
+                linkNamePlaceholder: EnvelopeRecord.linkName(EnvelopeStore.shared.nextNumber),
                 onContinue: {
                     HapticFeedback.shared.buttonPress()
                     goForward(to: .review)
@@ -284,6 +288,7 @@ struct SendFlowView: View {
             PaymentLinkReviewStep(
                 amountString: amountString,
                 draft: $linkDraft,
+                note: linkNote.trimmingCharacters(in: .whitespacesAndNewlines),
                 priceService: priceService,
                 walletManager: walletManager,
                 sendInProgress: sendInProgress,
@@ -375,7 +380,9 @@ struct SendFlowView: View {
             }
             // Saved (status created) before anything is broadcast, so the
             // words exist on this iPhone whatever happens next.
-            let record = PaymentLinkFunder.record(for: draft, wallet: walletManager.activeWallet)
+            var record = PaymentLinkFunder.record(for: draft, wallet: walletManager.activeWallet)
+            let note = linkNote.trimmingCharacters(in: .whitespacesAndNewlines)
+            record.note = note.isEmpty ? nil : note
             do {
                 try PaymentLinkFunder.save(record, networkType: walletManager.networkType)
             } catch {

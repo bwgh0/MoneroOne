@@ -212,6 +212,8 @@ struct PaymentLinkRecipientToken: View {
 struct PaymentLinkReviewStep: View {
     let amountString: String
     @Binding var draft: PaymentLinkDraft?
+    /// The link's note, trimmed; empty for none. Shown, never sent.
+    var note = ""
     let priceService: PriceService
     let walletManager: WalletManager
     let sendInProgress: Bool
@@ -258,6 +260,21 @@ struct PaymentLinkReviewStep: View {
                             .font(.subheadline)
                             .padding()
                             .accessibilityElement(children: .combine)
+                        }
+                        // The note, as Send's review shows a memo.
+                        if !note.isEmpty {
+                            Divider().padding(.horizontal)
+                            HStack {
+                                Image(systemName: "note.text")
+                                    .foregroundStyle(.secondary)
+                                Text(note)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding()
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(Text("Note, \(note)"))
                         }
                     }
                     .background(Color(.secondarySystemBackground))

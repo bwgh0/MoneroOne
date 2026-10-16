@@ -9,8 +9,11 @@ struct SendAmountStep: View {
     let priceService: PriceService
     /// Where a filled-in amount came from; the step says so above the amount.
     var amountPrefill: AmountPrefill? = nil
-    /// Payment links: no Max and no memo, and the title names the link.
+    /// Payment links: no Max, the memo control names the link ("Add note"),
+    /// and the title names the link.
     var isLinkMode = false
+    /// Link mode: the name the link gets without a note ("Link 9").
+    var linkNamePlaceholder = ""
     let onContinue: () -> Void
 
     enum AmountPrefill {
@@ -178,7 +181,7 @@ struct SendAmountStep: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "note.text")
-                                Text(showMemo ? "Hide memo" : "Add memo")
+                                Text(memoToggleTitle)
                                     .font(.caption)
                                 Spacer()
                                 Image(systemName: "chevron.down")
@@ -189,17 +192,24 @@ struct SendAmountStep: View {
                         }
 
                         if showMemo {
-                            TextField("Add a note", text: $memo)
+                            TextField(isLinkMode ? linkNamePlaceholder : String(localized: "Add a note"), text: $memo)
                                 .font(.subheadline)
                                 .padding(12)
                                 .background(Color(.secondarySystemBackground))
                                 .cornerRadius(12)
                                 .transition(.opacity.combined(with: .move(edge: .top)))
+                                .accessibilityLabel(isLinkMode ? Text("Note") : Text("Add a note"))
+                                .accessibilityHint(isLinkMode ? Text("Only this iPhone keeps the note.") : Text(""))
+                                .onChange(of: memo) { newValue in
+                                    // A link's note is a short name.
+                                    if isLinkMode, newValue.count > EnvelopeRecord.noteLimit {
+                                        memo = String(newValue.prefix(EnvelopeRecord.noteLimit))
+                                    }
+                                }
                         }
                     }
                     .padding(.horizontal, 4)
                     .padding(.bottom, 8)
-                    .removedInLinkMode(isLinkMode)
                 }
                 .padding(.horizontal)
                 .opacity(showContent ? 1 : 0)
@@ -264,6 +274,13 @@ struct SendAmountStep: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             softwareKeyboardVisible = false
         }
+    }
+
+    private var memoToggleTitle: String {
+        if isLinkMode {
+            return showMemo ? String(localized: "Hide note") : String(localized: "Add note")
+        }
+        return showMemo ? String(localized: "Hide memo") : String(localized: "Add memo")
     }
 
     private var canContinue: Bool {

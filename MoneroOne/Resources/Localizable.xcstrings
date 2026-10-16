@@ -10263,6 +10263,17 @@
         }
       }
     },
+    "Add note" : {
+      "comment" : "Send, link mode: shows the field for the link's note (a name kept on this iPhone)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add note"
+          }
+        }
+      }
+    },
     "Add places you trust, like home or work." : {
       "localizations" : {
         "de" : {
@@ -37602,6 +37613,17 @@
         }
       }
     },
+    "Hide note" : {
+      "comment" : "Send, link mode: hides the field for the link's note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide note"
+          }
+        }
+      }
+    },
     "Hides balance history and returns to now" : {
       "localizations" : {
         "de" : {
@@ -50213,6 +50235,28 @@
         }
       }
     },
+    "Note" : {
+      "comment" : "A payment link's note: the name only this iPhone keeps",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note"
+          }
+        }
+      }
+    },
+    "Note, %@" : {
+      "comment" : "VoiceOver: a payment link's note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note, %@"
+          }
+        }
+      }
+    },
     "Notifications Disabled" : {
       "localizations" : {
         "de" : {
@@ -51150,6 +51194,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "僅在受信任區域內同步"
+          }
+        }
+      }
+    },
+    "Only this iPhone keeps the note." : {
+      "comment" : "Payment link note: it stays on this device and is never in the link",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only this iPhone keeps the note."
           }
         }
       }

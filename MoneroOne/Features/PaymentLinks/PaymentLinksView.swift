@@ -59,7 +59,7 @@ struct PaymentLinkDisplay {
            let daemonHeight, daemonHeight > height {
             confirmations = max(confirmations ?? 0, Int(daemonHeight - height))
         }
-        // Same rule as the Open Links row in Activity, so both say the same.
+        // Same rule as the link's row in Activity, so both say the same.
         if record.role == .received, status == .pending,
            PendingPaymentLinks.state(of: record, daemonHeight: daemonHeight ?? 0, now: now) == .ready {
             status = .ready

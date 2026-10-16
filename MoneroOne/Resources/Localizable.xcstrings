@@ -5989,6 +5989,17 @@
         }
       }
     },
+    ", worth about %@" : {
+      "comment" : "VoiceOver: fiat value at today's price of an amount not received yet",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", worth about %@"
+          }
+        }
+      }
+    },
     "--" : {
       "shouldTranslate" : false
     },
@@ -89991,6 +90002,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的錢包正在從不受信任的位置同步。如果這是刻意的，請在「設定」中將此位置加入信任的位置。"
+          }
+        }
+      }
+    },
+    "about %@" : {
+      "comment" : "VoiceOver: an estimated amount",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %@"
+          }
+        }
+      }
+    },
+    "about %@ XMR" : {
+      "comment" : "VoiceOver: an estimated amount not received yet",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %@ XMR"
+          }
+        }
+      }
+    },
+    "about %@, about %@ XMR" : {
+      "comment" : "VoiceOver: Fiat Mode, an estimated amount not received yet: fiat at today's price, then XMR",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %1$@, about %2$@ XMR"
           }
         }
       }

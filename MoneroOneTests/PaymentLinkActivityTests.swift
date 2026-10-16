@@ -201,7 +201,7 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertEqual(Set(PendingPaymentLinks.records(in: store).map(\.id)), ["a", "b"])
     }
 
-    // MARK: - Open links (balance card lines, Open Links group)
+    // MARK: - Open links (balance card lines, Links filter)
 
     private func open(
         _ role: EnvelopeRecord.Role,
@@ -363,33 +363,79 @@ final class PaymentLinkActivityTests: XCTestCase {
     }
 
     func testClaimLineText() {
-        XCTAssertEqual(OpenPaymentLinks.claimLineText(amount: 30_000_000_000, count: 1), "0.0300 XMR to claim")
+        // An estimate, as on its Activity row and the claim sheet.
+        XCTAssertEqual(OpenPaymentLinks.claimLineText(amount: 30_000_000_000, count: 1), "~0.0300 XMR to claim")
         XCTAssertEqual(OpenPaymentLinks.claimLineText(amount: nil, count: 1), "1 link to claim")
         XCTAssertEqual(OpenPaymentLinks.claimLineText(amount: nil, count: 2), "2 links to claim")
+        XCTAssertEqual(OpenPaymentLinks.claimAccessibilityLabel(amount: 30_000_000_000, count: 1), "about 0.0300 XMR to claim")
+        XCTAssertEqual(OpenPaymentLinks.claimAccessibilityLabel(amount: nil, count: 2), "2 links to claim")
     }
 
-    func testOpenLinksGoMostUrgentFirst() {
-        XCTAssertEqual(OpenPaymentLinks.kind(role: .received, status: .pending, isExpired: false, confirmations: 2), .toClaim)
-        XCTAssertEqual(OpenPaymentLinks.kind(role: .sent, status: .ready, isExpired: true, confirmations: 12), .expired)
-        XCTAssertEqual(OpenPaymentLinks.kind(role: .sent, status: .pending, isExpired: false, confirmations: 3), .waiting)
-        XCTAssertEqual(OpenPaymentLinks.kind(role: .sent, status: .pending, isExpired: false, confirmations: 10), .ready)
-        XCTAssertEqual(OpenPaymentLinks.kind(role: .sent, status: .ready, isExpired: false, confirmations: nil), .ready)
+    /// In Fiat Mode the lines lead with fiat at today's price, as the
+    /// Activity rows do.
+    func testLinesFollowFiatMode() {
+        XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 20_000_000_000, fiat: "$11.12", count: 1, expired: 0), "$11.12 in 1 open link")
+        XCTAssertEqual(OpenPaymentLinks.sentAccessibilityLabel(amount: 20_000_000_000, fiat: "$11.12", count: 2, expired: 1), "$11.12 in 2 open links, 1 expired")
+        XCTAssertEqual(OpenPaymentLinks.claimLineText(amount: 49_000_000_000, fiat: "$27.34", count: 1), "~$27.34 to claim")
+        XCTAssertEqual(OpenPaymentLinks.claimAccessibilityLabel(amount: 49_000_000_000, fiat: "$27.34", count: 1), "about $27.34 to claim")
+    }
 
-        let older = Date(timeIntervalSince1970: 1_000)
-        let newer = Date(timeIntervalSince1970: 2_000)
-        func item(_ id: String, _ kind: OpenPaymentLinks.Kind, _ date: Date) -> OpenPaymentLinks.Item {
-            var r = open(kind == .toClaim ? .received : .sent, .pending, id: id)
-            r.createdAt = date
-            return OpenPaymentLinks.Item(record: r, kind: kind)
+    /// Activity's Links filter shows each link once: a link sent to us
+    /// that waits to be claimed gets a row of its own, newest first; our
+    /// open links do not, their "Sent by Link" rows stand for them.
+    func testLinksFilterListsOnlyTheLinksToClaim() {
+        var older = open(.received, .pending, id: "older")
+        older.createdAt = Date(timeIntervalSince1970: 1_000)
+        var newer = open(.received, .ready, id: "newer")
+        newer.createdAt = Date(timeIntervalSince1970: 2_000)
+        let records = [
+            older, newer,
+            open(.received, .claimed, id: "claimed"),
+            open(.received, .ready, id: "noSecret", secret: false),
+            open(.sent, .pending, id: "sentOpen"),
+            open(.sent, .ready, id: "sentExpired", expiry: 1),
+        ]
+        func rows(_ type: TransactionListView.FilterType = .links, receivingIndex: Int? = nil, search: String = "", asOf: Date? = nil) -> [String] {
+            TransactionListLogic.linksToClaim(records, type: type, receivingIndex: receivingIndex, search: search, asOf: asOf).map(\.id)
         }
-        let ordered = OpenPaymentLinks.ordered([
-            item("ready", .ready, newer),
-            item("waitingOld", .waiting, older),
-            item("waitingNew", .waiting, newer),
-            item("expired", .expired, older),
-            item("claim", .toClaim, older),
-        ])
-        XCTAssertEqual(ordered.map(\.record.id), ["claim", "expired", "waitingNew", "waitingOld", "ready"])
+        XCTAssertEqual(rows(), ["newer", "older"])
+        XCTAssertEqual(rows(.all), [])
+        XCTAssertEqual(rows(search: "abc"), [])
+        XCTAssertEqual(rows(receivingIndex: 1), [])
+        XCTAssertEqual(rows(asOf: Date()), [])
+    }
+
+    func testLinkToClaimAmountIsAnEstimate() {
+        let amount = TransactionAmountText.incomingEstimate(xmr: Decimal(string: "0.0154024")!, fiatNow: "$2.47", fiatFirst: false)
+        XCTAssertEqual(amount.primary, "+~0.0154024")
+        XCTAssertEqual(amount.secondary, "~$2.47")
+        XCTAssertFalse(amount.isFiatFirst)
+        XCTAssertEqual(amount.spoken, "about 0.0154024 XMR, worth about $2.47")
+    }
+
+    func testLinkToClaimAmountFollowsFiatMode() {
+        let amount = TransactionAmountText.incomingEstimate(xmr: Decimal(string: "0.0154024")!, fiatNow: "$2.47", fiatFirst: true)
+        XCTAssertEqual(amount.primary, "+~$2.47")
+        XCTAssertEqual(amount.secondary, "~0.0154 XMR")
+        XCTAssertTrue(amount.isFiatFirst)
+        XCTAssertEqual(amount.spoken, "about $2.47, about 0.0154 XMR")
+
+        let noPrice = TransactionAmountText.incomingEstimate(xmr: Decimal(string: "0.0154024")!, fiatNow: nil, fiatFirst: true)
+        XCTAssertEqual(noPrice.primary, "+~0.0154024")
+        XCTAssertNil(noPrice.secondary)
+        XCTAssertFalse(noPrice.isFiatFirst)
+    }
+
+    @MainActor
+    func testLinkToClaimRowSpeaksAmountAndStatus() {
+        XCTAssertEqual(
+            PaymentLinkToClaimRow.accessibilityLabel(amountSpoken: "about 0.0154024 XMR, worth about $2.47", status: "Ready to claim"),
+            "Payment link, plus about 0.0154024 XMR, worth about $2.47, Ready to claim"
+        )
+        XCTAssertEqual(
+            PaymentLinkToClaimRow.accessibilityLabel(amountSpoken: nil, status: PendingPaymentLinks.label(for: .unchecked)),
+            "Payment link, Tap to check"
+        )
     }
 
     /// A look stops the active wallet: the dashboard looks when a look is

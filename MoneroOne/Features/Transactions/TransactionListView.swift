@@ -13,8 +13,6 @@ struct TransactionListView: View {
     @State private var isOnScreen = false
     /// Minor index of the receiving subaddress to show, nil for any.
     @State private var receivingIndex: Int?
-    /// An open link's detail, opened from the Open Links group.
-    @State private var openedLink: OpenedLink?
     var asOf: Date? = nil
     var historyTransactions: [MoneroTransaction]? = nil
 
@@ -23,11 +21,6 @@ struct TransactionListView: View {
         self.asOf = asOf
         self.historyTransactions = historyTransactions
         _filterType = State(initialValue: initialFilter)
-    }
-
-    private struct OpenedLink: Hashable {
-        let id: String
-        let role: EnvelopeRecord.Role
     }
 
     private var sourceTransactions: [MoneroTransaction] {
@@ -92,11 +85,14 @@ struct TransactionListView: View {
     // sync/send), so the All Transactions screen matches the
     // Recent list on the home view instead of mis-tagging
     // outgoing sends as Received.
-    /// Under Links, the links that still hold money, above the summary:
-    /// now only, with no search.
-    private var openLinks: [OpenPaymentLinks.Item] {
-        guard filterType == .links, asOf == nil, searchText.isEmpty, receivingIndex == nil else { return [] }
-        return OpenPaymentLinks.items(in: paymentLinks, walletManager: walletManager)
+    private var linksToClaim: [EnvelopeRecord] {
+        TransactionListLogic.linksToClaim(
+            paymentLinks.records,
+            type: filterType,
+            receivingIndex: receivingIndex,
+            search: searchText,
+            asOf: asOf
+        )
     }
 
     private var filteredTransactions: [MoneroTransaction] {
@@ -130,7 +126,7 @@ struct TransactionListView: View {
 
     var body: some View {
         let filtered = filteredTransactions
-        let openLinks = self.openLinks
+        let linksToClaim = self.linksToClaim
         let totals = TransactionListLogic.totals(of: filtered)
         // Fiat Mode leads with fiat totals priced like the rows below them.
         let fiatTotals = priceService.showFiatFirst
@@ -145,22 +141,15 @@ struct TransactionListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            if !openLinks.isEmpty {
-                Text("Open Links", comment: "Activity, Links filter: header over the payment links that still hold money")
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                ForEach(openLinks) { item in
-                    OpenPaymentLinkRow(item: item) {
-                        openedLink = OpenedLink(id: item.record.id, role: item.record.role)
-                    }
-                }
+            // Not transactions yet: above the summary, whose totals are the
+            // transactions under it.
+            ForEach(linksToClaim) { record in
+                PaymentLinkToClaimRow(record: record)
+                    .listRowSeparator(.hidden, edges: record.id == linksToClaim.first?.id ? .top : [])
             }
             if filtered.isEmpty {
-                // Under Links, an open link above is a link.
-                if openLinks.isEmpty {
+                // Under Links, a link waiting to be claimed is a link.
+                if linksToClaim.isEmpty {
                     emptyState
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -182,9 +171,6 @@ struct TransactionListView: View {
         }
         .listStyle(.plain)
         .animation(.easeInOut(duration: 0.25), value: filtered.isEmpty)
-        .navigationDestination(item: $openedLink) { link in
-            PaymentLinkDetailView(recordId: link.id, role: link.role)
-        }
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
@@ -632,6 +618,24 @@ enum TransactionListLogic {
         }
     }
 
+    /// Under Links, the links sent to us that wait to be claimed, newest
+    /// first: their claim is no transaction yet, so each gets a row of its
+    /// own above the summary and the transactions. Now only, with no search
+    /// or address filter. Our open links are not here: their "Sent by Link"
+    /// rows say where each one stands, so every link shows once.
+    static func linksToClaim(
+        _ records: [EnvelopeRecord],
+        type: TransactionListView.FilterType,
+        receivingIndex: Int?,
+        search: String,
+        asOf: Date?
+    ) -> [EnvelopeRecord] {
+        guard type == .links, asOf == nil, search.isEmpty, receivingIndex == nil else { return [] }
+        return records
+            .filter(OpenPaymentLinks.isWaitingToClaim)
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
     /// Received and sent (amount plus fee) over `transactions`. Failed
     /// transactions moved nothing and are skipped; pending ones count.
     static func totals(of transactions: [MoneroTransaction]) -> TransactionTotals {
@@ -731,68 +735,21 @@ struct TransactionRow: View {
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     /// Payment link transactions read "Sent by Link" and so on.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let amount = self.amount
         let row = ActivityRowText(transaction: transaction, date: formattedDate, amount: amount, walletManager: walletManager, store: paymentLinks)
-        Group {
-            // At accessibility sizes the amount goes under the title: side
-            // by side, a whole "Reclaimed by Link" pushed the row off screen.
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 12) {
-                        icon(row)
-                        details(row, stacked: true)
-                    }
-                    // Under the title text: 36 icon + 12.
-                    TransactionAmountColumn(transaction: transaction, amount: amount, alignment: .leading)
-                        .padding(.leading, 48)
-                }
-            } else {
-                HStack(spacing: 12) {
-                    icon(row)
-                    details(row, stacked: false)
-
-                    Spacer()
-
-                    // Amount & Status
-                    TransactionAmountColumn(transaction: transaction, amount: amount)
-                }
-            }
+        ActivityRowLayout(
+            systemImage: row.systemImage,
+            isIncoming: transaction.type == .incoming,
+            title: row.title,
+            subtitle: row.subtitle,
+            subtitleIsStatus: row.subtitleIsStatus
+        ) { alignment in
+            TransactionAmountColumn(transaction: transaction, amount: amount, alignment: alignment)
         }
-        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.accessibilityLabel)
-    }
-
-    private func icon(_ row: ActivityRowText) -> some View {
-        Image(systemName: row.systemImage)
-            .font(.subheadline.weight(.semibold))
-            .foregroundColor(transaction.type == .incoming ? .green : .brand)
-            .frame(width: 36, height: 36)
-            .background(
-                (transaction.type == .incoming ? Color.green : Color.brand)
-                    .opacity(0.15)
-            )
-            .cornerRadius(8)
-    }
-
-    private func details(_ row: ActivityRowText, stacked: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(row.title)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                // Whole: next to a long amount, "Получено" broke with a
-                // hyphen; the amount column gives way instead. Stacked, the
-                // title has the row's width and wraps if it must.
-                .fixedSize(horizontal: !stacked, vertical: true)
-
-            Text(row.subtitle)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: row.subtitleIsStatus && !stacked, vertical: false)
-        }
     }
 
     private var amount: TransactionAmountText {
@@ -822,6 +779,84 @@ struct TransactionRow: View {
     private var fiatAtTime: String? {
         priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
             .map { priceService.formatFiat($0) }
+    }
+}
+
+// MARK: - Row layout (shared by Activity's rows)
+
+/// One Activity row: the direction's glyph in its tinted tile, the title
+/// with its second line, and the amount column at the end. A transaction
+/// and a payment link waiting to be claimed both use it, so they read
+/// alike.
+struct ActivityRowLayout<Amount: View>: View {
+    let systemImage: String
+    let isIncoming: Bool
+    let title: String
+    let subtitle: String
+    /// The subtitle is a status, not the date: it stays on one line next
+    /// to the amount.
+    let subtitleIsStatus: Bool
+    /// The amount column, aligned for where it sits.
+    @ViewBuilder let amount: (HorizontalAlignment) -> Amount
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            // At accessibility sizes the amount goes under the title: side
+            // by side, a whole "Reclaimed by Link" pushed the row off screen.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        icon
+                        details(stacked: true)
+                    }
+                    // Under the title text: 36 icon + 12.
+                    amount(.leading)
+                        .padding(.leading, 48)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    icon
+                    details(stacked: false)
+
+                    Spacer()
+
+                    // Amount & Status
+                    amount(.trailing)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var tint: Color { isIncoming ? .green : .brand }
+
+    private var icon: some View {
+        Image(systemName: systemImage)
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(tint)
+            .frame(width: 36, height: 36)
+            .background(tint.opacity(0.15))
+            .cornerRadius(8)
+    }
+
+    private func details(stacked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                // The label color inside a Button too, which would tint it.
+                .foregroundStyle(.primary)
+                // Whole: next to a long amount, "Получено" broke with a
+                // hyphen; the amount column gives way instead. Stacked, the
+                // title has the row's width and wraps if it must.
+                .fixedSize(horizontal: !stacked, vertical: true)
+
+            Text(subtitle)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: subtitleIsStatus && !stacked, vertical: false)
+        }
     }
 }
 
@@ -870,6 +905,37 @@ struct TransactionAmountText: Equatable {
             receivedOn: receivedOn
         )
     }
+
+    private init(primary: String, secondary: String?, isFiatFirst: Bool, spoken: String) {
+        self.primary = primary
+        self.secondary = secondary
+        self.isFiatFirst = isFiatFirst
+        self.spoken = spoken
+    }
+
+    /// Money coming in that is not ours yet, an estimate (a payment link's
+    /// claim, less a fee not known exactly): "+~0.0154" over "~$2.47", or
+    /// "+~$2.47" over "~0.0154 XMR" in Fiat Mode. `fiatNow` is its value
+    /// at today's price; nil with no price.
+    static func incomingEstimate(xmr: Decimal, fiatNow: String?, fiatFirst: Bool) -> TransactionAmountText {
+        let xmrText = XMRFormatter.format(xmr)
+        if fiatFirst, let fiatNow {
+            let compact = XMRFormatter.formatCompact(xmr)
+            return TransactionAmountText(
+                primary: "+~" + fiatNow,
+                secondary: "~\(compact) XMR",
+                isFiatFirst: true,
+                spoken: String(localized: "about \(fiatNow), about \(compact) XMR", comment: "VoiceOver: Fiat Mode, an estimated amount not received yet: fiat at today's price, then XMR")
+            )
+        }
+        return TransactionAmountText(
+            primary: "+~" + xmrText,
+            secondary: fiatNow.map { "~" + $0 },
+            isFiatFirst: false,
+            spoken: String(localized: "about \(xmrText) XMR", comment: "VoiceOver: an estimated amount not received yet")
+                + (fiatNow.map { String(localized: ", worth about \($0)", comment: "VoiceOver: fiat value at today's price of an amount not received yet") } ?? "")
+        )
+    }
 }
 
 /// The trailing column of a transaction row: the amount on top, then the
@@ -878,17 +944,35 @@ struct TransactionAmountText: Equatable {
 /// Mode the XMR amount is too long to share that line with the status, so
 /// it gets a line of its own under it.
 struct TransactionAmountColumn: View {
-    let transaction: MoneroTransaction
     let amount: TransactionAmountText
+    let isIncoming: Bool
+    /// The transaction whose status shows under the amount; nil for a row
+    /// whose second line already says where it stands.
+    let transaction: MoneroTransaction?
     /// Leading when the column sits under the title (accessibility sizes).
     var alignment: HorizontalAlignment = .trailing
+
+    init(transaction: MoneroTransaction, amount: TransactionAmountText, alignment: HorizontalAlignment = .trailing) {
+        self.amount = amount
+        self.isIncoming = transaction.type == .incoming
+        self.transaction = transaction
+        self.alignment = alignment
+    }
+
+    /// No status: the amount and the other currency only.
+    init(amount: TransactionAmountText, isIncoming: Bool, alignment: HorizontalAlignment = .trailing) {
+        self.amount = amount
+        self.isIncoming = isIncoming
+        self.transaction = nil
+        self.alignment = alignment
+    }
 
     var body: some View {
         VStack(alignment: alignment, spacing: 4) {
             Text(amount.primary)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(transaction.type == .incoming ? .green : .primary)
+                .foregroundColor(isIncoming ? .green : .primary)
                 // One line: a 12-decimal amount in the narrow iPad panel
                 // wrapped its last digit onto a line of its own.
                 .lineLimit(1)
@@ -920,7 +1004,14 @@ struct TransactionAmountColumn: View {
         .layoutPriority(1)
     }
 
+    @ViewBuilder
     private var status: some View {
+        if let transaction {
+            status(of: transaction)
+        }
+    }
+
+    private func status(of transaction: MoneroTransaction) -> some View {
         HStack(spacing: 4) {
             if transaction.isStatusLoading {
                 ProgressView()

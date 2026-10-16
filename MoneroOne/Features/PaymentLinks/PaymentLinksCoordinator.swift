@@ -64,8 +64,8 @@ final class PaymentLinksCoordinator: ObservableObject {
         return true
     }
 
-    /// Opens a saved record: Claim on the balance card or in Activity's
-    /// Open Links, or Reclaim on our expired link.
+    /// Opens a saved record: Claim on the balance card, a link to claim in
+    /// Activity's Links filter, or Reclaim on our expired link.
     /// `autoClaim`: claim a received link once its check finds it ready.
     func present(_ record: EnvelopeRecord, autoClaim: Bool = false) {
         let kind: Presentation.Kind = record.role == .sent ? .own : .claim

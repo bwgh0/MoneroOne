@@ -10,8 +10,8 @@ import SwiftUI
 /// - received record, incoming tx == `settleTxid` → "Received by Link"
 /// Every other transaction keeps "Received" / "Sent". A link row shows a
 /// link glyph in the disc of its direction and opens the link's detail.
-/// Activity's Links filter shows these rows only, under the open links
-/// (`OpenPaymentLinks`).
+/// Activity's Links filter shows these rows only, under the links sent to
+/// us that wait to be claimed (`PaymentLinkToClaimRow`).
 struct PaymentLinkActivity: Equatable {
     enum Kind: Equatable {
         /// Our send that put money in a link we made.
@@ -176,9 +176,9 @@ struct PaymentLinkTransactionRow: View {
 // MARK: - Received links waiting to be claimed
 
 /// Received links not claimed yet: the balance card's Claim line and the
-/// Open Links group in Activity. Their state comes from the record and the
-/// active wallet's daemon height, so neither opens an envelope (that stops
-/// the active wallet); Claim opens the claim sheet, which does.
+/// rows at the top of Activity's Links filter. Their state comes from the
+/// record and the active wallet's daemon height, so neither opens an
+/// envelope (that stops the active wallet); the claim sheet does.
 enum PendingPaymentLinks {
     enum State: Equatable {
         /// Saved, never checked (the claim sheet closed before its check).

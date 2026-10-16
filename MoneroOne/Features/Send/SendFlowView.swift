@@ -8,7 +8,6 @@ struct SendFlowView: View {
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
 
     @State private var phase: SendFlowPhase = .address
-    @State private var navigatingForward = true
 
     // Send data
     @State private var recipientAddress = ""
@@ -66,53 +65,39 @@ struct SendFlowView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // Amount, Review and the status step are pushes, so the system back
+        // button and the edge swipe go back one step, as in Receive's
+        // Select Address.
+        NavigationStack(path: stepPath) {
             ZStack {
                 if canSign {
-                    phaseContent
-                        .id(phaseIndex)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: navigatingForward ? .trailing : .leading).combined(with: .opacity),
-                            removal: .move(edge: navigatingForward ? .leading : .trailing).combined(with: .opacity)
-                        ))
+                    phaseContent(.address)
                 } else {
                     viewOnlyBlockedView
                 }
             }
-            .clipped()
             .horizontalBarsOnDuo()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if !canSign {
-                        Button("Close") { dismiss() }
+                    if canSign {
+                        Button("Cancel") { dismiss() }
                     } else {
-                        switch phase {
-                        case .address:
-                            Button("Cancel") { dismiss() }
-                        case .amount:
-                            Button {
-                                HapticFeedback.shared.buttonPress()
-                                goBack(to: .address)
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "chevron.left")
-                                    Text("Back")
-                                }
-                            }
-                        case .review:
-                            Button {
-                                HapticFeedback.shared.buttonPress()
-                                goBack(to: .amount)
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "chevron.left")
-                                    Text("Back")
-                                }
-                            }
-                        default:
-                            EmptyView()
-                        }
+                        Button("Close") { dismiss() }
                     }
+                }
+            }
+            .navigationDestination(for: SendFlowStep.self) { step in
+                switch step {
+                case .amount:
+                    phaseContent(.amount)
+                case .review:
+                    phaseContent(.review)
+                case .status:
+                    // Sending, success and failure have no way back: no back
+                    // button, and so no edge swipe.
+                    phaseContent(statusPhase)
+                        .navigationBarBackButtonHidden()
+                        .horizontalBarsOnDuo()
                 }
             }
             .sheet(isPresented: $showScanner) {
@@ -264,8 +249,8 @@ struct SendFlowView: View {
     // MARK: - Phase Content
 
     @ViewBuilder
-    private var phaseContent: some View {
-        switch phase {
+    private func phaseContent(_ shown: SendFlowPhase) -> some View {
+        switch shown {
         case .address:
             SendAddressStep(
                 recipientAddress: $recipientAddress,
@@ -346,7 +331,7 @@ struct SendFlowView: View {
 
         case .sending, .success, .error:
             SendStatusStep(
-                phase: phase,
+                phase: shown,
                 amountString: amountString,
                 priceService: priceService,
                 onDone: { dismiss() },
@@ -436,27 +421,46 @@ struct SendFlowView: View {
 
     // MARK: - Navigation
 
-    private var phaseIndex: Int {
-        switch phase {
-        case .address: return 0
-        case .amount: return 1
-        case .review: return 2
-        case .sending, .success, .error: return 3
-        }
+    /// The stack follows `phase`. A pop by the back button or the edge swipe
+    /// writes the shorter path back as the phase one step earlier. A wallet
+    /// that cannot sign shows only the root.
+    private var stepPath: Binding<[SendFlowStep]> {
+        Binding(
+            get: { canSign ? phase.stackPath : [] },
+            set: { phase = phase.popped(to: $0) }
+        )
+    }
+
+    /// What the status step shows. While it pops back to Review (a hardware
+    /// send that did not run), it keeps showing Sending, as before the pop.
+    private var statusPhase: SendFlowPhase {
+        phase.stackPath.last == .status ? phase : .sending
     }
 
     private func goForward(to newPhase: SendFlowPhase) {
-        navigatingForward = true
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+        move(to: newPhase, animation: .spring(response: 0.3, dampingFraction: 0.85))
+    }
+
+    private func goBack(to newPhase: SendFlowPhase) {
+        move(to: newPhase, animation: .spring(response: 0.5, dampingFraction: 0.8))
+    }
+
+    /// A push or a pop brings the system's own motion, so only a change inside
+    /// the status step (Retry) uses the spring.
+    private func move(to newPhase: SendFlowPhase, animation: Animation) {
+        if newPhase.stackPath == phase.stackPath {
+            withAnimation(animation) { phase = newPhase }
+        } else {
             phase = newPhase
         }
     }
 
-    private func goBack(to newPhase: SendFlowPhase) {
-        navigatingForward = false
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            phase = newPhase
-        }
+    /// Opens the flow on a later step with no push animation (a prefilled
+    /// address, amount or payment link).
+    private func jump(to newPhase: SendFlowPhase) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { phase = newPhase }
     }
 
     // MARK: - Prefill
@@ -474,9 +478,9 @@ struct SendFlowView: View {
             if let amt = walletManager.prefillSendAmount {
                 amountString = amt
                 walletManager.prefillSendAmount = nil
-                phase = .review
+                jump(to: .review)
             } else {
-                phase = .amount
+                jump(to: .amount)
             }
         }
     }
@@ -496,7 +500,7 @@ struct SendFlowView: View {
 
         guard phase != .amount else { return }
         if !animated {
-            phase = .amount
+            jump(to: .amount)
         } else if phase == .review {
             goBack(to: .amount)
         } else {

@@ -2041,3 +2041,32 @@ final class AppLanguageTests: XCTestCase {
         XCTAssertNil(defaults.persistentDomain(forName: suiteName)?["AppleLanguages"])
     }
 }
+
+// MARK: - Send Flow Navigation Tests
+
+/// The send steps are pushes on a navigation stack, so the system back button
+/// and the edge swipe go back one step. These pin the phase and path mapping.
+final class SendFlowNavigationTests: XCTestCase {
+
+    func testEachPhaseHasItsStackPath() {
+        XCTAssertEqual(SendFlowPhase.address.stackPath, [])
+        XCTAssertEqual(SendFlowPhase.amount.stackPath, [.amount])
+        XCTAssertEqual(SendFlowPhase.review.stackPath, [.amount, .review])
+        XCTAssertEqual(SendFlowPhase.sending.stackPath, [.amount, .review, .status])
+        XCTAssertEqual(SendFlowPhase.success(txHash: "abc").stackPath, [.amount, .review, .status])
+        XCTAssertEqual(SendFlowPhase.error(message: "failed").stackPath, [.amount, .review, .status])
+    }
+
+    func testPopGoesBackOneStep() {
+        XCTAssertEqual(SendFlowPhase.amount.popped(to: []), .address)
+        XCTAssertEqual(SendFlowPhase.review.popped(to: [.amount]), .amount)
+        // A long press on the back button can pop more than one step.
+        XCTAssertEqual(SendFlowPhase.review.popped(to: []), .address)
+    }
+
+    func testPathThatIsNotShorterKeepsThePhase() {
+        XCTAssertEqual(SendFlowPhase.amount.popped(to: [.amount]), .amount)
+        XCTAssertEqual(SendFlowPhase.sending.popped(to: [.amount, .review, .status]), .sending)
+        XCTAssertEqual(SendFlowPhase.address.popped(to: [.amount]), .address)
+    }
+}

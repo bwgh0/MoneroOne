@@ -16,7 +16,7 @@ import MoneroKit
 final class EnvelopeRuntime: ObservableObject {
     static let shared = EnvelopeRuntime()
 
-    /// The active wallet's current receive address (the one Receive shows),
+    /// The active wallet's main address (the one the wallet switcher shows),
     /// read before the wallet stops. A claim or reclaim goes here unless the
     /// user picks another wallet (`PaymentLinkClaimDestinations`).
     struct Destination: Equatable {
@@ -100,7 +100,7 @@ final class EnvelopeRuntime: ObservableObject {
         await resumeInFlight?.value
         guard !mainSuspended else { return }
         self.walletManager = walletManager
-        guard let address = Self.receiveAddress(of: walletManager) else {
+        guard let address = Self.mainAddress(of: walletManager) else {
             leases -= 1
             throw RuntimeError.noDestination
         }
@@ -408,14 +408,9 @@ final class EnvelopeRuntime: ObservableObject {
         try? url.setResourceValues(values)
     }
 
-    /// The address Receive shows for the active wallet.
-    static func receiveAddress(of walletManager: WalletManager) -> String? {
-        let index = walletManager.selectedReceiveIndex
-        if index != 0,
-           let sub = walletManager.subaddresses.first(where: { $0.index == index }),
-           !sub.address.isEmpty, !NullKeyAddress.isNullKey(sub.address) {
-            return sub.address
-        }
+    /// The active wallet's main address, the one the wallet switcher shows.
+    /// Every wallet takes a claim at its main address.
+    static func mainAddress(of walletManager: WalletManager) -> String? {
         let primary = walletManager.primaryAddress
         guard !primary.isEmpty, !NullKeyAddress.isNullKey(primary), walletManager.isValidAddress(primary) else { return nil }
         return primary

@@ -287,6 +287,102 @@ enum WalletRowSurface {
     }
 }
 
+/// The inside of a wallet switcher row: the emoji circle with its kind
+/// badge, the name, the orange balance and the 8…8 address, then the
+/// trailing slots. The switcher and the claim sheet's wallet rows use it.
+struct WalletRowContent<Trailing: View>: View {
+    let wallet: WalletInfo
+    /// False leaves the balance line out (the claim sheet's wallet row).
+    let showsBalance: Bool
+    /// Inactive wallets may not have a cached balance yet. Unknown is not zero.
+    let balance: Decimal?
+    let address: String?
+    let trailing: Trailing
+
+    init(
+        wallet: WalletInfo,
+        showsBalance: Bool = true,
+        balance: Decimal?,
+        address: String?,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.wallet = wallet
+        self.showsBalance = showsBalance
+        self.balance = balance
+        self.address = address
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Text(wallet.emoji)
+                .font(.system(size: 24))
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(.ultraThinMaterial))
+                .clipShape(Circle())
+                .overlay(alignment: .bottomTrailing) {
+                    // Hardware first: `isViewOnly` is true for it too.
+                    if wallet.requiresHardwareSession {
+                        HardwareAvatarBadge().offset(x: 3, y: 3)
+                    } else if wallet.isViewOnly {
+                        ViewOnlyAvatarBadge().offset(x: 3, y: 3)
+                    }
+                }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(wallet.name)
+                    .font(.subheadline.weight(.semibold))
+
+                if showsBalance {
+                    HStack(spacing: 0) {
+                        Text(balance.map(XMRFormatter.format) ?? "—")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .layoutPriority(0)
+                        Text(" XMR")
+                            .layoutPriority(1)
+                    }
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(balance == nil ? Color.secondary : Color.brand)
+                }
+
+                // The 8…8 short form, as in the Receive rows and on Android.
+                if let address, !address.isEmpty {
+                    Text(verbatim: ReceiveAddressLogic.shortAddress(address))
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                        .monospaced()
+                }
+            }
+
+            Spacer()
+
+            trailing
+        }
+    }
+}
+
+/// The switcher's mark in a row's last slot: a green check on the current
+/// wallet, an empty circle on the others.
+struct WalletRowCheck: View {
+    let isSelected: Bool
+
+    var body: some View {
+        if isSelected {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.green)
+                .frame(width: 24, height: 24)
+                .accessibilityLabel("Current wallet")
+        } else {
+            Circle()
+                .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
+                .frame(width: 24, height: 24)
+        }
+    }
+}
+
 /// One wallet row: emoji, name, orange balance, address underneath, a rename
 /// pencil, and a check plus an orange ring when it is the active wallet.
 ///
@@ -418,6 +514,12 @@ struct WalletRow: View {
     /// Names the last-known or unavailable balance on inactive wallets.
     /// The Selected trait marks the active wallet.
     private var spokenLabel: String {
+        Self.spokenLabel(wallet: wallet, balance: balance, isActive: isActive)
+    }
+
+    /// "Savings, last known balance 0.0500 XMR, view-only". The claim
+    /// sheet's wallet list reads its rows the same way.
+    static func spokenLabel(wallet: WalletInfo, balance: Decimal?, isActive: Bool) -> String {
         let amount: String
         if let balance {
             amount = isActive
@@ -457,65 +559,14 @@ struct WalletRow: View {
     // MARK: - Content
 
     private var rowContent: some View {
-        HStack(spacing: 14) {
-            Text(wallet.emoji)
-                .font(.system(size: 24))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(.ultraThinMaterial))
-                .clipShape(Circle())
-                .overlay(alignment: .bottomTrailing) {
-                    // Hardware first: `isViewOnly` is true for it too.
-                    if wallet.requiresHardwareSession {
-                        HardwareAvatarBadge().offset(x: 3, y: 3)
-                    } else if wallet.isViewOnly {
-                        ViewOnlyAvatarBadge().offset(x: 3, y: 3)
-                    }
-                }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(wallet.name)
-                    .font(.subheadline.weight(.semibold))
-
-                HStack(spacing: 0) {
-                    Text(balance.map(XMRFormatter.format) ?? "—")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .layoutPriority(0)
-                    Text(" XMR")
-                        .layoutPriority(1)
-                }
-                .font(.callout.weight(.medium))
-                .foregroundStyle(balance == nil ? Color.secondary : Color.brand)
-
-                // The 8…8 short form, as in the Receive rows and on Android.
-                if let address, !address.isEmpty {
-                    Text(verbatim: ReceiveAddressLogic.shortAddress(address))
-                        .font(.caption2)
-                        .lineLimit(1)
-                        .foregroundStyle(.secondary)
-                        .monospaced()
-                }
-            }
-
-            Spacer()
-
+        WalletRowContent(wallet: wallet, balance: balance, address: address) {
             // Holds the pencil's place; the real pencil is `renameButton`,
             // laid over the row outside its Button so its tap renames.
             Color.clear
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
 
-            if isActive {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.green)
-                    .frame(width: 24, height: 24)
-                    .accessibilityLabel("Current wallet")
-            } else {
-                Circle()
-                    .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
-                    .frame(width: 24, height: 24)
-            }
+            WalletRowCheck(isSelected: isActive)
         }
     }
 

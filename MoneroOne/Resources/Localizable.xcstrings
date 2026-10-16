@@ -18462,7 +18462,7 @@
       }
     },
     "Claim to" : {
-      "comment" : "VoiceOver: the claim sheet's wallet menu; the wallet name follows as the value",
+      "comment" : "Claim sheet: the label over the wallet that gets the money, and the title of the wallet list; VoiceOver reads the wallet name after it",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -52354,6 +52354,17 @@
         }
       }
     },
+    "Opens the wallet list to choose where the money goes" : {
+      "comment" : "VoiceOver: hint on the claim sheet's wallet row",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the wallet list to choose where the money goes"
+          }
+        }
+      }
+    },
     "Opens the wallet list, where you can switch, rename or add wallets" : {
       "localizations" : {
         "de" : {
@@ -60749,7 +60760,7 @@
       }
     },
     "Reclaim to" : {
-      "comment" : "VoiceOver: the claim sheet's wallet menu on a sent link; the wallet name follows as the value",
+      "comment" : "Claim sheet on a sent link: the label over the wallet that gets the money back, and the title of the wallet list; VoiceOver reads the wallet name after it",
       "localizations" : {
         "en" : {
           "stringUnit" : {

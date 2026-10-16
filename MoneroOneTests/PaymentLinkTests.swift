@@ -394,48 +394,53 @@ final class PaymentLinkTests: XCTestCase {
 
     // MARK: - Claim destination
 
-    private func wallet(_ name: String, address: String?, source: WalletSource = .seed(.bip39)) -> WalletInfo {
+    private func wallet(_ name: String, address: String?, balance: Decimal? = nil, source: WalletSource = .seed(.bip39)) -> WalletInfo {
         WalletInfo(id: UUID(), name: name, source: source, createdAt: Date(), restoreHeight: 0, syncResetCount: 0,
-                   userCreatedSubaddressIndices: [], cachedPrimaryAddress: address, cachedBalance: nil)
+                   userCreatedSubaddressIndices: [], cachedPrimaryAddress: address, cachedBalance: balance)
     }
 
     private let valid: (String) -> Bool = { $0.hasPrefix("4") || $0.hasPrefix("8") }
 
-    func testClaimDestinationsKeepWalletsWithAValidSavedAddress() {
-        let main = wallet("Main", address: "4main")
-        let savings = wallet("Savings", address: "4savings")
+    func testClaimDestinationsKeepWalletsWithAValidMainAddress() {
+        let main = wallet("Main", address: "4main", balance: 1)
+        let savings = wallet("Savings", address: "4savings", balance: 2)
         let viewOnly = wallet("Watch", address: "4watch", source: .viewOnly)
         let empty = wallet("New", address: nil)
         let blank = wallet("Blank", address: "  ")
         let nullKey = wallet("Burn", address: NullKeyAddress.mainnet)
         let otherNetwork = wallet("Testnet", address: "9testnet")
-        let active = EnvelopeRuntime.Destination(address: "8mainsub", walletName: "Main", walletId: main.id)
+        let active = EnvelopeRuntime.Destination(address: "4mainlive", walletName: "Main", walletId: main.id)
 
         let list = PaymentLinkClaimDestinations.eligible(
             wallets: [main, savings, viewOnly, empty, blank, nullKey, otherNetwork],
             active: active,
+            activeBalance: 5,
             isValidAddress: valid
         )
-        // Wallet list order; view-only can receive; no saved address, the
-        // null-key address and another network's address are left out.
+        // Wallet switcher order; view-only can receive; no saved address,
+        // the null-key address and another network's address are left out.
         XCTAssertEqual(list.map(\.name), ["Main", "Savings", "Watch"])
-        // The open wallet: the live receive address. A closed one: its saved
-        // main address.
-        XCTAssertEqual(list.first?.address, "8mainsub")
-        XCTAssertEqual(list[1].address, "4savings")
+        // Every wallet at its main address: the open one as the runtime read
+        // it before the wallet stopped, a closed one as saved.
+        XCTAssertEqual(list.map(\.address), ["4mainlive", "4savings", "4watch"])
+        // The rows show the open wallet's live balance and the others' last
+        // known one; unknown stays unknown.
+        XCTAssertEqual(list.map(\.balance), [5, 2, nil])
+        XCTAssertEqual(list.map(\.isOpen), [true, false, false])
+        XCTAssertTrue(list[2].wallet.isViewOnly)
     }
 
     func testTheOpenWalletIsEligibleWithoutASavedAddress() {
         let main = wallet("Main", address: nil)
-        let active = EnvelopeRuntime.Destination(address: "8mainsub", walletName: "Main", walletId: main.id)
-        let list = PaymentLinkClaimDestinations.eligible(wallets: [main], active: active, isValidAddress: valid)
-        XCTAssertEqual(list.map(\.address), ["8mainsub"])
+        let active = EnvelopeRuntime.Destination(address: "4mainlive", walletName: "Main", walletId: main.id)
+        let list = PaymentLinkClaimDestinations.eligible(wallets: [main], active: active, activeBalance: nil, isValidAddress: valid)
+        XCTAssertEqual(list.map(\.address), ["4mainlive"])
     }
 
     func testClaimGoesToTheOpenWalletByDefault() {
         let main = wallet("Main", address: "4main")
         let savings = wallet("Savings", address: "4savings")
-        let list = PaymentLinkClaimDestinations.eligible(wallets: [main, savings], active: nil, isValidAddress: valid)
+        let list = PaymentLinkClaimDestinations.eligible(wallets: [main, savings], active: nil, activeBalance: nil, isValidAddress: valid)
         let choice = PaymentLinkClaimDestinations.defaultChoice(among: list, role: .received, fundingWalletId: main.id.uuidString, activeWalletId: savings.id)
         XCTAssertEqual(choice?.walletId, savings.id)
     }
@@ -443,7 +448,7 @@ final class PaymentLinkTests: XCTestCase {
     func testReclaimGoesToTheFundingWalletWhenItCanReceive() {
         let main = wallet("Main", address: "4main")
         let savings = wallet("Savings", address: "4savings")
-        let list = PaymentLinkClaimDestinations.eligible(wallets: [main, savings], active: nil, isValidAddress: valid)
+        let list = PaymentLinkClaimDestinations.eligible(wallets: [main, savings], active: nil, activeBalance: nil, isValidAddress: valid)
         let funded = PaymentLinkClaimDestinations.defaultChoice(among: list, role: .sent, fundingWalletId: savings.id.uuidString, activeWalletId: main.id)
         XCTAssertEqual(funded?.walletId, savings.id)
         // Lowercase ids from another writer still match.
@@ -455,7 +460,7 @@ final class PaymentLinkTests: XCTestCase {
         let main = wallet("Main", address: "4main")
         let removed = UUID()
         let noAddress = wallet("New", address: nil)
-        let list = PaymentLinkClaimDestinations.eligible(wallets: [main, noAddress], active: nil, isValidAddress: valid)
+        let list = PaymentLinkClaimDestinations.eligible(wallets: [main, noAddress], active: nil, activeBalance: nil, isValidAddress: valid)
         // An old record with no funding wallet.
         XCTAssertEqual(PaymentLinkClaimDestinations.defaultChoice(among: list, role: .sent, fundingWalletId: nil, activeWalletId: main.id)?.walletId, main.id)
         // The funding wallet was removed.
@@ -464,5 +469,10 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(PaymentLinkClaimDestinations.defaultChoice(among: list, role: .sent, fundingWalletId: noAddress.id.uuidString, activeWalletId: main.id)?.walletId, main.id)
         // Never another wallet when the open one is not in the list.
         XCTAssertNil(PaymentLinkClaimDestinations.defaultChoice(among: list, role: .received, fundingWalletId: nil, activeWalletId: UUID()))
+    }
+
+    func testTheClaimRowReadsTheWalletAndItsKind() {
+        XCTAssertEqual(EnvelopeSessionContent.spokenDestination(title: "Claim to", wallet: wallet("Savings", address: "4s")), "Claim to, Savings")
+        XCTAssertEqual(EnvelopeSessionContent.spokenDestination(title: "Claim to", wallet: wallet("Watch", address: "4w", source: .viewOnly)), "Claim to, Watch, view-only")
     }
 }

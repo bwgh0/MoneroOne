@@ -10,53 +10,70 @@ struct PaymentLinkClaimSheet: View {
     @ObservedObject private var store = EnvelopeStore.shared
     @Environment(\.dismiss) private var dismiss
 
+    private var title: String {
+        presentation.kind == .own ? String(localized: "Your Payment Link") : String(localized: "Payment Link")
+    }
+
     var body: some View {
-        NavigationStack {
-            Group {
-                if let record = store.record(id: presentation.id, role: presentation.kind == .own ? .sent : .received) {
-                    EnvelopeSessionView(
-                        record: record,
-                        walletManager: walletManager,
-                        claimWhenReady: presentation.autoClaim && presentation.kind == .claim,
-                        onClose: { dismiss() }
-                    )
-                } else {
-                    PaymentLinkMessageView(
-                        systemImage: "exclamationmark.circle.fill",
-                        tint: .red,
-                        title: String(localized: "This link is not complete.")
-                    )
-                }
-            }
-            .navigationTitle(presentation.kind == .own ? String(localized: "Your Payment Link") : String(localized: "Payment Link"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                        .accessibilityLabel("Close")
-                }
+        if let record = store.record(id: presentation.id, role: presentation.kind == .own ? .sent : .received) {
+            EnvelopeSessionView(
+                record: record,
+                walletManager: walletManager,
+                claimWhenReady: presentation.autoClaim && presentation.kind == .claim,
+                title: title,
+                onClose: { dismiss() }
+            )
+        } else {
+            NavigationStack {
+                PaymentLinkMessageView(
+                    systemImage: "exclamationmark.circle.fill",
+                    tint: .red,
+                    title: String(localized: "This link is not complete.")
+                )
+                .claimSheetBar(title: title, onClose: { dismiss() })
             }
         }
     }
 }
 
-/// Shared body of the claim sheet and a sent link's live check.
+private extension View {
+    /// The sheet's inline title and Close button.
+    func claimSheetBar(title: String, onClose: @escaping () -> Void) -> some View {
+        navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", action: onClose)
+                        .accessibilityLabel("Close")
+                }
+            }
+    }
+}
+
+/// Shared body of the claim sheet and a sent link's live check. The session
+/// lives on the navigation stack, so pushing the wallet list keeps the
+/// envelope open.
 private struct EnvelopeSessionView: View {
     @StateObject private var session: EnvelopeSession
+    let title: String
     let onClose: () -> Void
 
-    init(record: EnvelopeRecord, walletManager: WalletManager, claimWhenReady: Bool = false, onClose: @escaping () -> Void) {
+    init(record: EnvelopeRecord, walletManager: WalletManager, claimWhenReady: Bool = false, title: String, onClose: @escaping () -> Void) {
         let session = EnvelopeSession(record: record, walletManager: walletManager)
         session.claimWhenReady = claimWhenReady
         _session = StateObject(wrappedValue: session)
+        self.title = title
         self.onClose = onClose
     }
 
     var body: some View {
-        EnvelopeSessionContent(session: session, onClose: onClose)
-            .interactiveDismissDisabled(session.isSweeping)
-            .task { await session.start() }
-            .onDisappear { session.stop() }
+        NavigationStack {
+            EnvelopeSessionContent(session: session, onClose: onClose)
+                .claimSheetBar(title: title, onClose: onClose)
+        }
+        .interactiveDismissDisabled(session.isSweeping)
+        .task { await session.start() }
+        .onDisappear { session.stop() }
     }
 }
 
@@ -67,6 +84,7 @@ struct EnvelopeSessionContent: View {
     var onClose: (() -> Void)?
 
     @State private var copiedHash = false
+    @State private var showWalletList = false
 
     private var record: EnvelopeRecord { session.record }
     private var isOwn: Bool { record.role == .sent }
@@ -97,6 +115,9 @@ struct EnvelopeSessionContent: View {
                 .padding(.bottom)
         }
         .padding()
+        .navigationDestination(isPresented: $showWalletList) {
+            ClaimWalletList(session: session, isOwn: isOwn)
+        }
     }
 
     // MARK: - Hero
@@ -200,13 +221,6 @@ struct EnvelopeSessionContent: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            if session.destinations.count > 1 {
-                destinationMenu
-            } else if !session.destinationWalletName.isEmpty {
-                Text(isOwn ? "Reclaim to \(session.destinationWalletName)" : "Claim to \(session.destinationWalletName)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
 
         case .sweeping:
             Text(isOwn ? "Taking the money back…" : "Claiming…")
@@ -259,49 +273,6 @@ struct EnvelopeSessionContent: View {
         }
     }
 
-    /// Two or more wallets can take the money: the line picks one. The
-    /// chosen wallet stays closed; the app stays on the open one.
-    private var destinationMenu: some View {
-        let name = session.destinationWalletName
-        return Menu {
-            Picker(selection: $session.destinationId) {
-                ForEach(session.destinations) { destination in
-                    Text(destination.name).tag(Optional(destination.walletId))
-                }
-            } label: {
-                EmptyView()
-            }
-            .pickerStyle(.inline)
-        } label: {
-            HStack(spacing: 4) {
-                Text(destinationLine(name))
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.brand)
-            }
-            .font(.subheadline)
-            .multilineTextAlignment(.center)
-        }
-        // Same order as the wallet switcher, wherever the menu opens.
-        .menuOrder(.fixed)
-        .disabled(session.isSweeping)
-        .accessibilityLabel(isOwn
-            ? Text("Reclaim to", comment: "VoiceOver: the claim sheet's wallet menu on a sent link; the wallet name follows as the value")
-            : Text("Claim to", comment: "VoiceOver: the claim sheet's wallet menu; the wallet name follows as the value"))
-        .accessibilityValue(name)
-    }
-
-    /// "Claim to Savings" with the wallet name in the brand color, as a
-    /// menu's current value.
-    private func destinationLine(_ name: String) -> AttributedString {
-        var line = AttributedString(isOwn ? String(localized: "Reclaim to \(name)") : String(localized: "Claim to \(name)"))
-        line.foregroundColor = .secondary
-        if let range = line.range(of: name, options: .backwards) {
-            line[range].foregroundColor = .brand
-        }
-        return line
-    }
-
     private func hashPill(_ txid: String) -> some View {
         Button {
             UIPasteboard.general.string = txid
@@ -338,6 +309,58 @@ struct EnvelopeSessionContent: View {
         }
     }
 
+    // MARK: - Destination
+
+    /// Where the money goes: the wallet switcher's row without the balance,
+    /// under "Claim to". With two or more wallets a tap opens the list to
+    /// choose another; with one it only shows where the money goes.
+    private func destinationRow(_ destination: PaymentLinkClaimDestination) -> some View {
+        let canChoose = session.destinations.count > 1
+        let title = isOwn ? String(localized: "Reclaim to") : String(localized: "Claim to")
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 16)
+                .accessibilityHidden(true)
+
+            Button {
+                guard canChoose else { return }
+                showWalletList = true
+            } label: {
+                WalletRowContent(wallet: destination.wallet, showsBalance: false, balance: nil, address: destination.address) {
+                    if canChoose {
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(16)
+                .contentShape(Rectangle())
+            }
+            .glassButtonStyle()
+            .allowsHitTesting(canChoose)
+            .disabled(session.isSweeping)
+            .accessibilityLabel(Self.spokenDestination(title: title, wallet: destination.wallet))
+            .accessibilityValue(ReceiveAddressLogic.shortAddress(destination.address))
+            .accessibilityHint(canChoose
+                ? String(localized: "Opens the wallet list to choose where the money goes", comment: "VoiceOver: hint on the claim sheet's wallet row")
+                : "")
+            .accessibilityRemoveTraits(canChoose ? [] : .isButton)
+        }
+    }
+
+    /// "Claim to, Savings, view-only".
+    static func spokenDestination(title: String, wallet: WalletInfo) -> String {
+        var parts = [title, wallet.name]
+        if wallet.requiresHardwareSession {
+            parts.append(String(localized: "hardware wallet", comment: "VoiceOver: wallet kind after name and balance"))
+        } else if wallet.isViewOnly {
+            parts.append(String(localized: "view-only", comment: "VoiceOver: wallet kind after name and balance"))
+        }
+        return parts.joined(separator: ", ")
+    }
+
     // MARK: - Actions
 
     @ViewBuilder
@@ -345,6 +368,10 @@ struct EnvelopeSessionContent: View {
         VStack(spacing: 12) {
             switch session.phase {
             case .ready:
+                if let destination = session.destination {
+                    destinationRow(destination)
+                        .padding(.bottom, 4)
+                }
                 Button {
                     HapticFeedback.shared.sendInitiated()
                     Task { await session.sweep() }
@@ -407,6 +434,57 @@ private extension EnvelopeSession.Phase {
         case .done, .alreadyClaimed, .reclaimed, .failed, .sweeping: return true
         default: return false
         }
+    }
+}
+
+/// The wallets a claim can go to, as the wallet switcher shows them: same
+/// rows, same order, the chosen one with the check and the orange ring. No
+/// rename or reorder here. A tap picks the wallet and goes back.
+private struct ClaimWalletList: View {
+    @ObservedObject var session: EnvelopeSession
+    let isOwn: Bool
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 10) {
+                ForEach(session.destinations) { destination in
+                    row(destination)
+                }
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 24)
+        }
+        .navigationTitle(isOwn ? String(localized: "Reclaim to") : String(localized: "Claim to"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ destination: PaymentLinkClaimDestination) -> some View {
+        let isChosen = destination.walletId == session.destinationId
+        return Button {
+            session.destinationId = destination.walletId
+            dismiss()
+        } label: {
+            WalletRowContent(wallet: destination.wallet, balance: destination.balance, address: destination.address) {
+                WalletRowCheck(isSelected: isChosen)
+            }
+            .padding(16)
+            .contentShape(Rectangle())
+        }
+        .glassButtonStyle()
+        .overlay {
+            WalletRowSurface.ring(.brand.opacity(isChosen ? 0.7 : 0))
+        }
+        .opacity(isChosen ? 1 : 0.85)
+        .disabled(session.isSweeping)
+        // As the switcher reads its rows: name, balance, kind; the address
+        // waits on the More Content rotor.
+        .accessibilityLabel(WalletRow.spokenLabel(wallet: destination.wallet, balance: destination.balance, isActive: destination.isOpen))
+        .accessibilityCustomContent(AccessibilityCustomContentKey("Address"), Text(destination.address))
+        .accessibilityCustomContent("Icon", destination.wallet.emoji)
+        .accessibilityAddTraits(isChosen ? .isSelected : [])
+        .padding(.horizontal)
     }
 }
 

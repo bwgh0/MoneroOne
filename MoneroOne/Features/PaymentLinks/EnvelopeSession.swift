@@ -28,11 +28,16 @@ final class EnvelopeSession: ObservableObject {
     /// A received link: claim on the first check that finds it ready (the
     /// user tapped Claim on its row in Activity). Once only.
     var claimWhenReady = false
-    /// The wallets the money can go to. The sheet offers a choice when
-    /// there are two or more.
+    /// The wallets the money can go to, in wallet switcher order. The sheet
+    /// offers a choice when there are two or more.
     @Published private(set) var destinations: [PaymentLinkClaimDestination] = []
     /// The wallet the money goes to.
     @Published var destinationId: UUID?
+
+    /// The chosen wallet, nil when no list could be read.
+    var destination: PaymentLinkClaimDestination? {
+        destinations.first { $0.walletId == destinationId }
+    }
 
     private let walletManager: WalletManager
     private let store: EnvelopeStore
@@ -64,7 +69,7 @@ final class EnvelopeSession: ObservableObject {
     /// The chosen wallet; with no list (none could be read), the active
     /// wallet's receive address as before.
     private var sweepTarget: (address: String, walletName: String)? {
-        if let chosen = destinations.first(where: { $0.walletId == destinationId }) {
+        if let chosen = destination {
             return (chosen.address, chosen.name)
         }
         return runtime.destination.map { ($0.address, $0.walletName) }
@@ -157,6 +162,7 @@ final class EnvelopeSession: ObservableObject {
         let list = PaymentLinkClaimDestinations.eligible(
             wallets: walletManager.wallets,
             active: runtime.destination,
+            activeBalance: walletManager.displayBalance,
             isValidAddress: { walletManager.isValidAddress($0) }
         )
         destinations = list
@@ -258,38 +264,47 @@ final class EnvelopeSession: ObservableObject {
     }
 }
 
-/// A wallet a claim or reclaim can send the money to.
+/// A wallet a claim or reclaim can send the money to, with what its
+/// switcher row shows.
 struct PaymentLinkClaimDestination: Identifiable, Equatable {
-    let walletId: UUID
-    let name: String
+    let wallet: WalletInfo
+    /// The wallet's main address: the claim pays it, the row shows it.
     let address: String
+    /// The open wallet's balance, or a closed wallet's last known one. Nil
+    /// when unknown.
+    let balance: Decimal?
+    /// The wallet the app has open (the one the envelope stopped).
+    let isOpen: Bool
 
-    var id: UUID { walletId }
+    var id: UUID { wallet.id }
+    var walletId: UUID { wallet.id }
+    var name: String { wallet.name }
 }
 
 /// Which wallets a payment link can be claimed into, and the one it goes to
 /// unless the user picks another. Choosing a wallet does not open it: the
-/// sweep goes to its address and the money shows when it next syncs.
+/// sweep goes to its main address and the money shows when it next syncs.
 enum PaymentLinkClaimDestinations {
-    /// In wallet list order. The open wallet takes its live receive address
-    /// (the one Receive shows). Every other wallet takes its saved main
-    /// address, when that address is valid on this network; a wallet
+    /// In wallet switcher order, each at its main address: the open wallet
+    /// at the address the runtime read before it stopped, every other
+    /// wallet at its saved one when that is valid on this network. A wallet
     /// without one is left out. View-only and hardware wallets can receive,
     /// so they stay in.
     static func eligible(
         wallets: [WalletInfo],
         active: EnvelopeRuntime.Destination?,
+        activeBalance: Decimal?,
         isValidAddress: (String) -> Bool
     ) -> [PaymentLinkClaimDestination] {
         wallets.compactMap { wallet in
             if let active, active.walletId == wallet.id {
-                return PaymentLinkClaimDestination(walletId: wallet.id, name: wallet.name, address: active.address)
+                return PaymentLinkClaimDestination(wallet: wallet, address: active.address, balance: activeBalance, isOpen: true)
             }
             guard let address = wallet.cachedPrimaryAddress?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !address.isEmpty,
                   !NullKeyAddress.isNullKey(address),
                   isValidAddress(address) else { return nil }
-            return PaymentLinkClaimDestination(walletId: wallet.id, name: wallet.name, address: address)
+            return PaymentLinkClaimDestination(wallet: wallet, address: address, balance: wallet.cachedBalance, isOpen: false)
         }
     }
 

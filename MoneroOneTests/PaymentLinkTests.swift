@@ -349,6 +349,8 @@ final class PaymentLinkTests: XCTestCase {
         // Never funded, or settled: nothing to do.
         XCTAssertEqual(actions(.sent, .notFunded, fundingTxid: nil), [])
         XCTAssertEqual(actions(.sent, .created, fundingTxid: nil), [])
+        XCTAssertEqual(actions(.sent, .pending, fundingTxid: nil), [])
+        XCTAssertEqual(actions(.sent, .ready, fundingTxid: nil), [])
         XCTAssertEqual(actions(.sent, .claimed), [])
         XCTAssertEqual(actions(.sent, .reclaimed), [])
         // A received link: Claim until it is settled.
@@ -440,9 +442,12 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertNil(store.record(id: record.id, role: .sent)?.fundingStartedAt)
         try PaymentLinkFunder.beginFunding(record, walletId: record.walletId, store: store, networkType: .mainnet)
         XCTAssertNotNil(store.record(id: record.id, role: .sent)?.fundingStartedAt)
-        // The node may have accepted the first send despite the error.
+        // The lock alone does not make the link visible.
+        XCTAssertEqual(store.record(id: record.id, role: .sent)?.status, .created)
+        // A failed send stays hidden; history or a scan adopts it if the node took it.
         PaymentLinkFunder.markNotFunded(id: record.id, store: store)
-        XCTAssertEqual(store.record(id: record.id, role: .sent)?.status, .pending)
+        XCTAssertEqual(store.record(id: record.id, role: .sent)?.status, .notFunded)
+        XCTAssertNotNil(store.record(id: record.id, role: .sent)?.fundingStartedAt)
         // A stale review-screen copy cannot reset the durable attempt.
         try PaymentLinkFunder.save(record, store: store, networkType: .mainnet)
         let reloaded = EnvelopeStore(service: service)

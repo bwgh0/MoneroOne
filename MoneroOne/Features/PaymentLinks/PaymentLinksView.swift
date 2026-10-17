@@ -168,8 +168,6 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 guard let txid = record.settleTxid else { return false }
                 return !walletManager.transactions.contains { $0.id == txid && $0.status != .failed }
             case .pending:
-                // An interrupted broadcast with no hash still needs a scan.
-                if record.fundingTxid == nil, record.fundingStartedAt != nil { return true }
                 // Another wallet sent the funding: this wallet's history has
                 // no count for it, and the record keeps the one from the last
                 // look. The envelope gives a fresh one.
@@ -219,7 +217,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
                     for: observation,
                     reclaimTxid: record.settleTxid,
                     reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) },
-                    fundingKnown: record.fundingTxid != nil || record.fundingStartedAt != nil
+                    fundingKnown: record.fundingTxid != nil
                 )
                 record.status = status
                 record.lastBalance = observation.balance
@@ -666,7 +664,8 @@ enum PaymentLinkDetailAction: Hashable {
             // by an earlier sweep. Retained secrets must remain usable.
             return hasLink ? [.claim] : []
         case .sent:
-            guard display.status == .pending || display.status == .ready else { return [] }
+            // No Share while no funding is known: the envelope may be empty.
+            guard record.fundingTxid != nil, display.status == .pending || display.status == .ready else { return [] }
             let share: [PaymentLinkDetailAction] = hasLink ? [.share] : []
             return display.isExpired ? [.reclaim] + share : share + [.reclaim]
         }

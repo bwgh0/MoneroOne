@@ -76307,6 +76307,17 @@
         }
       }
     },
+    "The payment could not be confirmed. If it went through, the link appears in Activity." : {
+      "comment" : "Send flow error: a payment link's funding may or may not have reached the network",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The payment could not be confirmed. If it went through, the link appears in Activity."
+          }
+        }
+      }
+    },
     "The price feed has no %@ quote." : {
       "comment" : "Currency code, e.g. EUR",
       "localizations" : {

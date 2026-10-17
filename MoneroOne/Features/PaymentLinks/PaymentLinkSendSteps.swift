@@ -113,6 +113,8 @@ enum PaymentLinkFunder {
     }
 
     /// Consumes the one funding attempt before software or hardware can send.
+    /// `fundingStartedAt` is only the lock: the record stays Created, so it
+    /// shows nowhere until its funding transaction is known.
     static func beginFunding(_ record: EnvelopeRecord, walletId: String?, store: EnvelopeStore = .shared, networkType: MoneroKit.NetworkType) throws {
         try save(record, store: store, networkType: networkType)
         guard var saved = store.record(id: record.id, role: .sent),
@@ -120,7 +122,6 @@ enum PaymentLinkFunder {
               saved.fundingStartedAt == nil, saved.fundingTxid == nil,
               saved.status == .created else { throw FundingError.alreadyAttempted }
         saved.fundingStartedAt = Date()
-        saved.status = .pending
         try store.save(saved)
     }
 
@@ -148,10 +149,21 @@ enum PaymentLinkFunder {
         try? store.save(record)
     }
 
+    /// The funding failed, or its result is not known. The link is hidden
+    /// (Activity, its counts and the balance card leave it out) and keeps
+    /// its secret and its used attempt. It shows again, as Waiting, when the
+    /// wallet's history or a scan finds its funding.
     static func markNotFunded(id: String, store: EnvelopeStore = .shared) {
         guard var record = store.record(id: id, role: .sent), record.fundingTxid == nil else { return }
-        record.status = record.fundingStartedAt == nil ? .notFunded : .pending
+        record.status = .notFunded
         try? store.save(record)
+    }
+
+    /// The Send flow's error when a link's funding may have reached the
+    /// network: a broadcast that failed or never reported back.
+    nonisolated static var unconfirmedMessage: String {
+        String(localized: "The payment could not be confirmed. If it went through, the link appears in Activity.",
+               comment: "Send flow error: a payment link's funding may or may not have reached the network")
     }
 
     /// The sentence that goes with a shared link.
@@ -177,7 +189,7 @@ enum PaymentLinkFunder {
             case .insufficientFunds:
                 return String(localized: "Not enough unlocked funds for the amount, the network fee and the claim fee reserve.")
             case .alreadyAttempted:
-                return String(localized: "This link already has a funding attempt. Check Activity before sending again.")
+                return PaymentLinkFunder.unconfirmedMessage
             }
         }
     }

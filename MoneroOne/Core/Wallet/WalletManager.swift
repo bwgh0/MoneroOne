@@ -129,7 +129,8 @@ class WalletManager: ObservableObject {
     enum HardwareSessionOutcome: Equatable {
         case sentTransaction(txId: String)
         case syncedOnly
-        case failed
+        /// The error the sheet showed.
+        case failed(message: String)
     }
     @Published private(set) var lastHardwareSessionOutcome: HardwareSessionOutcome?
 
@@ -647,7 +648,7 @@ class WalletManager: ObservableObject {
         } catch {
             TrezorLog.log("[Session] could not restore VIEW after failure: %@", error.localizedDescription)
         }
-        lastHardwareSessionOutcome = .failed
+        lastHardwareSessionOutcome = .failed(message: message)
         hardwareSessionState = .failed(message: message)
     }
 

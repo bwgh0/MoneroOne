@@ -204,7 +204,7 @@ final class EnvelopeSession: ObservableObject {
             for: observation,
             reclaimTxid: reclaimTxid,
             reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) },
-            fundingKnown: record.role == .sent && (record.fundingTxid != nil || record.fundingStartedAt != nil)
+            fundingKnown: record.role == .sent && record.fundingTxid != nil
         )
         record.noteBalance(observation.balance, sweepFee: observation.sweepFee)
         record.confirmations = observation.fundingConfirmations

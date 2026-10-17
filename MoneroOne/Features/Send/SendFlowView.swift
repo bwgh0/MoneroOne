@@ -222,17 +222,32 @@ struct SendFlowView: View {
                             }
                         }
                     }
-                case .failed:
+                case .failed(let message):
+                    sendInProgress = false
+                    // A link used its one funding attempt: no way back to
+                    // Confirm. It shows the error as a normal send does and
+                    // stays hidden until a funding turns up.
                     if isLinkMode, let linkRecordId {
                         PaymentLinkFunder.markNotFunded(id: linkRecordId)
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            phase = .error(message: message)
+                        }
+                        return
                     }
-                    sendInProgress = false
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        phase = isLinkMode ? .error(message: String(localized: "The link funding could not be confirmed. Check Activity before sending again.")) : .review
+                        phase = .review
                     }
                 case .syncedOnly, .none:
+                    sendInProgress = false
+                    // A link: the sheet closed without a result (cancelled,
+                    // dismissed, or a failure after the broadcast), so the
+                    // funding may have gone out. Its one attempt is used.
                     if isLinkMode, let linkRecordId {
                         PaymentLinkFunder.markNotFunded(id: linkRecordId)
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            phase = .error(message: PaymentLinkFunder.unconfirmedMessage)
+                        }
+                        return
                     }
                     // No send ran — the user cancelled or dismissed the sheet
                     // mid-session. Phase is still `.sending`, which has no
@@ -240,9 +255,8 @@ struct SendFlowView: View {
                     // dismissal, so leaving it there strands the user with no
                     // way out but force-quitting. Return to `.review` so the
                     // inputs are editable and Send is tappable again.
-                    sendInProgress = false
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        phase = isLinkMode ? .error(message: String(localized: "The link funding could not be confirmed. Check Activity before sending again.")) : .review
+                        phase = .review
                     }
                 }
             }
@@ -622,7 +636,13 @@ struct SendFlowView: View {
                 SoundFeedback.shared.playSendComplete()
             } catch {
                 sendInProgress = false
-                let msg = friendlyErrorMessage(for: error)
+                // A failed broadcast may still have reached the network.
+                let msg: String
+                if case MoneroCoreError.transactionCommitFailed = error {
+                    msg = PaymentLinkFunder.unconfirmedMessage
+                } else {
+                    msg = friendlyErrorMessage(for: error)
+                }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     phase = .error(message: msg)
                 }

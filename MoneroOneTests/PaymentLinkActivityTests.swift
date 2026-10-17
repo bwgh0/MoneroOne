@@ -283,6 +283,9 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .claimed), activeWalletId: "w1"))
         XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .reclaimed), activeWalletId: "w1"))
         XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .notFunded, fundingTxid: nil), activeWalletId: "w1"))
+        // A funding whose result is not known yet is not counted.
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .pending, fundingTxid: nil), activeWalletId: "w1"))
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .ready, fundingTxid: nil), activeWalletId: "w1"))
         XCTAssertFalse(OpenPaymentLinks.isOpenSent(open(.sent, .created, fundingTxid: nil), activeWalletId: "w1"))
         // Another wallet's link is that wallet's money; an old record without
         // a wallet id counts everywhere.

@@ -31,9 +31,10 @@ enum OpenPaymentLinks {
     /// wallet's money; a record from before wallet ids counts in every wallet.
     static func isOpenSent(_ record: EnvelopeRecord, activeWalletId: String?) -> Bool {
         // A link with a funding transaction is open whatever a check that
-        // missed the funding wrote; one without is hidden.
+        // missed the funding wrote; one without is hidden (a funding that
+        // failed, or whose result is not known yet).
         let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
-        guard record.role == .sent, status == .pending || status == .ready else { return false }
+        guard record.role == .sent, record.fundingTxid != nil, status == .pending || status == .ready else { return false }
         if let walletId = record.walletId, walletId != activeWalletId { return false }
         return true
     }

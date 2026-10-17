@@ -53,6 +53,9 @@ struct SendFlowView: View {
     /// Bumped when the review's funding transaction is gone at Send: the
     /// review builds it again, and its fee shows before anything is saved.
     @State private var linkFundingRebuild = 0
+    /// The funding transaction of the draft the user confirmed: Send
+    /// broadcasts this one.
+    @State private var linkFunding: PreparedTransaction?
     @State private var linkRecordId: String?
     /// The link's note: a name that stays on this iPhone, never in the link
     /// or the funding transaction's memo.
@@ -422,6 +425,7 @@ struct SendFlowView: View {
                 return
             }
             linkRecordId = record.id
+            linkFunding = draft.funding
             HapticFeedback.shared.sendInitiated()
             goForward(to: .sending)
             sendTransaction()
@@ -640,7 +644,7 @@ struct SendFlowView: View {
         }
         Task {
             do {
-                let txHash = try await PaymentLinkFunder.fund(record, funding: linkDraft?.funding, walletManager: walletManager)
+                let txHash = try await PaymentLinkFunder.fund(record, funding: linkFunding, walletManager: walletManager)
                 transactionHash = txHash
                 await walletManager.refresh()
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {

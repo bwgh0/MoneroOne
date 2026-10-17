@@ -167,20 +167,23 @@ class WalletManager: ObservableObject {
     }
 
     /// A payment link's step between signing and broadcast on a hardware
-    /// wallet: the Send flow sets it before the session sheet opens, and
-    /// the session runs it only for a send to `address` (the link's
-    /// envelope), once.
+    /// wallet: the Send flow sets it before the session sheet opens and
+    /// clears it when the sheet closes. The session runs it for a send to
+    /// `address` (the link's envelope). It stays for every run of the
+    /// sheet, so a second signed funding meets the link's one attempt
+    /// (``PaymentLinkFunder/saveAttempt(id:txids:store:)``) and is never
+    /// broadcast.
     struct PendingBroadcastStep {
         let address: String
         let run: MoneroWallet.BeforeBroadcast
     }
     var pendingBroadcastStep: PendingBroadcastStep?
 
-    /// Takes the pending step when it belongs to a send to `address`.
-    private func takeBroadcastStep(for address: String) -> MoneroWallet.BeforeBroadcast? {
-        guard let step = pendingBroadcastStep else { return nil }
-        pendingBroadcastStep = nil
-        return step.address == address ? step.run : nil
+    /// The pending step when it belongs to a send to `address`. It stays
+    /// pending.
+    nonisolated static func broadcastStep(_ step: PendingBroadcastStep?, for address: String) -> MoneroWallet.BeforeBroadcast? {
+        guard let step, step.address == address else { return nil }
+        return step.run
     }
     @Published private(set) var lastHardwareSessionOutcome: HardwareSessionOutcome?
 
@@ -505,7 +508,7 @@ class WalletManager: ObservableObject {
         case .single(let to, let amount, let memo):
             hardwareSessionState = .signing
             do {
-                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo, beforeBroadcast: takeBroadcastStep(for: to))
+                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo, beforeBroadcast: Self.broadcastStep(pendingBroadcastStep, for: to))
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {
@@ -522,7 +525,7 @@ class WalletManager: ObservableObject {
         case .all(let to, let memo):
             hardwareSessionState = .signing
             do {
-                let txId = try await fullWallet.sendAll(to: to, memo: memo, beforeBroadcast: takeBroadcastStep(for: to))
+                let txId = try await fullWallet.sendAll(to: to, memo: memo, beforeBroadcast: Self.broadcastStep(pendingBroadcastStep, for: to))
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {

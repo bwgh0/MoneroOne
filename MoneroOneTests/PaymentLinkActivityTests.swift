@@ -788,8 +788,10 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertTrue(OpenPaymentLinks.isOpenSent(orphan, activeWalletId: "w1", walletIds: wallets))
         // Another wallet still on this device keeps its own links.
         XCTAssertFalse(OpenPaymentLinks.isOpenSent(other, activeWalletId: "w1", walletIds: wallets))
-        // The wallets not known: only the funding wallet counts.
+        // The wallets not known (nil or empty): only the funding wallet counts.
         XCTAssertFalse(OpenPaymentLinks.isOpenSent(orphan, activeWalletId: "w1"))
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(orphan, activeWalletId: "w1", walletIds: []))
+        XCTAssertFalse(OpenPaymentLinks.belongsToActiveWallet(orphan, activeWalletId: "w1", walletIds: []))
         let summary = OpenPaymentLinks.summary(of: [orphan, other], activeWalletId: "w1", walletIds: wallets)
         XCTAssertEqual(summary.sentCount, 1)
         XCTAssertEqual(summary.sentAmount, orphan.amount)

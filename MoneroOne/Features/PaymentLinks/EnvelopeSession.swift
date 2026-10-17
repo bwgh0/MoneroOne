@@ -160,7 +160,7 @@ final class EnvelopeSession: ObservableObject {
             phase = .done(txid: result.txid, amount: result.amount)
             await runtime.deleteFiles(id: record.id)
         } catch {
-            if let after = Self.afterFailedSweep(record, before: before, error: error) {
+            if let after = Self.afterFailedSweep(record, before: before, error: error, transactions: walletManager.transactions) {
                 record = after
                 try? store.save(record)
             }
@@ -185,17 +185,27 @@ final class EnvelopeSession: ObservableObject {
     /// What a failed sweep leaves in the record: `record` as saved before
     /// the broadcast (or `before` when the sweep failed earlier), `before`
     /// the record before the sweep. Nil: keep it as it is.
-    /// - The node refused it as a double spend: a claim made elsewhere took
-    ///   the money. Claimed, with no sweep of ours.
+    /// - The node refused it as a double spend: another spend took the
+    ///   money. Our own earlier claim or reclaim (read as dropped, then
+    ///   mined) when there is one: it settles the link again, Reclaimed or
+    ///   Claimed by us, until a scan shows another spend. Else a claim made
+    ///   elsewhere: Claimed, with no sweep of ours.
     /// - No answer from the node: the sweep may have gone out. It stays
     ///   settled; a settle that dropped opens the link again once its
     ///   grace is over.
     /// - Any other failure sent nothing: the link is as it was.
-    nonisolated static func afterFailedSweep(_ record: EnvelopeRecord, before: EnvelopeRecord, error: Error) -> EnvelopeRecord? {
+    /// `transactions`: this wallet's history, where an earlier sweep of ours
+    /// that is live or mined shows.
+    nonisolated static func afterFailedSweep(_ record: EnvelopeRecord, before: EnvelopeRecord, error: Error,
+                                             transactions: [MoneroTransaction] = [], now: Date = Date()) -> EnvelopeRecord? {
         var after = record
         switch error {
         case EnvelopeRuntime.RuntimeError.alreadyClaimed:
             after.undoSettle(to: before)
+            if let earlier = earlierOwnSettle(of: before, transactions: transactions) {
+                after.resumeSettle(earlier, at: now)
+                return after
+            }
             after.status = .claimed
             return after
         case EnvelopeRuntime.RuntimeError.sweepUnconfirmed:
@@ -205,6 +215,20 @@ final class EnvelopeSession: ObservableObject {
             after.undoSettle(to: before)
             return after
         }
+    }
+
+    /// The claim or reclaim of ours from before `record`'s sweep that can
+    /// have beaten it: the newest one this wallet's history shows live or
+    /// mined, else the newest one it does not show failed. Nil when there
+    /// is none.
+    nonisolated static func earlierOwnSettle(of record: EnvelopeRecord, transactions: [MoneroTransaction]) -> EnvelopeRecord.OwnSettle? {
+        let earlier = record.ownSettles ?? []
+        func rows(_ settle: EnvelopeRecord.OwnSettle) -> [MoneroTransaction] {
+            transactions.filter { settle.txids.contains($0.id) }
+        }
+        if let live = earlier.last(where: { rows($0).contains { $0.status != .failed } }) { return live }
+        // Not in this history (it paid another wallet, or the history lags).
+        return earlier.last { rows($0).isEmpty }
     }
 
     /// Reads the wallets the money can go to. Keeps the user's pick when

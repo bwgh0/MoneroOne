@@ -173,6 +173,21 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
         status = previous.status
     }
 
+    /// `settle`, a claim or reclaim of ours from before, settles the link
+    /// again (the spend that beat a newer one of ours): Reclaimed or
+    /// Claimed by it from `date`, until a scan shows another spend.
+    mutating func resumeSettle(_ settle: OwnSettle, at date: Date) {
+        guard let txid = settle.txids.first else { return }
+        settleTxid = txid
+        settledAmount = settle.amount
+        walletName = settle.walletName ?? walletName
+        settledAt = date
+        settleHeight = nil
+        settleSeenMined = nil
+        settleLeftLocked = nil
+        status = role == .sent ? .reclaimed : .claimed
+    }
+
     /// Our settle lost to a claim made elsewhere: no sweep of ours describes
     /// the link. It reads "Already claimed".
     mutating func dropSettle() {

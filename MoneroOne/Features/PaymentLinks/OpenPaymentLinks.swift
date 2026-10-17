@@ -31,11 +31,11 @@ enum OpenPaymentLinks {
     /// (removed, or restored from its seed under a new id). Such a link
     /// shows, counts and gets checked here, and Reclaim pays the active
     /// wallet. A record from before wallet ids counts in every wallet.
-    /// `walletIds`: the wallets on this device; nil when not known (then
-    /// only the funding wallet counts).
+    /// `walletIds`: the wallets on this device; nil or empty when not
+    /// known (then only the funding wallet counts).
     static func belongsToActiveWallet(_ record: EnvelopeRecord, activeWalletId: String?, walletIds: Set<String>?) -> Bool {
         guard let walletId = record.walletId, walletId != activeWalletId else { return true }
-        if let walletIds, activeWalletId != nil, !walletIds.contains(walletId) { return true }
+        if let walletIds, !walletIds.isEmpty, activeWalletId != nil, !walletIds.contains(walletId) { return true }
         return false
     }
 

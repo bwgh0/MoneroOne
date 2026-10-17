@@ -106,7 +106,9 @@ enum PaymentLinkFunder {
             }
             throw error
         }
-        guard prepared.amount == draft.atomicAmount + draft.feeReserve, prepared.fee > 0 else {
+        guard fundingMatches(address: prepared.address, amount: prepared.amount,
+                             envelope: draft.address, linkAmount: draft.atomicAmount, feeReserve: draft.feeReserve),
+              prepared.fee > 0 else {
             throw FundingError.fundingNotBuilt
         }
         let fee = EnvelopeRuntime.xmr(prepared.fee)
@@ -117,6 +119,12 @@ enum PaymentLinkFunder {
                                      expiry: draft.expiry, feeReserve: draft.feeReserve, networkFee: fee)
         built.funding = prepared
         return built
+    }
+
+    /// A signed funding pays the link's envelope its amount plus the claim
+    /// fee reserve, no more and no less.
+    nonisolated static func fundingMatches(address: String, amount: UInt64, envelope: String, linkAmount: UInt64, feeReserve: UInt64) -> Bool {
+        !envelope.isEmpty && address == envelope && amount == linkAmount + feeReserve
     }
 
     /// `draft` can be sent as the review showed it: its funding transaction
@@ -201,7 +209,9 @@ enum PaymentLinkFunder {
     /// builds it again.
     static func fund(_ record: EnvelopeRecord, funding: PreparedTransaction?, walletManager: WalletManager,
                      store: EnvelopeStore = .shared) async throws -> String {
-        guard let funding, funding.amount == record.amount + (record.feeReserve ?? 0),
+        guard let funding,
+              fundingMatches(address: funding.address, amount: funding.amount,
+                             envelope: record.address, linkAmount: record.amount, feeReserve: record.feeReserve ?? 0),
               await walletManager.isPrepared(funding) else { throw FundingError.fundingNotBuilt }
         try beginFunding(record, walletId: walletManager.activeWallet?.id.uuidString, store: store, networkType: walletManager.networkType)
         do {

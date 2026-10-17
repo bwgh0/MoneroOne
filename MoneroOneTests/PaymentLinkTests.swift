@@ -1569,4 +1569,100 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(EnvelopeStatusRules.status(for: obs(conf: 30, spends: ["r1", "r2"], mined: ["r1", "r2"]), current: .ready,
                                                   role: .sent, ownSettleTxids: reopened.ownSettleTxids), .reclaimed)
     }
+
+    /// A hardware link funding: the step that saves the txids before the
+    /// broadcast stays for every run of the session sheet, and the sheet
+    /// offers no Try Again for it. A second signed funding meets the link's
+    /// one attempt and is never broadcast.
+    @MainActor
+    func testAHardwareLinkFundingNeverBroadcastsTwice() throws {
+        let envelope = "4envelope"
+        let step = WalletManager.PendingBroadcastStep(address: envelope, run: { _ in })
+        XCTAssertNotNil(WalletManager.broadcastStep(step, for: envelope))
+        // Still there for a second run.
+        XCTAssertNotNil(WalletManager.broadcastStep(step, for: envelope))
+        XCTAssertNil(WalletManager.broadcastStep(step, for: "4other"))
+        XCTAssertNil(WalletManager.broadcastStep(nil, for: envelope))
+
+        typealias Sheet = HardwareSessionSheet
+        XCTAssertFalse(Sheet.offersTryAgain(intent: .send(to: envelope, amount: 1, memo: nil), linkFundingAddress: envelope))
+        XCTAssertFalse(Sheet.offersTryAgain(intent: .sendAll(to: envelope, memo: nil), linkFundingAddress: envelope))
+        // A normal send keeps its Try Again.
+        XCTAssertTrue(Sheet.offersTryAgain(intent: .send(to: "4other", amount: 1, memo: nil), linkFundingAddress: envelope))
+        XCTAssertTrue(Sheet.offersTryAgain(intent: .send(to: envelope, amount: 1, memo: nil), linkFundingAddress: nil))
+        XCTAssertTrue(Sheet.offersTryAgain(intent: .syncSentTransactions, linkFundingAddress: envelope))
+
+        // What the step saves: one attempt per link.
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        var record = storeRecord(vector.id, .sent)
+        record.walletId = "trezor"
+        try PaymentLinkFunder.beginFunding(record, walletId: "trezor", store: store, networkType: .mainnet)
+        try PaymentLinkFunder.saveAttempt(id: record.id, txids: ["first"], store: store)
+        XCTAssertThrowsError(try PaymentLinkFunder.saveAttempt(id: record.id, txids: ["second"], store: store))
+        XCTAssertEqual(store.record(id: record.id, role: .sent)?.attemptTxids, ["first"])
+        XCTAssertThrowsError(try PaymentLinkFunder.beginFunding(record, walletId: "trezor", store: store, networkType: .mainnet))
+    }
+
+    /// Send broadcasts only a funding that pays this link's envelope its
+    /// amount plus the claim fee reserve.
+    func testOnlyAFundingOfThisLinkGoesOut() {
+        func matches(_ address: String, _ amount: UInt64, envelope: String = "4env") -> Bool {
+            PaymentLinkFunder.fundingMatches(address: address, amount: amount, envelope: envelope, linkAmount: 100, feeReserve: 7)
+        }
+        XCTAssertTrue(matches("4env", 107))
+        XCTAssertFalse(matches("4other", 107))
+        XCTAssertFalse(matches("4env", 100))
+        XCTAssertFalse(matches("4env", 108))
+        XCTAssertFalse(matches("", 107, envelope: ""))
+    }
+
+    /// Our reclaim read as dropped (unseen 31 blocks), the link opened
+    /// again, and a new reclaim lost as a double spend: the spend that won
+    /// can be our first reclaim. The link reads Reclaimed, never Claimed,
+    /// until a scan shows a claim made elsewhere.
+    func testANewReclaimThatLostToOurEarlierOneReadsReclaimed() throws {
+        typealias Failure = EnvelopeRuntime.RuntimeError
+        let now = Date()
+        var sent = storeRecord(vector.id, .sent)
+        sent.walletId = "w1"
+        sent.expiry = Int64(now.timeIntervalSince1970) + 86_400
+        sent.fundingTxid = "funding"
+        sent.status = .ready
+        let neverReclaimed = sent
+        sent.settle(txids: ["r1"], amount: 9, walletName: "Main", height: 1_000, leftLocked: false, at: now.addingTimeInterval(-7_200))
+        var past = obs(conf: 60, balance: 9, unlocked: 9)
+        past.height = 1_031
+        let reopened = PaymentLinksStatusChecker.applying(past, to: sent, transactions: [], now: now).record
+        XCTAssertEqual(reopened.status, .ready)
+
+        // The new reclaim, saved before its broadcast, refused as a double spend.
+        let attempt = EnvelopeRuntime.SweepAttempt(txids: ["r2"], amount: 9, height: 1_040, leavesLocked: false)
+        let saved = EnvelopeSession.settling(reopened, attempt: attempt, walletName: "Main", now: now)
+        func after(_ before: EnvelopeRecord, _ transactions: [MoneroTransaction] = []) -> EnvelopeRecord? {
+            EnvelopeSession.afterFailedSweep(EnvelopeSession.settling(before, attempt: attempt, walletName: "Main", now: now), before: before,
+                                             error: Failure.alreadyClaimed, transactions: transactions, now: now)
+        }
+        let lost = try XCTUnwrap(EnvelopeSession.afterFailedSweep(saved, before: reopened, error: Failure.alreadyClaimed, now: now))
+        XCTAssertEqual(lost.status, .reclaimed)
+        XCTAssertEqual(lost.settleTxid, "r1")
+        XCTAssertEqual(lost.settledAmount, 9)
+        XCTAssertEqual(PaymentLinkDisplay(record: lost, fundingConfirmations: nil, daemonHeight: nil).label, "Reclaimed")
+        // This wallet's history shows the first reclaim: ours.
+        XCTAssertEqual(after(reopened, [history("r1", .confirmed)])?.settleTxid, "r1")
+        // The history marks it failed: a claim made elsewhere won.
+        XCTAssertEqual(after(reopened, [history("r1", .failed)])?.status, .claimed)
+        XCTAssertNil(after(reopened, [history("r1", .failed)])?.settleTxid)
+        // No reclaim of ours before: Claimed.
+        XCTAssertEqual(after(neverReclaimed)?.status, .claimed)
+
+        // The next scan decides: our first reclaim mined, final.
+        let mined = PaymentLinksStatusChecker.applying(obs(conf: 60, spends: ["r1"], mined: ["r1"]), to: lost, transactions: [], now: now)
+        XCTAssertEqual(mined.record.status, .reclaimed)
+        XCTAssertTrue(mined.conclusive)
+        // A claim made elsewhere: Claimed.
+        XCTAssertEqual(PaymentLinksStatusChecker.applying(obs(conf: 60, spends: ["theirs"], mined: ["theirs"]), to: lost,
+                                                          transactions: [], now: now).record.status, .claimed)
+    }
 }

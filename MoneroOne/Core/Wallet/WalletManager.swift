@@ -118,6 +118,18 @@ class WalletManager: ObservableObject {
         case tearingDown
         case complete(message: String)
         case failed(message: String)
+
+        /// True while a session runs. The session closes the view-only
+        /// wallet, opens the device wallet in its place, and reopens the
+        /// view-only wallet before it ends.
+        var holdsWallet: Bool {
+            switch self {
+            case .idle, .complete, .failed:
+                return false
+            case .connecting, .openingFull, .syncingFull, .syncingKeyImages, .signing, .broadcasting, .tearingDown:
+                return true
+            }
+        }
     }
 
     /// Outcome of the most-recent hardware session — used by send
@@ -316,6 +328,10 @@ class WalletManager: ObservableObject {
         cancelWarmConnectionDisconnect()
 
         hardwareSessionState = .connecting
+
+        // A node or proxy change can still be reopening VIEW. Cancel that
+        // restart and wait for it, so FULL never runs next to a second wallet.
+        await finishPendingRestart()
 
         // Capture VIEW's balance before we tear it down — used as
         // the baseline for the snapshot's "new income since" delta.
@@ -1050,7 +1066,14 @@ class WalletManager: ObservableObject {
     private var connectionTimer: Timer?
     private var connectionStartTime: Date?
     private var reachabilityRetryTask: Task<Void, Never>?
-    private var restartTask: Task<Void, Never>?
+    private(set) var restartTask: Task<Void, Never>?
+    /// A node, login or proxy change came in during a wallet switch. The
+    /// switch restarts the wallet when it ends.
+    private var restartAfterSwitch = false
+    #if DEBUG
+    /// Tests set this so a restart opens a wallet without wallet2 or a node.
+    var openRestartedWalletForTesting: (@MainActor (RestartKeys) async throws -> MoneroWallet)?
+    #endif
     private var reachabilityRetryCount: Int = 0
     private var currentReachabilityTask: URLSessionDataTask?
     private var lastSyncPublish: Double = 0
@@ -1138,6 +1161,12 @@ class WalletManager: ObservableObject {
     /// teardown without prompting the user again — the user already
     /// authenticated when they unlocked the app.
     internal private(set) var currentPin: String?
+    #if DEBUG
+    /// Tests set the session PIN without the Keychain.
+    func setCurrentPinForTesting(_ pin: String?) {
+        currentPin = pin
+    }
+    #endif
     private var isRefreshing = false
     private var widgetReloadTask: Task<Void, Never>?
     /// Index of the subaddress that receive-address rotation or New Address
@@ -1660,6 +1689,9 @@ class WalletManager: ObservableObject {
             throw WalletError.invalidPin
         }
 
+        // A restart from before the lock can still be stopping the old wallet.
+        await finishPendingRestart()
+
         currentPin = pin
 
         // Dispatch on the wallet's origin type. Hardware wallets share the
@@ -2063,6 +2095,10 @@ class WalletManager: ObservableObject {
 
         // Cancel Combine subscriptions FIRST — they hold strong refs to the old wallet
         cancellables.removeAll()
+
+        // A restart in flight must not open a wallet after the lock. Unlock
+        // waits for it to end.
+        restartTask?.cancel()
 
         // Capture old wallet so its deallocation (Kit.deinit → C++ close)
         // happens off the main thread.
@@ -2784,11 +2820,10 @@ class WalletManager: ObservableObject {
 
         // If wallet2 is in an error state, a simple refresh won't recover —
         // the C++ connection is dead. Do a full restart instead.
-        if case .error = syncState, let seed = currentSeed {
+        if case .error = syncState, case .seed = activeWallet?.source, restartActiveWallet() {
             #if DEBUG
             NSLog("[WalletManager] refresh(): wallet in error state, doing full restart")
             #endif
-            restartWallet(with: seed)
             return
         }
 
@@ -2822,9 +2857,18 @@ class WalletManager: ObservableObject {
     /// Async variant of `pauseSync` for the background scene-phase path,
     /// where iOS suspending the process before wallet2 has stopped scanning
     /// leaves asio state torn and crashes on resume. Caller wraps this in
-    /// a `beginBackgroundTask` assertion to buy enough time.
+    /// a `beginBackgroundTask` assertion to buy enough time. A restart in
+    /// flight opens its wallet later and pauses it without waiting, so this
+    /// waits for the restart first.
     func pauseSyncAsync() async {
         isSyncBlocked = true
+        var waited: Task<Void, Never>?
+        while let restart = restartTask, restart != waited {
+            waited = restart
+            await restart.value
+        }
+        // The app came back to the foreground while a restart ran.
+        guard isSyncBlocked else { return }
         await moneroWallet?.pauseSyncAsync()
         syncState = .idle
     }
@@ -2842,9 +2886,7 @@ class WalletManager: ObservableObject {
         UserDefaults.standard.set(url, forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL")
         NodeCredentialStore.save(login: login, password: password, isTestnet: isTestnet)
 
-        if let seed = currentSeed {
-            restartWallet(with: seed)
-        }
+        restartForNodeChange()
         return true
     }
 
@@ -2854,9 +2896,7 @@ class WalletManager: ObservableObject {
     func setProxy(_ address: String) {
         saveProxy(address)
 
-        if let seed = currentSeed {
-            restartWallet(with: seed)
-        }
+        restartForNodeChange()
     }
 
     /// Save proxy address to UserDefaults without restarting the wallet.
@@ -2868,18 +2908,75 @@ class WalletManager: ObservableObject {
 
     // MARK: - Wallet Restart
 
+    /// What a restart opens the active wallet from: the secret each wallet
+    /// type opens from at unlock.
+    enum RestartKeys: Equatable {
+        /// A seeded wallet opens from the seed it holds while unlocked.
+        case seed([String])
+        /// View-only and Trezor wallets open watch-only from the address and
+        /// private view key in the Keychain. The address holds the spend
+        /// public key, so a Trezor restart never needs the device.
+        case viewKeys(walletId: UUID, pin: String)
+    }
+
+    /// How a node, login or proxy change restarts the active wallet. Nil
+    /// means no restart: the app is locked, the secret is not in memory, a
+    /// wallet switch is opening a wallet, or a Trezor session holds the
+    /// wallet. The session opens its wallet with the saved node and proxy.
+    /// A change during a switch restarts the wallet when the switch ends.
+    static func restartKeys(
+        for wallet: WalletInfo?,
+        isUnlocked: Bool,
+        currentSeed: [String]?,
+        currentPin: String?,
+        hardwareSession: HardwareSessionState,
+        isSwitchingWallet: Bool
+    ) -> RestartKeys? {
+        guard isUnlocked, !isSwitchingWallet, let wallet, !hardwareSession.holdsWallet else { return nil }
+        switch wallet.source {
+        case .seed:
+            return currentSeed.map(RestartKeys.seed)
+        case .viewOnly, .hardware:
+            return currentPin.map { RestartKeys.viewKeys(walletId: wallet.id, pin: $0) }
+        }
+    }
+
     /// Restart the wallet, serializing teardown → create to prevent dual C++ connections.
     /// The old wallet is stopped explicitly before the new one is created.
     /// Rapid re-entry (e.g. quick node switching) cancels the in-flight restart.
-    private func restartWallet(with seed: [String]) {
-        guard isUnlocked else { return }
+    /// Every wallet type restarts. Returns false when `restartKeys` gives none.
+    @discardableResult
+    private func restartActiveWallet() -> Bool {
+        guard let keys = Self.restartKeys(for: activeWallet, isUnlocked: isUnlocked, currentSeed: currentSeed,
+                                          currentPin: currentPin, hardwareSession: hardwareSessionState,
+                                          isSwitchingWallet: isSwitchingWallet) else { return false }
+        return restartActiveWallet(with: keys)
+    }
+
+    /// Restarts the wallet after a node, login or proxy change. A wallet
+    /// switch can open its wallet with the old values, so during a switch
+    /// the restart runs when the switch ends.
+    private func restartForNodeChange() {
+        guard !isSwitchingWallet else {
+            restartAfterSwitch = true
+            return
+        }
+        restartActiveWallet()
+    }
+
+    /// Starts the restart with `keys`. Internal for tests.
+    @discardableResult
+    func restartActiveWallet(with keys: RestartKeys) -> Bool {
+        guard let walletId = activeWallet?.id else { return false }
 
         let nodeURL = UserDefaults.standard.string(forKey: isTestnet ? "selectedTestnetNodeURL" : "selectedNodeURL") ?? "default"
         DiagnosticLog.shared.log("Restarting wallet with node: \(nodeURL)")
         syncState = .connecting
 
-        // Cancel any in-flight restart
-        restartTask?.cancel()
+        // Cancel any in-flight restart. This one waits for it to end, so two
+        // restarts never open wallets at the same time.
+        let supersededRestart = restartTask
+        supersededRestart?.cancel()
 
         let oldWallet = moneroWallet
         moneroWallet = nil
@@ -2889,8 +2986,11 @@ class WalletManager: ObservableObject {
         let resetCount = activeWallet?.syncResetCount ?? 0
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
         let netType = networkType
+        let keychain = self.keychain
 
         restartTask = Task {
+            await supersededRestart?.value
+
             // Stop old wallet explicitly — `stopAsync` blocks until
             // MONERO_WalletManager_closeWallet() returns and wallet2's
             // refresh thread has joined, so the new wallet doesn't share
@@ -2901,12 +3001,35 @@ class WalletManager: ObservableObject {
             guard !Task.isCancelled else { return }
 
             do {
-                let wallet = MoneroWallet()
-                try await wallet.create(seed: seed, restoreHeight: walletRestoreHeight,
-                                  resetSuffix: resetSuffix, networkType: netType)
+                #if DEBUG
+                let openForTesting = self.openRestartedWalletForTesting
+                #else
+                let openForTesting: ((RestartKeys) async throws -> MoneroWallet)? = nil
+                #endif
+                let wallet: MoneroWallet
+                if let openForTesting {
+                    wallet = try await openForTesting(keys)
+                } else {
+                    wallet = MoneroWallet()
+                    switch keys {
+                    case .seed(let seed):
+                        try await wallet.create(seed: seed, restoreHeight: walletRestoreHeight,
+                                          resetSuffix: resetSuffix, networkType: netType)
+                    case .viewKeys(let id, let pin):
+                        // The same open as unlock: the Keychain read checks the
+                        // PIN, so it runs off the main thread.
+                        let stored = try await Task.detached {
+                            try keychain.getViewOnly(pin: pin, walletId: id)
+                        }.value
+                        guard let stored else { throw WalletError.invalidPin }
+                        try await wallet.createWatchOnly(address: stored.address, viewKey: stored.viewKey,
+                                                         restoreHeight: walletRestoreHeight, networkType: netType)
+                    }
+                }
 
-                // Check again — create() takes time, another restart may have fired
-                guard !Task.isCancelled else {
+                // Check again — create() takes time. Another restart, a lock
+                // or a wallet switch may have come in.
+                guard !Task.isCancelled, self.isUnlocked, self.activeWallet?.id == walletId else {
                     await wallet.stopAsync()
                     return
                 }
@@ -2914,12 +3037,27 @@ class WalletManager: ObservableObject {
                 self.moneroWallet = wallet
                 self.bindToWallet(wallet)
                 self.startConnectionTracking()
+                // Sync was paused while this restart ran (the app went to the
+                // background, or a trusted-location block). The open started
+                // sync, so pause it again.
+                if self.isSyncBlocked { self.pauseSync() }
             } catch {
-                if !Task.isCancelled {
+                if !Task.isCancelled, self.activeWallet?.id == walletId {
                     self.syncState = .error(String(localized: "Failed to reconnect: \(error.localizedDescription)"))
                 }
             }
         }
+        return true
+    }
+
+    /// Cancels a restart in flight and waits until it ends: its stop of the
+    /// old wallet has returned, and it has stopped any wallet it opened.
+    /// Unlock, a wallet switch and a Trezor session call this before they
+    /// open a wallet, so two wallets never run at once.
+    func finishPendingRestart() async {
+        guard let restart = restartTask else { return }
+        restart.cancel()
+        await restart.value
     }
 
     // MARK: - Seed Access
@@ -3239,7 +3377,17 @@ class WalletManager: ObservableObject {
         defer {
             isSwitchingWallet = false
             sessionBumpedForSwitch = false
+            // A node, login or proxy change came in while this switch opened
+            // its wallet. Restart, so the wallet uses the change.
+            if restartAfterSwitch {
+                restartAfterSwitch = false
+                restartActiveWallet()
+            }
         }
+        // A node or proxy change can still be restarting the previous
+        // wallet. Wait until it has stopped before this switch opens one.
+        await finishPendingRestart()
+
         // Persist previous wallet's cached data to disk (off the animation hot path)
         if let previous = persistPrevious {
             walletStore.updateWallet(previous)

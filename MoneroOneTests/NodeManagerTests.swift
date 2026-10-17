@@ -1,22 +1,59 @@
+import Combine
+import CryptoKit
+import Network
 import XCTest
 @testable import MoneroOne
+
+/// The node settings a NodeManager reads and writes in UserDefaults. The
+/// tests run inside MoneroOne.app and share its UserDefaults, so a test that
+/// changes them saves them first and puts them back after it. A test run
+/// then leaves the simulator's own node list, selection and proxy as they
+/// were.
+private struct SavedNodeSettings {
+    static let keys = [
+        "isTestnet",
+        "selectedNodeURL", "selectedTestnetNodeURL",
+        "customNodes", "customTestnetNodes",
+        "autoSelectNode", "autoSelectTestnetNode",
+        "proxyAddress", "selectedProxyAddress", "customProxies",
+        "nodeCredsMigratedToKeychain",
+    ]
+
+    private let values = SavedNodeSettings.keys.map { UserDefaults.standard.object(forKey: $0) }
+
+    /// Puts each saved value back, and removes a key that had none.
+    func restore() {
+        for (key, value) in zip(Self.keys, values) {
+            if let value {
+                UserDefaults.standard.set(value, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+    }
+}
 
 @MainActor
 final class NodeManagerTests: XCTestCase {
 
     var nodeManager: NodeManager!
+    private var fake: FakeNodeKeychain!
+    private var savedSettings: SavedNodeSettings!
 
     override func setUp() async throws {
-        // Clear any saved state
+        // Start from no saved selection and no custom nodes. The fake
+        // Keychain keeps selectNode from clearing the app's own node login.
+        savedSettings = SavedNodeSettings()
         UserDefaults.standard.removeObject(forKey: "selectedNodeURL")
         UserDefaults.standard.removeObject(forKey: "customNodes")
-        nodeManager = NodeManager()
+        fake = FakeNodeKeychain()
+        nodeManager = NodeManager(keychain: fake.keychain)
     }
 
     override func tearDown() async throws {
-        UserDefaults.standard.removeObject(forKey: "selectedNodeURL")
-        UserDefaults.standard.removeObject(forKey: "customNodes")
         nodeManager = nil
+        fake = nil
+        savedSettings.restore()
     }
 
     // MARK: - Default Nodes Tests
@@ -67,7 +104,7 @@ final class NodeManagerTests: XCTestCase {
         nodeManager.selectNode(secondNode)
 
         // Create new instance
-        let newManager = NodeManager()
+        let newManager = NodeManager(keychain: fake.keychain)
         XCTAssertEqual(newManager.selectedNode.url, secondNode.url, "Selection should persist across instances")
     }
 
@@ -108,7 +145,7 @@ final class NodeManagerTests: XCTestCase {
     func testCustomNodesPersistAcrossInstances() {
         nodeManager.addCustomNode(name: "Persistent", url: "https://persistent.com:18081")
 
-        let newManager = NodeManager()
+        let newManager = NodeManager(keychain: fake.keychain)
         XCTAssertEqual(newManager.customNodes.count, 1, "Custom nodes should persist")
         XCTAssertEqual(newManager.customNodes[0].name, "Persistent")
     }
@@ -481,17 +518,19 @@ final class NodeLoginKeychainTests: XCTestCase {
     private let home = "https://home.node:18089"
     private let moved = "https://moved.node:18089"
     private let keys = ["selectedNodeURL", "customNodes", "isTestnet"]
+    private var savedSettings: SavedNodeSettings!
 
     override func setUp() async throws {
+        savedSettings = SavedNodeSettings()
         keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
         fake = FakeNodeKeychain()
         manager = NodeManager(keychain: fake.keychain)
     }
 
     override func tearDown() async throws {
-        keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
         manager = nil
         fake = nil
+        savedSettings.restore()
     }
 
     private var storedList: String {
@@ -614,7 +653,8 @@ final class NodeLoginKeychainTests: XCTestCase {
         XCTAssertEqual(item(home), login)
         XCTAssertEqual(manager.customNodes.map(\.credentials), [login, login])
         assertListHoldsNoLogin()
-        XCTAssertEqual(NodeManager(keychain: fake.keychain).customNodes.map(\.credentials), [login, login])
+        // The next launch keeps one copy of the URL, with the login.
+        XCTAssertEqual(NodeManager(keychain: fake.keychain).customNodes.map(\.credentials), [login])
     }
 
     func testURLAddedAgainWithoutLoginKeepsItsLogin() {
@@ -639,7 +679,7 @@ final class NodeLoginKeychainTests: XCTestCase {
         XCTAssertNil(item(moved), "No listed node uses the old URL now")
         XCTAssertEqual(manager.customNodes.map(\.credentials), [login, login])
         assertListHoldsNoLogin()
-        XCTAssertEqual(NodeManager(keychain: fake.keychain).customNodes.map(\.credentials), [login, login])
+        XCTAssertEqual(NodeManager(keychain: fake.keychain).customNodes.map(\.credentials), [login])
     }
 
     func testNodeMovedWithoutLoginOntoAListedURLTakesItsLogin() {
@@ -676,10 +716,9 @@ final class NodeLoginKeychainTests: XCTestCase {
 
         manager.updateCustomNode(oldURL: home, name: "Home", url: home)
 
-        let none = [NodeCredentials.none, NodeCredentials.none]
         XCTAssertNil(item(home))
-        XCTAssertEqual(manager.customNodes.map(\.credentials), none)
-        XCTAssertEqual(NodeManager(keychain: fake.keychain).customNodes.map(\.credentials), none)
+        XCTAssertEqual(manager.customNodes.map(\.credentials), [NodeCredentials.none, NodeCredentials.none])
+        XCTAssertEqual(NodeManager(keychain: fake.keychain).customNodes.map(\.credentials), [NodeCredentials.none])
         assertListHoldsNoLogin()
     }
 
@@ -707,7 +746,9 @@ final class NodeLoginKeychainTests: XCTestCase {
         let login = NodeCredentials(login: "alice", password: "hunter2")
         XCTAssertNil(item(home))
         XCTAssertEqual(manager.customNodes.map(\.credentials), [login, login])
-        XCTAssertEqual(NodeManager(keychain: fake.keychain).customNodes.map(\.credentials), [login, login])
+        // The next launch keeps one copy, and the login still waits in it.
+        XCTAssertEqual(NodeManager(keychain: fake.keychain).customNodes.map(\.credentials), [login])
+        XCTAssertTrue(storedList.contains("hunter2"))
 
         // A later launch with a working Keychain moves it.
         fake.failingAccounts = []
@@ -804,5 +845,947 @@ final class NodeLoginKeychainTests: XCTestCase {
 
         XCTAssertFalse(manager.needsReconnect(editing: node, to: renamed))
         XCTAssertTrue(manager.needsReconnect(editing: node, to: changed))
+    }
+}
+
+// MARK: - Duplicate URLs
+
+@MainActor
+final class NodeDuplicateURLTests: XCTestCase {
+
+    private var fake: FakeNodeKeychain!
+    private let home = "https://home.node:18089"
+    private let lab = "http://lab.node:18081"
+    private let keys = ["selectedNodeURL", "customNodes", "isTestnet"]
+    private var savedSettings: SavedNodeSettings!
+
+    override func setUp() async throws {
+        savedSettings = SavedNodeSettings()
+        keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        fake = FakeNodeKeychain()
+    }
+
+    override func tearDown() async throws {
+        fake = nil
+        savedSettings.restore()
+    }
+
+    private func storeList(_ nodes: [LegacyNode]) throws {
+        UserDefaults.standard.set(try JSONEncoder().encode(nodes), forKey: "customNodes")
+    }
+
+    private func storedEntries() throws -> [[String: Any]] {
+        let data = try XCTUnwrap(UserDefaults.standard.data(forKey: "customNodes"))
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+    }
+
+    func testNormalizedURL() {
+        XCTAssertEqual(NodeManager.normalizedURL("  HTTPS://Node.Example.COM:18089/ \n"), "https://node.example.com:18089")
+        XCTAssertEqual(NodeManager.normalizedURL("http://node.example.com:18081//"), "http://node.example.com:18081")
+        XCTAssertEqual(NodeManager.normalizedURL("http://Alice:PW@Node.Example.com:18081"), "http://Alice:PW@node.example.com:18081")
+        XCTAssertEqual(NodeManager.normalizedURL("http://node.example.com:18081/RPC"), "http://node.example.com:18081/RPC")
+        XCTAssertEqual(NodeManager.normalizedURL("Node.Example.com:18081"), "node.example.com:18081")
+        // Another scheme or port is another node.
+        XCTAssertNotEqual(NodeManager.normalizedURL("http://node.example.com:443"), NodeManager.normalizedURL("https://node.example.com:443"))
+        XCTAssertNotEqual(NodeManager.normalizedURL("http://node.example.com:18081"), NodeManager.normalizedURL("http://node.example.com:18089"))
+    }
+
+    func testListedURLsHoldEveryListedNode() {
+        let manager = NodeManager(keychain: fake.keychain)
+        manager.addCustomNode(name: "Home", url: home)
+
+        let listed = manager.listedURLs()
+
+        for node in NodeManager.defaultNodes + NodeManager.torNodes {
+            XCTAssertTrue(listed.contains(NodeManager.normalizedURL(node.url)), node.url)
+        }
+        XCTAssertTrue(listed.contains(NodeManager.normalizedURL("https://HOME.node:18089/")), "A URL in another case is listed")
+        XCTAssertFalse(listed.contains(NodeManager.normalizedURL(lab)))
+    }
+
+    func testListedURLsLeaveOutTheEditedNode() {
+        let manager = NodeManager(keychain: fake.keychain)
+        manager.addCustomNode(name: "Home", url: home)
+        manager.addCustomNode(name: "Lab", url: lab)
+
+        let listed = manager.listedURLs(except: home)
+
+        XCTAssertFalse(listed.contains(NodeManager.normalizedURL(home)), "The edited node can keep its own URL")
+        XCTAssertTrue(listed.contains(NodeManager.normalizedURL(lab)), "Another node's URL is still taken")
+        XCTAssertTrue(listed.contains(NodeManager.normalizedURL(NodeManager.defaultNodes[0].url)))
+    }
+
+    func testStoredCopiesOfAURLLoadAsOneNode() throws {
+        // Earlier builds let the same URL be added twice. The second copy's
+        // login still waits in the list.
+        try storeList([
+            LegacyNode(name: "Home", url: home),
+            LegacyNode(name: "Lab", url: lab),
+            LegacyNode(name: "Home Again", url: home, login: "alice", password: "hunter2"),
+        ])
+        fake.failingAccounts = [NodeCredentialStore.nodeAccount(url: home, isTestnet: false)]
+        UserDefaults.standard.set(home, forKey: "selectedNodeURL")
+
+        let manager = NodeManager(keychain: fake.keychain)
+
+        XCTAssertEqual(manager.customNodes.map(\.url), [home, lab])
+        XCTAssertEqual(manager.customNodes.map(\.name), ["Home", "Lab"], "The first copy keeps its name and place")
+        XCTAssertEqual(manager.customNodes[0].credentials, NodeCredentials(login: "alice", password: "hunter2"),
+                       "The login of the dropped copy stays")
+        let entries = try storedEntries()
+        XCTAssertEqual(entries.compactMap { $0["url"] as? String }, [home, lab], "The list is saved without the copy")
+        XCTAssertEqual(entries[0]["password"] as? String, "hunter2", "The login keeps waiting for its Keychain write")
+        XCTAssertEqual(manager.selectedNode.url, home)
+        XCTAssertEqual(UserDefaults.standard.string(forKey: "selectedNodeURL"), home, "The selection stays")
+    }
+
+    func testListWithoutCopiesIsNotSavedAgain() throws {
+        try storeList([LegacyNode(name: "Home", url: home), LegacyNode(name: "Lab", url: lab)])
+        let before = try XCTUnwrap(UserDefaults.standard.data(forKey: "customNodes"))
+
+        _ = NodeManager(keychain: fake.keychain)
+
+        XCTAssertEqual(UserDefaults.standard.data(forKey: "customNodes"), before)
+    }
+
+    func testAutoSelectSkipsANodeThatTurnsDownItsLogin() {
+        // Set before the manager loads it, so no deferred auto-select runs.
+        UserDefaults.standard.set(true, forKey: "autoSelectNode")
+        let manager = NodeManager(keychain: fake.keychain)
+        manager.addCustomNode(name: "Home", url: home, login: "alice", password: "wrong")
+        let hashvault = NodeManager.defaultNodes[1].url
+        manager.nodeStats = [
+            home: NodeStats(uptimeMonth: 100, uptimeYear: 100, isUp: true, latencyMs: 1, authFailed: true),
+            hashvault: NodeStats(uptimeMonth: 99, uptimeYear: 99, isUp: true, latencyMs: 80),
+        ]
+
+        manager.selectBestNode()
+
+        XCTAssertEqual(manager.selectedNode.url, hashvault)
+    }
+}
+
+// MARK: - Restart on a node change
+
+/// A wallet with no wallet2 behind it. Its stop can be held open, as a dead
+/// node holds a real stop open. It counts the pauses that do not wait, and
+/// logs the pause that waits.
+@MainActor
+private final class SpyWallet: MoneroWallet {
+    var stopGate: Gate?
+    var log: @MainActor (String) -> Void = { _ in }
+    private(set) var pauseCount = 0
+
+    override func stopAsync() async {
+        log("stop")
+        await stopGate?.wait()
+        log("stopped")
+    }
+
+    override func pauseSync() {
+        pauseCount += 1
+    }
+
+    override func pauseSyncAsync() async {
+        log("paused")
+    }
+}
+
+/// The order of the steps a test watches.
+@MainActor
+private final class EventLog {
+    private(set) var items: [String] = []
+
+    func add(_ item: String) {
+        items.append(item)
+    }
+}
+
+/// Holds each waiter until it opens.
+@MainActor
+private final class Gate {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        waiters.forEach { $0.resume() }
+        waiters.removeAll()
+    }
+}
+
+/// A node, login or proxy change restarts the wallet for every wallet type.
+@MainActor
+final class NodeChangeRestartTests: XCTestCase {
+
+    private let seed = ["abandon", "ability", "able", "about"]
+    private let pin = "123456"
+    private let trezor = WalletSource.hardware(.trezor(TrezorBinding(model: "Safe 7", deviceId: "T1")))
+    private var savedSettings: SavedNodeSettings!
+
+    override func setUp() async throws {
+        savedSettings = SavedNodeSettings()
+        ["selectedNodeURL", "customNodes", "isTestnet"].forEach { UserDefaults.standard.removeObject(forKey: $0) }
+    }
+
+    override func tearDown() async throws {
+        savedSettings.restore()
+    }
+
+    private func wallet(_ source: WalletSource) -> WalletInfo {
+        WalletInfo(id: UUID(), name: "Wallet", source: source, createdAt: Date(), restoreHeight: 0, syncResetCount: 0,
+                   userCreatedSubaddressIndices: [], cachedPrimaryAddress: nil, cachedBalance: nil)
+    }
+
+    private func restartKeys(
+        for wallet: WalletInfo?,
+        isUnlocked: Bool = true,
+        seed: [String]? = nil,
+        pin: String? = "123456",
+        session: WalletManager.HardwareSessionState = .idle,
+        switching: Bool = false
+    ) -> WalletManager.RestartKeys? {
+        WalletManager.restartKeys(for: wallet, isUnlocked: isUnlocked, currentSeed: seed, currentPin: pin,
+                                  hardwareSession: session, isSwitchingWallet: switching)
+    }
+
+    /// A manager that ran one restart, so `first` is its open wallet. No
+    /// wallet2 runs, and the node is a closed local port.
+    private func managerRunning(_ info: WalletInfo, keys: WalletManager.RestartKeys) async -> (WalletManager, SpyWallet) {
+        UserDefaults.standard.set("http://localhost:1", forKey: "selectedNodeURL")
+        let manager = WalletManager()
+        manager.activeWallet = info
+        manager.isUnlocked = true
+        let first = SpyWallet()
+        manager.openRestartedWalletForTesting = { _ in first }
+        XCTAssertTrue(manager.restartActiveWallet(with: keys))
+        await manager.restartTask?.value
+        XCTAssertTrue(manager.moneroWallet === first)
+        XCTAssertEqual(first.pauseCount, 0, "Sync runs when nothing paused it")
+        return (manager, first)
+    }
+
+    func testEveryWalletTypeRestarts() {
+        let seeded = wallet(.seed(.polyseed))
+        let viewOnly = wallet(.viewOnly)
+        let hardware = wallet(trezor)
+
+        XCTAssertEqual(restartKeys(for: seeded, seed: seed), .seed(seed))
+        XCTAssertEqual(restartKeys(for: viewOnly), .viewKeys(walletId: viewOnly.id, pin: pin))
+        XCTAssertEqual(restartKeys(for: hardware), .viewKeys(walletId: hardware.id, pin: pin),
+                       "A Trezor wallet opens watch-only from its view keys, without the device")
+    }
+
+    func testAViewOnlyWalletDoesNotRestartFromALeftoverSeed() {
+        let viewOnly = wallet(.viewOnly)
+
+        XCTAssertEqual(restartKeys(for: viewOnly, seed: seed), .viewKeys(walletId: viewOnly.id, pin: pin))
+    }
+
+    func testNoRestartWithoutTheSecret() {
+        XCTAssertNil(restartKeys(for: wallet(.seed(.bip39)), seed: nil))
+        XCTAssertNil(restartKeys(for: wallet(.viewOnly), pin: nil))
+        XCTAssertNil(restartKeys(for: wallet(trezor), pin: nil))
+    }
+
+    func testNoRestartWhileLocked() {
+        XCTAssertNil(restartKeys(for: wallet(.seed(.legacy)), isUnlocked: false, seed: seed))
+        XCTAssertNil(restartKeys(for: wallet(.viewOnly), isUnlocked: false))
+        XCTAssertNil(restartKeys(for: wallet(trezor), isUnlocked: false))
+        XCTAssertNil(restartKeys(for: nil))
+    }
+
+    func testNoRestartWhileATrezorSessionHoldsTheWallet() {
+        let hardware = wallet(trezor)
+        let running: [WalletManager.HardwareSessionState] = [
+            .connecting, .openingFull, .syncingFull(progress: 0.5, blocksRemaining: 10),
+            .syncingKeyImages, .signing, .broadcasting, .tearingDown,
+        ]
+        let ended: [WalletManager.HardwareSessionState] = [.idle, .complete(message: "Done"), .failed(message: "Failed")]
+
+        for state in running {
+            XCTAssertNil(restartKeys(for: hardware, session: state), "\(state)")
+        }
+        for state in ended {
+            XCTAssertEqual(restartKeys(for: hardware, session: state), .viewKeys(walletId: hardware.id, pin: pin), "\(state)")
+        }
+    }
+
+    func testNoRestartWhileAWalletSwitchRuns() {
+        // A change during a switch waits until the switch ends.
+        XCTAssertNil(restartKeys(for: wallet(.viewOnly), switching: true))
+        XCTAssertNil(restartKeys(for: wallet(.seed(.polyseed)), seed: seed, switching: true))
+        XCTAssertNil(restartKeys(for: wallet(trezor), switching: true))
+    }
+
+    func testASwitchWaitsForASlowRestartStop() async throws {
+        let info = wallet(.viewOnly)
+        let (manager, old) = await managerRunning(info, keys: .viewKeys(walletId: info.id, pin: pin))
+        let events = EventLog()
+        let stop = Gate()
+        old.stopGate = stop
+        old.log = events.add
+        manager.openRestartedWalletForTesting = { _ in events.add("open"); return SpyWallet() }
+
+        XCTAssertTrue(manager.restartActiveWallet(with: .viewKeys(walletId: info.id, pin: pin)))
+        // Without a PIN in memory the switch throws before it opens a wallet.
+        let switching = Task {
+            try? await manager.completeSwitchToWallet(target: self.wallet(.viewOnly))
+            events.add("switch done")
+        }
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        XCTAssertEqual(events.items, ["stop"], "The switch waits while the old wallet stops")
+
+        stop.open()
+        await switching.value
+
+        XCTAssertEqual(events.items, ["stop", "stopped", "switch done"], "The cancelled restart opens no wallet")
+        XCTAssertNil(manager.moneroWallet)
+    }
+
+    func testALockDuringASlowRestartStopOpensNoWallet() async {
+        let info = wallet(.seed(.polyseed))
+        let (manager, old) = await managerRunning(info, keys: .seed(seed))
+        let events = EventLog()
+        let stop = Gate()
+        old.stopGate = stop
+        old.log = events.add
+        manager.openRestartedWalletForTesting = { _ in events.add("open"); return SpyWallet() }
+
+        XCTAssertTrue(manager.restartActiveWallet(with: .seed(seed)))
+        manager.lock()
+        // An unlock comes in while the old wallet still stops.
+        manager.isUnlocked = true
+        stop.open()
+        await manager.restartTask?.value
+
+        XCTAssertEqual(events.items, ["stop", "stopped"], "The restart opens no wallet after a lock")
+        XCTAssertNil(manager.moneroWallet)
+    }
+
+    func testABackgroundPauseDuringASlowRestartWaitsUntilTheNewWalletPauses() async throws {
+        let info = wallet(trezor)
+        let (manager, old) = await managerRunning(info, keys: .viewKeys(walletId: info.id, pin: pin))
+        let events = EventLog()
+        let stop = Gate()
+        old.stopGate = stop
+        old.log = events.add
+        let new = SpyWallet()
+        new.log = events.add
+        manager.openRestartedWalletForTesting = { _ in events.add("open"); return new }
+
+        XCTAssertTrue(manager.restartActiveWallet(with: .viewKeys(walletId: info.id, pin: pin)))
+        // The app goes to the background while the old wallet still stops.
+        let background = Task {
+            await manager.pauseSyncAsync()
+            events.add("pause done")
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(events.items, ["stop"], "The pause waits for the restart")
+
+        stop.open()
+        await background.value
+
+        XCTAssertEqual(events.items, ["stop", "stopped", "open", "paused", "pause done"],
+                       "The new wallet has paused before iOS can suspend the app")
+        XCTAssertTrue(manager.moneroWallet === new)
+        XCTAssertEqual(new.pauseCount, 1, "The restart pauses the new wallet too")
+    }
+
+    func testAReturnToTheForegroundDuringASlowRestartLeavesTheNewWalletSyncing() async throws {
+        let info = wallet(.viewOnly)
+        let (manager, old) = await managerRunning(info, keys: .viewKeys(walletId: info.id, pin: pin))
+        let events = EventLog()
+        let stop = Gate()
+        old.stopGate = stop
+        old.log = events.add
+        let new = SpyWallet()
+        new.log = events.add
+        manager.openRestartedWalletForTesting = { _ in events.add("open"); return new }
+
+        XCTAssertTrue(manager.restartActiveWallet(with: .viewKeys(walletId: info.id, pin: pin)))
+        let background = Task {
+            await manager.pauseSyncAsync()
+            events.add("pause done")
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+        // The app comes back before the old wallet has stopped.
+        manager.resumeSync()
+        stop.open()
+        await background.value
+
+        XCTAssertEqual(events.items, ["stop", "stopped", "open", "pause done"], "Nothing pauses the new wallet")
+        XCTAssertTrue(manager.moneroWallet === new)
+        XCTAssertEqual(new.pauseCount, 0)
+    }
+
+    func testANodeChangeDuringASwitchRestartsTheWalletWhenTheSwitchEnds() async {
+        let activeIdKey = "one.monero.walletStore.activeWalletId"
+        let savedActiveId = UserDefaults.standard.string(forKey: activeIdKey)
+        let savedLogin = NodeCredentialStore.load(isTestnet: false)
+        defer {
+            UserDefaults.standard.set(savedActiveId, forKey: activeIdKey)
+            NodeCredentialStore.save(login: savedLogin.login, password: savedLogin.password, isTestnet: false)
+        }
+        let info = wallet(.viewOnly)
+        let target = wallet(.viewOnly)
+        let (manager, _) = await managerRunning(info, keys: .viewKeys(walletId: info.id, pin: pin))
+        manager.setCurrentPinForTesting(pin)
+        manager.wallets = [info, target]
+        let opened = EventLog()
+        let new = SpyWallet()
+        manager.openRestartedWalletForTesting = { keys in
+            if case .viewKeys(let id, _) = keys { opened.add(id.uuidString) }
+            return new
+        }
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: target.id))
+        let restartBeforeTheChange = manager.restartTask
+        let switching = Task { try await manager.completeSwitchToWallet(target: target) }
+        // The node changes while the switch runs.
+        manager.setNode(url: "http://localhost:2")
+        XCTAssertTrue(manager.restartTask == restartBeforeTheChange, "No restart runs during the switch")
+
+        // A cancel ends the switch before it reads the Keychain, which this
+        // test does not use.
+        switching.cancel()
+        _ = await switching.result
+        XCTAssertFalse(manager.isSwitchingWallet)
+        XCTAssertFalse(manager.restartTask == restartBeforeTheChange, "The switch ends with a restart")
+        await manager.restartTask?.value
+
+        XCTAssertEqual(opened.items, [target.id.uuidString], "One restart opens the wallet the switch went to")
+        XCTAssertTrue(manager.moneroWallet === new)
+    }
+
+    func testAutoSelectSendsTheNodeItSwitchesTo() {
+        // Set before the manager loads it, so no deferred auto-select runs.
+        UserDefaults.standard.set(true, forKey: "autoSelectNode")
+        let manager = NodeManager(keychain: FakeNodeKeychain().keychain)
+        let moneroOne = NodeManager.defaultNodes[0].url
+        let hashvault = NodeManager.defaultNodes[1].url
+        manager.selectNode(NodeManager.defaultNodes[0])
+        manager.nodeStats = [
+            moneroOne: NodeStats(uptimeMonth: 100, uptimeYear: 100, isUp: true, latencyMs: 400),
+            hashvault: NodeStats(uptimeMonth: 100, uptimeYear: 100, isUp: true, latencyMs: 20),
+        ]
+        var sent: [String] = []
+        let subscription = manager.autoSelectedNode.sink { sent.append($0.url) }
+        defer { subscription.cancel() }
+
+        manager.selectBestNode()
+        manager.selectBestNode()
+
+        XCTAssertEqual(manager.selectedNode.url, hashvault)
+        XCTAssertEqual(sent, [hashvault], "Sent once, on the switch")
+    }
+
+    func testAutoSelectSendsNothingWithoutASwitch() {
+        UserDefaults.standard.set(true, forKey: "autoSelectNode")
+        let manager = NodeManager(keychain: FakeNodeKeychain().keychain)
+        let moneroOne = NodeManager.defaultNodes[0].url
+        manager.selectNode(NodeManager.defaultNodes[0])
+        manager.nodeStats = [moneroOne: NodeStats(uptimeMonth: 100, uptimeYear: 100, isUp: true, latencyMs: 20)]
+        var sent: [String] = []
+        let subscription = manager.autoSelectedNode.sink { sent.append($0.url) }
+        defer { subscription.cancel() }
+
+        manager.selectBestNode()
+        manager.autoSelectEnabled = false
+        manager.nodeStats[NodeManager.defaultNodes[1].url] = NodeStats(uptimeMonth: 100, uptimeYear: 100, isUp: true, latencyMs: 1)
+        manager.selectBestNode()
+
+        XCTAssertEqual(manager.selectedNode.url, moneroOne)
+        XCTAssertEqual(sent, [], "Nothing is sent while the best node is selected or auto-select is off")
+    }
+}
+
+// MARK: - Digest Auth
+
+final class HTTPDigestTests: XCTestCase {
+
+    // RFC 2617 section 3.5 worked example.
+    private let rfcChallenge = "Digest realm=\"testrealm@host.com\", qop=\"auth,auth-int\", "
+        + "nonce=\"dcd98b7102dd2f0e8b11d0f600bfb0c093\", opaque=\"5ccc069c403ebaf9f0171e9517f40e41\""
+
+    private func response(in header: String) -> String? {
+        HTTPDigest.parameters(of: header)?["response"]
+    }
+
+    func testRFC2617Example() throws {
+        let header = try XCTUnwrap(HTTPDigest.authorization(
+            challenge: rfcChallenge, method: "GET", uri: "/dir/index.html",
+            credentials: NodeCredentials(login: "Mufasa", password: "Circle Of Life"),
+            cnonce: "0a4f113b", nonceCount: 1
+        ))
+
+        XCTAssertTrue(header.hasPrefix("Digest username=\"Mufasa\""))
+        for part in ["response=\"6629fae49393a05397450978507c4ef1\"", "realm=\"testrealm@host.com\"",
+                     "nonce=\"dcd98b7102dd2f0e8b11d0f600bfb0c093\"", "uri=\"/dir/index.html\"", "qop=auth",
+                     "nc=00000001", "cnonce=\"0a4f113b\"", "opaque=\"5ccc069c403ebaf9f0171e9517f40e41\"",
+                     "algorithm=MD5"] {
+            XCTAssertTrue(header.contains(part), part)
+        }
+    }
+
+    func testMonerodChallenge() throws {
+        // The shape epee sends for --rpc-login.
+        let challenge = "Digest qop=\"auth\",algorithm=MD5,realm=\"monero-rpc\",nonce=\"AbCd\",stale=false"
+        let parameters = try XCTUnwrap(HTTPDigest.parameters(of: challenge))
+        XCTAssertEqual(parameters, ["qop": "auth", "algorithm": "MD5", "realm": "monero-rpc", "nonce": "AbCd", "stale": "false"])
+
+        let header = try XCTUnwrap(HTTPDigest.authorization(
+            challenge: challenge, method: "GET", uri: "/get_info",
+            credentials: NodeCredentials(login: "u", password: "p"), cnonce: "c"
+        ))
+        XCTAssertTrue(header.contains("realm=\"monero-rpc\""))
+        XCTAssertTrue(header.contains("uri=\"/get_info\""))
+    }
+
+    func testMD5SessAndNoQopGiveOtherResponses() throws {
+        let credentials = NodeCredentials(login: "u", password: "p")
+        let plain = try XCTUnwrap(HTTPDigest.authorization(challenge: rfcChallenge, method: "GET", uri: "/x",
+                                                           credentials: credentials, cnonce: "c"))
+        let sess = try XCTUnwrap(HTTPDigest.authorization(
+            challenge: rfcChallenge.replacingOccurrences(of: "Digest ", with: "Digest algorithm=MD5-sess, "),
+            method: "GET", uri: "/x", credentials: credentials, cnonce: "c"))
+        let noQop = try XCTUnwrap(HTTPDigest.authorization(challenge: "Digest realm=\"r\", nonce=\"n\"", method: "GET",
+                                                           uri: "/x", credentials: credentials, cnonce: "c"))
+
+        let responses = [plain, sess, noQop].compactMap(response(in:))
+        XCTAssertEqual(responses.count, 3)
+        XCTAssertEqual(Set(responses).count, 3)
+        XCTAssertTrue(sess.contains("algorithm=MD5-sess"))
+        XCTAssertFalse(noQop.contains("qop="))
+        XCTAssertFalse(noQop.contains("cnonce="))
+    }
+
+    func testUnsupportedChallengesGiveNil() {
+        let credentials = NodeCredentials(login: "u", password: "p")
+        for challenge in ["Basic realm=\"x\"",
+                          "Digest realm=\"x\"",
+                          "Digest realm=\"x\", nonce=\"n\", qop=\"auth-int\"",
+                          "Digest realm=\"x\", nonce=\"n\", algorithm=SHA-256"] {
+            XCTAssertNil(HTTPDigest.authorization(challenge: challenge, method: "GET", uri: "/", credentials: credentials),
+                         challenge)
+        }
+    }
+
+    func testQuotesInValuesAreEscaped() throws {
+        let header = try XCTUnwrap(HTTPDigest.authorization(
+            challenge: "Digest realm=\"r\\\"q\", nonce=\"n\"", method: "GET", uri: "/",
+            credentials: NodeCredentials(login: "a\"b", password: "p")
+        ))
+        XCTAssertTrue(header.contains("username=\"a\\\"b\""))
+        XCTAssertTrue(header.contains("realm=\"r\\\"q\""))
+        XCTAssertEqual(HTTPDigest.parameters(of: header)?["username"], "a\"b")
+    }
+}
+
+// MARK: - Login Check
+
+/// A TCP server on the loopback interface. `reply` reads a session's input,
+/// removes what it used and returns the bytes to send: nil waits for more
+/// input, and empty data closes the connection.
+private final class LoopbackServer: @unchecked Sendable {
+    final class Session {
+        var input = Data()
+        var state: [String: String] = [:]
+    }
+
+    private let listener: NWListener
+    private let queue = DispatchQueue(label: "one.monero.tests.loopback")
+    private let reply: (Session) -> Data?
+    private var sessions: [(connection: NWConnection, session: Session)] = []
+
+    init(reply: @escaping (Session) -> Data?) throws {
+        let parameters = NWParameters.tcp
+        parameters.requiredInterfaceType = .loopback
+        listener = try NWListener(using: parameters)
+        self.reply = reply
+    }
+
+    var port: UInt16 { listener.port?.rawValue ?? 0 }
+    var connectionCount: Int { queue.sync { sessions.count } }
+    var states: [[String: String]] { queue.sync { sessions.map(\.session.state) } }
+
+    private var started: CheckedContinuation<Void, Never>?
+
+    func start() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            started = continuation
+            listener.stateUpdateHandler = { [weak self] state in
+                guard let self else { return }
+                switch state {
+                case .ready, .failed, .cancelled:
+                    self.started?.resume()
+                    self.started = nil
+                default:
+                    break
+                }
+            }
+            listener.newConnectionHandler = { [weak self] connection in
+                guard let self else { return }
+                let session = Session()
+                self.sessions.append((connection, session))
+                connection.start(queue: self.queue)
+                self.read(connection, session)
+            }
+            listener.start(queue: queue)
+        }
+    }
+
+    private func read(_ connection: NWConnection, _ session: Session) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+            if let data {
+                session.input.append(data)
+            }
+            while let out = self.reply(session) {
+                if out.isEmpty {
+                    connection.cancel()
+                    return
+                }
+                connection.send(content: out, completion: .idempotent)
+            }
+            if isComplete || error != nil {
+                connection.cancel()
+            } else {
+                self.read(connection, session)
+            }
+        }
+    }
+
+    func stop() {
+        queue.sync {
+            listener.cancel()
+            sessions.forEach { $0.connection.cancel() }
+        }
+    }
+}
+
+final class NodeLoginProbeTests: XCTestCase {
+
+    private var servers: [LoopbackServer] = []
+
+    override func tearDown() async throws {
+        servers.forEach { $0.stop() }
+        servers = []
+    }
+
+    private func start(_ reply: @escaping (LoopbackServer.Session) -> Data?) async throws -> LoopbackServer {
+        let server = try LoopbackServer(reply: reply)
+        servers.append(server)
+        await server.start()
+        XCTAssertNotEqual(server.port, 0)
+        return server
+    }
+
+    private static func md5(_ text: String) -> String {
+        Insecure.MD5.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func httpReply(_ status: String, headers: [String] = [], body: String) -> Data {
+        let lines = ["HTTP/1.1 \(status)", "Content-Length: \(Data(body.utf8).count)"] + headers
+        return Data((lines.joined(separator: "\r\n") + "\r\n\r\n" + body).utf8)
+    }
+
+    /// A node that asks for a login the way monerod's --rpc-login does. Each
+    /// connection has its own nonce, so only an answer on the connection
+    /// that got the challenge logs in, and the connection stays open after
+    /// a 401.
+    private static func monerod(login: String?, password: String?) -> (LoopbackServer.Session) -> Data? {
+        { session in
+            guard let headEnd = session.input.range(of: Data("\r\n\r\n".utf8)) else { return nil }
+            let head = String(decoding: session.input[..<headEnd.lowerBound], as: UTF8.self)
+            session.input.removeSubrange(..<headEnd.upperBound)
+            session.state["requests", default: ""] += "x"
+
+            let ok = httpReply("200 Ok", headers: ["Content-Type: application/json"], body: "{\"status\":\"OK\"}")
+            guard let login, let password else { return ok }
+
+            let nonce = session.state["nonce"] ?? UUID().uuidString
+            session.state["nonce"] = nonce
+            let answer = head.components(separatedBy: "\r\n").dropFirst()
+                .first { $0.lowercased().hasPrefix("authorization:") }
+                .flatMap { HTTPDigest.parameters(of: String($0.dropFirst("authorization:".count))) }
+            if let answer, answer["nonce"] == nonce, answer["username"] == login,
+               let uri = answer["uri"], let nc = answer["nc"], let cnonce = answer["cnonce"], answer["qop"] == "auth" {
+                let ha1 = md5("\(login):monero-rpc:\(password)")
+                let ha2 = md5("GET:\(uri)")
+                if answer["response"] == md5("\(ha1):\(nonce):\(nc):\(cnonce):auth:\(ha2)") {
+                    return ok
+                }
+            }
+            let stale = answer != nil && answer?["nonce"] != nonce
+            let body = "<html><head><title>Unauthorized Access</title></head><body><h1>401 Unauthorized</h1></body></html>"
+            return httpReply("401 Unauthorized", headers: [
+                "Server: Epee-based",
+                "Content-Type: text/html",
+                "WWW-authenticate: Digest qop=\"auth\",algorithm=MD5,realm=\"monero-rpc\",nonce=\"\(nonce)\",stale=\(stale)",
+                "WWW-authenticate: Digest qop=\"auth\",algorithm=MD5-sess,realm=\"monero-rpc\",nonce=\"\(nonce)\",stale=\(stale)",
+            ], body: body)
+        }
+    }
+
+    private func check(_ server: LoopbackServer, _ credentials: NodeCredentials, proxy: String = "") async -> NodeLoginCheck {
+        await NodeLoginProbe.check(url: "http://localhost:\(server.port)", credentials: credentials, proxy: proxy, timeout: 5)
+    }
+
+    func testRightLoginIsAcceptedOnOneConnection() async throws {
+        let node = try await start(Self.monerod(login: "kc", password: "right"))
+
+        let result = await check(node, NodeCredentials(login: "kc", password: "right"))
+
+        XCTAssertEqual(result, .accepted)
+        XCTAssertEqual(node.connectionCount, 1, "The answer to the challenge goes on the same connection")
+        XCTAssertEqual(node.states.first?["requests"], "xx")
+    }
+
+    func testWrongPasswordIsRejected() async throws {
+        let node = try await start(Self.monerod(login: "kc", password: "right"))
+
+        let result = await check(node, NodeCredentials(login: "kc", password: "wrong"))
+
+        XCTAssertEqual(result, .rejected)
+    }
+
+    func testNoLoginOnALoginNodeIsRejected() async throws {
+        let node = try await start(Self.monerod(login: "kc", password: "right"))
+
+        let result = await check(node, .none)
+
+        XCTAssertEqual(result, .rejected)
+        XCTAssertEqual(node.states.first?["requests"], "x", "With no login there is nothing to answer")
+    }
+
+    func testNodeWithoutLoginIsAccepted() async throws {
+        let node = try await start(Self.monerod(login: nil, password: nil))
+
+        let result = await check(node, NodeCredentials(login: "kc", password: "any"))
+
+        XCTAssertEqual(result, .accepted)
+    }
+
+    func testOtherRepliesAreInconclusive() async throws {
+        let node = try await start { session in
+            guard let headEnd = session.input.range(of: Data("\r\n\r\n".utf8)) else { return nil }
+            session.input.removeSubrange(..<headEnd.upperBound)
+            return Self.httpReply("403 Forbidden", body: "")
+        }
+
+        let result = await check(node, NodeCredentials(login: "kc", password: "right"))
+
+        XCTAssertEqual(result, .inconclusive)
+    }
+
+    func testNodeThatIsDownIsInconclusive() async throws {
+        let node = try await start { _ in nil }
+        let url = "http://localhost:\(node.port)"
+        node.stop()
+
+        let result = await NodeLoginProbe.check(url: url, credentials: .none, proxy: "", timeout: 5)
+
+        XCTAssertEqual(result, .inconclusive)
+    }
+
+    /// With a proxy, the check asks the proxy for the node and never
+    /// connects to the node itself, even when the proxy turns it down.
+    /// A SOCKS5 proxy that records the port each client asks for, then
+    /// reports that it cannot reach it.
+    private static func refusingSocksProxy(_ session: LoopbackServer.Session) -> Data? {
+        let bytes = [UInt8](session.input)
+        switch session.state["step"] {
+        case nil:
+            // Greeting: version, method count, methods.
+            guard bytes.count >= 2, bytes.count >= 2 + Int(bytes[1]) else { return nil }
+            session.input.removeAll()
+            session.state["step"] = "request"
+            return Data([0x05, 0x00])
+        case "request":
+            // Version, command, reserved, address type, address, port.
+            guard bytes.count >= 5 else { return nil }
+            let portStart: Int
+            switch bytes[3] {
+            case 0x01: portStart = 8
+            case 0x03: portStart = 5 + Int(bytes[4])
+            case 0x04: portStart = 20
+            default: return Data()
+            }
+            guard bytes.count >= portStart + 2 else { return nil }
+            session.state["port"] = String(Int(bytes[portStart]) << 8 | Int(bytes[portStart + 1]))
+            session.input.removeAll()
+            session.state["step"] = "done"
+            // Reply 5: connection refused.
+            return Data([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+        default:
+            return nil
+        }
+    }
+
+    func testCheckGoesThroughTheProxyOnly() async throws {
+        let node = try await start(Self.monerod(login: "kc", password: "right"))
+        let proxy = try await start(Self.refusingSocksProxy)
+
+        let result = await check(node, NodeCredentials(login: "kc", password: "right"), proxy: "localhost:\(proxy.port)")
+
+        XCTAssertEqual(result, .inconclusive)
+        XCTAssertEqual(node.connectionCount, 0, "The check never connects to the node directly")
+        let ports = proxy.states.compactMap { $0["port"] }
+        XCTAssertFalse(ports.isEmpty, "The check asked the proxy for the node")
+        XCTAssertEqual(Set(ports), [String(node.port)])
+    }
+
+    /// Clears the node settings a NodeManager reads and writes, and puts them
+    /// back after the test. Auto-select stays off, so no test switches nodes.
+    private func isolateNodeSettings() {
+        let saved = SavedNodeSettings()
+        addTeardownBlock { saved.restore() }
+        ["customNodes", "selectedNodeURL", "isTestnet", "proxyAddress"].forEach {
+            UserDefaults.standard.removeObject(forKey: $0)
+        }
+        UserDefaults.standard.set(false, forKey: "autoSelectNode")
+    }
+
+    /// Turning Tor on in settings writes only the wallet's proxy setting, so
+    /// the manager's `proxyAddress` is still empty. The row check must use
+    /// the wallet's setting and never connect around the proxy.
+    @MainActor
+    func testNodeRowCheckGoesThroughTheWalletProxy() async throws {
+        isolateNodeSettings()
+        let node = try await start(Self.monerod(login: "kc", password: "right"))
+        let proxy = try await start(Self.refusingSocksProxy)
+        let url = "http://localhost:\(node.port)"
+        let fake = FakeNodeKeychain()
+        let manager = NodeManager(keychain: fake.keychain)
+        manager.addCustomNode(name: "Lab", url: url, login: "kc", password: "wrong")
+
+        // With no proxy set, the check asks the node, which turns the login down.
+        let rejectedDirectly = await manager.loginRejected(at: url, timeout: 5)
+        XCTAssertTrue(rejectedDirectly)
+        XCTAssertEqual(node.connectionCount, 1)
+
+        UserDefaults.standard.set("localhost:\(proxy.port)", forKey: "proxyAddress")
+        XCTAssertEqual(manager.proxyAddress, "")
+
+        let rejectedThroughProxy = await manager.loginRejected(at: url, timeout: 5)
+
+        XCTAssertFalse(rejectedThroughProxy, "The proxy cannot reach the node, so the check has no answer")
+        XCTAssertEqual(node.connectionCount, 1, "The check never connects around the proxy")
+        XCTAssertEqual(Set(proxy.states.compactMap { $0["port"] }), [String(node.port)])
+    }
+
+    @MainActor
+    func testNodeRowCheckSkipsBuiltInNodes() async throws {
+        isolateNodeSettings()
+        let manager = NodeManager(keychain: FakeNodeKeychain().keychain)
+
+        for builtIn in NodeManager.defaultNodes {
+            let rejected = await manager.loginRejected(at: builtIn.url, timeout: 5)
+            XCTAssertFalse(rejected, builtIn.url)
+        }
+    }
+
+    /// Network.framework connects to some local addresses directly even with
+    /// a proxy set, so with a proxy the check skips a node at such an address.
+    func testWithAProxyTheCheckSkipsANodeAtALocalAddress() async throws {
+        let node = try await start(Self.monerod(login: "kc", password: "right"))
+        let proxy = try await start(Self.refusingSocksProxy)
+        let url = "http://127.0.0.1:\(node.port)"
+        let wrong = NodeCredentials(login: "kc", password: "wrong")
+
+        let direct = await NodeLoginProbe.check(url: url, credentials: wrong, proxy: "", timeout: 5)
+        XCTAssertEqual(direct, .rejected, "With no proxy the check asks the node")
+        XCTAssertEqual(node.connectionCount, 1)
+
+        let skipped = await NodeLoginProbe.check(url: url, credentials: wrong, proxy: "localhost:\(proxy.port)", timeout: 5)
+
+        XCTAssertEqual(skipped, .inconclusive)
+        XCTAssertEqual(node.connectionCount, 1, "The check never connects around the proxy")
+        XCTAssertEqual(proxy.connectionCount, 0, "The check is skipped")
+    }
+
+    func testWithAProxyTheCheckSkipsIPv6Loopback() async throws {
+        try await assertSkippedWithAProxy(host: "[::1]")
+    }
+
+    func testWithAProxyTheCheckSkipsAnIPv4MappedLoopback() async throws {
+        try await assertSkippedWithAProxy(host: "[::ffff:127.0.0.1]")
+    }
+
+    /// With no proxy the check reaches the node at `host`. With a proxy it
+    /// has no answer, and it connects to neither the node nor the proxy.
+    private func assertSkippedWithAProxy(host: String, line: UInt = #line) async throws {
+        let node = try await start(Self.monerod(login: "kc", password: "right"))
+        let proxy = try await start(Self.refusingSocksProxy)
+        let url = "http://\(host):\(node.port)"
+        let wrong = NodeCredentials(login: "kc", password: "wrong")
+
+        let direct = await NodeLoginProbe.check(url: url, credentials: wrong, proxy: "", timeout: 5)
+        XCTAssertEqual(direct, .rejected, "With no proxy the check asks the node", line: line)
+
+        let skipped = await NodeLoginProbe.check(url: url, credentials: wrong, proxy: "localhost:\(proxy.port)", timeout: 5)
+
+        XCTAssertEqual(skipped, .inconclusive, line: line)
+        XCTAssertEqual(node.connectionCount, 1, "The check never connects around the proxy", line: line)
+        XCTAssertEqual(proxy.connectionCount, 0, "The check is skipped", line: line)
+    }
+
+    func testWithAProxyTheCheckAsksTheProxyForAPublicAddress() async throws {
+        let proxy = try await start(Self.refusingSocksProxy)
+
+        // A documentation address (RFC 5737): the proxy turns it down.
+        let result = await NodeLoginProbe.check(url: "http://192.0.2.1:18089", credentials: .none,
+                                                proxy: "localhost:\(proxy.port)", timeout: 5)
+
+        XCTAssertEqual(result, .inconclusive)
+        XCTAssertEqual(proxy.states.compactMap { $0["port"] }, ["18089"], "The check asked the proxy for the node")
+    }
+
+    func testAddressesOutsidePublicUnicast() {
+        let outside = [
+            // 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.168/16, 224/4.
+            "0.0.0.0", "0.255.255.255", "10.0.0.1", "10.255.255.255", "100.64.0.0", "100.127.255.255",
+            "127.0.0.1", "127.255.255.254", "169.254.0.1", "169.254.255.255", "172.16.0.1", "172.31.255.255",
+            "192.168.0.1", "192.168.255.255", "224.0.0.1", "239.255.255.255",
+            // Spellings the connection reads as 127.0.0.1.
+            "127.1", "2130706433", "0x7f000001", "0127.0.0.1", "::ffff:127.0.0.1", "::ffff:7f00:1",
+            // ::, ::1, fe80::/10, fc00::/7, ff00::/8.
+            "::", "::1", "fe80::1", "fe80::1%lo0", "febf:ffff::1", "fc00::1", "fdff::1", "ff02::1",
+        ]
+        let publicOrName = [
+            // The addresses next to each range, and documentation addresses.
+            "1.0.0.0", "9.255.255.255", "11.0.0.0", "100.63.255.255", "100.128.0.0", "126.255.255.255",
+            "128.0.0.0", "169.253.255.255", "169.255.0.0", "172.15.255.255", "172.32.0.0", "192.167.255.255",
+            "192.169.0.0", "223.255.255.255", "192.0.2.1", "198.51.100.1", "203.0.113.1",
+            "2001:db8::1", "fe7f::1", "fbff::1", "::ffff:192.0.2.1",
+            // Names go through the proxy.
+            "localhost", "node.monero.one", "127.0.0.1.", "exampleonionnodeforthetest.onion", "999.1.1.1",
+        ]
+
+        for host in outside {
+            XCTAssertTrue(NodeLoginProbe.isNonPublicAddress(host), host)
+        }
+        for host in publicOrName {
+            XCTAssertFalse(NodeLoginProbe.isNonPublicAddress(host), host)
+        }
+    }
+
+    func testProxyThatIsNotHostAndPortIsInconclusive() async {
+        let result = await NodeLoginProbe.check(url: "http://localhost:18081", credentials: .none, proxy: "localhost", timeout: 5)
+
+        XCTAssertEqual(result, .inconclusive)
+    }
+
+    func testOnionNodeWithoutProxyIsInconclusive() async {
+        let result = await NodeLoginProbe.check(url: "http://exampleonionnodeforthetest.onion:18089", credentials: .none,
+                                                proxy: "", timeout: 5)
+
+        XCTAssertEqual(result, .inconclusive)
     }
 }

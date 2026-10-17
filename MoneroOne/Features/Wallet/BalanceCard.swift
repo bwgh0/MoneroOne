@@ -106,14 +106,19 @@ struct BalanceCard: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            HStack {
+            HStack(alignment: .statusLine) {
                 // The past covers the status and pills without replacing
                 // them, so the row keeps its height while scrubbing.
-                ZStack(alignment: .leading) {
-                    HStack {
+                ZStack(alignment: Alignment(horizontal: .leading, vertical: .statusLine)) {
+                    HStack(alignment: .statusLine) {
                         syncStatus
                         devicePill
-                        Spacer(minLength: 0)
+                        // A sync error fills the free width itself. Beside
+                        // this Spacer, the row gave a wrapping error 8pt too
+                        // much, and the pill covered the gap before History.
+                        if !showsSyncError {
+                            Spacer(minLength: 0)
+                        }
                     }
                     .opacity(historicalPoint == nil ? 1 : 0)
                     .accessibilityHidden(historicalPoint != nil)
@@ -259,6 +264,12 @@ struct BalanceCard: View {
 
     // MARK: - Status row
 
+    /// The status row shows a sync error, which can wrap.
+    private var showsSyncError: Bool {
+        guard !isSyncBlocked, case .error = syncState else { return false }
+        return true
+    }
+
     @ViewBuilder
     private var syncStatus: some View {
         if isSyncBlocked {
@@ -284,15 +295,25 @@ struct BalanceCard: View {
                 .fixedSize()
                 .accessibilityLabel("Sync status: synced")
         } else if case .error(let msg) = syncState {
-            Circle()
-                .fill(Color.red)
-                .frame(width: 8, height: 8)
-                .accessibilityHidden(true)
-            Text("Error: \(msg)")
-                .font(.caption)
-                .foregroundColor(.red)
-                .lineLimit(1)
-                .accessibilityLabel("Sync error: \(msg)")
+            // One view with its dot. It fills the width before the pill,
+            // so the error wraps there and the pill stays beside line 1.
+            HStack(alignment: .statusLine) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                Text("Error: \(msg)")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    // A long error, such as the node login error, wraps. The
+                    // row centers on its first line, so the dot, the pill and
+                    // History stay beside that line as on one line.
+                    .alignmentGuide(.statusLine) { d in
+                        (d.height - (d[.lastTextBaseline] - d[.firstTextBaseline])) / 2
+                    }
+                    .accessibilityLabel("Sync error: \(msg)")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             ConnectionStepIndicator(
                 stage: connectionStage,
@@ -337,10 +358,17 @@ struct BalanceCard: View {
         } else if isViewOnly {
             // The eye alone when the word does not fit beside the
             // status: "Solo visualizzazione" and "Только просмотр"
-            // wrapped inside the pill.
-            ViewThatFits(in: .horizontal) {
-                viewOnlyPill(showsText: true)
-                viewOnlyPill(showsText: false)
+            // wrapped inside the pill. A sync error wraps beside it, so
+            // the error gets the eye alone and the rest of the row.
+            Group {
+                if showsSyncError {
+                    viewOnlyPill(showsText: false)
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        viewOnlyPill(showsText: true)
+                        viewOnlyPill(showsText: false)
+                    }
+                }
             }
             .padding(.leading, 6)
             .accessibilityElement(children: .ignore)
@@ -559,6 +587,19 @@ struct BalanceCard: View {
             return "\(count)"
         }
     }
+}
+
+private extension VerticalAlignment {
+    /// The middle of the status row's first line. Only a sync error that
+    /// wraps sets it. Everywhere else it is the center, so the row looks as
+    /// it did with center alignment.
+    enum StatusLine: AlignmentID {
+        static func defaultValue(in d: ViewDimensions) -> CGFloat {
+            d[VerticalAlignment.center]
+        }
+    }
+
+    static let statusLine = VerticalAlignment(StatusLine.self)
 }
 
 /// Clips the history reveal at its top and bottom only, so chart dots and

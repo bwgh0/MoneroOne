@@ -1,3 +1,5 @@
+import Combine
+import CryptoKit
 import Foundation
 import Network
 import Security
@@ -112,6 +114,10 @@ struct NodeStats {
     let uptimeYear: Double?    // e.g. 99.8, nil if unknown
     let isUp: Bool
     var latencyMs: Int?        // measured locally, nil if not tested
+    /// True when the node turned down the login it has in the app, or it
+    /// wants a login and has none. The latency test connects with no login,
+    /// so such a node still gets a latency.
+    var authFailed = false
 
     var score: Double {
         guard let latency = latencyMs, latency > 0 else { return 0 }
@@ -323,6 +329,9 @@ class NodeManager: ObservableObject {
             }
         }
     }
+    /// Sends each node auto-select switches to. The wallet restarts on it, as
+    /// it does when the user taps a node.
+    let autoSelectedNode = PassthroughSubject<MoneroNode, Never>()
     @Published var nodeStats: [String: NodeStats] = [
         // Monero One: always 100% uptime
         "https://node.monero.one:443": NodeStats(uptimeMonth: 100.0, uptimeYear: 100.0, isUp: true, latencyMs: nil)
@@ -431,6 +440,41 @@ class NodeManager: ObservableObject {
         currentDefaultNodes + customNodes
     }
 
+    /// The URLs of every node in the list, as `normalizedURL` writes them.
+    /// The Add and Edit sheets turn down a URL in this set. `except` leaves
+    /// out the node being edited, so it can keep its own URL.
+    func listedURLs(except url: String? = nil) -> Set<String> {
+        var urls = Set((currentDefaultNodes + Self.torNodes + customNodes).map { Self.normalizedURL($0.url) })
+        if let url {
+            urls.remove(Self.normalizedURL(url))
+        }
+        return urls
+    }
+
+    /// A node URL in the form the duplicate check compares. It drops spaces
+    /// at the ends and a trailing slash, and writes the scheme and the host
+    /// in lowercase, because neither is case-sensitive. A login in the URL
+    /// and the path keep their case.
+    nonisolated static func normalizedURL(_ url: String) -> String {
+        var rest = Substring(url.trimmingCharacters(in: .whitespacesAndNewlines))
+        while rest.hasSuffix("/") {
+            rest = rest.dropLast()
+        }
+        var scheme = ""
+        if let separator = rest.range(of: "://") {
+            scheme = rest[..<separator.upperBound].lowercased()
+            rest = rest[separator.upperBound...]
+        }
+        let pathStart = rest.firstIndex(of: "/") ?? rest.endIndex
+        let authority = rest[..<pathStart]
+        let path = rest[pathStart...]
+        guard let at = authority.lastIndex(of: "@") else {
+            return scheme + authority.lowercased() + path
+        }
+        let hostStart = authority.index(after: at)
+        return scheme + authority[..<hostStart] + authority[hostStart...].lowercased() + path
+    }
+
     func selectNode(_ node: MoneroNode) {
         selectedNode = node
         UserDefaults.standard.set(node.url, forKey: selectedNodeKey)
@@ -493,6 +537,22 @@ class NodeManager: ObservableObject {
         guard let listed = customNodes.first(where: { $0.url == url }) else { return nil }
         guard listed.credentials.isEmpty else { return listed.credentials }
         return NodeCredentialStore.loadNode(url: url, isTestnet: isTestnet, keychain: keychain) ?? NodeCredentials.none
+    }
+
+    /// The proxy the wallet connects through, as "host:port", or empty.
+    /// Turning Tor on writes only this setting, so `proxyAddress` can lag
+    /// behind it until the settings screen opens again.
+    nonisolated static var walletProxy: String {
+        UserDefaults.standard.string(forKey: "proxyAddress") ?? ""
+    }
+
+    /// True when a custom node turns its login down. A node with no login
+    /// gets the check too: the latency test does not log in. Built-in nodes
+    /// take no login and get no check. The check goes through the wallet's
+    /// proxy and never around it.
+    func loginRejected(at url: String, timeout: TimeInterval = NodeLoginProbe.timeout) async -> Bool {
+        guard let login = listedLogin(of: url) else { return false }
+        return await NodeLoginProbe.check(url: url, credentials: login, proxy: Self.walletProxy, timeout: timeout) == .rejected
     }
 
     /// A URL is one node: ids, the selection and deletes all go by URL. So
@@ -684,10 +744,18 @@ class NodeManager: ObservableObject {
         for node in nodes where !node.credentials.isEmpty {
             waiting[node.url] = node.credentials
         }
-        customNodes = nodes.map { node in
+        // The list shows a URL once. Earlier builds let the same URL be
+        // added twice, and the copies then got mixed up, so the first copy
+        // stays, with its name and place. It takes the login found above.
+        var seen = Set<String>()
+        let unique = nodes.filter { seen.insert($0.url).inserted }
+        customNodes = unique.map { node in
             node.with(waiting[node.url]
                 ?? NodeCredentialStore.loadNode(url: node.url, isTestnet: isTestnet, keychain: keychain)
                 ?? .none)
+        }
+        if unique.count < nodes.count {
+            saveCustomNodes()
         }
     }
 
@@ -863,7 +931,8 @@ class NodeManager: ObservableObject {
                     uptimeMonth: uptimeMonth,
                     uptimeYear: uptimeYear,
                     isUp: isUp,
-                    latencyMs: existingLatency
+                    latencyMs: existingLatency,
+                    authFailed: nodeStats[node.url]?.authFailed ?? false
                 )
             }
         }
@@ -874,7 +943,7 @@ class NodeManager: ObservableObject {
     func measureAllLatencies() async {
         isLoadingStats = true
 
-        await withTaskGroup(of: (String, Int?).self) { group in
+        await withTaskGroup(of: (String, Int?, Bool).self) { group in
             for node in allNodes {
                 // .onion nodes can't be tested via direct TCP — mark as available if proxy is reachable
                 if node.url.contains(".onion") {
@@ -888,14 +957,16 @@ class NodeManager: ObservableObject {
                     continue
                 }
                 group.addTask {
-                    let latency = await self.measureLatency(for: node)
-                    return (node.url, latency)
+                    async let latency = self.measureLatency(for: node)
+                    let authFailed = await self.loginRejected(at: node.url)
+                    return (node.url, await latency, authFailed)
                 }
             }
 
-            for await (url, latency) in group {
+            for await (url, latency, authFailed) in group {
                 if var stats = nodeStats[url] {
                     stats.latencyMs = latency
+                    stats.authFailed = authFailed
                     nodeStats[url] = stats
                 } else {
                     // Custom node without uptime data - create stats with just latency
@@ -903,7 +974,8 @@ class NodeManager: ObservableObject {
                         uptimeMonth: nil,
                         uptimeYear: nil,
                         isUp: latency != nil,
-                        latencyMs: latency
+                        latencyMs: latency,
+                        authFailed: authFailed
                     )
                 }
             }
@@ -1014,10 +1086,11 @@ class NodeManager: ObservableObject {
     func selectBestNode() {
         guard autoSelectEnabled else { return }
 
-        // Filter to nodes that are up and have latency measured
+        // Filter to nodes that are up and have latency measured, and that
+        // accept their login
         let candidates = allNodes.filter { node in
             guard let stats = nodeStats[node.url] else { return false }
-            return stats.isUp && stats.latencyMs != nil
+            return stats.isUp && stats.latencyMs != nil && !stats.authFailed
         }
 
         // Sort by score (uptime / latency) descending
@@ -1028,6 +1101,7 @@ class NodeManager: ObservableObject {
 
         if let best = best, selectedNode.url != best.url {
             selectNode(best)
+            autoSelectedNode.send(best)
         }
     }
 
@@ -1041,5 +1115,382 @@ class NodeManager: ObservableObject {
         await fetchUptimeStats()
         await measureAllLatencies()
         // isLoadingStats is set to false in measureAllLatencies
+    }
+}
+
+// MARK: - Node Login Check
+
+/// What a node said to its login.
+enum NodeLoginCheck: Equatable {
+    /// The node answered the call.
+    case accepted
+    /// The node turned the login down, or it wants a login and there is none.
+    case rejected
+    /// No clear answer: no connection, no reply in time, or a reply that
+    /// says nothing about the login.
+    case inconclusive
+}
+
+/// Checks a node's RPC login with one `get_info` call. monerod's
+/// `--rpc-login` uses HTTP digest auth (RFC 2617).
+///
+/// monerod ties each digest nonce to its connection: a challenge answered
+/// on a new connection gets a new 401. So the check sends the call and its
+/// answer to the challenge on one connection.
+enum NodeLoginProbe {
+    static let path = "/get_info"
+    static let timeout: TimeInterval = 10
+
+    /// - Parameter proxy: the SOCKS5 proxy as "host:port", or empty for
+    ///   none. With a proxy, the check never connects directly.
+    static func check(url: String, credentials: NodeCredentials, proxy: String,
+                      timeout: TimeInterval = NodeLoginProbe.timeout) async -> NodeLoginCheck {
+        guard let parsed = URL(string: url),
+              let scheme = parsed.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = parsed.host, !host.isEmpty else {
+            return .inconclusive
+        }
+        let portNumber = parsed.port ?? 18081
+        guard (1...65535).contains(portNumber),
+              let port = NWEndpoint.Port(rawValue: UInt16(portNumber)) else {
+            return .inconclusive
+        }
+
+        let parameters: NWParameters
+        if scheme == "https" {
+            // Accept self-signed certificates, as the latency test does.
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, _, complete in
+                complete(true)
+            }, DispatchQueue.global())
+            parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
+        } else {
+            parameters = NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
+        }
+
+        let proxy = proxy.trimmingCharacters(in: .whitespaces)
+        if proxy.isEmpty {
+            // An onion node is reachable only through a proxy.
+            if host.lowercased().hasSuffix(".onion") { return .inconclusive }
+        } else {
+            // Network.framework connects to some local addresses directly,
+            // past the proxy, even with failover off. So with a proxy the
+            // check never connects to such an address, and has no answer.
+            if isNonPublicAddress(host) { return .inconclusive }
+            let parts = proxy.split(separator: ":")
+            guard parts.count == 2, let proxyPortNumber = UInt16(parts[1]), proxyPortNumber > 0,
+                  let proxyPort = NWEndpoint.Port(rawValue: proxyPortNumber) else {
+                return .inconclusive
+            }
+            var configuration = ProxyConfiguration(
+                socksv5Proxy: .hostPort(host: NWEndpoint.Host(String(parts[0])), port: proxyPort)
+            )
+            // No direct connection when the proxy is down.
+            configuration.allowFailover = false
+            let context = NWParameters.PrivacyContext(description: "one.monero.nodeLogin")
+            context.proxyConfigurations = [configuration]
+            parameters.setPrivacyContext(context)
+        }
+
+        let hostHeader = host.contains(":") ? "[\(host)]:\(portNumber)" : "\(host):\(portNumber)"
+        let connection = NWConnection(to: .hostPort(host: NWEndpoint.Host(host), port: port), using: parameters)
+        let exchange = NodeLoginExchange(connection: connection, hostHeader: hostHeader, credentials: credentials)
+        return await exchange.run(timeout: timeout)
+    }
+
+    /// True when `host` is an IP address outside public unicast: this
+    /// network (0/8), private (RFC 1918), shared (100.64/10), loopback,
+    /// link-local, multicast, unique local (fc00::/7) or unspecified (::).
+    /// The host is read as the connection reads it, so short, numeric and
+    /// IPv4-mapped forms count as the IPv4 address they name. A hostname
+    /// is never one.
+    static func isNonPublicAddress(_ host: String) -> Bool {
+        switch NWEndpoint.Host(host) {
+        case .name:
+            return false
+        case .ipv4(let address):
+            return isNonPublic(ipv4: [UInt8](address.rawValue))
+        case .ipv6(let address):
+            if address.isIPv4Mapped, let ipv4 = address.asIPv4 {
+                return isNonPublic(ipv4: [UInt8](ipv4.rawValue))
+            }
+            let bytes = [UInt8](address.rawValue)
+            guard bytes.count == 16 else { return true }
+            let unspecified = bytes.allSatisfy { $0 == 0 }
+            let loopback = bytes.dropLast().allSatisfy { $0 == 0 } && bytes[15] == 1
+            return unspecified || loopback
+                || (bytes[0] == 0xfe && bytes[1] & 0xc0 == 0x80)  // fe80::/10 link-local
+                || bytes[0] & 0xfe == 0xfc                        // fc00::/7 unique local
+                || bytes[0] == 0xff                               // ff00::/8 multicast
+        @unknown default:
+            return true
+        }
+    }
+
+    private static func isNonPublic(ipv4 bytes: [UInt8]) -> Bool {
+        guard bytes.count == 4 else { return true }
+        let (a, b) = (bytes[0], bytes[1])
+        return a == 0 || a == 10 || a == 127               // 0/8, 10/8, 127/8
+            || (a == 100 && b & 0xc0 == 64)                // 100.64/10
+            || (a == 169 && b == 254)                      // 169.254/16
+            || (a == 172 && b & 0xf0 == 16)                // 172.16/12
+            || (a == 192 && b == 168)                      // 192.168/16
+            || a & 0xf0 == 224                             // 224/4 multicast
+    }
+}
+
+/// The connection of one login check. It sends the call, answers a digest
+/// challenge on the same connection, and reads the result. All its state
+/// lives on `queue`, which also runs the connection's handlers.
+private final class NodeLoginExchange: @unchecked Sendable {
+    private let connection: NWConnection
+    private let hostHeader: String
+    private let credentials: NodeCredentials
+    private let queue = DispatchQueue(label: "one.monero.nodeLogin")
+    private var continuation: CheckedContinuation<NodeLoginCheck, Never>?
+    private var received = Data()
+    private var answeredChallenge = false
+
+    /// A reply head longer than this is not from monerod.
+    private static let maxHeadLength = 32 * 1024
+
+    init(connection: NWConnection, hostHeader: String, credentials: NodeCredentials) {
+        self.connection = connection
+        self.hostHeader = hostHeader
+        self.credentials = credentials
+    }
+
+    func run(timeout: TimeInterval) async -> NodeLoginCheck {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                self.continuation = continuation
+                self.connection.stateUpdateHandler = { state in
+                    self.handle(state)
+                }
+                self.connection.start(queue: self.queue)
+                self.queue.asyncAfter(deadline: .now() + timeout) {
+                    self.finish(.inconclusive)
+                }
+            }
+        }
+    }
+
+    private func handle(_ state: NWConnection.State) {
+        switch state {
+        case .ready:
+            send(authorization: nil)
+        case .waiting, .failed, .cancelled:
+            // .waiting: no route to the node, or it refused the connection.
+            finish(.inconclusive)
+        default:
+            break
+        }
+    }
+
+    private func send(authorization: String?) {
+        var request = "GET \(NodeLoginProbe.path) HTTP/1.1\r\nHost: \(hostHeader)\r\nAccept: application/json\r\n"
+        if let authorization {
+            request += "Authorization: \(authorization)\r\n"
+        }
+        request += "\r\n"
+        connection.send(content: Data(request.utf8), completion: .contentProcessed { error in
+            if error != nil {
+                self.finish(.inconclusive)
+            }
+        })
+        receive()
+    }
+
+    private func receive() {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { data, _, isComplete, error in
+            guard self.continuation != nil else { return }
+            if let data {
+                self.received.append(data)
+            }
+            if self.readReply() { return }
+            if error != nil || isComplete {
+                self.finish(.inconclusive)
+            } else {
+                self.receive()
+            }
+        }
+    }
+
+    /// Acts on the reply once its head is in. False while it needs more.
+    private func readReply() -> Bool {
+        guard let headEnd = received.range(of: Data("\r\n\r\n".utf8)) else {
+            if received.count > Self.maxHeadLength {
+                finish(.inconclusive)
+                return true
+            }
+            return false
+        }
+        let head = String(decoding: received[received.startIndex..<headEnd.lowerBound], as: UTF8.self)
+        let lines = head.components(separatedBy: "\r\n")
+        let statusLine = lines.first?.split(separator: " ") ?? []
+        guard statusLine.count >= 2, statusLine[0].hasPrefix("HTTP/1."), let status = Int(statusLine[1]) else {
+            finish(.inconclusive)
+            return true
+        }
+        // Header names are not case-sensitive: monerod sends "WWW-authenticate".
+        let headers = lines.dropFirst().compactMap { line -> (name: String, value: String)? in
+            guard let colon = line.firstIndex(of: ":") else { return nil }
+            return (line[..<colon].trimmingCharacters(in: .whitespaces).lowercased(),
+                    line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces))
+        }
+
+        switch status {
+        case 200:
+            finish(.accepted)
+        case 401 where answeredChallenge || credentials.isEmpty:
+            finish(.rejected)
+        case 401:
+            let challenges = headers.filter { $0.name == "www-authenticate" }.map(\.value)
+            guard let authorization = challenges.lazy.compactMap({ challenge in
+                HTTPDigest.authorization(challenge: challenge, method: "GET", uri: NodeLoginProbe.path,
+                                         credentials: self.credentials)
+            }).first else {
+                // No digest challenge this check can answer, and wallet2
+                // logs in with digest only.
+                finish(.rejected)
+                return true
+            }
+            // The answer has to go on this connection, after the whole body.
+            guard !headers.contains(where: { $0.name == "connection" && $0.value.lowercased().contains("close") }),
+                  let length = headers.first(where: { $0.name == "content-length" }).flatMap({ Int($0.value) }),
+                  length >= 0 else {
+                finish(.inconclusive)
+                return true
+            }
+            let bodyEnd = headEnd.upperBound + length
+            guard received.endIndex >= bodyEnd else { return false }
+            received = Data(received[bodyEnd...])
+            answeredChallenge = true
+            send(authorization: authorization)
+        default:
+            finish(.inconclusive)
+        }
+        return true
+    }
+
+    private func finish(_ result: NodeLoginCheck) {
+        guard let continuation else { return }
+        self.continuation = nil
+        connection.stateUpdateHandler = nil
+        connection.cancel()
+        continuation.resume(returning: result)
+    }
+}
+
+/// The client side of HTTP digest auth (RFC 2617) that monerod's
+/// `--rpc-login` needs: MD5 or MD5-sess, and qop "auth" or none. It ports
+/// the Android app's `DigestAuth`.
+enum HTTPDigest {
+    /// The Authorization header that answers one WWW-Authenticate challenge,
+    /// or nil when it is not a digest challenge this client can answer.
+    static func authorization(challenge: String, method: String, uri: String, credentials: NodeCredentials,
+                              cnonce: String = HTTPDigest.newCnonce(), nonceCount: Int = 1) -> String? {
+        guard let parameters = parameters(of: challenge),
+              let realm = parameters["realm"],
+              let nonce = parameters["nonce"] else {
+            return nil
+        }
+        let algorithm = parameters["algorithm"] ?? "MD5"
+        let offeredQop = parameters["qop"]
+        let qop = offeredQop?.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { $0.caseInsensitiveCompare("auth") == .orderedSame }
+        // Only auth-int is on offer.
+        if offeredQop != nil && qop == nil { return nil }
+        let hexCount = String(nonceCount, radix: 16)
+        let nc = String(repeating: "0", count: max(0, 8 - hexCount.count)) + hexCount
+
+        let username = credentials.login ?? ""
+        var ha1 = md5("\(username):\(realm):\(credentials.password ?? "")")
+        switch algorithm.lowercased() {
+        case "md5":
+            break
+        case "md5-sess":
+            ha1 = md5("\(ha1):\(nonce):\(cnonce)")
+        default:
+            return nil
+        }
+        let ha2 = md5("\(method):\(uri)")
+        let response = qop.map { md5("\(ha1):\(nonce):\(nc):\(cnonce):\($0):\(ha2)") } ?? md5("\(ha1):\(nonce):\(ha2)")
+
+        var header = "Digest username=\"\(quoted(username))\", realm=\"\(quoted(realm))\""
+            + ", nonce=\"\(quoted(nonce))\", uri=\"\(uri)\""
+        if let qop {
+            header += ", qop=\(qop), nc=\(nc), cnonce=\"\(cnonce)\""
+        }
+        header += ", response=\"\(response)\", algorithm=\(algorithm)"
+        if let opaque = parameters["opaque"] {
+            header += ", opaque=\"\(quoted(opaque))\""
+        }
+        return header
+    }
+
+    /// The parameters of a `Digest` challenge, with lowercase names, or nil
+    /// for any other scheme.
+    static func parameters(of challenge: String) -> [String: String]? {
+        let trimmed = challenge.trimmingCharacters(in: .whitespaces)
+        guard trimmed.prefix(7).lowercased() == "digest " else { return nil }
+        let isSeparator: (Character) -> Bool = { $0 == " " || $0 == "\t" || $0 == "," }
+        let isNameCharacter: (Character) -> Bool = { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
+        var result: [String: String] = [:]
+        var rest = trimmed.dropFirst(7)
+        while true {
+            rest = rest.drop(while: isSeparator)
+            guard !rest.isEmpty else { break }
+            let name = rest.prefix(while: isNameCharacter)
+            rest = rest.dropFirst(name.count).drop { $0 == " " || $0 == "\t" }
+            guard !name.isEmpty, rest.first == "=" else {
+                // Not a name=value pair: skip it.
+                rest = rest.drop { $0 != "," }
+                continue
+            }
+            rest = rest.dropFirst().drop { $0 == " " || $0 == "\t" }
+            var value = ""
+            if rest.first == "\"" {
+                rest = rest.dropFirst()
+                var escaped = false
+                while let character = rest.first {
+                    rest = rest.dropFirst()
+                    if escaped {
+                        value.append(character)
+                        escaped = false
+                    } else if character == "\\" {
+                        escaped = true
+                    } else if character == "\"" {
+                        break
+                    } else {
+                        value.append(character)
+                    }
+                }
+            } else {
+                let token = rest.prefix { !isSeparator($0) }
+                value = String(token)
+                rest = rest.dropFirst(token.count)
+            }
+            result[name.lowercased()] = value
+        }
+        return result
+    }
+
+    static func newCnonce() -> String {
+        (0..<8).map { _ in hex(UInt8.random(in: .min ... .max)) }.joined()
+    }
+
+    private static func md5(_ text: String) -> String {
+        Insecure.MD5.hash(data: Data(text.utf8)).map(hex).joined()
+    }
+
+    private static func hex(_ byte: UInt8) -> String {
+        let digits = String(byte, radix: 16)
+        return digits.count == 1 ? "0" + digits : digits
+    }
+
+    private static func quoted(_ value: String) -> String {
+        value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }
 }

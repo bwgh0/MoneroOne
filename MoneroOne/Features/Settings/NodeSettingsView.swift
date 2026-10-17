@@ -96,6 +96,9 @@ struct NodeSettingsView: View {
         .onChange(of: torEnabled) { _, enabled in
             handleTorToggle(enabled)
         }
+        .onReceive(nodeManager.autoSelectedNode) { node in
+            walletManager.setNode(url: node.url, isTrusted: node.isTrusted, login: node.login, password: node.password)
+        }
         .alert("Tor Proxy Required", isPresented: $showTorWarning) {
             Button("Cancel", role: .cancel) {}
             Button("Turn On") { torEnabled = true }
@@ -103,7 +106,7 @@ struct NodeSettingsView: View {
             Text("Monero One has no built-in Tor. Without Orbot or another Tor app running, no node will connect.")
         }
         .sheet(isPresented: $showAddNode) {
-            AddCustomNodeView { name, url, login, password in
+            AddCustomNodeView(takenURLs: nodeManager.listedURLs()) { name, url, login, password in
                 nodeManager.addCustomNode(name: name, url: url, login: login, password: password)
                 Task {
                     await nodeManager.refreshStats()
@@ -111,7 +114,7 @@ struct NodeSettingsView: View {
             }
         }
         .sheet(item: $editingNode) { node in
-            EditCustomNodeView(node: node) { name, url, login, password in
+            EditCustomNodeView(node: node, takenURLs: nodeManager.listedURLs(except: node.url)) { name, url, login, password in
                 let updatedNode = MoneroNode(name: name, url: url, login: login, password: password)
                 // Compared with the Keychain copy, which is what the kit reads.
                 let needsReconnect = nodeManager.needsReconnect(editing: node, to: updatedNode)
@@ -251,7 +254,13 @@ struct NodeSettingsView: View {
                                 }
                             }
 
-                            if let latency = stats.latencyMs {
+                            if stats.authFailed {
+                                Text("•")
+                                    .foregroundColor(.secondary)
+                                Text("Auth failed")
+                                    .font(.caption2)
+                                    .foregroundStyle(.red)
+                            } else if let latency = stats.latencyMs {
                                 Text("•")
                                     .foregroundColor(.secondary)
                                 Text("\(latency)ms")
@@ -289,7 +298,7 @@ struct NodeSettingsView: View {
     /// silent about it, so a node that did not answer the latency test
     /// (blocked or down on this network) sounded like a VoiceOver bug.
     private func missingLatencyDescription(isOnion: Bool, stats: NodeStats?) -> String {
-        guard !isOnion, let stats, stats.latencyMs == nil else { return "" }
+        guard !isOnion, let stats, stats.latencyMs == nil, !stats.authFailed else { return "" }
         return nodeManager.isLoadingStats ? String(localized: "Checking latency") : String(localized: "No response")
     }
 
@@ -463,11 +472,18 @@ struct AddCustomNodeView: View {
     @State private var password = ""
     @State private var showAuth = false
 
+    /// The listed URLs, from `NodeManager.listedURLs`.
+    let takenURLs: Set<String>
     var onAdd: (String, String, String?, String?) -> Void
+
+    private var isListed: Bool {
+        takenURLs.contains(NodeManager.normalizedURL(url))
+    }
 
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !url.trimmingCharacters(in: .whitespaces).isEmpty
+        !url.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !isListed
     }
 
     var body: some View {
@@ -483,7 +499,10 @@ struct AddCustomNodeView: View {
                 } header: {
                     Text("Node Details")
                 } footer: {
-                    if !name.isEmpty && url.isEmpty {
+                    if isListed {
+                        Text("This node is already in the list")
+                            .foregroundStyle(.red)
+                    } else if !name.isEmpty && url.isEmpty {
                         Text("URL is required")
                             .foregroundColor(.red)
                     }
@@ -533,6 +552,8 @@ struct AddCustomNodeView: View {
 struct EditCustomNodeView: View {
     @Environment(\.dismiss) private var dismiss
     let node: MoneroNode
+    /// The listed URLs except this node's, from `NodeManager.listedURLs`.
+    let takenURLs: Set<String>
     var onSave: (String, String, String?, String?) -> Void
 
     @State private var name: String = ""
@@ -541,9 +562,14 @@ struct EditCustomNodeView: View {
     @State private var password: String = ""
     @State private var showAuth: Bool = false
 
+    private var isListed: Bool {
+        takenURLs.contains(NodeManager.normalizedURL(url))
+    }
+
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !url.trimmingCharacters(in: .whitespaces).isEmpty
+        !url.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !isListed
     }
 
     var body: some View {
@@ -558,6 +584,11 @@ struct EditCustomNodeView: View {
                         .autocorrectionDisabled()
                 } header: {
                     Text("Node Details")
+                } footer: {
+                    if isListed {
+                        Text("This node is already in the list")
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 Section {

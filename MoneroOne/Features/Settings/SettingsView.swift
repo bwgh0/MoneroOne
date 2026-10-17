@@ -28,6 +28,7 @@ struct SettingsView: View {
     @EnvironmentObject var priceAlertService: PriceAlertService
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
     @AppStorage(WalletManager.rotateReceiveAddressKey) private var rotateReceiveAddress: Bool = true
+    @AppStorage(PaymentLinkSharing.appOnlyKey) private var appOnlyPaymentLinks: Bool = false
     @State private var showBackup = false
     @State private var showSecurity = false
     @State private var showDeleteConfirmation = false
@@ -120,6 +121,21 @@ struct SettingsView: View {
                     Text("Privacy & Security")
                 } footer: {
                     Text("After a payment arrives, Receive shows a new address. Old ones keep working.")
+                }
+
+                // Its own group so the footer sits under the toggle it explains.
+                Section {
+                    Toggle(isOn: $appOnlyPaymentLinks) {
+                        SettingsRow(
+                            icon: "link",
+                            title: "App-only payment links",
+                            color: .blue
+                        )
+                    }
+                    .accessibilityLabel(Text("App-only payment links"))
+                    .accessibilityIdentifier("settings.appOnlyPaymentLinksToggle")
+                } footer: {
+                    Text("Links open only in Monero One and never load a web page. People without the app can't open them.")
                 }
 
                 // Display Section

@@ -32,6 +32,16 @@
 				<string>monero</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>one.monero.MoneroOne.paymentlink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>moneroone</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>

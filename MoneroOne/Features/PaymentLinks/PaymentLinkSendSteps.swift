@@ -134,10 +134,19 @@ enum PaymentLinkFunder {
         try? store.save(record)
     }
 
-    static func shareText(for record: EnvelopeRecord) -> String? {
+    /// The sentence that goes with a shared link. `appOnly`: Settings →
+    /// "App-only payment links", read when the user shares, so Share again
+    /// follows the setting as it is now.
+    static func shareText(for record: EnvelopeRecord, appOnly: Bool = PaymentLinkSharing.appOnly) -> String? {
         guard let link = record.link else { return nil }
         let amount = XMRFormatter.format(EnvelopeRuntime.xmr(record.amount))
-        return String(localized: "I sent you \(amount) XMR. Tap to claim it in Monero One: \(link.url)")
+        if appOnly {
+            let url = link.appURL
+            return String(localized: "I sent you \(amount) XMR. Open this link in Monero One: \(url). Get the app at monero.one",
+                          comment: "Text shared with an app-only payment link (monero.one/a). The first value is the amount, the second the link")
+        }
+        return String(localized: "I sent you \(amount) XMR. Tap to claim it in Monero One: \(link.url)",
+                      comment: "Text shared with a payment link. The first value is the amount, the second the link")
     }
 
     enum FundingError: LocalizedError {
@@ -486,8 +495,8 @@ struct PaymentLinkReadyStep: View {
             Spacer()
 
             VStack(spacing: 12) {
-                if let record, let item = PaymentLinkShareItem(record: record) {
-                    PaymentLinkShareButton(item: item) {
+                if let record, record.link != nil {
+                    PaymentLinkShareButton(record: record) {
                         HStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up")
                             Text("Share")
@@ -542,11 +551,22 @@ extension View {
 
 // MARK: - Sharing a link
 
+/// Settings → "App-only payment links": share `monero.one/a` links, which
+/// the site sends on to `moneroone://`, so they open only in Monero One.
+/// Off by default.
+enum PaymentLinkSharing {
+    static let appOnlyKey = "appOnlyPaymentLinks"
+
+    static var appOnly: Bool {
+        UserDefaults.standard.bool(forKey: appOnlyKey)
+    }
+}
+
 /// What the share sheet gets for a payment link. Messages gets the bare
-/// URL with our own preview ("Claim your Monero", monero.one, the orange
-/// card with the amount), so it shows a card without fetching the page.
-/// Every other app gets the usual text with the link. Nothing here loads
-/// the URL: its secret is in the fragment.
+/// URL (a real URL item, so it is tappable) with our own preview ("Claim your Monero", the orange card with the
+/// amount), so it shows a card without fetching the page. Every other app
+/// gets the usual text with the link. Nothing here loads the URL: its
+/// secret is in the fragment.
 @MainActor
 final class PaymentLinkShareItem: NSObject, UIActivityItemSource {
     let url: URL
@@ -556,9 +576,11 @@ final class PaymentLinkShareItem: NSObject, UIActivityItemSource {
     /// Drawn on the first request of a share, then reused.
     private var metadata: LPLinkMetadata?
 
-    init?(record: EnvelopeRecord) {
-        guard let link = record.link, let url = URL(string: link.url),
-              let text = PaymentLinkFunder.shareText(for: record) else { return nil }
+    /// `appOnly`: share the app-only `monero.one/a` link (Settings →
+    /// "App-only payment links", as it is now).
+    init?(record: EnvelopeRecord, appOnly: Bool = PaymentLinkSharing.appOnly) {
+        guard let link = record.link, let url = URL(string: link.url(appOnly: appOnly)),
+              let text = PaymentLinkFunder.shareText(for: record, appOnly: appOnly) else { return nil }
         self.url = url
         self.text = text
         self.amount = record.amount
@@ -603,14 +625,16 @@ final class PaymentLinkShareItem: NSObject, UIActivityItemSource {
 
 /// A control that opens the share sheet for a payment link (one helper for
 /// every share point). The sheet comes from UIKit, anchored on the control
-/// for the iPad popover.
+/// for the iPad popover. The item is made on the tap, so the link follows
+/// "App-only payment links" as it is then.
 struct PaymentLinkShareButton<Label: View>: View {
-    let item: PaymentLinkShareItem
+    let record: EnvelopeRecord
     @ViewBuilder let label: () -> Label
     @State private var anchor = ShareAnchor()
 
     var body: some View {
         Button {
+            guard let item = PaymentLinkShareItem(record: record) else { return }
             anchor.present(item)
         } label: {
             label()

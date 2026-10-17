@@ -13227,6 +13227,17 @@
         }
       }
     },
+    "App-only payment links" : {
+      "comment" : "Settings: toggle that shares payment links that open only in the app (monero.one/a links)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App-only payment links"
+          }
+        }
+      }
+    },
     "Appearance" : {
       "localizations" : {
         "de" : {
@@ -38881,6 +38892,28 @@
         }
       }
     },
+    "I sent you %@ XMR. Open this link in Monero One: %@. Get the app at monero.one" : {
+      "comment" : "Text shared with an app-only payment link (monero.one/a). The first value is the amount, the second the link",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I sent you %@ XMR. Open this link in Monero One: %@. Get the app at monero.one"
+          }
+        }
+      }
+    },
+    "I sent you %@ XMR. Tap to claim it in Monero One: %@" : {
+      "comment" : "Text shared with a payment link. The first value is the amount, the second the link",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I sent you %@ XMR. Tap to claim it in Monero One: %@"
+          }
+        }
+      }
+    },
     "Icon" : {
       "localizations" : {
         "de" : {
@@ -41768,6 +41801,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Link %lld"
+          }
+        }
+      }
+    },
+    "Links open only in Monero One and never load a web page. People without the app can't open them." : {
+      "comment" : "Settings: footer under the App-only payment links toggle",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Links open only in Monero One and never load a web page. People without the app can't open them."
           }
         }
       }

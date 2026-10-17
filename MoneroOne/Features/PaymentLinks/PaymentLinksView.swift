@@ -567,8 +567,8 @@ struct PaymentLinkDetailView: View {
 
     private func shareButton(_ record: EnvelopeRecord) -> some View {
         Group {
-            if let item = PaymentLinkShareItem(record: record) {
-                PaymentLinkShareButton(item: item) {
+            if record.link != nil {
+                PaymentLinkShareButton(record: record) {
                     Label("Share again", systemImage: "square.and.arrow.up")
                         .foregroundStyle(.brand)
                 }

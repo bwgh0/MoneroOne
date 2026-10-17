@@ -1305,6 +1305,205 @@ final class NodeChangeRestartTests: XCTestCase {
     }
 }
 
+// MARK: - Lock during a wallet open
+
+/// A lock that comes in while a wallet opens holds: the app stays locked, and
+/// the next unlock opens the wallet once. The target wallet keeps its keys in
+/// the Keychain under the test PIN. No wallet2 runs.
+@MainActor
+final class LockDuringOpenTests: XCTestCase {
+
+    private let pin = "123456"
+    private let activeIdKey = "one.monero.walletStore.activeWalletId"
+    private let keychain = KeychainStorage()
+    private let trezor = WalletSource.hardware(.trezor(TrezorBinding(model: "Safe 7", deviceId: "T1")))
+    private var savedSettings: SavedNodeSettings!
+    private var savedActiveId: String?
+    private var keychainWalletIds: [UUID] = []
+
+    override func setUp() async throws {
+        savedSettings = SavedNodeSettings()
+        savedActiveId = UserDefaults.standard.string(forKey: activeIdKey)
+        ["selectedNodeURL", "customNodes", "isTestnet"].forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        UserDefaults.standard.set("http://localhost:1", forKey: "selectedNodeURL")
+    }
+
+    override func tearDown() async throws {
+        for id in keychainWalletIds {
+            keychain.deleteViewOnly(walletId: id)
+            keychain.deleteSeed(walletId: id)
+        }
+        UserDefaults.standard.set(savedActiveId, forKey: activeIdKey)
+        savedSettings.restore()
+    }
+
+    private func wallet(_ source: WalletSource, name: String) -> WalletInfo {
+        WalletInfo(id: UUID(), name: name, source: source, createdAt: Date(), restoreHeight: 0, syncResetCount: 0,
+                   userCreatedSubaddressIndices: [], cachedPrimaryAddress: nil, cachedBalance: nil)
+    }
+
+    /// A wallet whose keys are in the Keychain under the test PIN.
+    private func walletInTheKeychain(_ source: WalletSource) throws -> WalletInfo {
+        let info = wallet(source, name: "Target")
+        keychainWalletIds.append(info.id)
+        switch source {
+        case .seed:
+            try keychain.saveSeed("target seed words", pin: pin, walletId: info.id)
+        case .viewOnly, .hardware:
+            try keychain.saveViewOnly(address: "target address", viewKey: "target view key", pin: pin, walletId: info.id)
+        }
+        return info
+    }
+
+    /// An unlocked manager. Its wallet `running` is open on `from`.
+    private func managerRunning(_ from: WalletInfo, wallets: [WalletInfo]) async -> (WalletManager, SpyWallet) {
+        let manager = WalletManager()
+        manager.wallets = wallets
+        manager.activeWallet = from
+        manager.isUnlocked = true
+        manager.setCurrentPinForTesting(pin)
+        let running = SpyWallet()
+        manager.openRestartedWalletForTesting = { _ in running }
+        XCTAssertTrue(manager.restartActiveWallet(with: .viewKeys(walletId: from.id, pin: pin)))
+        await manager.restartTask?.value
+        XCTAssertTrue(manager.moneroWallet === running)
+        return (manager, running)
+    }
+
+    func testALockDuringASwitchToASeedWalletHolds() async throws {
+        try await checkALockDuringASwitch(to: .seed(.polyseed))
+    }
+
+    func testALockDuringASwitchToAViewOnlyWalletHolds() async throws {
+        try await checkALockDuringASwitch(to: .viewOnly)
+    }
+
+    func testALockDuringASwitchToATrezorWatchOnlyWalletHolds() async throws {
+        try await checkALockDuringASwitch(to: trezor)
+    }
+
+    /// The app locks while a switch opens the target wallet. The wallet that
+    /// opened stops before it shows, the app stays locked, and the next
+    /// unlock opens the target wallet.
+    private func checkALockDuringASwitch(to source: WalletSource) async throws {
+        let from = wallet(.viewOnly, name: "From")
+        let target = try walletInTheKeychain(source)
+        let (manager, _) = await managerRunning(from, wallets: [from, target])
+        let events = EventLog()
+        let opening = Gate()
+        let openEnds = Gate()
+        let first = SpyWallet()
+        first.log = { events.add("first \($0)") }
+        let second = SpyWallet()
+        manager.openWalletForTesting = { id in
+            XCTAssertEqual(id, target.id)
+            events.add("open")
+            guard events.items.filter({ $0 == "open" }).count == 1 else { return second }
+            opening.open()
+            await openEnds.wait()
+            return first
+        }
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: target.id))
+        let switching = Task { try await manager.completeSwitchToWallet(target: target) }
+        await opening.wait()
+        manager.lock()
+        openEnds.open()
+
+        let result = await switching.result
+        XCTAssertThrowsError(try result.get()) { XCTAssertEqual($0 as? WalletError, .notUnlocked) }
+        XCTAssertEqual(events.items, ["open", "first stop", "first stopped"], "The wallet that opened stops")
+        XCTAssertFalse(manager.isUnlocked, "The app stays locked")
+        XCTAssertNil(manager.moneroWallet, "The wallet that opened does not show")
+
+        try await manager.unlock(pin: pin)
+
+        XCTAssertEqual(events.items, ["open", "first stop", "first stopped", "open"])
+        XCTAssertTrue(manager.isUnlocked)
+        XCTAssertTrue(manager.moneroWallet === second, "The unlock opens the target wallet")
+        XCTAssertEqual(manager.activeWallet?.id, target.id)
+    }
+
+    /// The PIN comes in while the wallet that opened after the lock still
+    /// stops. The unlock waits for that stop, so two opens of one wallet never
+    /// run at the same time.
+    func testAnUnlockWaitsUntilTheWalletThatTheLockStoppedHasStopped() async throws {
+        let from = wallet(.viewOnly, name: "From")
+        let target = try walletInTheKeychain(.seed(.polyseed))
+        let (manager, _) = await managerRunning(from, wallets: [from, target])
+        let events = EventLog()
+        let opening = Gate()
+        let openEnds = Gate()
+        let stopEnds = Gate()
+        let first = SpyWallet()
+        first.stopGate = stopEnds
+        first.log = { events.add("first \($0)") }
+        let second = SpyWallet()
+        manager.openWalletForTesting = { _ in
+            events.add("open")
+            guard events.items.filter({ $0 == "open" }).count == 1 else { return second }
+            opening.open()
+            await openEnds.wait()
+            return first
+        }
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: target.id))
+        let switching = Task { try? await manager.completeSwitchToWallet(target: target) }
+        await opening.wait()
+        manager.lock()
+        let unlocking = Task { try await manager.unlock(pin: self.pin) }
+        openEnds.open()
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        XCTAssertEqual(events.items, ["open", "first stop"], "The unlock waits while the first wallet stops")
+        XCTAssertFalse(manager.isUnlocked)
+
+        stopEnds.open()
+        _ = await switching.value
+        try await unlocking.value
+
+        XCTAssertEqual(events.items, ["open", "first stop", "first stopped", "open"])
+        XCTAssertTrue(manager.isUnlocked)
+        XCTAssertTrue(manager.moneroWallet === second)
+    }
+
+    /// The app locks while a switch stops the old wallet, and the PIN comes in
+    /// before that stop ends. The unlock opens the target wallet, and the
+    /// switch then opens no second wallet.
+    func testAPINDuringASwitchStopOpensTheTargetWalletOnce() async throws {
+        let from = wallet(.viewOnly, name: "From")
+        let target = try walletInTheKeychain(.seed(.polyseed))
+        let (manager, old) = await managerRunning(from, wallets: [from, target])
+        let events = EventLog()
+        let stopping = Gate()
+        let stopEnds = Gate()
+        old.stopGate = stopEnds
+        old.log = { item in
+            events.add("old \(item)")
+            if item == "stop" { stopping.open() }
+        }
+        let opened = SpyWallet()
+        manager.openWalletForTesting = { id in
+            XCTAssertEqual(id, target.id)
+            events.add("open")
+            return opened
+        }
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: target.id))
+        let switching = Task { try await manager.completeSwitchToWallet(target: target) }
+        await stopping.wait()
+        manager.lock()
+        try await manager.unlock(pin: pin)
+        XCTAssertTrue(manager.moneroWallet === opened, "The unlock opens the target wallet")
+
+        stopEnds.open()
+        let result = await switching.result
+        XCTAssertThrowsError(try result.get()) { XCTAssertEqual($0 as? WalletError, .notUnlocked) }
+        XCTAssertEqual(events.items, ["old stop", "open", "old stopped"], "The switch opens no second wallet")
+        XCTAssertTrue(manager.isUnlocked)
+        XCTAssertTrue(manager.moneroWallet === opened)
+    }
+}
+
 // MARK: - Digest Auth
 
 final class HTTPDigestTests: XCTestCase {

@@ -318,6 +318,8 @@ class WalletManager: ObservableObject {
             TrezorLog.log("[Session] rejected duplicate runHardwareSession (state=%@)", String(describing: hardwareSessionState))
             return
         }
+        // A lock during the session leaves VIEW closed. The next unlock opens it.
+        let openLockCount = lockCount
         TrezorLog.log("[Session] starting hardware session (send=%@, deviceWalletId=%@)", send == nil ? "no" : "yes", deviceWalletId)
         DiagnosticLog.shared.log("Trezor session started (send=\(send == nil ? "no" : "yes"))")
 
@@ -388,7 +390,7 @@ class WalletManager: ObservableObject {
             } catch {
                 TrezorLog.log("[Session] FULL open FAILED: %@", error.localizedDescription)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: String(localized: "Couldn't open device wallet: \(error.localizedDescription)"), viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Couldn't open device wallet: \(error.localizedDescription)"), viewKeys: viewKeys, lockCount: openLockCount)
                 return
             }
 
@@ -422,7 +424,7 @@ class WalletManager: ObservableObject {
                     continue
                 }
 
-                await failSessionAndRestoreView(message: String(localized: "Device wallet sync failed: \(error.localizedDescription)"), viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Device wallet sync failed: \(error.localizedDescription)"), viewKeys: viewKeys, lockCount: openLockCount)
                 return
             }
         }
@@ -458,7 +460,7 @@ class WalletManager: ObservableObject {
                 let err = raw.isEmpty ? String(localized: "Trezor didn't complete the key-image export. Confirm the prompt on the device and try again.") : raw
                 TrezorLog.log("[Session] coldKeyImageSync FAILED: %@", err)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: String(localized: "Key image sync failed: \(err)"), viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Key image sync failed: \(err)"), viewKeys: viewKeys, lockCount: openLockCount)
                 return
             }
         }
@@ -480,7 +482,7 @@ class WalletManager: ObservableObject {
                               String(describing: type(of: error)),
                               walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys, lockCount: openLockCount)
                 return
             }
         case .all(let to, let memo):
@@ -496,7 +498,7 @@ class WalletManager: ObservableObject {
                               String(describing: type(of: error)),
                               walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys, lockCount: openLockCount)
                 return
             }
         }
@@ -535,9 +537,11 @@ class WalletManager: ObservableObject {
         hardwareSessionState = .tearingDown
         await fullWallet.stopAsync()
 
-        // 8. Reopen VIEW.
+        // 8. Reopen VIEW, unless the app locked during the session.
         do {
-            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)
+            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey, lockCount: openLockCount)
+        } catch _ where lockCount != openLockCount {
+            TrezorLog.log("[Session] app locked during the session; VIEW opens at the next unlock")
         } catch {
             TrezorLog.log("[Session] VIEW restore FAILED: %@", error.localizedDescription)
             hardwareSessionState = .failed(message: String(localized: "Couldn't restore view-only wallet — relaunch the app."))
@@ -655,11 +659,12 @@ class WalletManager: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func failSessionAndRestoreView(message: String, viewKeys: (address: String, viewKey: String)) async {
+    private func failSessionAndRestoreView(message: String, viewKeys: (address: String, viewKey: String),
+                                           lockCount openLockCount: Int) async {
         DiagnosticLog.shared.log("Trezor session failed: \(message)")
         hardwareSessionState = .tearingDown
         do {
-            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)
+            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey, lockCount: openLockCount)
         } catch {
             TrezorLog.log("[Session] could not restore VIEW after failure: %@", error.localizedDescription)
         }
@@ -1070,9 +1075,23 @@ class WalletManager: ObservableObject {
     /// A node, login or proxy change came in during a wallet switch. The
     /// switch restarts the wallet when it ends.
     private var restartAfterSwitch = false
+    /// Goes up at each lock. An unlock, a wallet switch and a Trezor session
+    /// read it before they open a wallet. If it changed during the open, a
+    /// lock came in: the open stops its wallet and the app stays locked.
+    private var lockCount = 0
+    /// Wallet opens that have not ended. An unlock waits for them. An open
+    /// that a lock ended can still be stopping a kit of the same wallet,
+    /// which shares that wallet's GRDB store. And KitManager keeps only one
+    /// waiting kit: a second one makes the first obsolete, and that wallet
+    /// then stays on "Connecting".
+    private var opensInFlight = 0
+    private var openWaiters: [CheckedContinuation<Void, Never>] = []
     #if DEBUG
     /// Tests set this so a restart opens a wallet without wallet2 or a node.
     var openRestartedWalletForTesting: (@MainActor (RestartKeys) async throws -> MoneroWallet)?
+    /// Tests set this so an unlock, a switch or a Trezor session opens a
+    /// wallet without wallet2 or a node. It gets the ID of the wallet.
+    var openWalletForTesting: (@MainActor (UUID?) async throws -> MoneroWallet)?
     #endif
     private var reachabilityRetryCount: Int = 0
     private var currentReachabilityTask: URLSessionDataTask?
@@ -1688,9 +1707,12 @@ class WalletManager: ObservableObject {
         guard let active = activeWallet else {
             throw WalletError.invalidPin
         }
+        let openLockCount = lockCount
 
         // A restart from before the lock can still be stopping the old wallet.
         await finishPendingRestart()
+        // An open that the lock stopped can still be stopping its wallet.
+        await finishOpensInFlight()
 
         currentPin = pin
 
@@ -1708,7 +1730,7 @@ class WalletManager: ObservableObject {
             }
             let mnemonic = seedPhrase.split(separator: " ").map(String.init)
             currentSeed = mnemonic
-            try await startWalletFromSeed(mnemonic)
+            try await startWalletFromSeed(mnemonic, lockCount: openLockCount)
 
             // Populate derivedWalletId lazily for wallets created before the
             // field existed, so future duplicate-seed checks catch them.
@@ -1722,7 +1744,7 @@ class WalletManager: ObservableObject {
                 throw WalletError.invalidPin
             }
             currentSeed = nil
-            try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
+            try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey, lockCount: openLockCount)
 
             populateDerivedWalletIdIfMissing(for: active.id, viewOnlyAddress: keys.address, viewKey: keys.viewKey)
         }
@@ -1764,8 +1786,15 @@ class WalletManager: ObservableObject {
         if activeWallet?.id == walletId { activeWallet = info }
     }
 
-    /// Common wallet start logic used by unlock and switchToWallet
-    private func startWalletFromSeed(_ mnemonic: [String]) async throws {
+    /// Common wallet start logic used by unlock and switchToWallet.
+    /// `openLockCount` is `lockCount` from before the caller's first await.
+    private func startWalletFromSeed(_ mnemonic: [String], lockCount openLockCount: Int) async throws {
+        beginOpen()
+        defer { endOpen() }
+        // A lock came in before this open. Touch nothing: the wallet that
+        // the next unlock opens can already run.
+        guard lockCount == openLockCount else { throw WalletError.notUnlocked }
+
         // Tear down existing wallet if running (e.g. adding a wallet while unlocked)
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
@@ -1796,15 +1825,32 @@ class WalletManager: ObservableObject {
             syncState = .connecting
         }
 
-        let wallet = MoneroWallet()
         let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
         let resetCount = activeWallet?.syncResetCount ?? 0
         let resetSuffix: String? = resetCount > 0 ? "\(resetCount)" : nil
 
+        #if DEBUG
+        let openForTesting = openWalletForTesting
+        #else
+        let openForTesting: (@MainActor (UUID?) async throws -> MoneroWallet)? = nil
+        #endif
+        let wallet: MoneroWallet
         do {
-            try await wallet.create(seed: mnemonic, restoreHeight: walletRestoreHeight, resetSuffix: resetSuffix, networkType: networkType)
+            if let openForTesting {
+                wallet = try await openForTesting(activeWallet?.id)
+            } else {
+                wallet = MoneroWallet()
+                try await wallet.create(seed: mnemonic, restoreHeight: walletRestoreHeight, resetSuffix: resetSuffix, networkType: networkType)
+            }
         } catch {
             throw WalletError.invalidMnemonic
+        }
+
+        // A lock came in while the wallet opened. Stop it before it shows.
+        guard lockCount == openLockCount else {
+            DiagnosticLog.shared.log("Locked during a wallet open: stopped the new wallet")
+            await wallet.stopAsync()
+            throw WalletError.notUnlocked
         }
 
         let runtimeAddress = wallet.primaryAddress
@@ -1830,7 +1876,12 @@ class WalletManager: ObservableObject {
 
     /// Open a view-only wallet from a primary address + private view key.
     /// Mirrors `startWalletFromSeed` but routes through `MoneroWallet.createWatchOnly`.
-    private func startWalletFromViewKey(address: String, viewKey: String) async throws {
+    private func startWalletFromViewKey(address: String, viewKey: String, lockCount openLockCount: Int) async throws {
+        beginOpen()
+        defer { endOpen() }
+        // See `startWalletFromSeed`.
+        guard lockCount == openLockCount else { throw WalletError.notUnlocked }
+
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
             moneroWallet = nil
@@ -1847,18 +1898,34 @@ class WalletManager: ObservableObject {
             syncState = .connecting
         }
 
-        let wallet = MoneroWallet()
         let walletRestoreHeight = activeWallet?.restoreHeight ?? 0
 
+        #if DEBUG
+        let openForTesting = openWalletForTesting
+        #else
+        let openForTesting: (@MainActor (UUID?) async throws -> MoneroWallet)? = nil
+        #endif
+        let wallet: MoneroWallet
         do {
-            try await wallet.createWatchOnly(
-                address: address,
-                viewKey: viewKey,
-                restoreHeight: walletRestoreHeight,
-                networkType: networkType
-            )
+            if let openForTesting {
+                wallet = try await openForTesting(activeWallet?.id)
+            } else {
+                wallet = MoneroWallet()
+                try await wallet.createWatchOnly(
+                    address: address,
+                    viewKey: viewKey,
+                    restoreHeight: walletRestoreHeight,
+                    networkType: networkType
+                )
+            }
         } catch {
             throw WalletError.saveFailed
+        }
+
+        guard lockCount == openLockCount else {
+            DiagnosticLog.shared.log("Locked during a wallet open: stopped the new wallet")
+            await wallet.stopAsync()
+            throw WalletError.notUnlocked
         }
 
         // View-only wallets get their primary address directly from the user —
@@ -2099,6 +2166,9 @@ class WalletManager: ObservableObject {
         // A restart in flight must not open a wallet after the lock. Unlock
         // waits for it to end.
         restartTask?.cancel()
+        // An open in flight sees the new count, stops its wallet and leaves
+        // the app locked. Unlock waits for it to end.
+        lockCount += 1
 
         // Capture old wallet so its deallocation (Kit.deinit → C++ close)
         // happens off the main thread.
@@ -3060,6 +3130,26 @@ class WalletManager: ObservableObject {
         await restart.value
     }
 
+    private func beginOpen() {
+        opensInFlight += 1
+    }
+
+    private func endOpen() {
+        opensInFlight -= 1
+        guard opensInFlight == 0 else { return }
+        let waiters = openWaiters
+        openWaiters = []
+        waiters.forEach { $0.resume() }
+    }
+
+    /// Waits until each open in flight has ended. After a lock, each one has
+    /// then stopped the wallet it opened.
+    private func finishOpensInFlight() async {
+        while opensInFlight > 0 {
+            await withCheckedContinuation { openWaiters.append($0) }
+        }
+    }
+
     // MARK: - Seed Access
 
     func getSeedPhrase(pin: String) throws -> [String]? {
@@ -3374,6 +3464,7 @@ class WalletManager: ObservableObject {
 
     /// Phase 2: Heavy work (async, runs in background after UI has updated).
     func completeSwitchToWallet(target: WalletInfo, persistPrevious: WalletInfo? = nil) async throws {
+        let openLockCount = lockCount
         defer {
             isSwitchingWallet = false
             sessionBumpedForSwitch = false
@@ -3413,7 +3504,14 @@ class WalletManager: ObservableObject {
         // refresh-thread join.
         await oldWallet?.stopAsync()
 
-        guard let pin = currentPin else { throw WalletError.notUnlocked }
+        // A lock came in while the old wallet stopped. An unlock after it
+        // can already have opened the target wallet. That is safe: KitManager
+        // runs one kit at a time, so the target's wallet2 object is created
+        // only after the old kit has closed its wallet.
+        guard let pin = currentPin, lockCount == openLockCount else {
+            DiagnosticLog.shared.log("Locked during a wallet switch: opened no wallet")
+            throw WalletError.notUnlocked
+        }
 
         // Route by wallet source. View-only and hardware wallets share the
         // watch-only startup path — neither has a seed on-device, both open
@@ -3426,14 +3524,14 @@ class WalletManager: ObservableObject {
             }
             let mnemonic = seedPhrase.split(separator: " ").map(String.init)
             currentSeed = mnemonic
-            try await startWalletFromSeed(mnemonic)
+            try await startWalletFromSeed(mnemonic, lockCount: openLockCount)
 
         case .viewOnly, .hardware:
             guard let keys = try keychain.getViewOnly(pin: pin, walletId: target.id) else {
                 throw WalletError.invalidPin
             }
             currentSeed = nil
-            try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
+            try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey, lockCount: openLockCount)
         }
     }
 

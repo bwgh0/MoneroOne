@@ -477,7 +477,6 @@ struct OpenPaymentLinksChecks: ViewModifier {
               !walletManager.transactions.isEmpty else { return }
         // From the active wallet's history alone: no envelope, every time.
         PaymentLinksStatusChecker.reconcileFunding(store: store, walletManager: walletManager)
-        PaymentLinksStatusChecker.forgetMinedClaimWords(store: store, walletManager: walletManager)
         PaymentLinksStatusChecker.fillNetAmounts(store: store, walletManager: walletManager)
         guard Self.isLookDue(isDue: isDue, lastLook: lastLook, now: now) else { return }
         isDue = false

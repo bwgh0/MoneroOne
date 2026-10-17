@@ -68,13 +68,13 @@ enum EnvelopeStatusRules {
             // shows a different spend, which means a claim won the race.
             let ours = observation.spendTxids.contains(reclaimTxid)
             let otherSpend = observation.spendTxids.contains { $0 != reclaimTxid }
-            if otherSpend && !ours {
+            if otherSpend && !ours && observation.balance == 0 {
                 return .claimed
             }
             // Not seen long after it went out, and the money is still
             // there: the reclaim dropped. The normal rules offer it again.
             let dropped = !ours && !otherSpend && observation.balance > 0 && (reclaimAge ?? 0) > reclaimGrace
-            if !dropped {
+            if !dropped && !(ours && observation.balance > 0) {
                 return .reclaimed
             }
         }

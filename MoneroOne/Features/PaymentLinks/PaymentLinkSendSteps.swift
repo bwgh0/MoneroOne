@@ -101,11 +101,31 @@ enum PaymentLinkFunder {
     static func save(_ record: EnvelopeRecord, store: EnvelopeStore = .shared, networkType: MoneroKit.NetworkType) throws {
         guard let link = record.link, link.id == record.id else { throw EnvelopeSecret.Failure.verificationFailed }
         try EnvelopeSecret.verify(words: link.words, address: record.address, networkType: networkType)
+        // Confirm and the broadcast path both call this. Never replace a saved
+        // attempt with the draft's stale, unfunded copy.
+        if let saved = store.record(id: record.id, role: .sent) {
+            guard saved.link == record.link, saved.address == record.address,
+                  saved.amount == record.amount, saved.feeReserve == record.feeReserve,
+                  saved.walletId == record.walletId else { throw EnvelopeSecret.Failure.verificationFailed }
+            return
+        }
         try store.save(record)
     }
 
+    /// Consumes the one funding attempt before software or hardware can send.
+    static func beginFunding(_ record: EnvelopeRecord, walletId: String?, store: EnvelopeStore = .shared, networkType: MoneroKit.NetworkType) throws {
+        try save(record, store: store, networkType: networkType)
+        guard var saved = store.record(id: record.id, role: .sent),
+              saved.walletId == walletId, walletId != nil,
+              saved.fundingStartedAt == nil, saved.fundingTxid == nil,
+              saved.status == .created else { throw FundingError.alreadyAttempted }
+        saved.fundingStartedAt = Date()
+        saved.status = .pending
+        try store.save(saved)
+    }
+
     static func fund(_ record: EnvelopeRecord, walletManager: WalletManager, store: EnvelopeStore = .shared) async throws -> String {
-        try save(record, store: store, networkType: walletManager.networkType)
+        try beginFunding(record, walletId: walletManager.activeWallet?.id.uuidString, store: store, networkType: walletManager.networkType)
         do {
             let txid = try await walletManager.send(
                 to: record.address,
@@ -130,7 +150,7 @@ enum PaymentLinkFunder {
 
     static func markNotFunded(id: String, store: EnvelopeStore = .shared) {
         guard var record = store.record(id: id, role: .sent), record.fundingTxid == nil else { return }
-        record.status = .notFunded
+        record.status = record.fundingStartedAt == nil ? .notFunded : .pending
         try? store.save(record)
     }
 
@@ -153,6 +173,7 @@ enum PaymentLinkFunder {
         case notSynced
         case invalidAmount
         case insufficientFunds
+        case alreadyAttempted
 
         var errorDescription: String? {
             switch self {
@@ -162,6 +183,8 @@ enum PaymentLinkFunder {
                 return String(localized: "Invalid amount")
             case .insufficientFunds:
                 return String(localized: "Not enough unlocked funds for the amount, the network fee and the claim fee reserve.")
+            case .alreadyAttempted:
+                return String(localized: "This link already has a funding attempt. Check Activity before sending again.")
             }
         }
     }
@@ -443,7 +466,7 @@ struct PaymentLinkReviewStep: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.yellow)
                 .accessibilityHidden(true)
-            Text("Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it.")
+            Text("Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it. Payment links are not restored by your wallet recovery phrase. Keep the link until the money is claimed or reclaimed.")
                 .font(.subheadline)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -452,7 +475,7 @@ struct PaymentLinkReviewStep: View {
         .background(Color.yellow.opacity(0.15))
         .cornerRadius(12)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Warning: Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it.")
+        .accessibilityLabel("Warning: Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it. Payment links are not restored by your wallet recovery phrase. Keep the link until the money is claimed or reclaimed.")
     }
 }
 

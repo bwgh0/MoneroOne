@@ -203,6 +203,9 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 5, unlocked: 5), reclaimTxid: "ours", reclaimAge: 3600), .ready)
         // Long after and seen: still reclaimed.
         XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["ours"]), reclaimTxid: "ours", reclaimAge: 3600), .reclaimed)
+        // A confirmed sweep can leave a newer, still-locked funding behind.
+        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 7, spends: ["ours"]), reclaimTxid: "ours"), .pending)
+        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 7, unlocked: 7, spends: ["ours"]), reclaimTxid: "ours"), .ready)
         // A claim won the race against our reclaim.
         XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["claim"]), reclaimTxid: "ours"), .claimed)
     }
@@ -354,7 +357,7 @@ final class PaymentLinkTests: XCTestCase {
         // A received link: Claim until it is settled.
         XCTAssertEqual(actions(.received, .pending), [.claim])
         XCTAssertEqual(actions(.received, .ready), [.claim])
-        XCTAssertEqual(actions(.received, .claimed), [])
+        XCTAssertEqual(actions(.received, .claimed), [.claim])
         XCTAssertEqual(actions(.received, .notFunded, secret: false), [])
     }
 
@@ -427,6 +430,46 @@ final class PaymentLinkTests: XCTestCase {
     }
 
     // MARK: - Storage
+
+    @MainActor
+    func testFundingAttemptSurvivesRestartAndRejectsASecondBroadcast() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        var record = storeRecord(vector.id, .sent)
+        record.walletId = "funding-wallet"
+        try PaymentLinkFunder.save(record, store: store, networkType: .mainnet)
+        XCTAssertThrowsError(try PaymentLinkFunder.beginFunding(record, walletId: "another-wallet", store: store, networkType: .mainnet))
+        XCTAssertNil(store.record(id: record.id, role: .sent)?.fundingStartedAt)
+        try PaymentLinkFunder.beginFunding(record, walletId: record.walletId, store: store, networkType: .mainnet)
+        XCTAssertNotNil(store.record(id: record.id, role: .sent)?.fundingStartedAt)
+        // The node may have accepted the first send despite the error.
+        PaymentLinkFunder.markNotFunded(id: record.id, store: store)
+        XCTAssertEqual(store.record(id: record.id, role: .sent)?.status, .pending)
+        // A stale review-screen copy cannot reset the durable attempt.
+        try PaymentLinkFunder.save(record, store: store, networkType: .mainnet)
+        let reloaded = EnvelopeStore(service: service)
+        XCTAssertThrowsError(try PaymentLinkFunder.beginFunding(record, walletId: record.walletId, store: reloaded, networkType: .mainnet))
+        XCTAssertNotNil(reloaded.record(id: record.id, role: .sent)?.link)
+    }
+
+    @MainActor
+    func testClaimedRecordsKeepRecoverySecretAcrossRestart() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        var record = storeRecord(vector.id, .received)
+        record.status = .claimed
+        record.settleTxid = "mined-claim"
+        try store.save(record)
+        let reloaded = EnvelopeStore(service: service)
+        let saved = try XCTUnwrap(reloaded.record(id: record.id, role: .received))
+        XCTAssertNotNil(saved.link)
+        let display = PaymentLinkDisplay(record: saved, fundingConfirmations: nil, daemonHeight: nil)
+        XCTAssertEqual(PaymentLinkDetailAction.actions(for: saved, display: display), [.claim])
+        // A claim does not make an envelope with newer locked funds settled.
+        XCTAssertEqual(EnvelopeStatusRules.status(for: obs(conf: 12, balance: 7, unlocked: 0, spends: ["mined-claim"]), reclaimTxid: nil), .pending)
+    }
 
     @MainActor
     func testStoreRoundTripsInItsOwnKeychainService() throws {

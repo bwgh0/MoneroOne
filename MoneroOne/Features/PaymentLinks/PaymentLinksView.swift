@@ -168,6 +168,8 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 guard let txid = record.settleTxid else { return false }
                 return !walletManager.transactions.contains { $0.id == txid && $0.status != .failed }
             case .pending:
+                // An interrupted broadcast with no hash still needs a scan.
+                if record.fundingTxid == nil, record.fundingStartedAt != nil { return true }
                 // Another wallet sent the funding: this wallet's history has
                 // no count for it, and the record keeps the one from the last
                 // look. The envelope gives a fresh one.
@@ -217,7 +219,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
                     for: observation,
                     reclaimTxid: record.settleTxid,
                     reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) },
-                    fundingKnown: record.fundingTxid != nil
+                    fundingKnown: record.fundingTxid != nil || record.fundingStartedAt != nil
                 )
                 record.status = status
                 record.lastBalance = observation.balance
@@ -237,18 +239,6 @@ final class PaymentLinksStatusChecker: ObservableObject {
     }
 
     static let recheckInterval: TimeInterval = 120
-
-    /// A received link keeps its words until our claim is mined, so a claim
-    /// that dropped can run again. Once the active wallet shows the claim
-    /// confirmed, the words go.
-    static func forgetMinedClaimWords(store: EnvelopeStore, walletManager: WalletManager) {
-        for var record in store.received where record.status == .claimed && record.link != nil {
-            guard let txid = record.settleTxid,
-                  walletManager.transactions.contains(where: { $0.id == txid && $0.status == .confirmed }) else { continue }
-            record.forgetSecret()
-            try? store.save(record)
-        }
-    }
 
     private static var lastNetAmountFill: Date?
 
@@ -314,7 +304,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
             // Only the wallet that funded it can hold the funding.
             let fromActiveWallet = record.walletId == nil || record.walletId == activeWalletId
             if record.fundingTxid == nil, fromActiveWallet,
-               record.status == .created || record.status == .notFunded,
+               record.status == .created || record.status == .notFunded || record.fundingStartedAt != nil,
                let funding = transactions.first(where: { tx in
                    tx.type == .outgoing && tx.status != .failed && tx.destinations.contains { $0.address == record.address }
                }) {
@@ -528,6 +518,13 @@ struct PaymentLinkDetailView: View {
             }
 
             let actions = PaymentLinkDetailAction.actions(for: record, display: display)
+            if record.status.isSettled, record.link != nil {
+                Section {
+                    Button("Check link") {
+                        claimPresentation = .init(id: record.id, kind: .own)
+                    }
+                }
+            }
             if !actions.isEmpty {
                 Section {
                     ForEach(actions, id: \.self) { action in
@@ -621,7 +618,7 @@ struct PaymentLinkDetailView: View {
                     Button {
                         claimPresentation = .init(id: record.id, kind: .claim)
                     } label: {
-                        Label("Claim", systemImage: "arrow.down.left")
+                        Label(record.status.isSettled ? "Check link" : "Claim", systemImage: "arrow.down.left")
                             .foregroundStyle(.brand)
                     }
                     .accessibilityLabel("Claim the money")
@@ -660,12 +657,14 @@ enum PaymentLinkDetailAction: Hashable {
     /// the last scan said) can be shared again and reclaimed; Reclaim comes
     /// first once it expired. A sent link without one, or one that was
     /// claimed or reclaimed, offers nothing. A received link offers Claim
-    /// until it is settled.
+    /// while its secret is available, including a fresh check after a claim.
     static func actions(for record: EnvelopeRecord, display: PaymentLinkDisplay) -> [PaymentLinkDetailAction] {
         let hasLink = record.link != nil
         switch record.role {
         case .received:
-            return !record.status.isSettled && hasLink ? [.claim] : []
+            // A fresh scan can recover a dropped claim or funding left locked
+            // by an earlier sweep. Retained secrets must remain usable.
+            return hasLink ? [.claim] : []
         case .sent:
             guard display.status == .pending || display.status == .ready else { return [] }
             let share: [PaymentLinkDetailAction] = hasLink ? [.share] : []

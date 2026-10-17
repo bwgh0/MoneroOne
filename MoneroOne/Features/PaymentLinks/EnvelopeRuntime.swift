@@ -292,7 +292,7 @@ final class EnvelopeRuntime: ObservableObject {
 
     private static func verifyAddress(of wallet: MoneroWallet, is address: String) throws {
         let runtimeAddress = wallet.primaryAddress
-        if !runtimeAddress.isEmpty, runtimeAddress != address {
+        if runtimeAddress.isEmpty || runtimeAddress != address {
             throw RuntimeError.addressMismatch
         }
     }
@@ -304,9 +304,9 @@ final class EnvelopeRuntime: ObservableObject {
     }
 
     /// Looks for new blocks on the open envelope and returns what it sees.
-    func poll(estimateSweepFee: Bool = false) async throws -> EnvelopeObservation? {
+    func poll(envelopeId: String, estimateSweepFee: Bool = false) async throws -> EnvelopeObservation? {
         try await serial { [self] in
-            guard let wallet = envelope else { return nil }
+            guard openEnvelopeId == envelopeId, let wallet = envelope else { return nil }
             wallet.startSync()
             try await Task.sleep(for: .seconds(2))
             try await waitUntilSynced(wallet)
@@ -318,9 +318,10 @@ final class EnvelopeRuntime: ObservableObject {
 
     /// Sweeps every unlocked piconero of the open envelope to `address`.
     /// The fee comes out of the envelope.
-    func sweep(to address: String) async throws -> (txid: String, amount: UInt64) {
+    func sweep(envelopeId: String, envelopeAddress: String, to address: String) async throws -> (txid: String, amount: UInt64) {
         try await serial { [self] in
-            guard let wallet = envelope else { throw RuntimeError.walletBusy }
+            guard openEnvelopeId == envelopeId, let wallet = envelope else { throw RuntimeError.walletBusy }
+            try Self.verifyAddress(of: wallet, is: envelopeAddress)
             guard wallet.unlockedBalance > 0 else { throw RuntimeError.nothingToSweep }
             do {
                 let txid = try await wallet.sendAll(to: address, memo: nil)

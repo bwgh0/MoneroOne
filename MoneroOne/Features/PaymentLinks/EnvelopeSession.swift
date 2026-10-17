@@ -142,15 +142,14 @@ final class EnvelopeSession: ObservableObject {
         pollTask?.cancel()
         phase = .sweeping
         do {
-            let result = try await runtime.sweep(to: destination.address)
+            let result = try await runtime.sweep(envelopeId: record.id, envelopeAddress: record.address, to: destination.address)
             record.settleTxid = result.txid
             record.settledAmount = result.amount
             record.walletName = destination.walletName
             record.settledAt = Date()
             record.status = record.role == .sent ? .reclaimed : .claimed
-            // A received link keeps its words until the claim is mined
-            // (PaymentLinksStatusChecker.forgetMinedClaimWords): a claim
-            // that never confirms can be made again.
+            // Keep the secret until explicit Remove All: a mined sweep can
+            // reorg, or leave newer locked funding in this envelope.
             try? store.save(record)
             phase = .done(txid: result.txid, amount: result.amount)
             await runtime.deleteFiles(id: record.id)
@@ -205,7 +204,7 @@ final class EnvelopeSession: ObservableObject {
             for: observation,
             reclaimTxid: reclaimTxid,
             reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) },
-            fundingKnown: record.role == .sent && record.fundingTxid != nil
+            fundingKnown: record.role == .sent && (record.fundingTxid != nil || record.fundingStartedAt != nil)
         )
         record.noteBalance(observation.balance, sweepFee: observation.sweepFee)
         record.confirmations = observation.fundingConfirmations
@@ -261,7 +260,7 @@ final class EnvelopeSession: ObservableObject {
                 try? await Task.sleep(for: Self.pollInterval)
                 guard !Task.isCancelled, let self else { return }
                 if case .sweeping = self.phase { return }
-                guard let observation = try? await self.runtime.poll(estimateSweepFee: self.record.role == .received), !Task.isCancelled else { continue }
+                guard let observation = try? await self.runtime.poll(envelopeId: self.record.id, estimateSweepFee: self.record.role == .received), !Task.isCancelled else { continue }
                 self.update(with: observation)
                 if self.record.status.isSettled { return }
             }

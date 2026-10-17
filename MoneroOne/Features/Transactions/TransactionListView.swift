@@ -217,7 +217,6 @@ struct TransactionListView: View {
     private func tidyPaymentLinks() {
         guard asOf == nil else { return }
         PaymentLinksStatusChecker.reconcileFunding(store: paymentLinks, walletManager: walletManager)
-        PaymentLinksStatusChecker.forgetMinedClaimWords(store: paymentLinks, walletManager: walletManager)
     }
 
     /// Under Links (now only), look at sent links someone could have

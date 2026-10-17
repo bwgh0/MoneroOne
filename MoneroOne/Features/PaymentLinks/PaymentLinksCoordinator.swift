@@ -99,8 +99,8 @@ final class PaymentLinksCoordinator: ObservableObject {
                 // first; a link id is meant to be unique.
                 throw EnvelopeLink.ParseError.incomplete
             }
-            // The secret is kept until a claim is mined; put it back so a
-            // claim that never confirmed can run again.
+            // Older builds discarded claimed secrets. Reopening the original
+            // link restores recovery access; retain it until explicit Remove All.
             if existing.link == nil {
                 existing.setSecret(from: link)
             }

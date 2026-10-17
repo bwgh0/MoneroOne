@@ -13,11 +13,9 @@ import Foundation
 ///
 ///     https://monero.one/a#2<secret><height>
 ///
-/// It is a Universal Link; in a browser, the site answers `/a` with a bare
-/// 302 to `moneroone://c`, and the browser carries the fragment over, so the
-/// app gets `moneroone://c#2<secret><height>`. No directive here: WebKit
-/// drops it on a redirect. The `moneroone://` link itself is not shared
-/// because Signal and Telegram do not make it tappable.
+/// It is a Universal Link. In a browser, `/a` returns an empty 204: no
+/// page and no redirect to an unverified custom URL scheme. Verified OS
+/// app-link routing or pasting into Monero One is required to open it.
 ///
 /// Links made before the directive (`https://monero.one/c#2<secret><height>`)
 /// and v1 links still parse and claim:
@@ -44,7 +42,7 @@ struct EnvelopeLink: Equatable {
     static let confirmationsToUnlock = 10
     /// Blocks subtracted from the sender's daemon height for `h`.
     static let restoreHeightMargin: UInt64 = 10
-    /// The app's own URL scheme: `moneroone://c#...`, where `/a` redirects.
+    /// The app's own URL scheme: `moneroone://c#...`, accepted for existing integrations.
     static let appScheme = "moneroone"
     /// The fragment directive that hides a v2 link's body from web pages:
     /// `#2:~:m1=<body>`.
@@ -131,7 +129,7 @@ struct EnvelopeLink: Equatable {
 
     /// The app-only link: `https://monero.one/a#2<secret><height>` (v2).
     /// The site sends `/a` straight on to `moneroone://c` with no page, so
-    /// it needs no directive (a redirect would drop it).
+    /// its browser fallback has no document.
     var appURL: String {
         switch format {
         case .v1:

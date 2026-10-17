@@ -13,11 +13,10 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     /// The envelope id (v1 `n`, v2 derived from the secret).
     let id: String
     let role: Role
-    /// v1 links: the 25 words. Nil for v2 links, and once a received link
-    /// is claimed here.
+    /// v1 links: the 25 words. Nil for v2 links, and in older records that already discarded their secret.
     var words: [String]?
     /// v2 links: the 16-byte link secret, lowercase hex. Nil for v1 links,
-    /// and once a received link is claimed here.
+    /// and in older records that discarded their secret.
     var secret: String?
     /// The envelope's primary address.
     var address: String
@@ -32,6 +31,8 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     var status: EnvelopeStatus
     /// Sent: the funding transaction.
     var fundingTxid: String?
+    /// Persisted before signing/broadcast. An uncertain send is never funded again.
+    var fundingStartedAt: Date?
     /// Sent: the claim fee reserve added to the funding amount, piconero.
     var feeReserve: UInt64?
     /// Sent: our reclaim sweep. Received: our claim sweep.
@@ -107,7 +108,7 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
         }
     }
 
-    /// Drops the link secret (a received link once its claim is mined).
+    /// Legacy helper. Automatic claim cleanup must never call this.
     mutating func forgetSecret() {
         words = nil
         secret = nil
@@ -245,6 +246,8 @@ final class EnvelopeStore: ObservableObject {
         if let stored = self.record(id: record.id, role: record.role) {
             record.number = stored.number ?? record.number
             record.note = stored.note
+            record.fundingStartedAt = stored.fundingStartedAt ?? record.fundingStartedAt
+            record.fundingTxid = stored.fundingTxid ?? record.fundingTxid
         }
         if record.number == nil {
             record.number = nextNumber

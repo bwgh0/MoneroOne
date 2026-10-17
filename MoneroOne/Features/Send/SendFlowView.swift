@@ -228,7 +228,7 @@ struct SendFlowView: View {
                     }
                     sendInProgress = false
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        phase = .review
+                        phase = isLinkMode ? .error(message: String(localized: "The link funding could not be confirmed. Check Activity before sending again.")) : .review
                     }
                 case .syncedOnly, .none:
                     if isLinkMode, let linkRecordId {
@@ -242,7 +242,7 @@ struct SendFlowView: View {
                     // inputs are editable and Send is tappable again.
                     sendInProgress = false
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        phase = .review
+                        phase = isLinkMode ? .error(message: String(localized: "The link funding could not be confirmed. Check Activity before sending again.")) : .review
                     }
                 }
             }
@@ -341,7 +341,7 @@ struct SendFlowView: View {
                 priceService: priceService,
                 onDone: { dismiss() },
                 onRetry: {
-                    guard !sendInProgress else { return }
+                    guard !isLinkMode, !sendInProgress else { return }
                     sendInProgress = true
                     Task {
                         if requireAuthForSend, !walletManager.requiresHardwareSession {
@@ -357,7 +357,8 @@ struct SendFlowView: View {
                         sendTransaction()
                     }
                 },
-                onClose: { dismiss() }
+                onClose: { dismiss() },
+                canRetry: !isLinkMode
             )
         }
     }
@@ -594,6 +595,13 @@ struct SendFlowView: View {
             return
         }
         if walletManager.requiresHardwareSession {
+            do {
+                try PaymentLinkFunder.beginFunding(record, walletId: walletManager.activeWallet?.id.uuidString, networkType: walletManager.networkType)
+            } catch {
+                sendInProgress = false
+                phase = .error(message: EnvelopeSession.message(for: error))
+                return
+            }
             walletManager.clearTerminalSessionState()
             hardwareSheetIntent = .send(
                 to: record.address,

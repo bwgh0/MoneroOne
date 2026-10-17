@@ -441,7 +441,8 @@ final class EnvelopeRuntime: ObservableObject {
             spendTxids: outgoing.map(\.id),
             minedSpendTxids: outgoing.filter { $0.status == .confirmed && ($0.blockHeight ?? 0) > 0 }.map(\.id),
             fundingTxids: fundingTxids,
-            fundingHeight: fundingHeight
+            fundingHeight: fundingHeight,
+            height: daemonHeight
         )
     }
 

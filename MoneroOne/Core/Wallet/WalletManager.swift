@@ -129,8 +129,25 @@ class WalletManager: ObservableObject {
     enum HardwareSessionOutcome: Equatable {
         case sentTransaction(txId: String)
         case syncedOnly
-        /// The error the sheet showed.
-        case failed(message: String)
+        /// The error the sheet showed. `mayHaveSent`: the failure came at
+        /// the send, so the transaction may have reached the network.
+        case failed(message: String, mayHaveSent: Bool = false)
+    }
+
+    /// A send error on the list of errors that come before any broadcast:
+    /// the wallet was not ready or could not send, or wallet2 never built
+    /// the transaction. Any other error (a failed relay, a wallet2 status
+    /// error, an unknown kind) may have reached the node.
+    nonisolated static func sendLeftNothingOnNetwork(_ error: Error) -> Bool {
+        switch error {
+        case WalletError.notUnlocked, WalletError.viewOnlyCannotSend, WalletError.hardwareSessionRequired:
+            return true
+        case MoneroCoreError.walletNotInitialized, MoneroCoreError.insufficientFunds,
+             MoneroCoreError.transactionEstimationFailed, MoneroCoreError.transactionSendFailed:
+            return true
+        default:
+            return false
+        }
     }
     @Published private(set) var lastHardwareSessionOutcome: HardwareSessionOutcome?
 
@@ -465,7 +482,8 @@ class WalletManager: ObservableObject {
                               String(describing: type(of: error)),
                               walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys,
+                                                mayHaveSent: !Self.sendLeftNothingOnNetwork(error))
                 return
             }
         case .all(let to, let memo):
@@ -481,7 +499,8 @@ class WalletManager: ObservableObject {
                               String(describing: type(of: error)),
                               walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys)
+                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys,
+                                                mayHaveSent: !Self.sendLeftNothingOnNetwork(error))
                 return
             }
         }
@@ -640,7 +659,7 @@ class WalletManager: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func failSessionAndRestoreView(message: String, viewKeys: (address: String, viewKey: String)) async {
+    private func failSessionAndRestoreView(message: String, viewKeys: (address: String, viewKey: String), mayHaveSent: Bool = false) async {
         DiagnosticLog.shared.log("Trezor session failed: \(message)")
         hardwareSessionState = .tearingDown
         do {
@@ -648,7 +667,7 @@ class WalletManager: ObservableObject {
         } catch {
             TrezorLog.log("[Session] could not restore VIEW after failure: %@", error.localizedDescription)
         }
-        lastHardwareSessionOutcome = .failed(message: message)
+        lastHardwareSessionOutcome = .failed(message: message, mayHaveSent: mayHaveSent)
         hardwareSessionState = .failed(message: message)
     }
 

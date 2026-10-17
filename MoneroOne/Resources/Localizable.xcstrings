@@ -76310,10 +76310,100 @@
     "The payment could not be confirmed. If it went through, the link appears in Activity." : {
       "comment" : "Send flow error: a payment link's funding may or may not have reached the network",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Zahlung konnte nicht bestätigt werden. Falls sie durchgegangen ist, erscheint der Link unter Aktivität."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "The payment could not be confirmed. If it went through, the link appears in Activity."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo confirmar el pago. Si se realizó, el enlace aparece en Actividad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le paiement n’a pas pu être confirmé. S’il a abouti, le lien apparaît dans Activité."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile confermare il pagamento. Se è andato a buon fine, il link compare in Attività."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支払いを確認できませんでした。送信されていれば、リンクはアクティビティに表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "결제를 확인할 수 없습니다. 결제가 완료되었다면 링크가 활동에 표시됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De betaling kon niet worden bevestigd. Als ze is gelukt, verschijnt de link bij Activiteit."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie udało się potwierdzić płatności. Jeśli przeszła, link pojawi się w Aktywności."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível confirmar o pagamento. Se ele foi concluído, o link aparece em Atividade."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plata nu a putut fi confirmată. Dacă a reușit, linkul apare în Activitate."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось подтвердить платёж. Если он прошёл, ссылка появится в списке операций."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ödeme onaylanamadı. Gerçekleştiyse bağlantı Etkinlik bölümünde görünür."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося підтвердити платіж. Якщо він пройшов, посилання з’явиться в розділі «Активність»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法确认这笔付款。如果付款已完成，链接会显示在活动中。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法確認這筆付款。如果付款已完成，連結會顯示在活動中。"
           }
         }
       }

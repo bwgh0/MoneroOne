@@ -33,6 +33,10 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     var fundingTxid: String?
     /// Persisted before signing/broadcast. An uncertain send is never funded again.
     var fundingStartedAt: Date?
+    /// The funding attempt failed before anything reached the network (the
+    /// transaction was never built, or a guard stopped it): no scan looks
+    /// for its funding. Nil when the attempt may have gone out.
+    var fundingNotSent: Bool?
     /// Sent: the claim fee reserve added to the funding amount, piconero.
     var feeReserve: UInt64?
     /// Sent: our reclaim sweep. Received: our claim sweep.
@@ -46,6 +50,11 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     var walletId: String?
     /// When our settle sweep went out.
     var settledAt: Date?
+    /// A scan saw our settle sweep in a block. Until then a background look
+    /// tells a sweep that waits from one that dropped.
+    var settleSeenMined: Bool?
+    /// The block height the last envelope scan reached.
+    var lastScannedHeight: UInt64?
     /// Last envelope sync.
     var lastBalance: UInt64?
     var confirmations: Int?
@@ -106,6 +115,16 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
             words = link.words
             secret = nil
         }
+    }
+
+    /// A settled link is open again: our claim or reclaim dropped, or money
+    /// arrived after it. The old sweep no longer describes the link.
+    mutating func reopen() {
+        settleTxid = nil
+        settledAmount = nil
+        settledAt = nil
+        settleSeenMined = nil
+        if role == .received { walletName = nil }
     }
 
     /// Legacy helper. Automatic claim cleanup must never call this.

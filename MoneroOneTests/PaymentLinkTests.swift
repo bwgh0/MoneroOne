@@ -274,6 +274,217 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertTrue(due(.received, .claimed, history: [claim(.failed)]))
     }
 
+    // MARK: - Dropped settles and hidden attempts
+
+    private func history(_ id: String, _ status: MoneroTransaction.TransactionStatus) -> MoneroTransaction {
+        MoneroTransaction(id: id, type: .incoming, amount: 1, fee: 0, address: "", timestamp: Date(), confirmations: nil,
+                          status: status, memo: nil, blockHeight: status == .confirmed ? 100 : nil)
+    }
+
+    func testASettleCountsAsDroppedOnlyOutOfThePoolPastItsGrace() {
+        let rules = EnvelopeStatusRules.self
+        let now = Date()
+        let sentAt = now.addingTimeInterval(-(rules.settleGrace + 60))
+        let money = obs(conf: 12, balance: 7, unlocked: 7)
+        func failed(_ observation: EnvelopeObservation, at settledAt: Date? = sentAt, _ transactions: [MoneroTransaction] = []) -> Bool {
+            rules.settleHasFailed(settleTxid: "mine", settledAt: settledAt, observation: observation, transactions: transactions, now: now)
+        }
+        XCTAssertEqual(rules.settleGrace, 60 * 60)
+        // Past the grace, in no block, not in this wallet's pool: dropped.
+        XCTAssertTrue(failed(money))
+        // Inside its grace: waits.
+        XCTAssertFalse(failed(money, at: now.addingTimeInterval(-(rules.settleGrace - 60))))
+        // In this wallet's pool, or mined in it: waits, however long.
+        XCTAssertFalse(failed(money, [history("mine", .pending)]))
+        XCTAssertFalse(failed(money, [history("mine", .confirmed)]))
+        // wallet2 marks it failed: dropped at once.
+        XCTAssertTrue(failed(money, at: now, [history("mine", .failed)]))
+        // The envelope sees it, in the pool or in a block.
+        XCTAssertFalse(failed(obs(conf: 12, spends: ["mine"])))
+        XCTAssertFalse(failed(obs(conf: 12, spends: ["mine"], mined: ["mine"])))
+        // No send time: only wallet2's mark counts.
+        XCTAssertFalse(failed(money, at: nil))
+        XCTAssertFalse(rules.settleHasFailed(settleTxid: nil, settledAt: sentAt, observation: money, transactions: [], now: now))
+    }
+
+    func testADroppedSettleReopensWhenTheMoneyIsSpendable() {
+        func status(_ observation: EnvelopeObservation, _ current: EnvelopeStatus, _ role: EnvelopeRecord.Role, failed: Bool) -> EnvelopeStatus {
+            EnvelopeStatusRules.status(for: observation, current: current, role: role, settleTxid: "mine", settleFailed: failed)
+        }
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7), .reclaimed, .sent, failed: true), .ready)
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7), .claimed, .received, failed: true), .ready)
+        // Not dropped (pool or grace): settled.
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7), .reclaimed, .sent, failed: false), .reclaimed)
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7), .claimed, .received, failed: false), .claimed)
+        // Dropped, but nothing spendable: settled.
+        XCTAssertEqual(status(obs(conf: 12, balance: 7), .claimed, .received, failed: true), .claimed)
+        XCTAssertEqual(status(obs(conf: 12), .reclaimed, .sent, failed: true), .reclaimed)
+        // A claim took it: Claimed, dropped reclaim or not.
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7, spends: ["claim"], mined: ["claim"]), .reclaimed, .sent, failed: true), .claimed)
+    }
+
+    /// A sweep the node accepted, then evicted with no replacement, across
+    /// an app restart: the money is claimable (or reclaimable) again.
+    @MainActor
+    func testAnEvictedSweepReopensTheLinkAfterARestart() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        let now = Date()
+        let sentAt = now.addingTimeInterval(-2 * EnvelopeStatusRules.settleGrace)
+        var claimed = storeRecord(vector.id, .received)
+        claimed.status = .claimed
+        claimed.settleTxid = "evicted-claim"
+        claimed.settledAmount = 7
+        claimed.settledAt = sentAt
+        claimed.walletName = "Main"
+        try store.save(claimed)
+        var reclaimed = storeRecord("0123456789abcdef", .sent)
+        reclaimed.walletId = "w1"
+        reclaimed.expiry = Int64(now.timeIntervalSince1970) + 86_400
+        reclaimed.fundingTxid = "funding"
+        reclaimed.status = .reclaimed
+        reclaimed.settleTxid = "evicted-reclaim"
+        reclaimed.settledAt = sentAt
+        try store.save(reclaimed)
+
+        // Relaunch: the records come back from the Keychain.
+        let relaunched = EnvelopeStore(service: service)
+        let received = try XCTUnwrap(relaunched.record(id: vector.id, role: .received))
+        let sent = try XCTUnwrap(relaunched.record(id: "0123456789abcdef", role: .sent))
+        // Not seen mined, not in this wallet: the dashboard looks at both.
+        XCTAssertTrue(OpenPaymentLinks.needsLook(received, activeWalletId: "w1", transactions: [], now: now))
+        XCTAssertTrue(OpenPaymentLinks.needsLook(sent, activeWalletId: "w1", transactions: [], now: now))
+
+        // A fresh envelope scan: the money is still there, no spend.
+        let money = obs(conf: 30, balance: 7, unlocked: 7)
+        let claim = PaymentLinksStatusChecker.applying(money, to: received, transactions: [], now: now).record
+        XCTAssertEqual(claim.status, .ready)
+        XCTAssertNil(claim.settleTxid)
+        XCTAssertNil(claim.settledAmount)
+        XCTAssertNil(claim.walletName)
+        XCTAssertTrue(OpenPaymentLinks.isWaitingToClaim(claim, now: now))
+        XCTAssertEqual(PaymentLinkDetailAction.actions(for: claim, display: PaymentLinkDisplay(record: claim, fundingConfirmations: nil, daemonHeight: nil)), [.claim])
+
+        let reclaim = PaymentLinksStatusChecker.applying(money, to: sent, transactions: [], now: now).record
+        XCTAssertEqual(reclaim.status, .ready)
+        XCTAssertNil(reclaim.settleTxid)
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(reclaim, activeWalletId: "w1"))
+        XCTAssertEqual(PaymentLinkDetailAction.actions(for: reclaim, display: PaymentLinkDisplay(record: reclaim, fundingConfirmations: nil, daemonHeight: nil)),
+                       [.share, .reclaim])
+
+        // The same scan while the claim waits in this wallet's pool: no change.
+        let waiting = PaymentLinksStatusChecker.applying(money, to: received, transactions: [history("evicted-claim", .pending)], now: now).record
+        XCTAssertEqual(waiting.status, .claimed)
+        XCTAssertEqual(waiting.settledAmount, 7)
+        XCTAssertFalse(OpenPaymentLinks.needsLook(received, activeWalletId: "w1", transactions: [history("evicted-claim", .pending)], now: now))
+        // Seen mined once: no more background looks.
+        let mined = PaymentLinksStatusChecker.applying(obs(conf: 30, spends: ["evicted-claim"], mined: ["evicted-claim"]), to: received, transactions: [], now: now)
+        XCTAssertEqual(mined.record.status, .claimed)
+        XCTAssertTrue(mined.conclusive)
+        XCTAssertEqual(mined.record.settleSeenMined, true)
+        XCTAssertFalse(EnvelopeStatusRules.needsSettleLook(mined.record, transactions: []))
+    }
+
+    func testOnlyErrorsBeforeTheBroadcastSkipTheHiddenScan() {
+        XCTAssertTrue(WalletManager.sendLeftNothingOnNetwork(MoneroCoreError.transactionSendFailed("not enough unlocked money")))
+        XCTAssertTrue(WalletManager.sendLeftNothingOnNetwork(MoneroCoreError.insufficientFunds("1.0")))
+        XCTAssertTrue(WalletManager.sendLeftNothingOnNetwork(MoneroCoreError.walletNotInitialized))
+        XCTAssertTrue(WalletManager.sendLeftNothingOnNetwork(WalletError.viewOnlyCannotSend))
+        XCTAssertTrue(WalletManager.sendLeftNothingOnNetwork(WalletError.notUnlocked))
+        XCTAssertFalse(WalletManager.sendLeftNothingOnNetwork(MoneroCoreError.transactionCommitFailed("relay")))
+        XCTAssertFalse(WalletManager.sendLeftNothingOnNetwork(MoneroCoreError.walletStatusError("?")))
+        XCTAssertFalse(WalletManager.sendLeftNothingOnNetwork(URLError(.timedOut)))
+    }
+
+    func testAHiddenAttemptIsScannedForADayOfBlocks() {
+        let now = Date()
+        var attempt = storeRecord("0123456789abcdef", .sent)
+        attempt.status = .notFunded
+        attempt.fundingStartedAt = now.addingTimeInterval(-60)
+        let rules = EnvelopeStatusRules.self
+        XCTAssertTrue(rules.needsFundingScan(attempt, now: now))
+        // Until the scan reaches the attempt (restore height + 10) + 720 blocks.
+        let end = attempt.restoreHeight + EnvelopeLink.restoreHeightMargin + rules.fundingScanBlocks
+        var scanned = attempt
+        scanned.lastScannedHeight = end - 1
+        XCTAssertTrue(rules.needsFundingScan(scanned, now: now))
+        scanned.lastScannedHeight = end
+        XCTAssertFalse(rules.needsFundingScan(scanned, now: now))
+        XCTAssertNotNil(scanned.link)
+        // Failed before anything was sent: no scan.
+        var notSent = attempt
+        notSent.fundingNotSent = true
+        XCTAssertFalse(rules.needsFundingScan(notSent, now: now))
+        // Never attempted, or funded: no scan.
+        var draft = attempt
+        draft.fundingStartedAt = nil
+        XCTAssertFalse(rules.needsFundingScan(draft, now: now))
+        var funded = attempt
+        funded.fundingTxid = "f"
+        XCTAssertFalse(rules.needsFundingScan(funded, now: now))
+        // The app closed during the attempt: a send still running gets time.
+        var interrupted = attempt
+        interrupted.status = .created
+        XCTAssertFalse(rules.needsFundingScan(interrupted, now: now))
+        interrupted.fundingStartedAt = now.addingTimeInterval(-11 * 60)
+        XCTAssertTrue(rules.needsFundingScan(interrupted, now: now))
+        // The dashboard looks at it in the wallet that made the attempt only.
+        attempt.walletId = "w1"
+        XCTAssertTrue(OpenPaymentLinks.needsLook(attempt, activeWalletId: "w1", transactions: [], now: now))
+        XCTAssertFalse(OpenPaymentLinks.needsLook(attempt, activeWalletId: "w2", transactions: [], now: now))
+    }
+
+    /// The node took the funding, its answer was lost, and no funding hash
+    /// is known. Mined later, the scan finds it: the link shows as Waiting.
+    @MainActor
+    func testAHiddenAttemptReappearsWhenTheScanFindsItsFunding() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        var record = storeRecord(vector.id, .sent)
+        record.walletId = "w1"
+        record.expiry = Int64(Date().timeIntervalSince1970) + 86_400
+        try PaymentLinkFunder.save(record, store: store, networkType: .mainnet)
+        try PaymentLinkFunder.beginFunding(record, walletId: "w1", store: store, networkType: .mainnet)
+        PaymentLinkFunder.markNotFunded(id: record.id, store: store)
+        let hidden = try XCTUnwrap(EnvelopeStore(service: service).record(id: record.id, role: .sent))
+        XCTAssertNil(hidden.fundingNotSent)
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(hidden, activeWalletId: "w1"))
+        XCTAssertTrue(OpenPaymentLinks.needsLook(hidden, activeWalletId: "w1", transactions: [], now: Date()))
+
+        // A scan before the funding is mined, and one that sees nothing.
+        var nothing = EnvelopeObservation.empty
+        nothing.height = 200
+        let early = PaymentLinksStatusChecker.applying(nothing, to: hidden, transactions: [], now: Date()).record
+        XCTAssertEqual(early.status, .notFunded)
+        XCTAssertEqual(early.lastScannedHeight, 200)
+        XCTAssertTrue(EnvelopeStatusRules.needsFundingScan(early, now: Date()))
+
+        var funded = obs(conf: 2, balance: 5)
+        funded.fundingTxids = ["lost-answer"]
+        funded.fundingHeight = 205
+        funded.height = 207
+        let found = PaymentLinksStatusChecker.applying(funded, to: early, transactions: [], now: Date()).record
+        XCTAssertEqual(found.fundingTxid, "lost-answer")
+        XCTAssertEqual(found.status, .pending)
+        XCTAssertEqual(found.lastScannedHeight, 207)
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(found, activeWalletId: "w1"))
+        XCTAssertFalse(EnvelopeStatusRules.needsFundingScan(found, now: Date()))
+        let display = PaymentLinkDisplay(record: found, fundingConfirmations: 2, daemonHeight: nil)
+        XCTAssertEqual(PaymentLinkDetailAction.actions(for: found, display: display), [.share, .reclaim])
+
+        // A failure known to come before the broadcast is never scanned.
+        let otherStore = EnvelopeStore(service: service + ".other")
+        defer { otherStore.removeAll() }
+        try PaymentLinkFunder.save(record, store: otherStore, networkType: .mainnet)
+        try PaymentLinkFunder.beginFunding(record, walletId: "w1", store: otherStore, networkType: .mainnet)
+        PaymentLinkFunder.markNotFunded(id: record.id, nothingSent: true, store: otherStore)
+        let notSent = try XCTUnwrap(otherStore.record(id: record.id, role: .sent))
+        XCTAssertEqual(notSent.fundingNotSent, true)
+        XCTAssertFalse(OpenPaymentLinks.needsLook(notSent, activeWalletId: "w1", transactions: [], now: Date()))
+    }
+
     /// Link 10: the wallet's history has the funding, the envelope's scan
     /// did not see it. The link waits; it is never Not funded.
     func testAKnownFundingIsNeverNotFunded() {
@@ -452,6 +663,7 @@ final class PaymentLinkTests: XCTestCase {
         let pool = EnvelopeRuntime.observation(transactions: [tx("f", .incoming, height: nil, status: .pending)], balance: 0, unlocked: 0, daemonHeight: 200)
         var poolExpected = obs(conf: 0)
         poolExpected.fundingTxids = ["f"]
+        poolExpected.height = 200
         XCTAssertEqual(pool, poolExpected)
 
         let mined = EnvelopeRuntime.observation(
@@ -463,6 +675,7 @@ final class PaymentLinkTests: XCTestCase {
         var expected = obs(conf: 10, balance: 500_000_000_000, unlocked: 500_000_000_000, spends: ["c", "p"], mined: ["c"])
         expected.fundingHeight = 190
         expected.fundingTxids = ["f"]
+        expected.height = 200
         XCTAssertEqual(mined, expected)
 
         // Fundings oldest first; one still in the pool last.

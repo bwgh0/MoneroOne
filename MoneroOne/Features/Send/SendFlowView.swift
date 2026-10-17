@@ -222,13 +222,13 @@ struct SendFlowView: View {
                             }
                         }
                     }
-                case .failed(let message):
+                case .failed(let message, let mayHaveSent):
                     sendInProgress = false
                     // A link used its one funding attempt: no way back to
                     // Confirm. It shows the error as a normal send does and
                     // stays hidden until a funding turns up.
                     if isLinkMode, let linkRecordId {
-                        PaymentLinkFunder.markNotFunded(id: linkRecordId)
+                        PaymentLinkFunder.markNotFunded(id: linkRecordId, nothingSent: !mayHaveSent)
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                             phase = .error(message: message)
                         }

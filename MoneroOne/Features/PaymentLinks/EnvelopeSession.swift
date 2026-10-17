@@ -200,21 +200,8 @@ final class EnvelopeSession: ObservableObject {
         if let stored = store.record(id: record.id, role: record.role), record.fundingTxid == nil {
             record.fundingTxid = stored.fundingTxid
         }
-        if record.role == .sent, record.fundingTxid == nil, let first = observation.fundingTxids.first {
-            record.fundingTxid = first
-        }
-        let status = EnvelopeStatusRules.status(
-            for: observation,
-            current: record.status,
-            role: record.role,
-            settleTxid: record.settleTxid,
-            fundingKnown: record.role == .sent && record.fundingTxid != nil
-        )
-        record.noteBalance(observation.balance, sweepFee: observation.sweepFee)
-        record.confirmations = observation.fundingConfirmations
-        record.fundingHeight = observation.fundingHeight ?? record.fundingHeight
-        record.lastCheckedAt = Date()
-        record.status = status
+        record = PaymentLinksStatusChecker.applying(observation, to: record, transactions: walletManager.transactions, now: Date()).record
+        let status = record.status
         try? store.save(record)
         apply(status: status, observation: observation)
         if status.isSettled {

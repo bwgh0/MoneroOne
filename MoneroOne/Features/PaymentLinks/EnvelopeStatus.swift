@@ -44,6 +44,8 @@ struct EnvelopeObservation: Equatable {
     /// Block height of the oldest mined incoming transfer; nil while every
     /// funding waits in the pool.
     var fundingHeight: UInt64? = nil
+    /// The block height the scan reached; 0 when unknown.
+    var height: UInt64 = 0
     /// wallet2's fee estimate for a sweep of the balance, piconero. Nil when
     /// the check did not ask for one, the envelope is empty or the estimate
     /// failed.
@@ -53,6 +55,14 @@ struct EnvelopeObservation: Equatable {
 }
 
 enum EnvelopeStatusRules {
+    /// How long our claim or reclaim may stay unseen in a block, and absent
+    /// from this wallet's history, before it counts as dropped.
+    static let settleGrace: TimeInterval = 60 * 60
+
+    /// How far past a funding attempt with no known funding the envelope is
+    /// scanned for it: about one day of blocks.
+    static let fundingScanBlocks: UInt64 = 720
+
     /// The status table of the spec, as one pure function.
     /// - Parameters:
     ///   - observation: what the envelope sync saw.
@@ -61,6 +71,8 @@ enum EnvelopeStatusRules {
     ///     (``settledStatus(_:role:settleTxid:observation:)``).
     ///   - role: whose link it is.
     ///   - settleTxid: our own claim or reclaim, if we sent one.
+    ///   - settleFailed: that claim or reclaim dropped
+    ///     (``settleHasFailed(settleTxid:settledAt:observation:transactions:now:)``).
     ///   - fundingKnown: a funding transaction is known (a sent link's
     ///     txid). The wallet's own history wins over a scan that missed it:
     ///     the link waits, never reads "not funded".
@@ -69,10 +81,11 @@ enum EnvelopeStatusRules {
         current: EnvelopeStatus = .pending,
         role: EnvelopeRecord.Role = .sent,
         settleTxid: String? = nil,
+        settleFailed: Bool = false,
         fundingKnown: Bool = false
     ) -> EnvelopeStatus {
         if current.isSettled {
-            return settledStatus(current, role: role, settleTxid: settleTxid, observation: observation)
+            return settledStatus(current, role: role, settleTxid: settleTxid, settleFailed: settleFailed, observation: observation)
         }
         guard observation.fundingSeen else { return fundingKnown ? .pending : .notFunded }
         if observation.balance == 0 {
@@ -87,12 +100,13 @@ enum EnvelopeStatusRules {
     }
 
     /// A claimed or reclaimed link stays settled. It opens again (Ready)
-    /// only when the scan sees the spend that settled it in a block and
-    /// spendable money still in the envelope: money that spend did not take
-    /// (a later funding, or outputs still locked at the sweep). A fresh
+    /// when the scan sees spendable money still in the envelope and either
+    /// the spend that settled it is in a block (the money came later, or was
+    /// still locked at the sweep) or our claim or reclaim dropped. A fresh
     /// envelope may not see our spend while it waits in the pool, so a scan
-    /// from before it is mined still sees the money and must not reopen it.
-    static func settledStatus(_ settled: EnvelopeStatus, role: EnvelopeRecord.Role, settleTxid: String?, observation: EnvelopeObservation) -> EnvelopeStatus {
+    /// from before it is mined still sees the money; inside its grace that
+    /// scan must not reopen it.
+    static func settledStatus(_ settled: EnvelopeStatus, role: EnvelopeRecord.Role, settleTxid: String?, settleFailed: Bool = false, observation: EnvelopeObservation) -> EnvelopeStatus {
         let ours = settleTxid.flatMap { $0.isEmpty ? nil : $0 }
         if role == .sent, let ours {
             // A claim beat our reclaim: final.
@@ -101,12 +115,58 @@ enum EnvelopeStatusRules {
             if otherSpend && !observation.spendTxids.contains(ours) {
                 return .claimed
             }
-            return reopens(settledBy: [ours], observation) ? .ready : .reclaimed
         }
-        // Our claim, or a claim or reclaim made elsewhere: the spends the
-        // envelope saw (wallet2 sees another device's spend once mined).
+        // Our sweep dropped: the money it took is spendable again.
+        if ours != nil, settleFailed, observation.unlockedBalance > 0 { return .ready }
+        // Our claim or reclaim, or a claim or reclaim made elsewhere: the
+        // spends the envelope saw (wallet2 sees another device's spend once
+        // mined).
         let spends = ours.map { [$0] } ?? observation.spendTxids
         return reopens(settledBy: spends, observation) ? .ready : settled
+    }
+
+    /// Our claim or reclaim dropped (or a reorg took it out): the envelope
+    /// does not see it, in the pool or in a block, and this wallet's history
+    /// marks it failed or, past `settleGrace`, does not show it waiting or
+    /// mined. A sweep to another wallet is judged by the grace alone.
+    static func settleHasFailed(settleTxid: String?, settledAt: Date?, observation: EnvelopeObservation, transactions: [MoneroTransaction], now: Date) -> Bool {
+        guard let txid = settleTxid, !txid.isEmpty, !observation.spendTxids.contains(txid) else { return false }
+        if let transaction = transactions.first(where: { $0.id == txid }) {
+            return transaction.status == .failed
+        }
+        guard let settledAt else { return false }
+        return now.timeIntervalSince(settledAt) > settleGrace
+    }
+
+    /// Our claim or reclaim went out, no scan has seen it in a block, and
+    /// this wallet's history does not show it waiting or mined: a background
+    /// look tells whether it dropped or a claim beat it. Not for a reclaim a
+    /// claim already beat (final).
+    static func needsSettleLook(_ record: EnvelopeRecord, transactions: [MoneroTransaction]) -> Bool {
+        guard record.status.isSettled, record.link != nil, let txid = record.settleTxid, !txid.isEmpty,
+              record.settleSeenMined != true else { return false }
+        if record.role == .sent, record.status == .claimed { return false }
+        return !transactions.contains { $0.id == txid && $0.status != .failed }
+    }
+
+    /// A hidden sent link whose funding attempt may have reached the
+    /// network: the node can take a funding the app never heard back about.
+    /// Its envelope is scanned until the scan has covered about a day of
+    /// blocks past the attempt with no funding; the secret stays. An attempt
+    /// that failed before anything was sent needs no scan, and one the app
+    /// closed during waits a while, so a send still running can finish.
+    static func needsFundingScan(_ record: EnvelopeRecord, now: Date) -> Bool {
+        guard record.role == .sent, record.link != nil, record.fundingTxid == nil,
+              let started = record.fundingStartedAt, record.fundingNotSent != true else { return false }
+        switch record.status {
+        case .notFunded: break
+        case .created: guard now.timeIntervalSince(started) > 10 * 60 else { return false }
+        default: return false
+        }
+        // The link is made at the tip less the restore margin, just before
+        // its one funding attempt.
+        let attemptHeight = record.restoreHeight + EnvelopeLink.restoreHeightMargin
+        return (record.lastScannedHeight ?? 0) < attemptHeight + fundingScanBlocks
     }
 
     /// Every spend that settled the link is in a block, and unlocked money

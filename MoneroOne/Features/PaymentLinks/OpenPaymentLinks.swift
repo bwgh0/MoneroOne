@@ -39,6 +39,17 @@ enum OpenPaymentLinks {
         return true
     }
 
+    /// What the dashboard's background look opens: open links, hidden
+    /// funding attempts the node may have taken, and our claims or reclaims
+    /// no scan has seen mined. The last two show nothing until a look finds
+    /// money: then the link is Waiting, or Ready again.
+    static func needsLook(_ record: EnvelopeRecord, activeWalletId: String?, transactions: [MoneroTransaction], now: Date) -> Bool {
+        if isOpenSent(record, activeWalletId: activeWalletId) { return true }
+        if EnvelopeStatusRules.needsSettleLook(record, transactions: transactions) { return true }
+        let fromActiveWallet = record.walletId == nil || record.walletId == activeWalletId
+        return fromActiveWallet && EnvelopeStatusRules.needsFundingScan(record, now: now)
+    }
+
     /// A received link this device can still claim: not settled, and it
     /// still has the secret. Pending money or not, it is open.
     static func isToClaim(_ record: EnvelopeRecord) -> Bool {
@@ -482,11 +493,13 @@ struct OpenPaymentLinksChecks: ViewModifier {
         guard Self.isLookDue(isDue: isDue, lastLook: lastLook, now: now) else { return }
         isDue = false
         let activeId = walletManager.activeWallet?.id.uuidString
-        guard store.sent.contains(where: { OpenPaymentLinks.isOpenSent($0, activeWalletId: activeId) }) else { return }
+        let transactions = walletManager.transactions
+        let needsLook = { (record: EnvelopeRecord) in
+            OpenPaymentLinks.needsLook(record, activeWalletId: activeId, transactions: transactions, now: now)
+        }
+        guard (store.sent + store.received).contains(where: needsLook) else { return }
         lastLook = now
-        checker.start(walletManager: walletManager, store: store, matching: {
-            OpenPaymentLinks.isOpenSent($0, activeWalletId: activeId)
-        })
+        checker.start(walletManager: walletManager, store: store, matching: needsLook)
     }
 }
 

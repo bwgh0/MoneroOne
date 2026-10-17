@@ -136,7 +136,7 @@ enum PaymentLinkFunder {
             markFunded(id: record.id, txid: txid, store: store)
             return txid
         } catch {
-            markNotFunded(id: record.id, store: store)
+            markNotFunded(id: record.id, nothingSent: WalletManager.sendLeftNothingOnNetwork(error), store: store)
             throw error
         }
     }
@@ -152,10 +152,13 @@ enum PaymentLinkFunder {
     /// The funding failed, or its result is not known. The link is hidden
     /// (Activity, its counts and the balance card leave it out) and keeps
     /// its secret and its used attempt. It shows again, as Waiting, when the
-    /// wallet's history or a scan finds its funding.
-    static func markNotFunded(id: String, store: EnvelopeStore = .shared) {
+    /// wallet's history or a scan finds its funding. `nothingSent`: the
+    /// failure came before anything reached the network, so no scan looks
+    /// for it (``EnvelopeStatusRules/needsFundingScan(_:now:)``).
+    static func markNotFunded(id: String, nothingSent: Bool = false, store: EnvelopeStore = .shared) {
         guard var record = store.record(id: id, role: .sent), record.fundingTxid == nil else { return }
         record.status = .notFunded
+        if nothingSent { record.fundingNotSent = true }
         try? store.save(record)
     }
 

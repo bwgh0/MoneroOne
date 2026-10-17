@@ -20,11 +20,8 @@ final class PaymentLinkTests: XCTestCase {
 
     // MARK: - Link format
 
-    func testBuildsSpecVector() throws {
+    func testBuildsSpecVector() {
         XCTAssertEqual(vector.url, vectorLink)
-        // The app-only link carries the same fragment on /a.
-        XCTAssertEqual(vector.appURL, vectorLink.replacingOccurrences(of: "https://monero.one/c#", with: "https://monero.one/a#"))
-        XCTAssertEqual(try EnvelopeLink.parse(vector.appURL), vector)
     }
 
     func testParsesSpecVector() throws {
@@ -38,7 +35,7 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(try EnvelopeLink.parse("  \(vectorLink)\n"), vector)
         // The sentence's punctuation after a v1 link is not part of it.
         XCTAssertEqual(try EnvelopeLink.parse(vectorLink + "."), vector)
-        XCTAssertEqual(try EnvelopeLink.parse(vector.appURL + ")"), vector)
+        XCTAssertEqual(try EnvelopeLink.parse(vectorLink + ")"), vector)
     }
 
     func testRejectsHttpAndOtherHosts() {
@@ -653,13 +650,10 @@ final class PaymentLinkTests: XCTestCase {
         let url = try XCTUnwrap(record.link?.url)
         XCTAssertFalse(url.contains("Rent"))
         XCTAssertFalse(url.contains("Sam"))
-        for appOnly in [false, true] {
-            let share = try XCTUnwrap(PaymentLinkFunder.shareText(for: record, appOnly: appOnly))
-            XCTAssertFalse(share.contains("Rent"))
-            XCTAssertFalse(share.contains("Sam"))
-            XCTAssertFalse(share.contains("Link 7"))
-            XCTAssertFalse(try XCTUnwrap(record.link?.appURL).contains("Rent"))
-        }
+        let share = try XCTUnwrap(PaymentLinkFunder.shareText(for: record))
+        XCTAssertFalse(share.contains("Rent"))
+        XCTAssertFalse(share.contains("Sam"))
+        XCTAssertFalse(share.contains("Link 7"))
         XCTAssertEqual(PaymentLinkFunder.memo, "Payment link")
         // The link is the same with or without a note.
         record.note = nil
@@ -696,7 +690,7 @@ final class PaymentLinkTests: XCTestCase {
         let record = EnvelopeRecord(id: "0123456789abcdef", role: .sent, words: vectorWords, address: vectorAddress,
                                     restoreHeight: 150, amount: 100_000_000_000, expiry: 1_791_000_000,
                                     createdAt: Date(), status: .pending)
-        let item = try XCTUnwrap(PaymentLinkShareItem(record: record, appOnly: false))
+        let item = try XCTUnwrap(PaymentLinkShareItem(record: record))
         XCTAssertEqual(item.url.absoluteString, vectorLink)
         XCTAssertEqual(PaymentLinkShareItem.title, "Claim your Monero")
 
@@ -718,10 +712,9 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertTrue(item.linkMetadata() === metadata)
     }
 
-    /// App-only payment links: Messages gets the monero.one/a link as a URL
-    /// item with the same card, every other app the sentence with it.
+    /// A v2 link shares the web link, its secret behind the directive.
     @MainActor
-    func testAppOnlyShareUsesTheAppLink() throws {
+    func testV2ShareUsesTheWebLink() throws {
         let secret = [UInt8](0..<16)
         let link = try XCTUnwrap(EnvelopeLink(secret: secret, restoreHeight: 150))
         var record = EnvelopeRecord(id: link.id, role: .sent, words: nil, address: vectorAddress,
@@ -729,39 +722,12 @@ final class PaymentLinkTests: XCTestCase {
                                     createdAt: Date(), status: .pending)
         record.setSecret(from: link)
 
-        let appItem = try XCTUnwrap(PaymentLinkShareItem(record: record, appOnly: true))
-        XCTAssertEqual(appItem.url.absoluteString, "https://monero.one/a#2112drXXUifSrRnXLGbXg8E3b")
-        XCTAssertEqual(appItem.text, "I sent you 0.0010 XMR. Open this link in Monero One: https://monero.one/a#2112drXXUifSrRnXLGbXg8E3b. Get the app at monero.one")
+        let item = try XCTUnwrap(PaymentLinkShareItem(record: record))
+        XCTAssertEqual(item.url.absoluteString, "https://monero.one/c#2:~:m1=112drXXUifSrRnXLGbXg8E3b")
+        XCTAssertEqual(item.text, "I sent you 0.0010 XMR. Tap to claim it in Monero One: https://monero.one/c#2:~:m1=112drXXUifSrRnXLGbXg8E3b")
         let controller = UIActivityViewController(activityItems: [], applicationActivities: nil)
-        XCTAssertEqual(appItem.activityViewController(controller, itemForActivityType: .message) as? URL, appItem.url)
-        XCTAssertEqual(appItem.activityViewController(controller, itemForActivityType: .copyToPasteboard) as? String, appItem.text)
-        XCTAssertEqual(try EnvelopeLink.parse(appItem.url.absoluteString), link)
-        XCTAssertEqual(appItem.linkMetadata().url, appItem.url)
-        XCTAssertEqual(appItem.linkMetadata().title, "Claim your Monero")
-
-        let webItem = try XCTUnwrap(PaymentLinkShareItem(record: record, appOnly: false))
-        XCTAssertEqual(webItem.url.absoluteString, "https://monero.one/c#2:~:m1=112drXXUifSrRnXLGbXg8E3b")
-        XCTAssertEqual(webItem.text, "I sent you 0.0010 XMR. Tap to claim it in Monero One: https://monero.one/c#2:~:m1=112drXXUifSrRnXLGbXg8E3b")
-    }
-
-    /// Off by default; Share again reads the setting when the user shares.
-    @MainActor
-    func testAppOnlySettingPicksTheShape() throws {
-        let defaults = UserDefaults.standard
-        let saved = defaults.object(forKey: PaymentLinkSharing.appOnlyKey)
-        defer { defaults.set(saved, forKey: PaymentLinkSharing.appOnlyKey) }
-        let link = try XCTUnwrap(EnvelopeLink(secret: [UInt8](0..<16), restoreHeight: 150))
-        var record = EnvelopeRecord(id: link.id, role: .sent, words: nil, address: vectorAddress,
-                                    restoreHeight: 150, amount: 1_000_000_000, expiry: 0,
-                                    createdAt: Date(), status: .pending)
-        record.setSecret(from: link)
-
-        defaults.removeObject(forKey: PaymentLinkSharing.appOnlyKey)
-        XCTAssertFalse(PaymentLinkSharing.appOnly)
-        XCTAssertEqual(PaymentLinkShareItem(record: record)?.url.absoluteString, link.url)
-        defaults.set(true, forKey: PaymentLinkSharing.appOnlyKey)
-        XCTAssertEqual(PaymentLinkShareItem(record: record)?.url.absoluteString, link.appURL)
-        XCTAssertTrue(PaymentLinkFunder.shareText(for: record)?.contains(link.appURL) ?? false)
+        XCTAssertEqual(item.activityViewController(controller, itemForActivityType: .message) as? URL, item.url)
+        XCTAssertEqual(try EnvelopeLink.parse(item.url.absoluteString), link)
     }
 
     /// The card is 1200 x 1200 px.

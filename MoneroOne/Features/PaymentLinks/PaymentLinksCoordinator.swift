@@ -2,8 +2,8 @@ import Foundation
 import SwiftUI
 import MoneroKit
 
-/// Takes claim links in (Universal Link, `moneroone://` link, a paste or
-/// scan into Send) and opens the claim sheet when the app can show it.
+/// Takes claim links in (Universal Link, a paste or scan into Send) and
+/// opens the claim sheet when the app can show it.
 ///
 /// Every good link is saved as a received record in the Keychain first, so
 /// a link that arrives while the app is locked, or before any wallet exists,

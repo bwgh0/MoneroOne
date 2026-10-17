@@ -9,13 +9,6 @@ import Foundation
 /// The secret sits behind a fragment directive (`:~:`), so a web page that
 /// opens the link sees only `#2` (WebKit hides the directive from page
 /// script; Chromium does not, so this is an extra layer, not a boundary).
-/// With "App-only payment links" on, the link opens only in this app:
-///
-///     https://monero.one/a#2<secret><height>
-///
-/// It is a Universal Link. In a browser, `/a` returns an empty 204: no
-/// page and no redirect to an unverified custom URL scheme. Verified OS
-/// app-link routing or pasting into Monero One is required to open it.
 ///
 /// Links made before the directive (`https://monero.one/c#2<secret><height>`)
 /// and v1 links still parse and claim:
@@ -42,8 +35,6 @@ struct EnvelopeLink: Equatable {
     static let confirmationsToUnlock = 10
     /// Blocks subtracted from the sender's daemon height for `h`.
     static let restoreHeightMargin: UInt64 = 10
-    /// The app's own URL scheme: `moneroone://c#...`, accepted for existing integrations.
-    static let appScheme = "moneroone"
     /// The fragment directive that hides a v2 link's body from web pages:
     /// `#2:~:m1=<body>`.
     static let directive = ":~:"
@@ -127,24 +118,6 @@ struct EnvelopeLink: Equatable {
         }
     }
 
-    /// The app-only link: `https://monero.one/a#2<secret><height>` (v2).
-    /// The site sends `/a` straight on to `moneroone://c` with no page, so
-    /// its browser fallback has no document.
-    var appURL: String {
-        switch format {
-        case .v1:
-            return "https://monero.one/a#" + v1Fragment
-        case .v2(let secret):
-            return "https://monero.one/a#" + (EnvelopeV2.fragment(secret: secret, restoreHeight: restoreHeight) ?? "")
-        }
-    }
-
-    /// The link to share: the app-only link when "App-only payment links"
-    /// is on, else the web link.
-    func url(appOnly: Bool) -> String {
-        appOnly ? appURL : url
-    }
-
     private var v1Fragment: String {
         "v=\(Self.version)&s=\(words.joined(separator: "-"))&h=\(restoreHeight)&a=\(amount)&e=\(expiry)&n=\(id)"
     }
@@ -154,17 +127,15 @@ struct EnvelopeLink: Equatable {
 
     // MARK: - Parse
 
-    /// True when `text` is shaped like a claim link (`monero.one/c#`,
-    /// `monero.one/a#` or `moneroone://c#`), good or bad. A pasted or scanned claim link opens the claim sheet; it must
+    /// True when `text` is shaped like a claim link (`monero.one/c#`), good
+    /// or bad. A pasted or scanned claim link opens the claim sheet; it must
     /// never be read as an address.
     static func looksLikeClaimLink(_ text: String) -> Bool {
         fragment(of: text) != nil
     }
 
-    /// Parses a claim link. Accepts `https://monero.one/c#...`, the app-only
-    /// `https://monero.one/a#...`, each without a scheme (`monero.one/c#...`),
-    /// and `moneroone://c#...`.
-    /// Rejects `http`. A fragment with the directive (`2:~:m1=<body>`) is
+    /// Parses a claim link. Accepts `https://monero.one/c#...` and
+    /// `monero.one/c#...` (pasted without a scheme). Rejects `http`. A fragment with the directive (`2:~:m1=<body>`) is
     /// the short format with its body moved behind `:~:`; one with `=` is
     /// the v1 key-value format (unknown keys are ignored); one without is
     /// the short format, whose first character is the version.
@@ -255,11 +226,12 @@ struct EnvelopeLink: Equatable {
     // MARK: - Redaction
 
     /// Replaces the secret part of every claim link in `text`, for the
-    /// diagnostic log: `monero.one/c#<redacted>`, `monero.one/a#<redacted>`,
-    /// `moneroone://c#<redacted>`.
+    /// diagnostic log: `monero.one/c#<redacted>`. The app-only links of
+    /// test builds (`monero.one/a#`, `moneroone://c#`) no longer open, but
+    /// they still hold a secret, so they are redacted too.
     static func redacted(in text: String) -> String {
         guard text.range(of: "monero.one/", options: .caseInsensitive) != nil
-                || text.range(of: "\(appScheme)://", options: .caseInsensitive) != nil,
+                || text.range(of: "moneroone://", options: .caseInsensitive) != nil,
               let regex = try? NSRegularExpression(pattern: "((?:monero\\.one|moneroone:/)/[ac]/?)(?:#|%23)[^\\s\"'<>]*", options: .caseInsensitive)
         else { return text }
         return regex.stringByReplacingMatches(
@@ -271,27 +243,20 @@ struct EnvelopeLink: Equatable {
 
     // MARK: - Private
 
-    /// The fragment after `monero.one/c#`, `monero.one/a#` or
-    /// `moneroone://c#`, or nil when `text` is not a claim link. A sentence's full stop after the link is
-    /// not part of it.
+    /// The fragment after `monero.one/c#`, or nil when `text` is not a
+    /// claim link. A sentence's full stop after the link is not part of it.
     private static func fragment(of text: String) -> String? {
         var trimmed = Substring(text.trimmingCharacters(in: .whitespacesAndNewlines))
         while let last = trimmed.last, ".,;!?)".contains(last) { trimmed = trimmed.dropLast() }
         guard let hashIndex = trimmed.firstIndex(of: "#") else { return nil }
         var head = trimmed[..<hashIndex].lowercased()
-        let app = "\(appScheme)://"
-        if head.hasPrefix(app) {
-            head.removeFirst(app.count)
-            guard head == "c" || head == "c/" else { return nil }
-            return String(trimmed[trimmed.index(after: hashIndex)...])
-        }
         if head.hasPrefix("https://") {
             head.removeFirst("https://".count)
         } else if head.contains("://") {
             // http and every other scheme.
             return nil
         }
-        guard ["monero.one/c", "monero.one/c/", "monero.one/a", "monero.one/a/"].contains(head) else { return nil }
+        guard head == "monero.one/c" || head == "monero.one/c/" else { return nil }
         return String(trimmed[trimmed.index(after: hashIndex)...])
     }
 

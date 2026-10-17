@@ -11,10 +11,10 @@ final class PaymentLinkV2Tests: XCTestCase {
     private let vectorHeight: UInt64 = 150
     /// The link as it was before the fragment directive; it still parses.
     private let vectorLink = "https://monero.one/c#2112drXXUifSrRnXLGbXg8E3b"
-    /// New links: the body behind `:~:m1=`, and the app-only link.
+    /// New links: the body behind `:~:m1=`.
     private let vectorWebLink = "https://monero.one/c#2:~:m1=112drXXUifSrRnXLGbXg8E3b"
+    /// The app-only links of test builds, removed: they no longer open.
     private let vectorAppLink = "https://monero.one/a#2112drXXUifSrRnXLGbXg8E3b"
-    /// Where the site sends the app-only link.
     private let vectorSchemeLink = "moneroone://c#2112drXXUifSrRnXLGbXg8E3b"
     private let vectorK = "6a5bd15ceb3ca1dc24f7056feabfb1b825296bc5b26cfdcff8ad8362145ce908"
     private let vectorSpend = "6a5bd15ceb3ca1dc24f7056feabfb1b825296bc5b26cfdcff8ad8362145ce908"
@@ -41,9 +41,6 @@ final class PaymentLinkV2Tests: XCTestCase {
         let link = try XCTUnwrap(EnvelopeLink(secret: bytes(vectorSecretHex), restoreHeight: vectorHeight))
         XCTAssertEqual(link.url, vectorWebLink)
         XCTAssertEqual(link.url.count, 52)
-        XCTAssertEqual(link.appURL, vectorAppLink)
-        XCTAssertEqual(link.url(appOnly: false), vectorWebLink)
-        XCTAssertEqual(link.url(appOnly: true), vectorAppLink)
         XCTAssertEqual(link.id, vectorId)
         XCTAssertEqual(link.amount, 0)
         XCTAssertEqual(link.expiry, 0)
@@ -196,7 +193,6 @@ final class PaymentLinkV2Tests: XCTestCase {
         XCTAssertEqual(link.words, secret.words)
         XCTAssertLessThanOrEqual(link.url.count, 54)
         XCTAssertEqual(try EnvelopeLink.parse(link.url), link)
-        XCTAssertEqual(try EnvelopeLink.parse(link.appURL), link)
         XCTAssertEqual(EnvelopeSecret.address(for: link.words, networkType: .mainnet), secret.address)
     }
 
@@ -249,22 +245,16 @@ final class PaymentLinkV2Tests: XCTestCase {
         }
     }
 
-    /// Every shape opens the same link: the new web link, the old one, the
-    /// app-only link and its redirect, each without a scheme or inside a
-    /// sentence.
+    /// Every shape opens the same link: the new web link and the old one,
+    /// each without a scheme or inside a sentence.
     func testEveryLinkShapeParses() throws {
         let link = try XCTUnwrap(EnvelopeLink(secret: bytes(vectorSecretHex), restoreHeight: vectorHeight))
         let shapes = [
             vectorWebLink,
             vectorLink,
-            vectorAppLink,
-            vectorSchemeLink,
-            "monero.one/a#2112drXXUifSrRnXLGbXg8E3b",
-            "https://monero.one/a/#2112drXXUifSrRnXLGbXg8E3b",
             "monero.one/c#2:~:m1=112drXXUifSrRnXLGbXg8E3b",
             "monero.one/c/#2:~:m1=112drXXUifSrRnXLGbXg8E3b",
-            "MONEROONE://c#2112drXXUifSrRnXLGbXg8E3b",
-            "moneroone://c/#2112drXXUifSrRnXLGbXg8E3b",
+            "monero.one/c#2112drXXUifSrRnXLGbXg8E3b",
             // An app that percent-encodes the directive.
             "https://monero.one/c#2%3A~%3Am1=112drXXUifSrRnXLGbXg8E3b",
             "https://monero.one/c#2%3A%7E%3Am1=112drXXUifSrRnXLGbXg8E3b",
@@ -273,12 +263,11 @@ final class PaymentLinkV2Tests: XCTestCase {
             // A chat app that takes the sentence's punctuation into the link.
             vectorWebLink + ".",
             vectorLink + ",",
-            vectorAppLink + ".",
-            vectorAppLink + ";",
-            vectorSchemeLink + "!",
-            vectorSchemeLink + "?",
+            vectorWebLink + ";",
+            vectorLink + "!",
+            vectorLink + "?",
             vectorWebLink + ")",
-            vectorAppLink + ".)",
+            vectorWebLink + ".)",
             "  \(vectorWebLink)\n",
         ]
         for shape in shapes {
@@ -296,7 +285,6 @@ final class PaymentLinkV2Tests: XCTestCase {
             // The secret with no height.
             "https://monero.one/c#2:~:m1=112drXXUifSrRnXLGbXg8E",
             "https://monero.one/c#2:~:m1=102drXXUifSrRnXLGbXg8E3b",
-            "moneroone://c#2",
         ]
         for link in incomplete {
             XCTAssertThrowsError(try EnvelopeLink.parse(link), link) {
@@ -306,29 +294,29 @@ final class PaymentLinkV2Tests: XCTestCase {
         XCTAssertThrowsError(try EnvelopeLink.parse("https://monero.one/c#3:~:m1=112drXXUifSrRnXLGbXg8E3b")) {
             XCTAssertEqual($0 as? EnvelopeLink.ParseError, .unsupportedVersion)
         }
-        // Only `moneroone://c`, `/c` and `/a` are claim links; `http` is not.
-        for other in ["moneroone://x#2112drXXUifSrRnXLGbXg8E3b", "moneroone://a#2112drXXUifSrRnXLGbXg8E3b", "moneroone://c",
-                      "moneroone:c#2112drXXUifSrRnXLGbXg8E3b", "moneroone://price", "http://monero.one/a#2112drXXUifSrRnXLGbXg8E3b",
-                      "https://monero.one/b#2112drXXUifSrRnXLGbXg8E3b", "https://evil.one/a#2112drXXUifSrRnXLGbXg8E3b"] {
+        // Only `monero.one/c` links are claim links; `http` is not. The
+        // app-only links of test builds (`/a`, `moneroone://c`) no longer
+        // open.
+        for other in [vectorAppLink, vectorSchemeLink, "monero.one/a#2112drXXUifSrRnXLGbXg8E3b",
+                      "MONEROONE://c#2112drXXUifSrRnXLGbXg8E3b", "moneroone://c#2", "moneroone://price",
+                      "http://monero.one/c#2112drXXUifSrRnXLGbXg8E3b",
+                      "https://monero.one/b#2112drXXUifSrRnXLGbXg8E3b", "https://evil.one/c#2112drXXUifSrRnXLGbXg8E3b"] {
             XCTAssertFalse(EnvelopeLink.looksLikeClaimLink(other), other)
         }
     }
 
     /// Messages, Mail and Notes make a link tappable with the system's link
-    /// detector. It must find the whole app-only link in the share sentence,
-    /// without the full stop after it.
+    /// detector. It must find the whole link in the share sentence.
     @MainActor
-    func testLinkDetectorFindsTheAppLinkInTheShareText() throws {
+    func testLinkDetectorFindsTheLinkInTheShareText() throws {
         let link = try XCTUnwrap(EnvelopeLink(secret: bytes(vectorSecretHex), restoreHeight: vectorHeight))
         var record = EnvelopeRecord(id: link.id, role: .sent, words: nil, address: "addr", restoreHeight: link.restoreHeight,
                                     amount: 1_000_000_000, expiry: 0, createdAt: Date(), status: .pending)
         record.setSecret(from: link)
         let detector = try NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-        for appOnly in [true, false] {
-            let text = try XCTUnwrap(PaymentLinkFunder.shareText(for: record, appOnly: appOnly))
-            let urls = detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap(\.url)
-            XCTAssertTrue(urls.contains(URL(string: link.url(appOnly: appOnly))!), "\(urls)")
-        }
+        let text = try XCTUnwrap(PaymentLinkFunder.shareText(for: record))
+        let urls = detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap(\.url)
+        XCTAssertTrue(urls.contains(URL(string: link.url)!), "\(urls)")
     }
 
     // MARK: - Helpers

@@ -36,6 +36,9 @@ struct EnvelopeObservation: Equatable {
     var unlockedBalance: UInt64
     /// Hashes of outgoing transfers (claims or reclaims) the envelope saw.
     var spendTxids: [String]
+    /// The outgoing transfers that are in a block: a claim or reclaim that
+    /// can no longer drop.
+    var minedSpendTxids: [String] = []
     /// Hashes of the incoming transfers (fundings), oldest first.
     var fundingTxids: [String] = []
     /// Block height of the oldest mined incoming transfer; nil while every
@@ -50,33 +53,26 @@ struct EnvelopeObservation: Equatable {
 }
 
 enum EnvelopeStatusRules {
-    /// How long a reclaim may stay unseen while the money is still in the
-    /// envelope before it counts as dropped.
-    static let reclaimGrace: TimeInterval = 30 * 60
-
     /// The status table of the spec, as one pure function.
     /// - Parameters:
     ///   - observation: what the envelope sync saw.
-    ///   - reclaimTxid: our own reclaim sweep, if we sent one.
-    ///   - reclaimAge: seconds since that reclaim went out.
+    ///   - current: the record's stored status. A settled link keeps it
+    ///     unless the scan shows money its settle left behind
+    ///     (``settledStatus(_:role:settleTxid:observation:)``).
+    ///   - role: whose link it is.
+    ///   - settleTxid: our own claim or reclaim, if we sent one.
     ///   - fundingKnown: a funding transaction is known (a sent link's
     ///     txid). The wallet's own history wins over a scan that missed it:
     ///     the link waits, never reads "not funded".
-    static func status(for observation: EnvelopeObservation, reclaimTxid: String?, reclaimAge: TimeInterval? = nil, fundingKnown: Bool = false) -> EnvelopeStatus {
-        if let reclaimTxid {
-            // Our reclaim went out. It stays "reclaimed" unless the chain
-            // shows a different spend, which means a claim won the race.
-            let ours = observation.spendTxids.contains(reclaimTxid)
-            let otherSpend = observation.spendTxids.contains { $0 != reclaimTxid }
-            if otherSpend && !ours && observation.balance == 0 {
-                return .claimed
-            }
-            // Not seen long after it went out, and the money is still
-            // there: the reclaim dropped. The normal rules offer it again.
-            let dropped = !ours && !otherSpend && observation.balance > 0 && (reclaimAge ?? 0) > reclaimGrace
-            if !dropped && !(ours && observation.balance > 0) {
-                return .reclaimed
-            }
+    static func status(
+        for observation: EnvelopeObservation,
+        current: EnvelopeStatus = .pending,
+        role: EnvelopeRecord.Role = .sent,
+        settleTxid: String? = nil,
+        fundingKnown: Bool = false
+    ) -> EnvelopeStatus {
+        if current.isSettled {
+            return settledStatus(current, role: role, settleTxid: settleTxid, observation: observation)
         }
         guard observation.fundingSeen else { return fundingKnown ? .pending : .notFunded }
         if observation.balance == 0 {
@@ -88,6 +84,58 @@ enum EnvelopeStatusRules {
         // wallet2 unlocks an output after 10 confirmations; unlocked money
         // is claimable whatever a second, newer funding still waits for.
         return observation.unlockedBalance > 0 ? .ready : .pending
+    }
+
+    /// A claimed or reclaimed link stays settled. It opens again (Ready)
+    /// only when the scan sees the spend that settled it in a block and
+    /// spendable money still in the envelope: money that spend did not take
+    /// (a later funding, or outputs still locked at the sweep). A fresh
+    /// envelope may not see our spend while it waits in the pool, so a scan
+    /// from before it is mined still sees the money and must not reopen it.
+    static func settledStatus(_ settled: EnvelopeStatus, role: EnvelopeRecord.Role, settleTxid: String?, observation: EnvelopeObservation) -> EnvelopeStatus {
+        let ours = settleTxid.flatMap { $0.isEmpty ? nil : $0 }
+        if role == .sent, let ours {
+            // A claim beat our reclaim: final.
+            if settled == .claimed { return .claimed }
+            let otherSpend = observation.spendTxids.contains { $0 != ours }
+            if otherSpend && !observation.spendTxids.contains(ours) {
+                return .claimed
+            }
+            return reopens(settledBy: [ours], observation) ? .ready : .reclaimed
+        }
+        // Our claim, or a claim or reclaim made elsewhere: the spends the
+        // envelope saw (wallet2 sees another device's spend once mined).
+        let spends = ours.map { [$0] } ?? observation.spendTxids
+        return reopens(settledBy: spends, observation) ? .ready : settled
+    }
+
+    /// Every spend that settled the link is in a block, and unlocked money
+    /// is still in the envelope.
+    static func reopens(settledBy spends: [String], _ observation: EnvelopeObservation) -> Bool {
+        !spends.isEmpty && observation.unlockedBalance > 0 && Set(observation.minedSpendTxids).isSuperset(of: spends)
+    }
+
+    /// The leftover check of a settled link reached its answer: the spend
+    /// that settled it is in a block, and the envelope holds nothing still
+    /// locked. A later look cannot change the status.
+    static func leftoverCheckIsConclusive(role: EnvelopeRecord.Role, settleTxid: String?, observation: EnvelopeObservation) -> Bool {
+        let spends = settleTxid.flatMap { $0.isEmpty ? nil : [$0] } ?? observation.spendTxids
+        guard !spends.isEmpty, Set(observation.minedSpendTxids).isSuperset(of: spends) else { return false }
+        return observation.balance == 0 || observation.unlockedBalance > 0
+    }
+
+    /// Whether a settled link's detail should look at its envelope for money
+    /// its settle left behind. Not for a reclaim a claim beat (final), not
+    /// while our spend still waits in this wallet's pool (a scan cannot
+    /// reopen it yet), and at most once per `interval`.
+    static func isLeftoverCheckDue(_ record: EnvelopeRecord, transactions: [MoneroTransaction], now: Date, interval: TimeInterval) -> Bool {
+        guard record.status.isSettled, record.link != nil else { return false }
+        if record.role == .sent, record.status == .claimed, record.settleTxid != nil { return false }
+        if let txid = record.settleTxid, transactions.contains(where: { $0.id == txid && $0.status == .pending }) {
+            return false
+        }
+        if let last = record.lastCheckedAt, now.timeIntervalSince(last) < interval { return false }
+        return true
     }
 
     /// "Expired" is a label over pending and ready, not a stored status:

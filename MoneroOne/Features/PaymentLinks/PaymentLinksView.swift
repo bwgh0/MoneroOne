@@ -131,22 +131,29 @@ struct PaymentLinkDisplay {
 
 /// Opens each sent link that someone could have claimed since the last look,
 /// one at a time, while the dashboard (the balance card's open-link lines),
-/// Activity's Links filter or a link's detail is on screen.
+/// Activity's Links filter or a link's detail is on screen. A settled link's
+/// detail (sent or received) gets one look for money its settle left behind.
 @MainActor
 final class PaymentLinksStatusChecker: ObservableObject {
     @Published private(set) var isChecking = false
     private var task: Task<Void, Never>?
+    /// Settled links whose leftover look was conclusive in this run
+    /// (``EnvelopeStatusRules/leftoverCheckIsConclusive(role:settleTxid:observation:)``):
+    /// opening them again shows the result with no scan, so the active
+    /// wallet keeps running.
+    static var settledLooks: Set<String> = []
     /// When a look at each link last failed. A failure sets no
     /// lastCheckedAt; without this, every new block would try again.
     private var lastFailedLook: [String: Date] = [:]
 
-    /// `only`: look at that one link (its detail is on screen).
+    /// `only`: look at that one link (its detail is on screen), of `role`.
     /// `matching`: look only at the links it accepts (the dashboard: the
     /// active wallet's open links).
     func start(
         walletManager: WalletManager,
         store: EnvelopeStore,
         only recordId: String? = nil,
+        role: EnvelopeRecord.Role = .sent,
         matching include: ((EnvelopeRecord) -> Bool)? = nil
     ) {
         guard task == nil else { return }
@@ -154,17 +161,27 @@ final class PaymentLinksStatusChecker: ObservableObject {
         // confirmations come from the active wallet. Only links that can
         // have moved are opened.
         let now = Date()
-        let candidates = store.sent.filter { record in
+        let pool = role == .sent ? store.sent : store.received
+        let candidates = pool.filter { record in
             guard record.link != nil, recordId == nil || record.id == recordId,
                   include?(record) ?? true else { return false }
             // One look per block is enough; a scan stops the active wallet.
             let last = [record.lastCheckedAt, lastFailedLook[record.id]].compactMap { $0 }.max()
             if let last, now.timeIntervalSince(last) < Self.recheckInterval { return false }
+            if record.status.isSettled {
+                if Self.settledLooks.contains(record.id) { return false }
+                // The detail of a settled link: one look for money left behind.
+                if recordId != nil {
+                    return EnvelopeStatusRules.isLeftoverCheckDue(record, transactions: walletManager.transactions,
+                                                                  now: now, interval: Self.recheckInterval)
+                }
+            }
+            guard record.role == .sent else { return false }
             switch EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid) {
             case .ready: return true
             case .reclaimed:
                 // The reclaim reached this wallet: nothing left to watch.
-                // Not seen here: look whether it dropped.
+                // Not seen here: look whether a claim beat it.
                 guard let txid = record.settleTxid else { return false }
                 return !walletManager.transactions.contains { $0.id == txid && $0.status != .failed }
             case .pending:
@@ -198,7 +215,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
             }
             for candidate in candidates {
                 guard !Task.isCancelled, let link = candidate.link,
-                      var record = store.record(id: candidate.id, role: .sent) else { continue }
+                      var record = store.record(id: candidate.id, role: candidate.role) else { continue }
                 let observation: EnvelopeObservation
                 do {
                     observation = try await EnvelopeRuntime.shared.check(
@@ -212,18 +229,27 @@ final class PaymentLinksStatusChecker: ObservableObject {
                     if !Task.isCancelled { self?.lastFailedLook[candidate.id] = Date() }
                     continue
                 }
-                if record.fundingTxid == nil { record.fundingTxid = observation.fundingTxids.first }
+                if record.role == .sent, record.fundingTxid == nil { record.fundingTxid = observation.fundingTxids.first }
+                let wasSettled = record.status.isSettled
                 let status = EnvelopeStatusRules.status(
                     for: observation,
-                    reclaimTxid: record.settleTxid,
-                    reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) },
-                    fundingKnown: record.fundingTxid != nil
+                    current: record.status,
+                    role: record.role,
+                    settleTxid: record.settleTxid,
+                    fundingKnown: record.role == .sent && record.fundingTxid != nil
                 )
+                if wasSettled, EnvelopeStatusRules.leftoverCheckIsConclusive(role: record.role, settleTxid: record.settleTxid, observation: observation) {
+                    Self.settledLooks.insert(record.id)
+                }
+                // A link that stays settled keeps the amount it settled with.
+                if !(wasSettled && status.isSettled) {
+                    record.noteBalance(observation.balance, sweepFee: nil)
+                    record.confirmations = observation.fundingConfirmations
+                }
                 record.status = status
-                record.lastBalance = observation.balance
-                record.confirmations = observation.fundingConfirmations
                 record.fundingHeight = observation.fundingHeight ?? record.fundingHeight
                 record.lastCheckedAt = Date()
+                if !status.isSettled { Self.settledLooks.remove(record.id) }
                 try? store.save(record)
                 if status.isSettled {
                     await EnvelopeRuntime.shared.deleteFiles(id: record.id)
@@ -336,6 +362,7 @@ struct PaymentLinkDetailView: View {
     @State private var claimPresentation: PaymentLinksCoordinator.Presentation?
     /// The dashboard and Activity's Links filter check every link: a sent
     /// link looks at its envelope here too, so a claim shows and Reclaim opens.
+    /// A settled link looks once for money left behind.
     @StateObject private var checker = PaymentLinksStatusChecker()
     @State private var isOnScreen = false
 
@@ -357,7 +384,7 @@ struct PaymentLinkDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             isOnScreen = true
-            checkSentLink()
+            checkLink()
         }
         .onDisappear {
             isOnScreen = false
@@ -365,7 +392,7 @@ struct PaymentLinkDetailView: View {
         }
         // A pending link can reach the unlock depth while this screen is open.
         .onChange(of: reachedUnlockDepth) { _, reached in
-            if reached, isOnScreen { checkSentLink() }
+            if reached, isOnScreen { checkLink() }
         }
         .sheet(item: $claimPresentation) { presentation in
             PaymentLinkClaimSheet(presentation: presentation)
@@ -470,9 +497,11 @@ struct PaymentLinkDetailView: View {
         return transaction.fee
     }
 
-    private func checkSentLink() {
-        guard role == .sent else { return }
-        checker.start(walletManager: walletManager, store: store, only: recordId)
+    /// A sent link's look at its envelope; a settled link of either role
+    /// looks once for money its settle left behind.
+    private func checkLink() {
+        guard role == .sent || record?.status.isSettled == true else { return }
+        checker.start(walletManager: walletManager, store: store, only: recordId, role: role)
     }
 
     private var reachedUnlockDepth: Bool {
@@ -516,13 +545,6 @@ struct PaymentLinkDetailView: View {
             }
 
             let actions = PaymentLinkDetailAction.actions(for: record, display: display)
-            if record.status.isSettled, record.link != nil {
-                Section {
-                    Button("Check link") {
-                        claimPresentation = .init(id: record.id, kind: .own)
-                    }
-                }
-            }
             if !actions.isEmpty {
                 Section {
                     ForEach(actions, id: \.self) { action in
@@ -616,7 +638,7 @@ struct PaymentLinkDetailView: View {
                     Button {
                         claimPresentation = .init(id: record.id, kind: .claim)
                     } label: {
-                        Label(record.status.isSettled ? "Check link" : "Claim", systemImage: "arrow.down.left")
+                        Label("Claim", systemImage: "arrow.down.left")
                             .foregroundStyle(.brand)
                     }
                     .accessibilityLabel("Claim the money")
@@ -655,14 +677,12 @@ enum PaymentLinkDetailAction: Hashable {
     /// the last scan said) can be shared again and reclaimed; Reclaim comes
     /// first once it expired. A sent link without one, or one that was
     /// claimed or reclaimed, offers nothing. A received link offers Claim
-    /// while its secret is available, including a fresh check after a claim.
+    /// until it is settled; money a settle left behind reopens it.
     static func actions(for record: EnvelopeRecord, display: PaymentLinkDisplay) -> [PaymentLinkDetailAction] {
         let hasLink = record.link != nil
         switch record.role {
         case .received:
-            // A fresh scan can recover a dropped claim or funding left locked
-            // by an earlier sweep. Retained secrets must remain usable.
-            return hasLink ? [.claim] : []
+            return !record.status.isSettled && hasLink ? [.claim] : []
         case .sent:
             // No Share while no funding is known: the envelope may be empty.
             guard record.fundingTxid != nil, display.status == .pending || display.status == .ready else { return [] }

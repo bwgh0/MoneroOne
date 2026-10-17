@@ -176,46 +176,113 @@ final class PaymentLinkTests: XCTestCase {
 
     // MARK: - Status rules
 
-    private func obs(seen: Bool = true, conf: Int = 0, balance: UInt64 = 0, unlocked: UInt64 = 0, spends: [String] = []) -> EnvelopeObservation {
-        EnvelopeObservation(fundingSeen: seen, fundingConfirmations: conf, balance: balance, unlockedBalance: unlocked, spendTxids: spends)
+    private func obs(seen: Bool = true, conf: Int = 0, balance: UInt64 = 0, unlocked: UInt64 = 0, spends: [String] = [], mined: [String] = []) -> EnvelopeObservation {
+        EnvelopeObservation(fundingSeen: seen, fundingConfirmations: conf, balance: balance, unlockedBalance: unlocked,
+                            spendTxids: spends, minedSpendTxids: mined)
     }
 
     func testStatusTable() {
         let rules = EnvelopeStatusRules.self
-        XCTAssertEqual(rules.status(for: .empty, reclaimTxid: nil), .notFunded)
+        XCTAssertEqual(rules.status(for: .empty), .notFunded)
         // In the pool: seen, no balance yet.
-        XCTAssertEqual(rules.status(for: obs(conf: 0), reclaimTxid: nil), .pending)
-        XCTAssertEqual(rules.status(for: obs(conf: 3, balance: 5), reclaimTxid: nil), .pending)
-        XCTAssertEqual(rules.status(for: obs(conf: 10, balance: 5, unlocked: 5), reclaimTxid: nil), .ready)
+        XCTAssertEqual(rules.status(for: obs(conf: 0)), .pending)
+        XCTAssertEqual(rules.status(for: obs(conf: 3, balance: 5)), .pending)
+        XCTAssertEqual(rules.status(for: obs(conf: 10, balance: 5, unlocked: 5)), .ready)
         // Balance gone with a spend on chain: claimed.
-        XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["claim"]), reclaimTxid: nil), .claimed)
+        XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["claim"], mined: ["claim"])), .claimed)
         // Balance zero, no spend seen: not claimed yet (pool or stale read).
-        XCTAssertEqual(rules.status(for: obs(conf: 12), reclaimTxid: nil), .pending)
-        // Our reclaim.
-        XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["ours"]), reclaimTxid: "ours"), .reclaimed)
-        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 5, unlocked: 5), reclaimTxid: "ours"), .reclaimed)
-        // Still in the pool a few minutes after it went out: reclaimed.
-        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 5, unlocked: 5), reclaimTxid: "ours", reclaimAge: 300), .reclaimed)
-        // Unseen long after, money still there: the reclaim dropped.
-        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 5, unlocked: 5), reclaimTxid: "ours", reclaimAge: 3600), .ready)
-        // Long after and seen: still reclaimed.
-        XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["ours"]), reclaimTxid: "ours", reclaimAge: 3600), .reclaimed)
-        // A confirmed sweep can leave a newer, still-locked funding behind.
-        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 7, spends: ["ours"]), reclaimTxid: "ours"), .pending)
-        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 7, unlocked: 7, spends: ["ours"]), reclaimTxid: "ours"), .ready)
-        // A claim won the race against our reclaim.
-        XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["claim"]), reclaimTxid: "ours"), .claimed)
+        XCTAssertEqual(rules.status(for: obs(conf: 12)), .pending)
+    }
+
+    /// Our reclaim went out. The link stays Reclaimed until the scan sees
+    /// it in a block with spendable money left behind; a claim that beat it
+    /// reads Claimed.
+    func testAReclaimedLinkReopensOnlyAfterItsReclaimIsMined() {
+        func status(_ observation: EnvelopeObservation, _ current: EnvelopeStatus = .reclaimed) -> EnvelopeStatus {
+            EnvelopeStatusRules.status(for: observation, current: current, role: .sent, settleTxid: "ours", fundingKnown: true)
+        }
+        XCTAssertEqual(status(obs(conf: 12, spends: ["ours"], mined: ["ours"])), .reclaimed)
+        // Still in the pool: a fresh envelope may not see it, and sees the
+        // money. However long it waits, it does not reopen.
+        XCTAssertEqual(status(obs(conf: 12, balance: 5, unlocked: 5)), .reclaimed)
+        XCTAssertEqual(status(obs(conf: 12, balance: 5, unlocked: 5, spends: ["ours"])), .reclaimed)
+        // Mined, and a newer funding is still locked: settled for now.
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, spends: ["ours"], mined: ["ours"])), .reclaimed)
+        // Mined, and spendable money is left: open again.
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7, spends: ["ours"], mined: ["ours"])), .ready)
+        // A claim won the race against our reclaim: Claimed, and final.
+        XCTAssertEqual(status(obs(conf: 12, spends: ["claim"], mined: ["claim"])), .claimed)
+        XCTAssertEqual(status(obs(conf: 12, balance: 5, unlocked: 5, spends: ["claim"], mined: ["claim"])), .claimed)
+        XCTAssertEqual(status(obs(conf: 12, balance: 5, unlocked: 5, spends: ["claim", "ours"], mined: ["claim", "ours"]), .claimed), .claimed)
+        // Open links follow the base rules, whatever an old reclaim says.
+        XCTAssertEqual(status(obs(conf: 12, balance: 5, unlocked: 5, spends: ["ours"], mined: ["ours"]), .ready), .ready)
+    }
+
+    /// Our claim, and links settled elsewhere: the same rule.
+    func testAClaimedLinkReopensOnlyAfterItsClaimIsMined() {
+        func status(_ observation: EnvelopeObservation, _ current: EnvelopeStatus, _ role: EnvelopeRecord.Role, _ settle: String?) -> EnvelopeStatus {
+            EnvelopeStatusRules.status(for: observation, current: current, role: role, settleTxid: settle)
+        }
+        // Our claim waits in the pool: the scan sees the money. Still Claimed.
+        XCTAssertEqual(status(obs(conf: 12, balance: 5, unlocked: 5), .claimed, .received, "mine"), .claimed)
+        XCTAssertEqual(status(obs(conf: 12, balance: 5, unlocked: 5, spends: ["mine"]), .claimed, .received, "mine"), .claimed)
+        XCTAssertEqual(status(obs(conf: 12, spends: ["mine"], mined: ["mine"]), .claimed, .received, "mine"), .claimed)
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, spends: ["mine"], mined: ["mine"]), .claimed, .received, "mine"), .claimed)
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7, spends: ["mine"], mined: ["mine"]), .claimed, .received, "mine"), .ready)
+        // Claimed by the recipient (sent), or reclaimed by the sender (received).
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7, spends: ["claim"]), .claimed, .sent, nil), .claimed)
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7, spends: ["claim"], mined: ["claim"]), .claimed, .sent, nil), .ready)
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7, spends: ["back"], mined: ["back"]), .reclaimed, .received, nil), .ready)
+        XCTAssertEqual(status(obs(conf: 12, balance: 7, unlocked: 7), .reclaimed, .received, nil), .reclaimed)
+    }
+
+    func testTheLeftoverCheckOfASettledLink() {
+        let rules = EnvelopeStatusRules.self
+        // Conclusive: the settle is in a block and nothing is left locked.
+        XCTAssertTrue(rules.leftoverCheckIsConclusive(role: .received, settleTxid: "mine", observation: obs(conf: 12, spends: ["mine"], mined: ["mine"])))
+        XCTAssertTrue(rules.leftoverCheckIsConclusive(role: .received, settleTxid: "mine", observation: obs(conf: 12, balance: 7, unlocked: 7, spends: ["mine"], mined: ["mine"])))
+        XCTAssertFalse(rules.leftoverCheckIsConclusive(role: .received, settleTxid: "mine", observation: obs(conf: 12, spends: ["mine"])))
+        XCTAssertFalse(rules.leftoverCheckIsConclusive(role: .received, settleTxid: "mine", observation: obs(conf: 12, balance: 7, spends: ["mine"], mined: ["mine"])))
+        XCTAssertFalse(rules.leftoverCheckIsConclusive(role: .sent, settleTxid: nil, observation: obs(conf: 12)))
+        XCTAssertTrue(rules.leftoverCheckIsConclusive(role: .sent, settleTxid: nil, observation: obs(conf: 12, spends: ["claim"], mined: ["claim"])))
+
+        let now = Date()
+        func due(_ role: EnvelopeRecord.Role, _ status: EnvelopeStatus, settle: String? = "mine", checked: TimeInterval? = nil,
+                 history: [MoneroTransaction] = []) -> Bool {
+            var record = storeRecord(UUID().uuidString, role)
+            record.status = status
+            record.settleTxid = settle
+            record.lastCheckedAt = checked.map { now.addingTimeInterval(-$0) }
+            return rules.isLeftoverCheckDue(record, transactions: history, now: now, interval: 120)
+        }
+        XCTAssertTrue(due(.received, .claimed))
+        XCTAssertTrue(due(.sent, .reclaimed))
+        XCTAssertTrue(due(.sent, .claimed, settle: nil))
+        XCTAssertFalse(due(.received, .ready))
+        // A claim beat our reclaim: final.
+        XCTAssertFalse(due(.sent, .claimed))
+        // At most one look every 2 minutes.
+        XCTAssertFalse(due(.received, .claimed, checked: 60))
+        XCTAssertTrue(due(.received, .claimed, checked: 600))
+        // Our claim still waits in this wallet's pool: a look cannot reopen it.
+        func claim(_ status: MoneroTransaction.TransactionStatus) -> MoneroTransaction {
+            MoneroTransaction(id: "mine", type: .incoming, amount: 1, fee: 0, address: "", timestamp: now, confirmations: nil,
+                              status: status, memo: nil, blockHeight: status == .confirmed ? 100 : nil)
+        }
+        XCTAssertFalse(due(.received, .claimed, history: [claim(.pending)]))
+        XCTAssertTrue(due(.received, .claimed, history: [claim(.confirmed)]))
+        XCTAssertTrue(due(.received, .claimed, history: [claim(.failed)]))
     }
 
     /// Link 10: the wallet's history has the funding, the envelope's scan
     /// did not see it. The link waits; it is never Not funded.
     func testAKnownFundingIsNeverNotFunded() {
         let rules = EnvelopeStatusRules.self
-        XCTAssertEqual(rules.status(for: .empty, reclaimTxid: nil, fundingKnown: true), .pending)
-        XCTAssertEqual(rules.status(for: .empty, reclaimTxid: nil, fundingKnown: false), .notFunded)
+        XCTAssertEqual(rules.status(for: .empty, fundingKnown: true), .pending)
+        XCTAssertEqual(rules.status(for: .empty, fundingKnown: false), .notFunded)
         // What the scan sees still wins once it sees the funding.
-        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 5, unlocked: 5), reclaimTxid: nil, fundingKnown: true), .ready)
-        XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["claim"]), reclaimTxid: nil, fundingKnown: true), .claimed)
+        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 5, unlocked: 5), fundingKnown: true), .ready)
+        XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["claim"]), fundingKnown: true), .claimed)
 
         XCTAssertEqual(rules.reconciled(.notFunded, role: .sent, fundingTxid: "f"), .pending)
         XCTAssertEqual(rules.reconciled(.created, role: .sent, fundingTxid: "f"), .pending)
@@ -356,7 +423,8 @@ final class PaymentLinkTests: XCTestCase {
         // A received link: Claim until it is settled.
         XCTAssertEqual(actions(.received, .pending), [.claim])
         XCTAssertEqual(actions(.received, .ready), [.claim])
-        XCTAssertEqual(actions(.received, .claimed), [.claim])
+        XCTAssertEqual(actions(.received, .claimed), [])
+        XCTAssertEqual(actions(.received, .reclaimed), [])
         XCTAssertEqual(actions(.received, .notFunded, secret: false), [])
     }
 
@@ -387,10 +455,12 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(pool, poolExpected)
 
         let mined = EnvelopeRuntime.observation(
-            transactions: [tx("f", .incoming, height: 190), tx("c", .outgoing, height: 199, amount: "0.4", fee: "0.1"), tx("x", .outgoing, height: nil, status: .failed)],
+            transactions: [tx("f", .incoming, height: 190), tx("c", .outgoing, height: 199, amount: "0.4", fee: "0.1"), tx("x", .outgoing, height: nil, status: .failed),
+                           tx("p", .outgoing, height: nil, status: .pending, amount: "0")],
             balance: Decimal(string: "0.5")!, unlocked: Decimal(string: "0.5")!, daemonHeight: 200
         )
-        var expected = obs(conf: 10, balance: 500_000_000_000, unlocked: 500_000_000_000, spends: ["c"])
+        // A spend in the pool is seen, not mined.
+        var expected = obs(conf: 10, balance: 500_000_000_000, unlocked: 500_000_000_000, spends: ["c", "p"], mined: ["c"])
         expected.fundingHeight = 190
         expected.fundingTxids = ["f"]
         XCTAssertEqual(mined, expected)
@@ -411,7 +481,7 @@ final class PaymentLinkTests: XCTestCase {
         )
         XCTAssertEqual(stale.balance, 0)
         XCTAssertEqual(stale.unlockedBalance, 0)
-        XCTAssertEqual(EnvelopeStatusRules.status(for: stale, reclaimTxid: nil), .claimed)
+        XCTAssertEqual(EnvelopeStatusRules.status(for: stale), .claimed)
     }
 
     func testClaimFeeReserveUsesWallet2PriorityTwo() {
@@ -468,9 +538,10 @@ final class PaymentLinkTests: XCTestCase {
         let saved = try XCTUnwrap(reloaded.record(id: record.id, role: .received))
         XCTAssertNotNil(saved.link)
         let display = PaymentLinkDisplay(record: saved, fundingConfirmations: nil, daemonHeight: nil)
-        XCTAssertEqual(PaymentLinkDetailAction.actions(for: saved, display: display), [.claim])
-        // A claim does not make an envelope with newer locked funds settled.
-        XCTAssertEqual(EnvelopeStatusRules.status(for: obs(conf: 12, balance: 7, unlocked: 0, spends: ["mined-claim"]), reclaimTxid: nil), .pending)
+        // Settled: no Claim. Money left behind reopens it.
+        XCTAssertEqual(PaymentLinkDetailAction.actions(for: saved, display: display), [])
+        XCTAssertEqual(EnvelopeStatusRules.status(for: obs(conf: 12, balance: 7, unlocked: 7, spends: ["mined-claim"], mined: ["mined-claim"]),
+                                                  current: saved.status, role: .received, settleTxid: saved.settleTxid), .ready)
     }
 
     @MainActor

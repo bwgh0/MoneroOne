@@ -471,7 +471,7 @@ struct PaymentLinkReviewStep: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.yellow)
                 .accessibilityHidden(true)
-            Text("Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it. Payment links are not restored by your wallet recovery phrase. Keep the link until the money is claimed or reclaimed.")
+            Text("Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it.")
                 .font(.subheadline)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -480,7 +480,7 @@ struct PaymentLinkReviewStep: View {
         .background(Color.yellow.opacity(0.15))
         .cornerRadius(12)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Warning: Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it. Payment links are not restored by your wallet recovery phrase. Keep the link until the money is claimed or reclaimed.")
+        .accessibilityLabel("Warning: Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it.")
     }
 }
 

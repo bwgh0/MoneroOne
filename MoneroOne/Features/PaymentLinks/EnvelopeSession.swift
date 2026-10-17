@@ -80,11 +80,14 @@ final class EnvelopeSession: ObservableObject {
     // MARK: - Lifecycle
 
     /// Opens the envelope and checks it. Keeps looking for new blocks while
-    /// the money is on its way.
+    /// the money is on its way. A claimed or reclaimed link shows its result
+    /// with no scan: a scan would stop the active wallet on every open, and
+    /// one made before our claim is mined still sees the money. The link's
+    /// detail looks once for money left behind (PaymentLinksStatusChecker).
     func start() async {
         stopped = false
         pollTask?.cancel()
-        guard let link = record.link else {
+        guard let link = record.link, !record.status.isSettled else {
             apply(status: record.status, observation: nil)
             return
         }
@@ -148,6 +151,7 @@ final class EnvelopeSession: ObservableObject {
             record.walletName = destination.walletName
             record.settledAt = Date()
             record.status = record.role == .sent ? .reclaimed : .claimed
+            PaymentLinksStatusChecker.settledLooks.remove(record.id)
             // Keep the secret until explicit Remove All: a mined sweep can
             // reorg, or leave newer locked funding in this envelope.
             try? store.save(record)
@@ -199,11 +203,11 @@ final class EnvelopeSession: ObservableObject {
         if record.role == .sent, record.fundingTxid == nil, let first = observation.fundingTxids.first {
             record.fundingTxid = first
         }
-        let reclaimTxid = record.role == .sent ? record.settleTxid : nil
         let status = EnvelopeStatusRules.status(
             for: observation,
-            reclaimTxid: reclaimTxid,
-            reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) },
+            current: record.status,
+            role: record.role,
+            settleTxid: record.settleTxid,
             fundingKnown: record.role == .sent && record.fundingTxid != nil
         )
         record.noteBalance(observation.balance, sweepFee: observation.sweepFee)

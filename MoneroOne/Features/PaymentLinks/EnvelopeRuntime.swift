@@ -439,6 +439,7 @@ final class EnvelopeRuntime: ObservableObject {
             balance: piconero(balance),
             unlockedBalance: piconero(unlocked),
             spendTxids: outgoing.map(\.id),
+            minedSpendTxids: outgoing.filter { $0.status == .confirmed && ($0.blockHeight ?? 0) > 0 }.map(\.id),
             fundingTxids: fundingTxids,
             fundingHeight: fundingHeight
         )

@@ -71,6 +71,9 @@ enum EnvelopeStatusRules {
     ///     (``settledStatus(_:role:settleTxid:observation:)``).
     ///   - role: whose link it is.
     ///   - settleTxid: our own claim or reclaim, if we sent one.
+    ///   - spendsBeforeSettle: the envelope's spends from before it (our
+    ///     earlier sweeps, and spends seen while the link was open). Ours, or
+    ///     older than ours: never a claim that beat it.
     ///   - settleFailed: that claim or reclaim dropped
     ///     (``settleHasFailed(settleTxid:settledAt:observation:transactions:now:)``).
     ///   - fundingKnown: a funding transaction is known (a sent link's
@@ -81,18 +84,24 @@ enum EnvelopeStatusRules {
         current: EnvelopeStatus = .pending,
         role: EnvelopeRecord.Role = .sent,
         settleTxid: String? = nil,
+        spendsBeforeSettle: [String] = [],
         settleFailed: Bool = false,
         fundingKnown: Bool = false
     ) -> EnvelopeStatus {
         if current.isSettled {
-            return settledStatus(current, role: role, settleTxid: settleTxid, settleFailed: settleFailed, observation: observation)
+            return settledStatus(current, role: role, settleTxid: settleTxid, spendsBeforeSettle: spendsBeforeSettle,
+                                 settleFailed: settleFailed, observation: observation)
         }
         guard observation.fundingSeen else { return fundingKnown ? .pending : .notFunded }
         if observation.balance == 0 {
             // Claimed only once a spend is on chain (wallet2 sees another
             // device's spend when it is mined). Zero balance and no spend
             // is a funding still in the pool, or a balance not read yet.
-            return observation.spendTxids.isEmpty ? .pending : .claimed
+            if observation.spendTxids.isEmpty { return .pending }
+            // Our earlier reclaim, mined after the link opened again (it
+            // read as dropped), took the money: still ours.
+            if role == .sent, Set(spendsBeforeSettle).isSuperset(of: observation.spendTxids) { return .reclaimed }
+            return .claimed
         }
         // wallet2 unlocks an output after 10 confirmations; unlocked money
         // is claimable whatever a second, newer funding still waits for.
@@ -106,12 +115,15 @@ enum EnvelopeStatusRules {
     /// envelope may not see our spend while it waits in the pool, so a scan
     /// from before it is mined still sees the money; inside its grace that
     /// scan must not reopen it.
-    static func settledStatus(_ settled: EnvelopeStatus, role: EnvelopeRecord.Role, settleTxid: String?, settleFailed: Bool = false, observation: EnvelopeObservation) -> EnvelopeStatus {
+    /// A spend that is neither our reclaim nor one from before it
+    /// (`spendsBeforeSettle`), with our reclaim not seen, is a claim that
+    /// beat it.
+    static func settledStatus(_ settled: EnvelopeStatus, role: EnvelopeRecord.Role, settleTxid: String?, spendsBeforeSettle: [String] = [], settleFailed: Bool = false, observation: EnvelopeObservation) -> EnvelopeStatus {
         let ours = settleTxid.flatMap { $0.isEmpty ? nil : $0 }
         if role == .sent, let ours {
             // A claim beat our reclaim: final.
             if settled == .claimed { return .claimed }
-            let otherSpend = observation.spendTxids.contains { $0 != ours }
+            let otherSpend = observation.spendTxids.contains { $0 != ours && !spendsBeforeSettle.contains($0) }
             if otherSpend && !observation.spendTxids.contains(ours) {
                 return .claimed
             }

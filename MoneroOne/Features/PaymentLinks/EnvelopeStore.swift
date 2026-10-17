@@ -55,6 +55,11 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     var settleSeenMined: Bool?
     /// The block height the last envelope scan reached.
     var lastScannedHeight: UInt64?
+    /// The envelope's spends from before our current claim or reclaim: our
+    /// earlier sweeps, kept when the link opened again, and the spends a
+    /// scan saw while it was open. None of them is a claim that beat ours.
+    /// Nil in records from before this field: none known.
+    var spendsBeforeSettle: [String]?
     /// Last envelope sync.
     var lastBalance: UInt64?
     var confirmations: Int?
@@ -118,13 +123,23 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     }
 
     /// A settled link is open again: our claim or reclaim dropped, or money
-    /// arrived after it. The old sweep no longer describes the link.
+    /// arrived after it. The old sweep no longer describes the link; its
+    /// txid stays in `spendsBeforeSettle`, so a later scan that shows it
+    /// reads it as ours.
     mutating func reopen() {
+        if let settleTxid, !settleTxid.isEmpty { noteSpendsBeforeSettle([settleTxid]) }
         settleTxid = nil
         settledAmount = nil
         settledAt = nil
         settleSeenMined = nil
         if role == .received { walletName = nil }
+    }
+
+    /// Adds `txids` to `spendsBeforeSettle`, once each.
+    mutating func noteSpendsBeforeSettle(_ txids: [String]) {
+        var spends = spendsBeforeSettle ?? []
+        for txid in txids where !txid.isEmpty && !spends.contains(txid) { spends.append(txid) }
+        if !spends.isEmpty { spendsBeforeSettle = spends }
     }
 
     /// Legacy helper. Automatic claim cleanup must never call this.

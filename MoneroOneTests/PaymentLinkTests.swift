@@ -386,6 +386,118 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertFalse(EnvelopeStatusRules.needsSettleLook(mined.record, transactions: []))
     }
 
+    /// Reclaimed, opened again by more money, reclaimed again: a scan that
+    /// shows the first reclaim (and not yet the second) never reads it as a
+    /// claim that beat ours. The earlier spends survive a restart.
+    @MainActor
+    func testASecondReclaimNeverReadsTheFirstAsAClaim() throws {
+        let now = Date()
+        var sent = storeRecord("0123456789abcdef", .sent)
+        sent.walletId = "w1"
+        sent.expiry = Int64(now.timeIntervalSince1970) + 86_400
+        sent.fundingTxid = "funding"
+        sent.status = .reclaimed
+        sent.settleTxid = "first"
+        sent.settledAt = now.addingTimeInterval(-3_600)
+        XCTAssertNil(sent.spendsBeforeSettle)
+
+        // More money came after the first reclaim was mined: open again.
+        let topUp = obs(conf: 30, balance: 5, unlocked: 5, spends: ["first"], mined: ["first"])
+        let reopened = PaymentLinksStatusChecker.applying(topUp, to: sent, transactions: [], now: now).record
+        XCTAssertEqual(reopened.status, .ready)
+        XCTAssertNil(reopened.settleTxid)
+        XCTAssertEqual(reopened.spendsBeforeSettle, ["first"])
+
+        // Saved and read back after a relaunch.
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        try store.save(reopened)
+        var again = try XCTUnwrap(EnvelopeStore(service: service).record(id: "0123456789abcdef", role: .sent))
+        XCTAssertEqual(again.spendsBeforeSettle, ["first"])
+
+        // The second reclaim goes out (as EnvelopeSession.sweep records it).
+        again.settleTxid = "second"
+        again.settledAt = now
+        again.status = .reclaimed
+        func scan(_ observation: EnvelopeObservation) -> EnvelopeRecord {
+            PaymentLinksStatusChecker.applying(observation, to: again, transactions: [], now: now).record
+        }
+        // The second still waits in the pool: the scan shows only the first.
+        XCTAssertEqual(scan(obs(conf: 30, balance: 5, unlocked: 5, spends: ["first"], mined: ["first"])).status, .reclaimed)
+        XCTAssertEqual(scan(obs(conf: 30, spends: ["first"], mined: ["first"])).status, .reclaimed)
+        // Both mined, the envelope empty: Reclaimed, and the check is done.
+        let both = obs(conf: 30, spends: ["first", "second"], mined: ["first", "second"])
+        XCTAssertEqual(scan(both).status, .reclaimed)
+        XCTAssertTrue(PaymentLinksStatusChecker.applying(both, to: again, transactions: [], now: now).conclusive)
+        // A new spend that is not ours, and ours not seen: a claim beat it.
+        XCTAssertEqual(scan(obs(conf: 30, spends: ["first", "claim"], mined: ["first", "claim"])).status, .claimed)
+
+        // A claim made elsewhere settled the link first, then more money
+        // came: the claim stays older than our reclaim.
+        var claimedFirst = sent
+        claimedFirst.status = .claimed
+        claimedFirst.settleTxid = nil
+        claimedFirst.settledAt = nil
+        let open = PaymentLinksStatusChecker.applying(obs(conf: 30, balance: 5, unlocked: 5, spends: ["their-claim"], mined: ["their-claim"]),
+                                                      to: claimedFirst, transactions: [], now: now).record
+        XCTAssertEqual(open.status, .ready)
+        XCTAssertEqual(open.spendsBeforeSettle, ["their-claim"])
+        var ours = open
+        ours.settleTxid = "ours"
+        ours.settledAt = now
+        ours.status = .reclaimed
+        XCTAssertEqual(PaymentLinksStatusChecker.applying(obs(conf: 30, balance: 5, unlocked: 5, spends: ["their-claim"], mined: ["their-claim"]),
+                                                          to: ours, transactions: [], now: now).record.status, .reclaimed)
+    }
+
+    /// Our reclaim read as dropped and the link opened again, then the
+    /// reclaim was mined after all: Reclaimed, not Claimed.
+    func testALateMinedOldReclaimReadsReclaimed() {
+        let now = Date()
+        var sent = storeRecord("0123456789abcdef", .sent)
+        sent.walletId = "w1"
+        sent.expiry = Int64(now.timeIntervalSince1970) + 86_400
+        sent.fundingTxid = "funding"
+        sent.status = .reclaimed
+        sent.settleTxid = "slow"
+        sent.settledAt = now.addingTimeInterval(-2 * EnvelopeStatusRules.settleGrace)
+        // Past its grace, seen nowhere: dropped, the link opens again.
+        let reopened = PaymentLinksStatusChecker.applying(obs(conf: 30, balance: 7, unlocked: 7), to: sent, transactions: [], now: now).record
+        XCTAssertEqual(reopened.status, .ready)
+        XCTAssertNil(reopened.settleTxid)
+        XCTAssertEqual(reopened.spendsBeforeSettle, ["slow"])
+
+        func scan(_ observation: EnvelopeObservation) -> EnvelopeStatus {
+            PaymentLinksStatusChecker.applying(observation, to: reopened, transactions: [], now: now).record.status
+        }
+        XCTAssertEqual(scan(obs(conf: 30, spends: ["slow"], mined: ["slow"])), .reclaimed)
+        // Another spend took the money: Claimed.
+        XCTAssertEqual(scan(obs(conf: 30, spends: ["claim"], mined: ["claim"])), .claimed)
+        XCTAssertEqual(scan(obs(conf: 30, spends: ["slow", "claim"], mined: ["slow", "claim"])), .claimed)
+        // A received link: our old claim, mined late, is still a claim.
+        var received = storeRecord("0123456789abcdef", .received)
+        received.status = .claimed
+        received.settleTxid = "slow"
+        received.settledAt = sent.settledAt
+        let claimable = PaymentLinksStatusChecker.applying(obs(conf: 30, balance: 7, unlocked: 7), to: received, transactions: [], now: now).record
+        XCTAssertEqual(claimable.status, .ready)
+        XCTAssertEqual(claimable.spendsBeforeSettle, ["slow"])
+        XCTAssertEqual(PaymentLinksStatusChecker.applying(obs(conf: 30, spends: ["slow"], mined: ["slow"]), to: claimable, transactions: [], now: now).record.status,
+                       .claimed)
+    }
+
+    /// Records saved before `spendsBeforeSettle` existed decode with none.
+    func testOldRecordsDecodeWithNoEarlierSpends() throws {
+        var record = storeRecord("0123456789abcdef", .sent)
+        record.spendsBeforeSettle = nil
+        let data = try JSONEncoder().encode(record)
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("spendsBeforeSettle"))
+        let decoded = try JSONDecoder().decode(EnvelopeRecord.self, from: data)
+        XCTAssertNil(decoded.spendsBeforeSettle)
+        XCTAssertEqual(decoded, record)
+    }
+
     func testOnlyErrorsBeforeTheBroadcastSkipTheHiddenScan() {
         XCTAssertTrue(WalletManager.sendLeftNothingOnNetwork(MoneroCoreError.transactionSendFailed("not enough unlocked money")))
         XCTAssertTrue(WalletManager.sendLeftNothingOnNetwork(MoneroCoreError.insufficientFunds("1.0")))

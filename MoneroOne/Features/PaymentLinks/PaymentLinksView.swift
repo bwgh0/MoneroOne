@@ -270,6 +270,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
             current: record.status,
             role: record.role,
             settleTxid: record.settleTxid,
+            spendsBeforeSettle: record.spendsBeforeSettle ?? [],
             settleFailed: failed,
             fundingKnown: record.role == .sent && record.fundingTxid != nil
         )
@@ -283,6 +284,9 @@ final class PaymentLinksStatusChecker: ObservableObject {
             record.noteBalance(observation.balance, sweepFee: observation.sweepFee)
             record.confirmations = observation.fundingConfirmations
         }
+        // While the link is open, every spend a scan sees is older than any
+        // claim or reclaim still to come.
+        if !status.isSettled { record.noteSpendsBeforeSettle(observation.spendTxids) }
         record.status = status
         record.fundingHeight = observation.fundingHeight ?? record.fundingHeight
         if observation.height > 0 {

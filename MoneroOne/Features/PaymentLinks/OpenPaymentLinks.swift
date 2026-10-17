@@ -39,9 +39,16 @@ enum OpenPaymentLinks {
     }
 
     /// A received link this device can still claim: not settled, and it
-    /// still has the secret.
-    static func isWaitingToClaim(_ record: EnvelopeRecord) -> Bool {
+    /// still has the secret. Pending money or not, it is open.
+    static func isToClaim(_ record: EnvelopeRecord) -> Bool {
         record.role == .received && !record.status.isSettled && record.link != nil
+    }
+
+    /// A received link that waits to be claimed: `isToClaim`, unless its
+    /// money never arrived in its days to claim. That one is History, as
+    /// Expired, until money shows up.
+    static func isWaitingToClaim(_ record: EnvelopeRecord, now: Date = Date()) -> Bool {
+        isToClaim(record) && !record.isReceivedExpired(now: now)
     }
 
     static func summary(of records: [EnvelopeRecord], activeWalletId: String?, now: Date = Date()) -> Summary {
@@ -51,7 +58,7 @@ enum OpenPaymentLinks {
                 summary.sentCount += 1
                 summary.sentAmount += record.amount
                 if record.isExpired(now: now) { summary.expiredCount += 1 }
-            } else if isWaitingToClaim(record) {
+            } else if isWaitingToClaim(record, now: now) {
                 summary.toClaimCount += 1
                 if let amount = record.claimAmount, let total = summary.toClaimAmount {
                     summary.toClaimAmount = total + amount
@@ -263,7 +270,7 @@ struct OpenPaymentLinkLines: View {
 
     /// The one link waiting, if there is only one.
     private var onlyLinkToClaim: EnvelopeRecord? {
-        let waiting = store.received.filter(OpenPaymentLinks.isWaitingToClaim)
+        let waiting = store.received.filter { OpenPaymentLinks.isWaitingToClaim($0) }
         return waiting.count == 1 ? waiting.first : nil
     }
 

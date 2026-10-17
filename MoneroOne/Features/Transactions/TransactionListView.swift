@@ -652,17 +652,19 @@ enum TransactionListLogic {
     /// of its own among the transactions, at the date it was opened. Now
     /// only, with no search or address filter. Our open links are not here:
     /// their funding rows say where each one stands, so every link shows
-    /// once.
+    /// once. Links also lists the ones whose money never came in their
+    /// days to claim, under History as Expired; All leaves them out.
     static func linksToClaim(
         _ records: [EnvelopeRecord],
         type: TransactionListView.FilterType,
         receivingIndex: Int?,
         search: String,
-        asOf: Date?
+        asOf: Date?,
+        now: Date = Date()
     ) -> [EnvelopeRecord] {
         guard type == .all || type == .links, asOf == nil, search.isEmpty, receivingIndex == nil else { return [] }
         return records
-            .filter(OpenPaymentLinks.isWaitingToClaim)
+            .filter { type == .links ? OpenPaymentLinks.isToClaim($0) : OpenPaymentLinks.isWaitingToClaim($0, now: now) }
             .sorted { $0.createdAt > $1.createdAt }
     }
 
@@ -678,15 +680,20 @@ enum TransactionListLogic {
 
     /// The Links filter's two groups. Open: the links that still hold
     /// money (our funding rows that are Waiting, Ready or Expired, and the
-    /// links sent to us not claimed yet). History: every other link row.
-    /// Each newest first; every row once.
-    static func linkSections(_ items: [ActivityListItem], records: [EnvelopeRecord]) -> (open: [ActivityListItem], history: [ActivityListItem]) {
+    /// links sent to us not claimed yet). History: every other link row,
+    /// a link sent to us whose money never came in its days to claim among
+    /// them. Each newest first; every row once.
+    static func linkSections(_ items: [ActivityListItem], records: [EnvelopeRecord], now: Date = Date()) -> (open: [ActivityListItem], history: [ActivityListItem]) {
         var open: [ActivityListItem] = []
         var history: [ActivityListItem] = []
         for item in items {
             switch item {
-            case .linkToClaim:
-                open.append(item)
+            case .linkToClaim(let record):
+                if OpenPaymentLinks.isWaitingToClaim(record, now: now) {
+                    open.append(item)
+                } else {
+                    history.append(item)
+                }
             case .transaction(let tx):
                 let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: tx.type == .incoming, records: records)
                 if let link, link.kind == .funding, !link.record.status.isSettled, tx.status != .failed {

@@ -675,4 +675,99 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertFalse(Checks.isLookDue(isDue: false, lastLook: now.addingTimeInterval(-9 * 60), now: now))
         XCTAssertTrue(Checks.isLookDue(isDue: false, lastLook: now.addingTimeInterval(-10 * 60), now: now))
     }
+
+    // MARK: - Received links whose money never came
+
+    /// A received link stays open for its days to claim, then goes to
+    /// History as Expired and leaves the home line. Android 1c8809b has the
+    /// same rule.
+    private func received(_ status: EnvelopeStatus, days: Double, expiry: Int64 = 0, id: String = "r") -> EnvelopeRecord {
+        var r = open(.received, status, id: id, expiry: expiry)
+        r.createdAt = now.addingTimeInterval(-days * 24 * 60 * 60)
+        return r
+    }
+
+    private let now = Date(timeIntervalSince1970: 1_792_000_000)
+
+    func testAReceivedLinkWithNoMoneyExpiresAfter30Days() {
+        for status in [EnvelopeStatus.created, .notFunded] {
+            XCTAssertFalse(received(status, days: 29).isReceivedExpired(now: now))
+            XCTAssertTrue(received(status, days: 31).isReceivedExpired(now: now))
+            XCTAssertTrue(OpenPaymentLinks.isWaitingToClaim(received(status, days: 29), now: now))
+            XCTAssertFalse(OpenPaymentLinks.isWaitingToClaim(received(status, days: 31), now: now))
+            // Still a link to claim: it keeps its secret.
+            XCTAssertTrue(OpenPaymentLinks.isToClaim(received(status, days: 31)))
+        }
+        // Money in it: open whatever its age.
+        for status in [EnvelopeStatus.pending, .ready] {
+            XCTAssertFalse(received(status, days: 31).isReceivedExpired(now: now))
+            XCTAssertTrue(OpenPaymentLinks.isWaitingToClaim(received(status, days: 31), now: now))
+        }
+        // Settled links and our own links never read this.
+        XCTAssertFalse(received(.claimed, days: 31).isReceivedExpired(now: now))
+        XCTAssertFalse(received(.reclaimed, days: 31).isReceivedExpired(now: now))
+        var sent = open(.sent, .notFunded, fundingTxid: nil)
+        sent.createdAt = now.addingTimeInterval(-31 * 24 * 60 * 60)
+        XCTAssertFalse(sent.isReceivedExpired(now: now))
+    }
+
+    /// A v1 link carries its own expiry; a v2 link (expiry 0) counts 30
+    /// days from when this device got it.
+    func testAReceivedLinkUsesItsOwnExpiryWhenItHasOne() {
+        let rules = EnvelopeStatusRules.self
+        let got = now.addingTimeInterval(-2 * 24 * 60 * 60)
+        XCTAssertEqual(rules.claimDeadline(expiry: 0, receivedAt: got), got.addingTimeInterval(EnvelopeLink.defaultLifetime))
+        XCTAssertEqual(rules.claimDeadline(expiry: 1_791_000_000, receivedAt: got), Date(timeIntervalSince1970: 1_791_000_000))
+        // Two days old, but its own expiry passed.
+        XCTAssertTrue(received(.notFunded, days: 2, expiry: 1_791_000_000).isReceivedExpired(now: now))
+        XCTAssertFalse(received(.notFunded, days: 31, expiry: 1_793_000_000).isReceivedExpired(now: now))
+    }
+
+    @MainActor
+    func testAnExpiredReceivedLinkMovesToHistoryAndLeavesTheHomeLine() {
+        let fresh = received(.notFunded, days: 29, id: "fresh")
+        let old = received(.notFunded, days: 31, id: "old")
+        let records = [fresh, old]
+
+        // Links lists both; All only the one still waiting.
+        let links = TransactionListLogic.linksToClaim(records, type: .links, receivingIndex: nil, search: "", asOf: nil, now: now)
+        XCTAssertEqual(links.map(\.id), ["fresh", "old"])
+        let all = TransactionListLogic.linksToClaim(records, type: .all, receivingIndex: nil, search: "", asOf: nil, now: now)
+        XCTAssertEqual(all.map(\.id), ["fresh"])
+
+        let items = TransactionListLogic.items(transactions: [], linksToClaim: links)
+        let sections = TransactionListLogic.linkSections(items, records: records, now: now)
+        XCTAssertEqual(sections.open.map(\.id), ["link.fresh"])
+        XCTAssertEqual(sections.history.map(\.id), ["link.old"])
+        XCTAssertEqual(TransactionListLogic.linksSummaryTitle(items, openCount: sections.open.count, records: records), "2 links · 1 open")
+
+        // The balance card's Claim line counts the fresh one only.
+        XCTAssertEqual(OpenPaymentLinks.summary(of: records, activeWalletId: "w1", now: now).toClaimCount, 1)
+        XCTAssertTrue(OpenPaymentLinks.summary(of: [old], activeWalletId: "w1", now: now).isEmpty)
+
+        // Its row and its detail read Expired.
+        XCTAssertEqual(PendingPaymentLinks.state(of: old, daemonHeight: 2000, now: now), .expired)
+        XCTAssertEqual(PendingPaymentLinks.label(for: .expired), "Expired")
+        XCTAssertEqual(PaymentLinkRowStatus.toClaim(.expired), .expired)
+        XCTAssertEqual(PendingPaymentLinks.state(of: fresh, daemonHeight: 2000, now: now), .noMoney)
+        let display = PaymentLinkDisplay(record: old, fundingConfirmations: nil, daemonHeight: 2000, now: now)
+        XCTAssertTrue(display.isExpired)
+        XCTAssertEqual(display.label, "Expired")
+        XCTAssertFalse(PaymentLinkDisplay(record: fresh, fundingConfirmations: nil, daemonHeight: 2000, now: now).isExpired)
+    }
+
+    /// Money that shows up after the 30 days brings the link back to Open.
+    @MainActor
+    func testAnExpiredReceivedLinkComesBackWhenMoneyShowsUp() {
+        var late = received(.notFunded, days: 40, id: "late")
+        XCTAssertFalse(OpenPaymentLinks.isWaitingToClaim(late, now: now))
+        late.status = .pending
+        late.fundingHeight = 1990
+        XCTAssertTrue(OpenPaymentLinks.isWaitingToClaim(late, now: now))
+        let items = TransactionListLogic.items(transactions: [], linksToClaim: [late])
+        XCTAssertEqual(TransactionListLogic.linkSections(items, records: [late], now: now).open.map(\.id), ["link.late"])
+        XCTAssertEqual(OpenPaymentLinks.summary(of: [late], activeWalletId: "w1", now: now).toClaimCount, 1)
+        XCTAssertEqual(PendingPaymentLinks.state(of: late, daemonHeight: 1995, now: now), .waiting(minutes: 10))
+        XCTAssertFalse(PaymentLinkDisplay(record: late, fundingConfirmations: nil, daemonHeight: 1995, now: now).isExpired)
+    }
 }

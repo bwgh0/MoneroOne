@@ -98,6 +98,22 @@ enum EnvelopeStatusRules {
         return now.timeIntervalSince1970 > TimeInterval(expiry)
     }
 
+    /// When a received link's days to claim end: its own expiry (a v1
+    /// link carries one), else 30 days after this device got it (a v2
+    /// link carries none).
+    static func claimDeadline(expiry: Int64, receivedAt: Date) -> Date {
+        expiry > 0 ? Date(timeIntervalSince1970: TimeInterval(expiry)) : receivedAt.addingTimeInterval(EnvelopeLink.defaultLifetime)
+    }
+
+    /// A received link whose money never arrived (no check saw any) and
+    /// whose days to claim are over: it leaves Open and the balance card's
+    /// line for History, as Expired. It keeps its secret, so money that
+    /// shows up later (a check reads pending or ready) brings it back.
+    static func isReceivedExpired(_ status: EnvelopeStatus, role: EnvelopeRecord.Role, expiry: Int64, receivedAt: Date, now: Date) -> Bool {
+        guard role == .received, status == .created || status == .notFunded else { return false }
+        return now > claimDeadline(expiry: expiry, receivedAt: receivedAt)
+    }
+
     /// A sent record whose funding transaction is known reads at least
     /// pending: "created" and "not funded" would contradict the wallet's
     /// own history.
@@ -111,6 +127,25 @@ enum EnvelopeStatusRules {
     static func scanFloor(restoreHeight: UInt64, fundingHeight: UInt64?) -> UInt64 {
         guard let fundingHeight, fundingHeight > 0 else { return restoreHeight }
         return min(restoreHeight, fundingHeight)
+    }
+
+    /// Saved envelope files hold a scan that started at `savedStart`: it
+    /// was written once the envelope's first refresh ran and was saved, so
+    /// a scan cut off later (a timeout, a close) resumes. Those files are
+    /// used when that scan started at or below `floor`. Files with no saved
+    /// start (the app was killed before the first save, or files from
+    /// before this record) are rebuilt from the words.
+    static func canReuseScan(savedStart: UInt64?, floor: UInt64) -> Bool {
+        guard let savedStart else { return false }
+        return savedStart <= floor
+    }
+
+    /// The envelope's first refresh ran: wallet2 pulled the block hashes
+    /// up to the scan start and scans from there. Before it, the wallet
+    /// holds one block (height 1, or 0 before the kit reports), and a save
+    /// then makes the next open skip to the chain tip.
+    static func hasRefreshed(walletHeight: UInt64, scanFrom: UInt64) -> Bool {
+        walletHeight >= max(scanFrom, 2)
     }
 
     /// The envelope wallet must be scanned again from `floor`. wallet2

@@ -106,7 +106,8 @@ enum PaymentLinkRowStatus: Equatable {
     case ready
     case claimed
     case reclaimed
-    /// Sent, past its expiry and still holding the money.
+    /// Sent, past its expiry and still holding the money; or sent to us,
+    /// and no money came in its days to claim.
     case expired
     /// Sent to us: we can claim it now.
     case readyToClaim
@@ -126,7 +127,11 @@ enum PaymentLinkRowStatus: Equatable {
 
     /// A link sent to us, not claimed yet.
     static func toClaim(_ state: PendingPaymentLinks.State) -> PaymentLinkRowStatus {
-        state == .ready ? .readyToClaim : .waiting
+        switch state {
+        case .ready: return .readyToClaim
+        case .expired: return .expired
+        default: return .waiting
+        }
     }
 
     var text: String {
@@ -335,13 +340,16 @@ enum PendingPaymentLinks {
         case waiting(minutes: Int)
         /// 10 confirmations or more, as far as this device knows.
         case ready
+        /// No money arrived in its days to claim
+        /// (`EnvelopeRecord.isReceivedExpired`): History, as Expired.
+        case expired
     }
 
     /// Newest first. Only links this device can still claim (it has the
     /// secret) and that are not settled.
     @MainActor
     static func records(in store: EnvelopeStore) -> [EnvelopeRecord] {
-        store.received.filter(OpenPaymentLinks.isWaitingToClaim)
+        store.received.filter { OpenPaymentLinks.isWaitingToClaim($0) }
     }
 
     /// Confirmations come from the funding height the last check saw and
@@ -349,6 +357,7 @@ enum PendingPaymentLinks {
     /// height (the funding was still in the mempool), the count of the last
     /// check less the minutes since.
     static func state(of record: EnvelopeRecord, daemonHeight: UInt64, now: Date = Date()) -> State {
+        if record.isReceivedExpired(now: now) { return .expired }
         let unlock = EnvelopeLink.confirmationsToUnlock
         switch record.status {
         case .created, .claimed, .reclaimed:
@@ -376,6 +385,7 @@ enum PendingPaymentLinks {
         case .noMoney: return String(localized: "No money yet", comment: "Payment link sent to you: the link holds no money yet")
         case .waiting(let minutes): return String(localized: "Ready in about \(minutes) min")
         case .ready: return String(localized: "Ready to claim")
+        case .expired: return String(localized: "Expired")
         }
     }
 }

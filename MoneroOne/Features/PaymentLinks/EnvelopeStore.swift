@@ -163,6 +163,13 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
         EnvelopeStatusRules.isExpired(status, expiry: expiry, now: now)
     }
 
+    /// A received link that never got money in its days to claim (see
+    /// `EnvelopeStatusRules.isReceivedExpired`); `createdAt` is when this
+    /// device got it.
+    func isReceivedExpired(now: Date = Date()) -> Bool {
+        EnvelopeStatusRules.isReceivedExpired(status, role: role, expiry: expiry, receivedAt: createdAt, now: now)
+    }
+
     /// A received record we finished (claimed here) or that turned out empty.
     var isDone: Bool { status.isSettled }
 }

@@ -81,6 +81,7 @@ struct PaymentLinkDisplay {
         self.role = record.role
         self.claimedHere = record.role == .received && record.settleTxid != nil
         self.isExpired = EnvelopeStatusRules.isExpired(status, expiry: record.expiry, now: now)
+            || EnvelopeStatusRules.isReceivedExpired(status, role: record.role, expiry: record.expiry, receivedAt: record.createdAt, now: now)
     }
 
     /// A sent link's Reclaim button is on.

@@ -81,6 +81,14 @@ final class EnvelopeRuntime: ObservableObject {
     /// Envelopes scanned again this run because they missed a mined
     /// funding; that rescan runs once per run.
     private var rescannedIds = Set<String>()
+    /// The open envelope's scan starts at this height.
+    private var openScanFrom: UInt64?
+    /// When the open envelope's first refresh reached `openScanFrom`. A
+    /// save after this time holds a scanned wallet, so the close records
+    /// the scan start on disk (see `closeEnvelopeNow`).
+    private var openScanRefreshedAt: Date?
+    /// "Link 7", for the diagnostic log.
+    private var openName: String?
     private var lockObserver: AnyCancellable?
 
     private init() {
@@ -187,9 +195,9 @@ final class EnvelopeRuntime: ObservableObject {
     /// With `estimateSweepFee`, the observation carries the claim sweep's fee.
     ///
     /// The scan must start at or below the link's restore height, and at or
-    /// below `fundingHeight` when the funding block is known. An envelope
-    /// whose scan started higher (wallet2 moves the start of a wallet saved
-    /// before its first scan to the chain tip when it opens again), or that
+    /// below `fundingHeight` when the funding block is known. Saved files
+    /// are used only when they record a saved scan from there (see
+    /// `openEnvelope`). An envelope whose scan started higher, or that
     /// missed a funding mined below its height, is scanned again from there:
     /// its files go and the wallet is restored from the words.
     /// - Parameters:
@@ -202,7 +210,7 @@ final class EnvelopeRuntime: ObservableObject {
             let name = Self.logName(number)
             let floor = EnvelopeStatusRules.scanFloor(restoreHeight: link.restoreHeight, fundingHeight: fundingHeight)
             if openEnvelopeId != link.id {
-                try await openEnvelope(link, restoreHeight: link.restoreHeight, networkType: walletManager.networkType)
+                try await openEnvelope(link, floor: floor, name: name, networkType: walletManager.networkType)
             } else {
                 envelope?.startSync()
             }
@@ -232,7 +240,7 @@ final class EnvelopeRuntime: ObservableObject {
                 rescannedIds.insert(link.id)
                 await closeEnvelopeNow()
                 Self.removeFiles(id: link.id)
-                try await openEnvelope(link, restoreHeight: floor, networkType: walletManager.networkType)
+                try await openEnvelope(link, floor: floor, name: name, networkType: walletManager.networkType)
             }
             guard let wallet = envelope else { throw RuntimeError.walletBusy }
             if rescan {
@@ -247,21 +255,39 @@ final class EnvelopeRuntime: ObservableObject {
         }
     }
 
-    /// Restores the envelope wallet of `link` (or opens its cache) and makes
-    /// it the open envelope.
-    private func openEnvelope(_ link: EnvelopeLink, restoreHeight: UInt64, networkType: MoneroKit.NetworkType) async throws {
+    /// Makes the envelope of `link` the open one. Its saved files are used
+    /// only when they record a scan start at or below `floor`, written once
+    /// a refresh was saved. Other files go, and the wallet is restored from
+    /// the words to scan from `floor`: files saved before the first refresh
+    /// (wallet2 saves a new wallet at once; the app was then killed) make
+    /// wallet2 open a "new" wallet, move its start to the chain tip and
+    /// skip every block below it, the funding among them, for good.
+    private func openEnvelope(_ link: EnvelopeLink, floor: UInt64, name: String, networkType: MoneroKit.NetworkType) async throws {
         await closeEnvelopeNow()
+        var start = floor
+        if let dir = Self.directory(for: link.id), FileManager.default.fileExists(atPath: dir.path) {
+            let savedStart = Self.savedScanStart(in: dir)
+            if EnvelopeStatusRules.canReuseScan(savedStart: savedStart, floor: floor), let savedStart {
+                start = savedStart
+            } else {
+                DiagnosticLog.shared.log("Envelope rebuild: \(name), \(savedStart.map { "saved scan from \($0)" } ?? "no saved scan"), scanning from \(floor)")
+                Self.removeFiles(id: link.id)
+            }
+        }
         let wallet = MoneroWallet()
         syncProgress = 0
         Self.excludeEnvelopesFromBackup()
         try await wallet.create(
             seed: link.words,
-            restoreHeight: restoreHeight,
+            restoreHeight: start,
             networkType: networkType,
             cacheIdOverride: Self.cacheId(for: link.id)
         )
         envelope = wallet
         openEnvelopeId = link.id
+        openScanFrom = start
+        openScanRefreshedAt = nil
+        openName = name
     }
 
     private static func verifyAddress(of wallet: MoneroWallet, is address: String) throws {
@@ -339,10 +365,27 @@ final class EnvelopeRuntime: ObservableObject {
 
     private func closeEnvelopeNow() async {
         guard let wallet = envelope else { return }
+        let id = openEnvelopeId
+        let scanFrom = openScanFrom
+        let refreshedAt = openScanRefreshedAt
+        let name = openName ?? Self.logName(nil)
         envelope = nil
         openEnvelopeId = nil
+        openScanFrom = nil
+        openScanRefreshedAt = nil
+        openName = nil
         syncProgress = nil
+        // The kit saves the wallet as it closes. Record the scan start only
+        // when that save came after a refresh: a save can fail, and a
+        // wallet saved before its first refresh must never be reused.
         await wallet.stopAsync()
+        if let refreshedAt, let id, let scanFrom, let dir = Self.directory(for: id),
+           let saved = Self.walletSavedAt(in: dir), saved >= refreshedAt {
+            Self.markScanStart(in: dir, from: scanFrom)
+            DiagnosticLog.shared.log("Envelope saved: \(name), scan from \(scanFrom)")
+        } else if refreshedAt != nil {
+            DiagnosticLog.shared.log("Envelope save not seen: \(name), its next open scans again")
+        }
     }
 
     private func observe(_ wallet: MoneroWallet) async -> EnvelopeObservation {
@@ -407,6 +450,9 @@ final class EnvelopeRuntime: ObservableObject {
         while true {
             try Task.checkCancellation()
             if generation != started { throw CancellationError() }
+            // Before the synced check: a short scan can report its first
+            // height and synced in one update.
+            noteRefresh(of: wallet)
             switch wallet.syncState {
             case .synced where wallet.daemonHeight > 0 && wallet.daemonHeight >= tip:
                 return
@@ -427,6 +473,14 @@ final class EnvelopeRuntime: ObservableObject {
             }
             try await Task.sleep(for: .milliseconds(400))
         }
+    }
+
+    /// The open envelope's first refresh reached its scan start: blocks
+    /// from there on are being scanned, and a save from now on resumes.
+    private func noteRefresh(of wallet: MoneroWallet) {
+        guard wallet === envelope, openScanRefreshedAt == nil, let scanFrom = openScanFrom,
+              EnvelopeStatusRules.hasRefreshed(walletHeight: wallet.walletHeight, scanFrom: scanFrom) else { return }
+        openScanRefreshedAt = Date()
     }
 
     private func pauseForBackground() {
@@ -456,6 +510,32 @@ final class EnvelopeRuntime: ObservableObject {
     }
 
     nonisolated static func cacheId(for id: String) -> String { "envelopes/\(id)" }
+
+    nonisolated static let scanStartFile = "scan-start"
+
+    /// The height the saved scan of the envelope in `dir` started at. Nil
+    /// when no refresh was saved (files from before this record, too).
+    nonisolated static func savedScanStart(in dir: URL) -> UInt64? {
+        guard let text = try? String(contentsOf: dir.appendingPathComponent(scanStartFile), encoding: .utf8) else { return nil }
+        return UInt64(text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    nonisolated static func markScanStart(in dir: URL, from height: UInt64) {
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        try? String(height).write(to: dir.appendingPathComponent(scanStartFile), atomically: true, encoding: .utf8)
+    }
+
+    /// When the kit last saved the envelope's wallet cache (the file named
+    /// "wallet" under `dir`). Nil when there is none.
+    nonisolated static func walletSavedAt(in dir: URL) -> Date? {
+        guard let files = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return nil }
+        var newest: Date?
+        for case let url as URL in files where url.lastPathComponent == "wallet" {
+            guard let date = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate else { continue }
+            newest = max(newest ?? date, date)
+        }
+        return newest
+    }
 
     /// Deletes the envelope's wallet files (never the record or its secret).
     private static func removeFiles(id: String) {

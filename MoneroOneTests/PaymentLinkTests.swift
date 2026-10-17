@@ -258,6 +258,63 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertFalse(rescan(start: 1934, height: 1934))
     }
 
+    /// Saved envelope files are reused only with a recorded scan start at
+    /// or below the floor. Files with none (the app was killed before the
+    /// first save, files from before the record) are rebuilt (Link 18:
+    /// a kill during a received link's first scan).
+    func testSavedEnvelopeFilesNeedARecordedScanStart() {
+        let rules = EnvelopeStatusRules.self
+        XCTAssertFalse(rules.canReuseScan(savedStart: nil, floor: 1608))
+        XCTAssertTrue(rules.canReuseScan(savedStart: 1608, floor: 1608))
+        XCTAssertTrue(rules.canReuseScan(savedStart: 1500, floor: 1608))
+        // A scan from higher up missed blocks the floor needs.
+        XCTAssertFalse(rules.canReuseScan(savedStart: 1964, floor: 1608))
+    }
+
+    /// The scan start is recorded once the first refresh pulled the hashes
+    /// to it: before that the wallet holds one block, and its save would
+    /// make the next open skip to the tip.
+    func testTheScanStartIsRecordedAfterTheFirstRefresh() {
+        let rules = EnvelopeStatusRules.self
+        XCTAssertFalse(rules.hasRefreshed(walletHeight: 0, scanFrom: 1608))
+        XCTAssertFalse(rules.hasRefreshed(walletHeight: 1, scanFrom: 1608))
+        XCTAssertFalse(rules.hasRefreshed(walletHeight: 1607, scanFrom: 1608))
+        XCTAssertTrue(rules.hasRefreshed(walletHeight: 1608, scanFrom: 1608))
+        XCTAssertTrue(rules.hasRefreshed(walletHeight: 1964, scanFrom: 1608))
+        // A start of 0 or 1 still needs a refresh past the first block.
+        XCTAssertFalse(rules.hasRefreshed(walletHeight: 1, scanFrom: 0))
+        XCTAssertTrue(rules.hasRefreshed(walletHeight: 2, scanFrom: 0))
+    }
+
+    func testTheScanStartRecordRoundTrips() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("envelope-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        // No folder: nothing written, nothing read.
+        EnvelopeRuntime.markScanStart(in: dir, from: 1608)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.path))
+        XCTAssertNil(EnvelopeRuntime.savedScanStart(in: dir))
+        XCTAssertNil(EnvelopeRuntime.walletSavedAt(in: dir))
+
+        let core = dir.appendingPathComponent("network_0/monero_core")
+        try FileManager.default.createDirectory(at: core, withIntermediateDirectories: true)
+        XCTAssertNil(EnvelopeRuntime.savedScanStart(in: dir))
+        EnvelopeRuntime.markScanStart(in: dir, from: 1608)
+        XCTAssertEqual(EnvelopeRuntime.savedScanStart(in: dir), 1608)
+        EnvelopeRuntime.markScanStart(in: dir, from: 1500)
+        XCTAssertEqual(EnvelopeRuntime.savedScanStart(in: dir), 1500)
+
+        // The save time is the wallet cache's, not the keys file's.
+        let saved = Date(timeIntervalSince1970: 1_792_000_000)
+        let keys = core.appendingPathComponent("wallet.keys")
+        let cache = core.appendingPathComponent("wallet")
+        try Data([1]).write(to: keys)
+        XCTAssertNil(EnvelopeRuntime.walletSavedAt(in: dir))
+        try Data([1]).write(to: cache)
+        try FileManager.default.setAttributes([.modificationDate: saved], ofItemAtPath: cache.path)
+        try FileManager.default.setAttributes([.modificationDate: saved.addingTimeInterval(60)], ofItemAtPath: keys.path)
+        XCTAssertEqual(EnvelopeRuntime.walletSavedAt(in: dir), saved)
+    }
+
     func testTheLogNamesTheLinkByItsNumberOnly() {
         XCTAssertEqual(EnvelopeRuntime.logName(7), "Link 7")
         XCTAssertEqual(EnvelopeRuntime.logName(nil), "Link ?")

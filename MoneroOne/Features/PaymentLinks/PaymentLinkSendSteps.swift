@@ -16,14 +16,26 @@ struct PaymentLinkDraft: Equatable {
     let expiry: Int64
     /// Claim fee reserve, piconero.
     let feeReserve: UInt64
-    /// Fee of the funding transaction, XMR.
+    /// Fee of the funding transaction, XMR: the fee of `funding` when the
+    /// review built it, else wallet2's estimate (a hardware wallet).
     let networkFee: Decimal
+    /// The funding transaction, built and signed at review and not sent
+    /// (software wallets). Send broadcasts this same transaction, so the
+    /// fee the review showed is the fee it pays. Nil for a hardware
+    /// wallet: building it there would need the device.
+    var funding: PreparedTransaction? = nil
 
     var amount: Decimal { EnvelopeRuntime.xmr(atomicAmount) }
     var reserve: Decimal { EnvelopeRuntime.xmr(feeReserve) }
     /// What the funding transaction sends to the envelope.
     var fundingAmount: Decimal { EnvelopeRuntime.xmr(atomicAmount + feeReserve) }
     var expiryDate: Date { Date(timeIntervalSince1970: TimeInterval(expiry)) }
+
+    static func == (lhs: PaymentLinkDraft, rhs: PaymentLinkDraft) -> Bool {
+        lhs.link == rhs.link && lhs.address == rhs.address && lhs.atomicAmount == rhs.atomicAmount
+            && lhs.expiry == rhs.expiry && lhs.feeReserve == rhs.feeReserve && lhs.networkFee == rhs.networkFee
+            && lhs.funding === rhs.funding
+    }
 }
 
 @MainActor
@@ -65,7 +77,7 @@ enum PaymentLinkFunder {
         guard funding + networkFee <= walletManager.displayUnlockedBalance else {
             throw FundingError.insufficientFunds
         }
-        return PaymentLinkDraft(
+        let draft = PaymentLinkDraft(
             link: link,
             address: secret.address,
             atomicAmount: atomic,
@@ -73,6 +85,46 @@ enum PaymentLinkFunder {
             feeReserve: reserveAtomic,
             networkFee: networkFee
         )
+        return try await buildFunding(for: draft, walletManager: walletManager)
+    }
+
+    /// Builds and signs `draft`'s funding transaction (not sent), and
+    /// prices the draft with the fee it pays: wallet2's estimate counts
+    /// one input, and a funding pays for each input it spends. The same
+    /// envelope; a new transaction. A hardware wallet keeps the estimate:
+    /// building there would need the device.
+    static func buildFunding(for draft: PaymentLinkDraft, walletManager: WalletManager) async throws -> PaymentLinkDraft {
+        guard !walletManager.requiresHardwareSession else { return draft }
+        let prepared: PreparedTransaction
+        do {
+            prepared = try await walletManager.prepareSend(to: draft.address, amount: draft.fundingAmount, memo: memo)
+        } catch let error as MoneroCoreError {
+            // Not enough once the real inputs are counted.
+            if case .insufficientFunds = error { throw FundingError.insufficientFunds }
+            if case .transactionSendFailed(let message) = error, message.lowercased().contains("not enough") {
+                throw FundingError.insufficientFunds
+            }
+            throw error
+        }
+        guard prepared.amount == draft.atomicAmount + draft.feeReserve, prepared.fee > 0 else {
+            throw FundingError.fundingNotBuilt
+        }
+        let fee = EnvelopeRuntime.xmr(prepared.fee)
+        guard draft.fundingAmount + fee <= walletManager.displayUnlockedBalance else {
+            throw FundingError.insufficientFunds
+        }
+        var built = PaymentLinkDraft(link: draft.link, address: draft.address, atomicAmount: draft.atomicAmount,
+                                     expiry: draft.expiry, feeReserve: draft.feeReserve, networkFee: fee)
+        built.funding = prepared
+        return built
+    }
+
+    /// `draft` can be sent as the review showed it: its funding transaction
+    /// is still there to broadcast (a hardware wallet builds at Send).
+    static func isReady(_ draft: PaymentLinkDraft, walletManager: WalletManager) async -> Bool {
+        if walletManager.requiresHardwareSession { return draft.funding == nil }
+        guard let funding = draft.funding else { return false }
+        return await walletManager.isPrepared(funding)
     }
 
     /// The record saved before the funding broadcast.
@@ -125,14 +177,35 @@ enum PaymentLinkFunder {
         try store.save(saved)
     }
 
-    static func fund(_ record: EnvelopeRecord, walletManager: WalletManager, store: EnvelopeStore = .shared) async throws -> String {
+    /// Saves the signed funding's txids before the broadcast. It is not a
+    /// known funding: the link stays hidden until the wallet's history or a
+    /// scan shows one of them (``PaymentLinksStatusChecker/fundingUpdates(sent:activeWalletId:walletIds:transactions:)``).
+    /// Throws, and nothing is broadcast, when the attempt is not this
+    /// link's one funding attempt or the Keychain refuses the save.
+    static func saveAttempt(id: String, txids: [String], store: EnvelopeStore = .shared) throws {
+        guard !txids.isEmpty, var record = store.record(id: id, role: .sent), record.fundingStartedAt != nil,
+              record.fundingTxid == nil, record.attemptTxids == nil else { throw FundingError.alreadyAttempted }
+        record.attemptTxids = txids
+        try store.save(record)
+    }
+
+    /// The step the send runs between signing and broadcast for link `id`.
+    static func broadcastStep(id: String, store: EnvelopeStore = .shared) -> MoneroWallet.BeforeBroadcast {
+        { prepared in try saveAttempt(id: id, txids: prepared.txids, store: store) }
+    }
+
+    /// Broadcasts `funding`, the transaction the review built for
+    /// `record`, after the funding lock and the save of its txids. When
+    /// that transaction is gone (the wallet closed since), it throws
+    /// `fundingNotBuilt` before the lock: nothing was sent, and the review
+    /// builds it again.
+    static func fund(_ record: EnvelopeRecord, funding: PreparedTransaction?, walletManager: WalletManager,
+                     store: EnvelopeStore = .shared) async throws -> String {
+        guard let funding, funding.amount == record.amount + (record.feeReserve ?? 0),
+              await walletManager.isPrepared(funding) else { throw FundingError.fundingNotBuilt }
         try beginFunding(record, walletId: walletManager.activeWallet?.id.uuidString, store: store, networkType: walletManager.networkType)
         do {
-            let txid = try await walletManager.send(
-                to: record.address,
-                amount: EnvelopeRuntime.xmr(record.amount + (record.feeReserve ?? 0)),
-                memo: memo
-            )
+            let txid = try await walletManager.send(funding, beforeBroadcast: broadcastStep(id: record.id, store: store))
             markFunded(id: record.id, txid: txid, store: store)
             return txid
         } catch {
@@ -144,6 +217,7 @@ enum PaymentLinkFunder {
     static func markFunded(id: String, txid: String, store: EnvelopeStore = .shared) {
         guard var record = store.record(id: id, role: .sent) else { return }
         record.fundingTxid = txid
+        record.fundingFailed = nil
         record.status = .pending
         record.confirmations = 0
         try? store.save(record)
@@ -182,6 +256,9 @@ enum PaymentLinkFunder {
         case invalidAmount
         case insufficientFunds
         case alreadyAttempted
+        /// The funding transaction the review built is gone (the wallet
+        /// closed since) or does not match the link. Nothing was sent.
+        case fundingNotBuilt
 
         var errorDescription: String? {
             switch self {
@@ -193,6 +270,8 @@ enum PaymentLinkFunder {
                 return String(localized: "Not enough unlocked funds for the amount, the network fee and the claim fee reserve.")
             case .alreadyAttempted:
                 return PaymentLinkFunder.unconfirmedMessage
+            case .fundingNotBuilt:
+                return String(localized: "Could not make the payment link. Nothing was sent.")
             }
         }
     }
@@ -257,6 +336,9 @@ struct PaymentLinkReviewStep: View {
     let priceService: PriceService
     let walletManager: WalletManager
     let sendInProgress: Bool
+    /// A new value builds the funding transaction again: the one built
+    /// here is gone (the wallet closed since).
+    var rebuild = 0
     let onConfirm: () -> Void
 
     @State private var errorMessage: String?
@@ -354,10 +436,21 @@ struct PaymentLinkReviewStep: View {
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
-        .task {
+        .task(id: rebuild) {
             // Same amount as before: keep the envelope already built, so
             // Back and Review again do not make a new secret each time.
-            if let draft, draft.atomicAmount == EnvelopeRuntime.piconero(amount) { return }
+            // Its funding transaction is built again when it is gone.
+            errorMessage = nil
+            if let draft, draft.atomicAmount == EnvelopeRuntime.piconero(amount) {
+                if await PaymentLinkFunder.isReady(draft, walletManager: walletManager) { return }
+                self.draft = nil
+                do {
+                    self.draft = try await PaymentLinkFunder.buildFunding(for: draft, walletManager: walletManager)
+                } catch {
+                    errorMessage = EnvelopeSession.message(for: error)
+                }
+                return
+            }
             draft = nil
             do {
                 draft = try await PaymentLinkFunder.makeDraft(amount: amount, walletManager: walletManager)

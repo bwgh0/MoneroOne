@@ -56,7 +56,10 @@ struct EnvelopeObservation: Equatable {
 
 enum EnvelopeStatusRules {
     /// How long our claim or reclaim may stay unseen in a block, and absent
-    /// from this wallet's history, before it counts as dropped.
+    /// from this wallet's history, before it counts as dropped: blocks past
+    /// the chain height at the settle, else (no height known) time. Android
+    /// uses the same numbers.
+    static let settleGraceBlocks: UInt64 = 30
     static let settleGrace: TimeInterval = 60 * 60
 
     /// How far past a funding attempt with no known funding the envelope is
@@ -71,25 +74,32 @@ enum EnvelopeStatusRules {
     ///     (``settledStatus(_:role:settleTxid:observation:)``).
     ///   - role: whose link it is.
     ///   - settleTxid: our own claim or reclaim, if we sent one.
+    ///   - settleTxids: every transaction of that sweep (it can split);
+    ///     empty means `settleTxid` alone.
     ///   - spendsBeforeSettle: the envelope's spends from before it (our
     ///     earlier sweeps, and spends seen while the link was open). Ours, or
     ///     older than ours: never a claim that beat it.
     ///   - settleFailed: that claim or reclaim dropped
-    ///     (``settleHasFailed(settleTxid:settledAt:observation:transactions:now:)``).
+    ///     (``settleHasFailed(settleTxid:settleTxids:settledAt:settleHeight:observation:transactions:now:)``).
     ///   - fundingKnown: a funding transaction is known (a sent link's
     ///     txid). The wallet's own history wins over a scan that missed it:
     ///     the link waits, never reads "not funded".
+    ///   - ownSettleTxids: every claim or reclaim this device sent for the
+    ///     link. Ours, never a claim that beat it.
     static func status(
         for observation: EnvelopeObservation,
         current: EnvelopeStatus = .pending,
         role: EnvelopeRecord.Role = .sent,
         settleTxid: String? = nil,
+        settleTxids: [String] = [],
         spendsBeforeSettle: [String] = [],
         settleFailed: Bool = false,
-        fundingKnown: Bool = false
+        fundingKnown: Bool = false,
+        ownSettleTxids: [String] = []
     ) -> EnvelopeStatus {
         if current.isSettled {
-            return settledStatus(current, role: role, settleTxid: settleTxid, spendsBeforeSettle: spendsBeforeSettle,
+            return settledStatus(current, role: role, settleTxid: settleTxid, settleTxids: settleTxids,
+                                 spendsBeforeSettle: spendsBeforeSettle + ownSettleTxids,
                                  settleFailed: settleFailed, observation: observation)
         }
         guard observation.fundingSeen else { return fundingKnown ? .pending : .notFunded }
@@ -99,8 +109,10 @@ enum EnvelopeStatusRules {
             // is a funding still in the pool, or a balance not read yet.
             if observation.spendTxids.isEmpty { return .pending }
             // Our earlier reclaim, mined after the link opened again (it
-            // read as dropped), took the money: still ours.
-            if role == .sent, Set(spendsBeforeSettle).isSuperset(of: observation.spendTxids) { return .reclaimed }
+            // read as dropped), took the money: still ours. A received
+            // link reads Claimed either way; `PaymentLinksStatusChecker`
+            // gives it back our claim's txid when the spend is ours.
+            if role == .sent, Set(spendsBeforeSettle + ownSettleTxids).isSuperset(of: observation.spendTxids) { return .reclaimed }
             return .claimed
         }
         // wallet2 unlocks an output after 10 confirmations; unlocked money
@@ -118,47 +130,84 @@ enum EnvelopeStatusRules {
     /// A spend that is neither our reclaim nor one from before it
     /// (`spendsBeforeSettle`), with our reclaim not seen, is a claim that
     /// beat it.
-    static func settledStatus(_ settled: EnvelopeStatus, role: EnvelopeRecord.Role, settleTxid: String?, spendsBeforeSettle: [String] = [], settleFailed: Bool = false, observation: EnvelopeObservation) -> EnvelopeStatus {
-        let ours = settleTxid.flatMap { $0.isEmpty ? nil : $0 }
-        if role == .sent, let ours {
+    static func settledStatus(_ settled: EnvelopeStatus, role: EnvelopeRecord.Role, settleTxid: String?, settleTxids: [String] = [], spendsBeforeSettle: [String] = [], settleFailed: Bool = false, observation: EnvelopeObservation) -> EnvelopeStatus {
+        let ours = Self.ours(settleTxid: settleTxid, settleTxids: settleTxids)
+        if role == .sent, !ours.isEmpty {
             // A claim beat our reclaim: final.
             if settled == .claimed { return .claimed }
-            let otherSpend = observation.spendTxids.contains { $0 != ours && !spendsBeforeSettle.contains($0) }
-            if otherSpend && !observation.spendTxids.contains(ours) {
+            let otherSpend = observation.spendTxids.contains { !ours.contains($0) && !spendsBeforeSettle.contains($0) }
+            if otherSpend && !observation.spendTxids.contains(where: ours.contains) {
                 return .claimed
             }
         }
         // Our sweep dropped: the money it took is spendable again.
-        if ours != nil, settleFailed, observation.unlockedBalance > 0 { return .ready }
+        if !ours.isEmpty, settleFailed, observation.unlockedBalance > 0 { return .ready }
         // Our claim or reclaim, or a claim or reclaim made elsewhere: the
         // spends the envelope saw (wallet2 sees another device's spend once
         // mined).
-        let spends = ours.map { [$0] } ?? observation.spendTxids
+        let spends = ours.isEmpty ? observation.spendTxids : ours
         return reopens(settledBy: spends, observation) ? .ready : settled
+    }
+
+    /// Every transaction of our settle: `settleTxids`, else `settleTxid`.
+    static func ours(settleTxid: String?, settleTxids: [String]) -> [String] {
+        let all = settleTxids.filter { !$0.isEmpty }
+        if !all.isEmpty { return all }
+        return settleTxid.flatMap { $0.isEmpty ? nil : [$0] } ?? []
     }
 
     /// Our claim or reclaim dropped (or a reorg took it out): the envelope
     /// does not see it, in the pool or in a block, and this wallet's history
-    /// marks it failed or, past `settleGrace`, does not show it waiting or
-    /// mined. A sweep to another wallet is judged by the grace alone.
-    static func settleHasFailed(settleTxid: String?, settledAt: Date?, observation: EnvelopeObservation, transactions: [MoneroTransaction], now: Date) -> Bool {
-        guard let txid = settleTxid, !txid.isEmpty, !observation.spendTxids.contains(txid) else { return false }
-        if let transaction = transactions.first(where: { $0.id == txid }) {
+    /// marks it failed or, once its grace is over, does not show it waiting
+    /// or mined. A sweep to another wallet is judged by the grace alone.
+    static func settleHasFailed(settleTxid: String?, settleTxids: [String] = [], settledAt: Date?, settleHeight: UInt64? = nil, observation: EnvelopeObservation, transactions: [MoneroTransaction], now: Date) -> Bool {
+        let ours = Self.ours(settleTxid: settleTxid, settleTxids: settleTxids)
+        guard !ours.isEmpty, !observation.spendTxids.contains(where: ours.contains) else { return false }
+        if let transaction = transactions.first(where: { ours.contains($0.id) }) {
             return transaction.status == .failed
+        }
+        return settleGraceIsOver(settledAt: settledAt, settleHeight: settleHeight, scanHeight: observation.height, now: now)
+    }
+
+    /// More than `settleGraceBlocks` blocks past the settle's height when
+    /// it and the scan's height are known, else more than `settleGrace`
+    /// past `settledAt`. Neither known: never.
+    static func settleGraceIsOver(settledAt: Date?, settleHeight: UInt64?, scanHeight: UInt64, now: Date) -> Bool {
+        if let settleHeight, settleHeight > 0, scanHeight > 0 {
+            return scanHeight > settleHeight + settleGraceBlocks
         }
         guard let settledAt else { return false }
         return now.timeIntervalSince(settledAt) > settleGrace
+    }
+
+    /// A received link our claim lost: the envelope is empty, a spend that
+    /// is not ours (nor from before our claim) is in a block, and ours shows
+    /// nowhere. Another device claimed it first (our claim was a double
+    /// spend). Final: the link reads "Already claimed" and no look follows.
+    static func claimWasBeaten(role: EnvelopeRecord.Role, settleTxid: String?, settleTxids: [String] = [], spendsBeforeSettle: [String], ownSettleTxids: [String], observation: EnvelopeObservation) -> Bool {
+        let ours = Self.ours(settleTxid: settleTxid, settleTxids: settleTxids)
+        guard role == .received, !ours.isEmpty, observation.balance == 0,
+              !observation.spendTxids.contains(where: ours.contains) else { return false }
+        return observation.minedSpendTxids.contains { !ours.contains($0) && !spendsBeforeSettle.contains($0) && !ownSettleTxids.contains($0) }
     }
 
     /// Our claim or reclaim went out, no scan has seen it in a block, and
     /// this wallet's history does not show it waiting or mined: a background
     /// look tells whether it dropped or a claim beat it. Not for a reclaim a
     /// claim already beat (final).
+    /// Also while our settle left money still locked in the envelope
+    /// (`settleLeftLocked`): looks go on until it unlocks and the link opens
+    /// again, or a look sees none left. Not while our settle waits in this
+    /// wallet's pool: a scan cannot open the link again before it is mined.
     static func needsSettleLook(_ record: EnvelopeRecord, transactions: [MoneroTransaction]) -> Bool {
-        guard record.status.isSettled, record.link != nil, let txid = record.settleTxid, !txid.isEmpty,
-              record.settleSeenMined != true else { return false }
+        let ours = record.settleTxids
+        guard record.status.isSettled, record.link != nil, !ours.isEmpty else { return false }
         if record.role == .sent, record.status == .claimed { return false }
-        return !transactions.contains { $0.id == txid && $0.status != .failed }
+        if record.settleLeftLocked == true {
+            return !transactions.contains { ours.contains($0.id) && $0.status == .pending }
+        }
+        guard record.settleSeenMined != true else { return false }
+        return !transactions.contains { ours.contains($0.id) && $0.status != .failed }
     }
 
     /// A hidden sent link whose funding attempt may have reached the
@@ -168,7 +217,7 @@ enum EnvelopeStatusRules {
     /// that failed before anything was sent needs no scan, and one the app
     /// closed during waits a while, so a send still running can finish.
     static func needsFundingScan(_ record: EnvelopeRecord, now: Date) -> Bool {
-        guard record.role == .sent, record.link != nil, record.fundingTxid == nil,
+        guard record.role == .sent, record.link != nil, record.knownFundingTxid == nil,
               let started = record.fundingStartedAt, record.fundingNotSent != true else { return false }
         switch record.status {
         case .notFunded: break
@@ -190,8 +239,9 @@ enum EnvelopeStatusRules {
     /// The leftover check of a settled link reached its answer: the spend
     /// that settled it is in a block, and the envelope holds nothing still
     /// locked. A later look cannot change the status.
-    static func leftoverCheckIsConclusive(role: EnvelopeRecord.Role, settleTxid: String?, observation: EnvelopeObservation) -> Bool {
-        let spends = settleTxid.flatMap { $0.isEmpty ? nil : [$0] } ?? observation.spendTxids
+    static func leftoverCheckIsConclusive(role: EnvelopeRecord.Role, settleTxid: String?, settleTxids: [String] = [], observation: EnvelopeObservation) -> Bool {
+        let ours = Self.ours(settleTxid: settleTxid, settleTxids: settleTxids)
+        let spends = ours.isEmpty ? observation.spendTxids : ours
         guard !spends.isEmpty, Set(observation.minedSpendTxids).isSuperset(of: spends) else { return false }
         return observation.balance == 0 || observation.unlockedBalance > 0
     }
@@ -236,7 +286,8 @@ enum EnvelopeStatusRules {
 
     /// A sent record whose funding transaction is known reads at least
     /// pending: "created" and "not funded" would contradict the wallet's
-    /// own history.
+    /// own history. Pass `EnvelopeRecord.knownFundingTxid`: a funding the
+    /// wallet marked failed is not known.
     static func reconciled(_ status: EnvelopeStatus, role: EnvelopeRecord.Role, fundingTxid: String?) -> EnvelopeStatus {
         guard role == .sent, fundingTxid != nil, status == .created || status == .notFunded else { return status }
         return .pending

@@ -11,6 +11,9 @@ import WidgetKit
 class WalletManager: ObservableObject {
     // MARK: - Published State
     @Published var wallets: [WalletInfo] = []
+
+    /// The ids of the wallets on this device, as payment link records keep them.
+    var walletIds: Set<String> { Set(wallets.map(\.id.uuidString)) }
     @Published var activeWallet: WalletInfo? {
         didSet {
             if let id = activeWallet?.id {
@@ -145,9 +148,39 @@ class WalletManager: ObservableObject {
         case MoneroCoreError.walletNotInitialized, MoneroCoreError.insufficientFunds,
              MoneroCoreError.transactionEstimationFailed, MoneroCoreError.transactionSendFailed:
             return true
+        case is MoneroWallet.BroadcastCancelled:
+            return true
+        case MoneroCoreError.transactionCommitFailed(let message):
+            return broadcastWasRefused(message)
         default:
             return false
         }
+    }
+
+    /// wallet2's commit error for a transaction the node answered and
+    /// refused (`tx_rejected`, a double spend among them, or `daemon_busy`).
+    /// A lost connection or an unknown error may hide a broadcast that
+    /// went through.
+    nonisolated static func broadcastWasRefused(_ message: String) -> Bool {
+        let text = message.lowercased()
+        return text.contains("was rejected by daemon") || text.contains("daemon is busy")
+    }
+
+    /// A payment link's step between signing and broadcast on a hardware
+    /// wallet: the Send flow sets it before the session sheet opens, and
+    /// the session runs it only for a send to `address` (the link's
+    /// envelope), once.
+    struct PendingBroadcastStep {
+        let address: String
+        let run: MoneroWallet.BeforeBroadcast
+    }
+    var pendingBroadcastStep: PendingBroadcastStep?
+
+    /// Takes the pending step when it belongs to a send to `address`.
+    private func takeBroadcastStep(for address: String) -> MoneroWallet.BeforeBroadcast? {
+        guard let step = pendingBroadcastStep else { return nil }
+        pendingBroadcastStep = nil
+        return step.address == address ? step.run : nil
     }
     @Published private(set) var lastHardwareSessionOutcome: HardwareSessionOutcome?
 
@@ -472,7 +505,7 @@ class WalletManager: ObservableObject {
         case .single(let to, let amount, let memo):
             hardwareSessionState = .signing
             do {
-                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo)
+                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo, beforeBroadcast: takeBroadcastStep(for: to))
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {
@@ -489,7 +522,7 @@ class WalletManager: ObservableObject {
         case .all(let to, let memo):
             hardwareSessionState = .signing
             do {
-                let txId = try await fullWallet.sendAll(to: to, memo: memo)
+                let txId = try await fullWallet.sendAll(to: to, memo: memo, beforeBroadcast: takeBroadcastStep(for: to))
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {
@@ -2564,7 +2597,8 @@ class WalletManager: ObservableObject {
         return try await wallet.estimateFee(to: address, amount: amount, priority: priority)
     }
 
-    func send(to address: String, amount: Decimal, memo: String? = nil) async throws -> String {
+    func send(to address: String, amount: Decimal, memo: String? = nil,
+              beforeBroadcast: MoneroWallet.BeforeBroadcast? = nil) async throws -> String {
         if isHardwareWallet {
             // Hardware sends route through a device session — Send tap
             // in the UI presents `HardwareSessionSheet` which kicks off
@@ -2577,7 +2611,36 @@ class WalletManager: ObservableObject {
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
-        return try await wallet.send(to: address, amount: amount, memo: memo)
+        return try await wallet.send(to: address, amount: amount, memo: memo, beforeBroadcast: beforeBroadcast)
+    }
+
+    /// Signs a transfer and keeps it for `send(_:beforeBroadcast:)`, not
+    /// sent: the fee it pays for the inputs it really spends. Software
+    /// wallets only; a hardware wallet would sign on the device.
+    func prepareSend(to address: String, amount: Decimal, memo: String? = nil) async throws -> PreparedTransaction {
+        if isHardwareWallet { throw WalletError.hardwareSessionRequired }
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
+        // A payment-link check may have just let go of the wallet.
+        if moneroWallet == nil { await EnvelopeRuntime.shared.waitForActiveWallet() }
+        guard let wallet = moneroWallet else { throw WalletError.notUnlocked }
+        return try await wallet.prepareSend(to: address, amount: amount, memo: memo)
+    }
+
+    /// The transaction from `prepareSend` can still go out on the open
+    /// wallet. False once that wallet closed (a payment-link check, a
+    /// switch, a restart) or the transaction was sent.
+    func isPrepared(_ prepared: PreparedTransaction) async -> Bool {
+        guard !isHardwareWallet, let wallet = moneroWallet else { return false }
+        return await wallet.isPrepared(prepared)
+    }
+
+    /// Broadcasts the transaction from `prepareSend` as it is, after
+    /// `beforeBroadcast`. Returns its txid.
+    func send(_ prepared: PreparedTransaction, beforeBroadcast: MoneroWallet.BeforeBroadcast? = nil) async throws -> String {
+        if isHardwareWallet { throw WalletError.hardwareSessionRequired }
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
+        guard let wallet = moneroWallet else { throw WalletError.notUnlocked }
+        return try await wallet.send(prepared, beforeBroadcast: beforeBroadcast)
     }
 
     func sendAll(to address: String, memo: String? = nil) async throws -> String {

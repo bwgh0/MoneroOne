@@ -26,28 +26,40 @@ enum OpenPaymentLinks {
         var isEmpty: Bool { sentCount == 0 && toClaimCount == 0 }
     }
 
+    /// Whether a sent link is the active wallet's: the wallet that funded
+    /// it, else the active wallet when that one is gone from this device
+    /// (removed, or restored from its seed under a new id). Such a link
+    /// shows, counts and gets checked here, and Reclaim pays the active
+    /// wallet. A record from before wallet ids counts in every wallet.
+    /// `walletIds`: the wallets on this device; nil when not known (then
+    /// only the funding wallet counts).
+    static func belongsToActiveWallet(_ record: EnvelopeRecord, activeWalletId: String?, walletIds: Set<String>?) -> Bool {
+        guard let walletId = record.walletId, walletId != activeWalletId else { return true }
+        if let walletIds, activeWalletId != nil, !walletIds.contains(walletId) { return true }
+        return false
+    }
+
     /// A link this wallet funded that nobody claimed or reclaimed: pending or
-    /// ready, expired or not. A link funded from another wallet is that
-    /// wallet's money; a record from before wallet ids counts in every wallet.
-    static func isOpenSent(_ record: EnvelopeRecord, activeWalletId: String?) -> Bool {
+    /// ready, expired or not. A link funded from another wallet on this
+    /// device is that wallet's money (``belongsToActiveWallet(_:activeWalletId:walletIds:)``).
+    static func isOpenSent(_ record: EnvelopeRecord, activeWalletId: String?, walletIds: Set<String>? = nil) -> Bool {
         // A link with a funding transaction is open whatever a check that
         // missed the funding wrote; one without is hidden (a funding that
         // failed, or whose result is not known yet).
-        let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
-        guard record.role == .sent, record.fundingTxid != nil, status == .pending || status == .ready else { return false }
-        if let walletId = record.walletId, walletId != activeWalletId { return false }
-        return true
+        let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.knownFundingTxid)
+        guard record.role == .sent, record.knownFundingTxid != nil, status == .pending || status == .ready else { return false }
+        return belongsToActiveWallet(record, activeWalletId: activeWalletId, walletIds: walletIds)
     }
 
     /// What the dashboard's background look opens: open links, hidden
     /// funding attempts the node may have taken, and our claims or reclaims
     /// no scan has seen mined. The last two show nothing until a look finds
     /// money: then the link is Waiting, or Ready again.
-    static func needsLook(_ record: EnvelopeRecord, activeWalletId: String?, transactions: [MoneroTransaction], now: Date) -> Bool {
-        if isOpenSent(record, activeWalletId: activeWalletId) { return true }
+    static func needsLook(_ record: EnvelopeRecord, activeWalletId: String?, walletIds: Set<String>? = nil, transactions: [MoneroTransaction], now: Date) -> Bool {
+        if isOpenSent(record, activeWalletId: activeWalletId, walletIds: walletIds) { return true }
         if EnvelopeStatusRules.needsSettleLook(record, transactions: transactions) { return true }
-        let fromActiveWallet = record.walletId == nil || record.walletId == activeWalletId
-        return fromActiveWallet && EnvelopeStatusRules.needsFundingScan(record, now: now)
+        return belongsToActiveWallet(record, activeWalletId: activeWalletId, walletIds: walletIds)
+            && EnvelopeStatusRules.needsFundingScan(record, now: now)
     }
 
     /// A received link this device can still claim: not settled, and it
@@ -63,10 +75,10 @@ enum OpenPaymentLinks {
         isToClaim(record) && !record.isReceivedExpired(now: now)
     }
 
-    static func summary(of records: [EnvelopeRecord], activeWalletId: String?, now: Date = Date()) -> Summary {
+    static func summary(of records: [EnvelopeRecord], activeWalletId: String?, walletIds: Set<String>? = nil, now: Date = Date()) -> Summary {
         var summary = Summary()
         for record in records {
-            if isOpenSent(record, activeWalletId: activeWalletId) {
+            if isOpenSent(record, activeWalletId: activeWalletId, walletIds: walletIds) {
                 summary.sentCount += 1
                 summary.sentAmount += record.amount
                 if record.isExpired(now: now) { summary.expiredCount += 1 }
@@ -383,6 +395,51 @@ struct PaymentLinkToClaimRow: View {
     }
 }
 
+/// One of our open links whose funding has no row in this wallet's
+/// Activity (its funding wallet left this device, or another wallet funded
+/// it), in the Links filter's Open section. It reads like the funding row
+/// it stands in for: money going out, the link's name, the date it was
+/// made, its amount and where it stands. A tap opens its detail, with
+/// Share and Reclaim.
+struct PaymentLinkOpenSentRow: View {
+    let record: EnvelopeRecord
+    @EnvironmentObject var walletManager: WalletManager
+
+    /// As the transaction rows write it.
+    private var date: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: record.createdAt)
+    }
+
+    var body: some View {
+        let display = PaymentLinkDisplay(record: record, walletManager: walletManager)
+        let status = PaymentLinkRowStatus.funding(status: display.status, isExpired: display.isExpired, confirmations: display.confirmations)
+        let amount = TransactionAmountText(isIncoming: false, xmr: EnvelopeRuntime.xmr(record.amount), fiatAtTime: nil, fiatFirst: false)
+        let date = self.date
+        ActivityRowLayout(
+            systemImage: "arrow.up.right",
+            isIncoming: false,
+            showsLinkBadge: true,
+            title: record.displayName,
+            subtitle: date
+        ) { alignment in
+            TransactionAmountColumn(amount: amount, isIncoming: false, linkStatus: status, alignment: alignment)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(PaymentLinkActivity.accessibilityLabel(
+            kind: PaymentLinkActivity(kind: .funding, record: record).title,
+            name: record.displayName,
+            isIncoming: false,
+            amountSpoken: amount.spoken,
+            status: status.text,
+            date: date
+        ))
+        .accessibilityIdentifier("links.openSent.\(record.id)")
+    }
+}
+
 extension View {
     /// A trailing chevron like a List row's NavigationLink.
     func listRowDisclosure() -> some View {
@@ -493,9 +550,10 @@ struct OpenPaymentLinksChecks: ViewModifier {
         guard Self.isLookDue(isDue: isDue, lastLook: lastLook, now: now) else { return }
         isDue = false
         let activeId = walletManager.activeWallet?.id.uuidString
+        let walletIds = walletManager.walletIds
         let transactions = walletManager.transactions
         let needsLook = { (record: EnvelopeRecord) in
-            OpenPaymentLinks.needsLook(record, activeWalletId: activeId, transactions: transactions, now: now)
+            OpenPaymentLinks.needsLook(record, activeWalletId: activeId, walletIds: walletIds, transactions: transactions, now: now)
         }
         guard (store.sent + store.received).contains(where: needsLook) else { return }
         lastLook = now

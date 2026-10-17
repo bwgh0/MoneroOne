@@ -33,6 +33,9 @@ final class EnvelopeRuntime: ObservableObject {
         case addressMismatch
         case alreadyClaimed
         case sweepFailed(String)
+        /// The broadcast failed with no answer from the node: the sweep
+        /// may have gone out.
+        case sweepUnconfirmed(String)
         case nothingToSweep
 
         var errorDescription: String? {
@@ -51,7 +54,7 @@ final class EnvelopeRuntime: ObservableObject {
                 return String(localized: "This link failed its safety check. Do not use it.")
             case .alreadyClaimed:
                 return String(localized: "Already claimed.")
-            case .sweepFailed(let detail):
+            case .sweepFailed(let detail), .sweepUnconfirmed(let detail):
                 return detail
             case .nothingToSweep:
                 return String(localized: "This link holds no money that can move yet.")
@@ -316,24 +319,47 @@ final class EnvelopeRuntime: ObservableObject {
         }
     }
 
+    /// A claim or reclaim, signed and not broadcast yet.
+    struct SweepAttempt: Equatable {
+        /// Every transaction of the sweep (it can split), first one first.
+        let txids: [String]
+        var txid: String { txids.first ?? "" }
+        /// Piconero to the destination, after the fee.
+        let amount: UInt64
+        /// The envelope's chain height at the sweep: the settle's grace
+        /// counts blocks from here.
+        let height: UInt64
+        /// The envelope keeps money that is still locked (a newer funding).
+        let leavesLocked: Bool
+    }
+
     /// Sweeps every unlocked piconero of the open envelope to `address`.
-    /// The fee comes out of the envelope.
-    func sweep(envelopeId: String, envelopeAddress: String, to address: String) async throws -> (txid: String, amount: UInt64) {
+    /// The fee comes out of the envelope. `beforeBroadcast` runs once the
+    /// sweep is signed, before anything reaches the network; when it
+    /// throws, nothing is sent. Throws `sweepUnconfirmed` when the sweep may
+    /// have gone out, `alreadyClaimed` when the node refused it as a double
+    /// spend, any other error when nothing was sent.
+    func sweep(envelopeId: String, envelopeAddress: String, to address: String,
+               beforeBroadcast: @escaping @MainActor (SweepAttempt) throws -> Void) async throws -> SweepAttempt {
         try await serial { [self] in
             guard openEnvelopeId == envelopeId, let wallet = envelope else { throw RuntimeError.walletBusy }
             try Self.verifyAddress(of: wallet, is: envelopeAddress)
             guard wallet.unlockedBalance > 0 else { throw RuntimeError.nothingToSweep }
+            let height = wallet.daemonHeight
+            let leavesLocked = wallet.balance > wallet.unlockedBalance
+            var attempt: SweepAttempt?
             do {
-                let txid = try await wallet.sendAll(to: address, memo: nil)
-                let txs = await wallet.fetchTransactionsBlocking()
-                let tx = txs.first { $0.id == txid }
-                let sent = tx.map { tx in
-                    tx.destinations.isEmpty ? abs(tx.amount) : tx.destinations.reduce(Decimal(0)) { $0 + $1.amount }
-                } ?? 0
-                return (txid, Self.piconero(sent))
+                _ = try await wallet.sendAll(to: address, memo: nil) { prepared in
+                    let signed = SweepAttempt(txids: prepared.txids, amount: prepared.amount, height: height, leavesLocked: leavesLocked)
+                    try beforeBroadcast(signed)
+                    attempt = signed
+                }
             } catch {
                 throw Self.mapSweepError(error)
             }
+            // `sendAll` runs the step before it broadcasts.
+            guard let attempt else { throw RuntimeError.walletBusy }
+            return attempt
         }
     }
 
@@ -579,7 +605,11 @@ final class EnvelopeRuntime: ObservableObject {
         Decimal(piconero) / Decimal(1_000_000_000_000)
     }
 
-    private static func mapSweepError(_ error: Error) -> Error {
+    nonisolated static func mapSweepError(_ error: Error) -> Error {
+        // The step before the broadcast failed: nothing was sent.
+        if let cancelled = error as? MoneroWallet.BroadcastCancelled {
+            return RuntimeError.sweepFailed(cancelled.localizedDescription)
+        }
         let text = String(describing: error).lowercased()
         // Only the daemon's double-spend verdict means someone else swept
         // first; any other failure keeps the link claimable.
@@ -591,7 +621,10 @@ final class EnvelopeRuntime: ObservableObject {
             case .transactionSendFailed(let msg), .transactionEstimationFailed(let msg):
                 return RuntimeError.sweepFailed(msg)
             case .transactionCommitFailed(let msg):
-                return RuntimeError.sweepFailed(String(localized: "Broadcast failed: \(msg)"))
+                // A refusal from the node sent nothing; no answer may hide
+                // a sweep that went out.
+                let message = String(localized: "Broadcast failed: \(msg)")
+                return WalletManager.broadcastWasRefused(msg) ? RuntimeError.sweepFailed(message) : RuntimeError.sweepUnconfirmed(message)
             default:
                 break
             }

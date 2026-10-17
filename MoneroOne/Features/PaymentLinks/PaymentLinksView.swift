@@ -31,11 +31,12 @@ struct PaymentLinkDisplay {
     @MainActor
     init(record: EnvelopeRecord, walletManager: WalletManager?, now: Date = Date()) {
         var fundingConfirmations: Int?
-        let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
-        if record.role == .sent, status == .pending || status == .created,
-           let txid = record.fundingTxid,
-           let tx = walletManager?.transactions.first(where: { $0.id == txid }) {
-            fundingConfirmations = tx.confirmations
+        let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.knownFundingTxid)
+        if record.role == .sent, status == .pending || status == .created, record.knownFundingTxid != nil {
+            // A split funding: its least confirmed transaction.
+            let txids = record.ownFundingTxids
+            let rows = walletManager?.transactions.filter { txids.contains($0.id) } ?? []
+            fundingConfirmations = rows.count > 1 ? rows.map { $0.confirmations ?? 0 }.min() : rows.first?.confirmations
         }
         self.init(record: record, fundingConfirmations: fundingConfirmations, daemonHeight: walletManager?.daemonHeight, now: now)
     }
@@ -48,7 +49,7 @@ struct PaymentLinkDisplay {
     init(record: EnvelopeRecord, fundingConfirmations: Int?, daemonHeight: UInt64?, now: Date = Date()) {
         // A sent link with a funding transaction waits for it, whatever a
         // check that missed it wrote.
-        var status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
+        var status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.knownFundingTxid)
         var confirmations = record.confirmations
         if record.role == .sent, status == .pending || status == .created, let fundingConfirmations {
             confirmations = fundingConfirmations
@@ -138,7 +139,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
     @Published private(set) var isChecking = false
     private var task: Task<Void, Never>?
     /// Settled links whose leftover look was conclusive in this run
-    /// (``EnvelopeStatusRules/leftoverCheckIsConclusive(role:settleTxid:observation:)``):
+    /// (``EnvelopeStatusRules/leftoverCheckIsConclusive(role:settleTxid:settleTxids:observation:)``):
     /// opening them again shows the result with no scan, so the active
     /// wallet keeps running.
     static var settledLooks: Set<String> = []
@@ -149,7 +150,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
     /// `only`: look at that one link (its detail is on screen), of `role`.
     /// `matching`: look only at the links it accepts (the dashboard: the
     /// active wallet's open links, hidden funding attempts and sweeps not
-    /// seen mined; ``OpenPaymentLinks/needsLook(_:activeWalletId:transactions:now:)``).
+    /// seen mined; ``OpenPaymentLinks/needsLook(_:activeWalletId:walletIds:transactions:now:)``).
     func start(
         walletManager: WalletManager,
         store: EnvelopeStore,
@@ -181,7 +182,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 return EnvelopeStatusRules.needsSettleLook(record, transactions: walletManager.transactions)
             }
             guard record.role == .sent else { return false }
-            switch EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid) {
+            switch EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.knownFundingTxid) {
             case .ready: return true
             case .created, .notFunded:
                 // A hidden attempt the node may have taken.
@@ -253,7 +254,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
     /// found, the balance, how far the scan reached. A settled link that
     /// stays settled keeps the amount it settled with; one that opens again
     /// drops its old sweep. `conclusive`: a settled link's leftover question
-    /// is answered (``EnvelopeStatusRules/leftoverCheckIsConclusive(role:settleTxid:observation:)``).
+    /// is answered (``EnvelopeStatusRules/leftoverCheckIsConclusive(role:settleTxid:settleTxids:observation:)``).
     nonisolated static func applying(
         _ observation: EnvelopeObservation,
         to original: EnvelopeRecord,
@@ -261,28 +262,66 @@ final class PaymentLinksStatusChecker: ObservableObject {
         now: Date
     ) -> (record: EnvelopeRecord, conclusive: Bool) {
         var record = original
-        if record.role == .sent, record.fundingTxid == nil { record.fundingTxid = observation.fundingTxids.first }
+        if record.role == .sent {
+            if record.fundingTxid == nil {
+                // A txid saved before the broadcast, else the oldest funding.
+                if let attempt = record.attemptTxids?.first(where: observation.fundingTxids.contains) {
+                    record.fundingTxid = attempt
+                } else {
+                    record.fundingTxid = observation.fundingTxids.first
+                }
+            }
+            // The envelope holds a funding: funded, whatever the wallet marked failed.
+            if observation.fundingSeen { record.fundingFailed = nil }
+        }
         let wasSettled = record.status.isSettled
-        let failed = EnvelopeStatusRules.settleHasFailed(settleTxid: record.settleTxid, settledAt: record.settledAt,
+        let own = record.ownSettleTxids
+        let ours = record.settleTxids
+        let spendsBefore = record.spendsBeforeSettle ?? []
+        let failed = EnvelopeStatusRules.settleHasFailed(settleTxid: record.settleTxid, settleTxids: ours, settledAt: record.settledAt,
+                                                         settleHeight: record.settleHeight,
                                                          observation: observation, transactions: transactions, now: now)
-        let status = EnvelopeStatusRules.status(
+        // Another device claimed it first: final, and no look follows.
+        let beaten = wasSettled && EnvelopeStatusRules.claimWasBeaten(
+            role: record.role, settleTxid: record.settleTxid, settleTxids: ours, spendsBeforeSettle: spendsBefore,
+            ownSettleTxids: own, observation: observation)
+        let status = beaten ? .claimed : EnvelopeStatusRules.status(
             for: observation,
             current: record.status,
             role: record.role,
             settleTxid: record.settleTxid,
-            spendsBeforeSettle: record.spendsBeforeSettle ?? [],
+            settleTxids: ours,
+            spendsBeforeSettle: spendsBefore,
             settleFailed: failed,
-            fundingKnown: record.role == .sent && record.fundingTxid != nil
+            fundingKnown: record.role == .sent && record.knownFundingTxid != nil,
+            ownSettleTxids: own
         )
-        let conclusive = wasSettled && EnvelopeStatusRules.leftoverCheckIsConclusive(
-            role: record.role, settleTxid: record.settleTxid, observation: observation)
-        if let txid = record.settleTxid, observation.minedSpendTxids.contains(txid) {
+        let conclusive = beaten || (wasSettled && EnvelopeStatusRules.leftoverCheckIsConclusive(
+            role: record.role, settleTxid: record.settleTxid, settleTxids: ours, observation: observation))
+        if !ours.isEmpty, Set(observation.minedSpendTxids).isSuperset(of: ours) {
             record.settleSeenMined = true
         }
-        if !(wasSettled && status.isSettled) {
+        if beaten {
+            // Our claim stays in `ownSettles`.
+            record.dropSettle()
+        } else if !(wasSettled && status.isSettled) {
             if wasSettled { record.reopen() }
             record.noteBalance(observation.balance, sweepFee: observation.sweepFee)
             record.confirmations = observation.fundingConfirmations
+        } else {
+            // Still settled: is money still locked behind our settle?
+            record.settleLeftLocked = observation.balance > observation.unlockedBalance ? true : nil
+        }
+        // Settled by a claim or reclaim of ours that a reopen let go (it
+        // read as dropped, then was mined): it is ours again, not a claim
+        // made elsewhere. Every other spend is from before it.
+        if status.isSettled, !beaten, record.settleTxid == nil,
+           Set(spendsBefore + own).isSuperset(of: observation.spendTxids),
+           let mine = record.ownSettles?.last(where: { $0.txids.contains(where: observation.spendTxids.contains) }) {
+            record.settleTxid = mine.txids.first
+            record.settledAmount = mine.amount
+            record.walletName = mine.walletName ?? record.walletName
+            if Set(observation.minedSpendTxids).isSuperset(of: mine.txids) { record.settleSeenMined = true }
         }
         // While the link is open, every spend a scan sees is older than any
         // claim or reclaim still to come.
@@ -322,10 +361,14 @@ final class PaymentLinksStatusChecker: ObservableObject {
     /// is in the pool or another wallet sent it.
     nonisolated static func fundingHeight(of record: EnvelopeRecord, in transactions: [MoneroTransaction]) -> UInt64? {
         if let height = record.fundingHeight, height > 0 { return height }
-        guard record.role == .sent, let txid = record.fundingTxid,
-              let height = transactions.first(where: { $0.id == txid && $0.type == .outgoing })?.blockHeight,
-              height > 0 else { return nil }
-        return height
+        guard record.role == .sent else { return nil }
+        // The funding txid's block, else another transaction of a split funding's.
+        for txid in record.ownFundingTxids {
+            if let height = transactions.first(where: { $0.id == txid && $0.type == .outgoing })?.blockHeight, height > 0 {
+                return height
+            }
+        }
+        return nil
     }
 
     /// Saves what the active wallet's history tells about its sent links
@@ -334,6 +377,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
         let updates = fundingUpdates(
             sent: store.sent,
             activeWalletId: walletManager.activeWallet?.id.uuidString,
+            walletIds: walletManager.walletIds,
             transactions: walletManager.transactions
         )
         for record in updates {
@@ -346,20 +390,35 @@ final class PaymentLinksStatusChecker: ObservableObject {
     ///   broadcast, or the error came after the node took it) adopts a
     ///   funding transaction the active wallet sent to its address, and
     ///   shows again as a waiting link;
+    /// - a record whose funding txid was saved before the broadcast adopts
+    ///   it once this wallet's history shows it, in any wallet (a seed
+    ///   restore gives a new one), with no time limit;
+    /// - a funding the wallet marks failed hides the link again, until the
+    ///   history shows it live;
     /// - a record with a funding transaction is never Not funded;
     /// - a mined funding gives its block, where the envelope's scan must
     ///   start.
     nonisolated static func fundingUpdates(
         sent: [EnvelopeRecord],
         activeWalletId: String?,
+        walletIds: Set<String>? = nil,
         transactions: [MoneroTransaction]
     ) -> [EnvelopeRecord] {
         sent.compactMap { original in
             guard original.role == .sent else { return nil }
             var record = original
-            // Only the wallet that funded it can hold the funding.
-            let fromActiveWallet = record.walletId == nil || record.walletId == activeWalletId
-            if record.fundingTxid == nil, fromActiveWallet,
+            // A live transaction of the attempt first.
+            if record.fundingTxid == nil, let attempts = record.attemptTxids {
+                let found = transactions.filter { attempts.contains($0.id) }
+                if let funding = found.first(where: { $0.status != .failed }) ?? found.first {
+                    record.fundingTxid = funding.id
+                    record.confirmations = funding.confirmations
+                }
+            }
+            // Only the wallet that funded it can hold the funding (a link
+            // whose wallet left this device belongs to the active one).
+            if record.fundingTxid == nil,
+               OpenPaymentLinks.belongsToActiveWallet(record, activeWalletId: activeWalletId, walletIds: walletIds),
                record.status == .created || record.status == .notFunded || record.fundingStartedAt != nil,
                let funding = transactions.first(where: { tx in
                    tx.type == .outgoing && tx.status != .failed && tx.destinations.contains { $0.address == record.address }
@@ -367,7 +426,20 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 record.fundingTxid = funding.id
                 record.confirmations = funding.confirmations
             }
-            record.status = EnvelopeStatusRules.reconciled(record.status, role: .sent, fundingTxid: record.fundingTxid)
+            // A split funding failed only when every transaction of it did.
+            let fundings = transactions.filter { record.ownFundingTxids.contains($0.id) }
+            if !fundings.isEmpty {
+                if fundings.allSatisfy({ $0.status == .failed }) {
+                    // Gone from the pool unmined: hidden, as with no funding.
+                    if record.fundingFailed != true, !record.status.isSettled {
+                        record.fundingFailed = true
+                        if record.status == .pending || record.status == .ready { record.status = .notFunded }
+                    }
+                } else {
+                    record.fundingFailed = nil
+                }
+            }
+            record.status = EnvelopeStatusRules.reconciled(record.status, role: .sent, fundingTxid: record.knownFundingTxid)
             if record.fundingHeight == nil {
                 record.fundingHeight = fundingHeight(of: record, in: transactions)
             }
@@ -521,12 +593,14 @@ struct PaymentLinkDetailView: View {
         .accessibilityLabel([title, amount, fiat.map { String(localized: "about \($0)") }].compactMap { $0 }.joined(separator: ", "))
     }
 
-    /// The funding transaction's network fee, when this wallet has it.
+    /// The funding's network fee (every transaction of a split funding),
+    /// when this wallet has it.
     private func networkFee(_ record: EnvelopeRecord) -> Decimal? {
-        guard let txid = record.fundingTxid,
-              let transaction = walletManager.transactions.first(where: { $0.id == txid && $0.type == .outgoing }),
-              transaction.fee > 0 else { return nil }
-        return transaction.fee
+        let txids = record.ownFundingTxids
+        let fee = walletManager.transactions
+            .filter { txids.contains($0.id) && $0.type == .outgoing }
+            .reduce(Decimal(0)) { $0 + $1.fee }
+        return fee > 0 ? fee : nil
     }
 
     /// A sent link's look at its envelope; a settled link of either role
@@ -717,7 +791,7 @@ enum PaymentLinkDetailAction: Hashable {
             return !record.status.isSettled && hasLink ? [.claim] : []
         case .sent:
             // No Share while no funding is known: the envelope may be empty.
-            guard record.fundingTxid != nil, display.status == .pending || display.status == .ready else { return [] }
+            guard record.knownFundingTxid != nil, display.status == .pending || display.status == .ready else { return [] }
             let share: [PaymentLinkDetailAction] = hasLink ? [.share] : []
             return display.isExpired ? [.reclaim] + share : share + [.reclaim]
         }

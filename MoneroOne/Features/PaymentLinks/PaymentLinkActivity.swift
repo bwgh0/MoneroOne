@@ -31,14 +31,16 @@ struct PaymentLinkActivity: Equatable {
         for record in records {
             switch record.role {
             case .sent:
-                if !isIncoming, record.fundingTxid == transactionId {
+                // A funding wallet2 split: each of its transactions.
+                if !isIncoming, record.ownFundingTxids.contains(transactionId) {
                     return PaymentLinkActivity(kind: .funding, record: record)
                 }
-                if isIncoming, record.settleTxid == transactionId {
+                // Every reclaim we sent stays ours, after a reopen too.
+                if isIncoming, record.settleTxid == transactionId || record.ownSettleTxids.contains(transactionId) {
                     return PaymentLinkActivity(kind: .reclaim, record: record)
                 }
             case .received:
-                if isIncoming, record.settleTxid == transactionId {
+                if isIncoming, record.settleTxid == transactionId || record.ownSettleTxids.contains(transactionId) {
                     return PaymentLinkActivity(kind: .claim, record: record)
                 }
             }

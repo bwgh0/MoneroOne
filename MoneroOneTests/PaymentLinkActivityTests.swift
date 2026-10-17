@@ -773,4 +773,107 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertEqual(PendingPaymentLinks.state(of: late, daemonHeight: 1995, now: now), .waiting(minutes: 10))
         XCTAssertFalse(PaymentLinkDisplay(record: late, fundingConfirmations: nil, daemonHeight: 1995, now: now).isExpired)
     }
+
+    // MARK: - Orphaned links
+
+    /// A link funded from a wallet that left this device (removed, or
+    /// restored from its seed under a new id) belongs to the active wallet:
+    /// it counts, gets looked at, adopts its funding and shows in Open with
+    /// a row of its own when the history has no funding row for it.
+    func testALinkWhoseWalletLeftBelongsToTheActiveWallet() throws {
+        let wallets: Set<String> = ["w1", "w2"]
+        let orphan = open(.sent, .pending, id: "orphan", walletId: "gone", fundingTxid: "f-gone")
+        let other = open(.sent, .pending, id: "other", walletId: "w2", fundingTxid: "f-other")
+        XCTAssertTrue(OpenPaymentLinks.belongsToActiveWallet(orphan, activeWalletId: "w1", walletIds: wallets))
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(orphan, activeWalletId: "w1", walletIds: wallets))
+        // Another wallet still on this device keeps its own links.
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(other, activeWalletId: "w1", walletIds: wallets))
+        // The wallets not known: only the funding wallet counts.
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(orphan, activeWalletId: "w1"))
+        let summary = OpenPaymentLinks.summary(of: [orphan, other], activeWalletId: "w1", walletIds: wallets)
+        XCTAssertEqual(summary.sentCount, 1)
+        XCTAssertEqual(summary.sentAmount, orphan.amount)
+        XCTAssertTrue(OpenPaymentLinks.needsLook(orphan, activeWalletId: "w1", walletIds: wallets, transactions: [], now: Date()))
+        XCTAssertFalse(OpenPaymentLinks.needsLook(other, activeWalletId: "w1", walletIds: wallets, transactions: [], now: Date()))
+
+        // Its funding in the active wallet's history (sent to its address) is adopted.
+        let hidden = open(.sent, .notFunded, id: "hidden", walletId: "gone", fundingTxid: nil)
+        let funding = MoneroTransaction(
+            id: "f-hidden", type: .outgoing, amount: 1, fee: 0, address: "", timestamp: Date(timeIntervalSince1970: 900),
+            confirmations: 3, status: .confirmed, memo: nil, blockHeight: 1_934,
+            destinations: [MoneroTransactionDestination(address: "addr", amount: 1)]
+        )
+        XCTAssertEqual(PaymentLinksStatusChecker.fundingUpdates(sent: [hidden], activeWalletId: "w1", walletIds: wallets,
+                                                               transactions: [funding]).first?.fundingTxid, "f-hidden")
+        XCTAssertTrue(PaymentLinksStatusChecker.fundingUpdates(sent: [hidden], activeWalletId: "w1", transactions: [funding]).isEmpty)
+
+        // The Links filter: a row of its own in Open, counted once.
+        let history = [tx("in", .incoming, at: 800)]
+        func rows(_ type: TransactionListView.FilterType = .links, search: String = "", asOf: Date? = nil) -> [EnvelopeRecord] {
+            TransactionListLogic.openSentWithoutRow([orphan, other], transactions: history, type: type, receivingIndex: nil,
+                                                    search: search, asOf: asOf, activeWalletId: "w1", walletIds: wallets)
+        }
+        XCTAssertEqual(rows().map(\.id), ["orphan"])
+        XCTAssertTrue(rows(.all).isEmpty)
+        XCTAssertTrue(rows(search: "x").isEmpty)
+        XCTAssertTrue(rows(asOf: Date()).isEmpty)
+        // A funding row in the history already shows it.
+        XCTAssertTrue(TransactionListLogic.openSentWithoutRow([orphan], transactions: [tx("f-gone", .outgoing, at: 900)], type: .links,
+                                                              receivingIndex: nil, search: "", asOf: nil, activeWalletId: "w1",
+                                                              walletIds: wallets).isEmpty)
+        let items = TransactionListLogic.items(transactions: [], linksToClaim: [], openSent: rows())
+        let sections = TransactionListLogic.linkSections(items, records: [orphan, other])
+        XCTAssertEqual(sections.open.map(\.id), items.map(\.id))
+        XCTAssertTrue(sections.history.isEmpty)
+        XCTAssertEqual(TransactionListLogic.linksSummaryTitle(items, openCount: 1, records: [orphan, other]), "1 link · 1 open")
+    }
+
+    /// A funding wallet2 split into two transactions: both are the link's.
+    /// Activity labels each one, the Links filter shows the link once, the
+    /// funding is failed only when both failed, and adoption prefers a live one.
+    func testEveryTransactionOfASplitFundingIsTheLinks() throws {
+        var split = open(.sent, .pending, id: "split", fundingTxid: "f1")
+        split.attemptTxids = ["f1", "f2"]
+        split.fundingHeight = 2_000
+        XCTAssertEqual(split.ownFundingTxids, ["f1", "f2"])
+        XCTAssertEqual(PaymentLinkActivity.match(transactionId: "f2", isIncoming: false, records: [split])?.kind, .funding)
+        XCTAssertNil(PaymentLinkActivity.match(transactionId: "f2", isIncoming: true, records: [split]))
+        // A txid saved by an older build, or found by address: that one only.
+        XCTAssertEqual(open(.sent, .pending, fundingTxid: "f9").ownFundingTxids, ["f9"])
+        XCTAssertEqual(open(.sent, .notFunded, fundingTxid: nil).ownFundingTxids, [])
+
+        let both = [tx("f2", .outgoing, at: 900), tx("f1", .outgoing, at: 900), tx("other", .outgoing, at: 800)]
+        let links = TransactionListLogic.filter(both, type: .links, receivingIndex: nil, search: "", linkRecords: [split])
+        XCTAssertEqual(links.map(\.id), ["f1"])
+        XCTAssertEqual(TransactionListLogic.filter(both, type: .all, receivingIndex: nil, search: "", linkRecords: [split]).count, 3)
+        // Only the second one shown: that row stands for the link.
+        XCTAssertEqual(TransactionListLogic.filter([both[0]], type: .links, receivingIndex: nil, search: "", linkRecords: [split]).map(\.id), ["f2"])
+        XCTAssertTrue(TransactionListLogic.openSentWithoutRow([split], transactions: [both[0]], type: .links, receivingIndex: nil, search: "",
+                                                              asOf: nil, activeWalletId: "w1", walletIds: ["w1"]).isEmpty)
+
+        // One failed, one live: funded.
+        let oneFailed = [tx("f1", .outgoing, at: 900, status: .failed), tx("f2", .outgoing, at: 900, status: .pending)]
+        XCTAssertTrue(PaymentLinksStatusChecker.fundingUpdates(sent: [split], activeWalletId: "w1", transactions: oneFailed).isEmpty)
+        let gone = [tx("f1", .outgoing, at: 900, status: .failed), tx("f2", .outgoing, at: 900, status: .failed)]
+        let failed = try XCTUnwrap(PaymentLinksStatusChecker.fundingUpdates(sent: [split], activeWalletId: "w1", transactions: gone).first)
+        XCTAssertEqual(failed.fundingFailed, true)
+        XCTAssertEqual(failed.status, .notFunded)
+
+        // Adoption by attempt: the live transaction.
+        var hidden = open(.sent, .notFunded, id: "hidden", fundingTxid: nil)
+        hidden.attemptTxids = ["f1", "f2"]
+        let adopted = try XCTUnwrap(PaymentLinksStatusChecker.fundingUpdates(sent: [hidden], activeWalletId: "w1", transactions: oneFailed).first)
+        XCTAssertEqual(adopted.fundingTxid, "f2")
+        XCTAssertEqual(adopted.status, .pending)
+        XCTAssertNil(adopted.fundingFailed)
+        // The scan floor: a block of either transaction.
+        func row(_ id: String, height: UInt64?) -> MoneroTransaction {
+            MoneroTransaction(id: id, type: .outgoing, amount: 1, fee: 0, address: "", timestamp: Date(), confirmations: nil,
+                              status: height == nil ? .pending : .confirmed, memo: nil, blockHeight: height)
+        }
+        var unscanned = split
+        unscanned.fundingHeight = nil
+        XCTAssertEqual(PaymentLinksStatusChecker.fundingHeight(of: unscanned, in: [row("f1", height: nil), row("f2", height: 3_000)]), 3_000)
+        XCTAssertEqual(PaymentLinksStatusChecker.fundingHeight(of: unscanned, in: [row("f1", height: 2_990), row("f2", height: 3_000)]), 2_990)
+    }
 }

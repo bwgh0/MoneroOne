@@ -538,42 +538,90 @@ class MoneroWallet: ObservableObject {
     }
     #endif
 
-    func send(to address: String, amount: Decimal, priority: SendPriority = .default, memo: String? = nil) async throws -> String {
-        guard let kit = kit else { throw WalletError.notUnlocked }
+    /// Runs after signing and before the broadcast, with the final txids.
+    /// When it throws, nothing is broadcast and the send throws
+    /// `BroadcastCancelled`.
+    typealias BeforeBroadcast = @MainActor (PreparedTransaction) async throws -> Void
 
-        let piconero = Int((amount * coinRate) as NSDecimalNumber)
-        writeDebugLog("send: starting send to \(address.prefix(16))..., piconero=\(piconero)")
-
-        try await Task.detached {
-            try kit.send(to: address, amount: .value(piconero), priority: priority, memo: memo)
-        }.value
-        writeDebugLog("send: kit.send completed, fetching transactions")
-
-        let txId = await Task.detached { () -> String in
-            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 1)
-            return txInfos.first?.hash ?? ""
-        }.value
-        writeDebugLog("send: got txId=\(txId)")
-
-        fetchTransactions()
-        return txId
+    /// The `BeforeBroadcast` step threw: the signed transaction was dropped
+    /// and nothing reached the network.
+    struct BroadcastCancelled: LocalizedError {
+        let underlying: Error
+        var errorDescription: String? { (underlying as? LocalizedError)?.errorDescription ?? underlying.localizedDescription }
     }
 
-    func sendAll(to address: String, priority: SendPriority = .default, memo: String? = nil) async throws -> String {
+    /// Returns the txid of the broadcast transaction.
+    func send(to address: String, amount: Decimal, priority: SendPriority = .default, memo: String? = nil,
+              beforeBroadcast: BeforeBroadcast? = nil) async throws -> String {
+        let piconero = Int((amount * coinRate) as NSDecimalNumber)
+        writeDebugLog("send: starting send to \(address.prefix(16))..., piconero=\(piconero)")
+        return try await send(to: address, amount: .value(piconero), priority: priority, memo: memo, beforeBroadcast: beforeBroadcast)
+    }
+
+    /// Sweeps the whole unlocked balance. Returns the txid of the broadcast
+    /// transaction.
+    func sendAll(to address: String, priority: SendPriority = .default, memo: String? = nil,
+                 beforeBroadcast: BeforeBroadcast? = nil) async throws -> String {
+        writeDebugLog("sendAll: starting sweep to \(address.prefix(16))...")
+        return try await send(to: address, amount: .all, priority: priority, memo: memo, beforeBroadcast: beforeBroadcast)
+    }
+
+    /// Signs a transfer of `amount` XMR to `address` and keeps it, not
+    /// sent: its fee is the one it pays for the inputs it really spends
+    /// (wallet2's estimate counts one). `send(_:beforeBroadcast:)`
+    /// broadcasts this same transaction.
+    func prepareSend(to address: String, amount: Decimal, priority: SendPriority = .default, memo: String? = nil) async throws -> PreparedTransaction {
+        guard let kit = kit else { throw WalletError.notUnlocked }
+        let piconero = Int((amount * coinRate) as NSDecimalNumber)
+        return try await Task.detached {
+            try kit.prepareSend(to: address, amount: .value(piconero), priority: priority, memo: memo)
+        }.value
+    }
+
+    /// The transaction from `prepareSend` can still go out: the wallet it
+    /// was signed in is still open, and it was not sent.
+    func isPrepared(_ prepared: PreparedTransaction) async -> Bool {
+        guard let kit = kit else { return false }
+        return await Task.detached { kit.isPrepared(prepared) }.value
+    }
+
+    /// Runs `beforeBroadcast`, then broadcasts `prepared` (from
+    /// `prepareSend`). Returns its txid. Throws
+    /// `MoneroCoreError.walletNotInitialized`, with nothing sent, when the
+    /// wallet it was signed in closed since.
+    func send(_ prepared: PreparedTransaction, beforeBroadcast: BeforeBroadcast? = nil) async throws -> String {
+        guard let kit = kit else { throw WalletError.notUnlocked }
+        return try await broadcast(prepared, kit: kit, beforeBroadcast: beforeBroadcast)
+    }
+
+    /// Signs, runs `beforeBroadcast`, then broadcasts. The txid comes from
+    /// the signed transaction, never from the newest history row: the
+    /// history can lag the broadcast.
+    private func send(to address: String, amount: SendAmount, priority: SendPriority, memo: String?,
+                      beforeBroadcast: BeforeBroadcast?) async throws -> String {
         guard let kit = kit else { throw WalletError.notUnlocked }
 
-        writeDebugLog("sendAll: starting sweep to \(address.prefix(16))...")
+        let prepared = try await Task.detached {
+            try kit.prepareSend(to: address, amount: amount, priority: priority, memo: memo)
+        }.value
+        return try await broadcast(prepared, kit: kit, beforeBroadcast: beforeBroadcast)
+    }
 
+    private func broadcast(_ prepared: PreparedTransaction, kit: MoneroKit.Kit,
+                           beforeBroadcast: BeforeBroadcast?) async throws -> String {
+        if let beforeBroadcast {
+            do {
+                try await beforeBroadcast(prepared)
+            } catch {
+                writeDebugLog("send: not broadcast, the step before it failed")
+                throw BroadcastCancelled(underlying: error)
+            }
+        }
         try await Task.detached {
-            try kit.send(to: address, amount: .all, priority: priority, memo: memo)
+            try kit.commit(prepared)
         }.value
-        writeDebugLog("sendAll: kit.send completed, fetching transactions")
-
-        let txId = await Task.detached { () -> String in
-            let txInfos = kit.transactions(fromHash: nil, descending: true, type: nil, limit: 1)
-            return txInfos.first?.hash ?? ""
-        }.value
-        writeDebugLog("sendAll: got txId=\(txId)")
+        let txId = prepared.txids.first ?? ""
+        writeDebugLog("send: committed txId=\(txId)")
 
         fetchTransactions()
         return txId

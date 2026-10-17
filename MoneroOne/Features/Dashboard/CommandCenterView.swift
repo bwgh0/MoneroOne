@@ -148,7 +148,8 @@ struct CommandCenterView: View {
             historyModel: historyModel,
             openLinks: OpenPaymentLinks.summary(
                 of: paymentLinks.records,
-                activeWalletId: walletManager.activeWallet?.id.uuidString
+                activeWalletId: walletManager.activeWallet?.id.uuidString,
+                walletIds: walletManager.walletIds
             ),
             onOpenLinks: {
                 allTransactionsFilter = .links

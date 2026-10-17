@@ -1253,4 +1253,320 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(EnvelopeSessionContent.spokenDestination(title: "Claim to", wallet: wallet("Savings", address: "4s")), "Claim to, Savings")
         XCTAssertEqual(EnvelopeSessionContent.spokenDestination(title: "Claim to", wallet: wallet("Watch", address: "4w", source: .viewOnly)), "Claim to, Watch, view-only")
     }
+
+    // MARK: - Stuck states
+
+    private func outgoing(_ id: String, _ status: MoneroTransaction.TransactionStatus, at seconds: TimeInterval = 0,
+                          height: UInt64? = nil, to address: String? = nil) -> MoneroTransaction {
+        MoneroTransaction(id: id, type: .outgoing, amount: 1, fee: 0, address: "", timestamp: Date(timeIntervalSince1970: seconds),
+                          confirmations: status == .confirmed ? 4 : 0, status: status, memo: nil, blockHeight: height,
+                          destinations: address.map { [MoneroTransactionDestination(address: $0, amount: 1)] } ?? [])
+    }
+
+    /// The funding's txids are saved before the broadcast. A send that timed
+    /// out (the node took it, the app never heard back) stays hidden, then
+    /// shows as Waiting once the history or a scan has one of them: after a
+    /// restart, in a wallet restored from its seed, with no time limit.
+    @MainActor
+    func testASavedFundingAttemptIsAdoptedByItsTxid() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        var record = storeRecord(vector.id, .sent)
+        record.walletId = "funding-wallet"
+        record.expiry = Int64(Date().timeIntervalSince1970) + 86_400
+        try PaymentLinkFunder.save(record, store: store, networkType: .mainnet)
+        // No txids without the funding lock.
+        XCTAssertThrowsError(try PaymentLinkFunder.saveAttempt(id: record.id, txids: ["f1"], store: store))
+        try PaymentLinkFunder.beginFunding(record, walletId: record.walletId, store: store, networkType: .mainnet)
+        try PaymentLinkFunder.saveAttempt(id: record.id, txids: ["f1", "f2"], store: store)
+        // One attempt per link: a second signed funding is never broadcast.
+        XCTAssertThrowsError(try PaymentLinkFunder.saveAttempt(id: record.id, txids: ["g1"], store: store))
+        // The broadcast timed out: hidden, and its envelope is scanned.
+        PaymentLinkFunder.markNotFunded(id: record.id, store: store)
+        let hidden = try XCTUnwrap(store.record(id: record.id, role: .sent))
+        XCTAssertEqual(hidden.attemptTxids, ["f1", "f2"])
+        XCTAssertNil(hidden.knownFundingTxid)
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(hidden, activeWalletId: "funding-wallet"))
+        XCTAssertTrue(EnvelopeStatusRules.needsFundingScan(hidden, now: Date()))
+        // A stale copy cannot erase the saved txids.
+        try store.save(record)
+        XCTAssertEqual(store.record(id: record.id, role: .sent)?.attemptTxids, ["f1", "f2"])
+
+        // Relaunch, then a seed restore: the wallet has a new id, and its
+        // history shows the second transaction of the split funding, long after.
+        let relaunched = try XCTUnwrap(EnvelopeStore(service: service).record(id: record.id, role: .sent))
+        XCTAssertEqual(relaunched.attemptTxids, ["f1", "f2"])
+        let mined = outgoing("f2", .confirmed, height: 2_000)
+        let found = try XCTUnwrap(PaymentLinksStatusChecker.fundingUpdates(
+            sent: [relaunched], activeWalletId: "restored", walletIds: ["restored"], transactions: [mined]).first)
+        XCTAssertEqual(found.fundingTxid, "f2")
+        XCTAssertEqual(found.status, .pending)
+        XCTAssertEqual(found.fundingHeight, 2_000)
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(found, activeWalletId: "restored", walletIds: ["restored"]))
+        let display = PaymentLinkDisplay(record: found, fundingConfirmations: nil, daemonHeight: nil)
+        XCTAssertEqual(PaymentLinkDetailAction.actions(for: found, display: display), [.share, .reclaim])
+        // The txid is the link's own: any wallet's history adopts it.
+        XCTAssertEqual(PaymentLinksStatusChecker.fundingUpdates(
+            sent: [relaunched], activeWalletId: "w2", walletIds: ["w2", "funding-wallet"], transactions: [mined]).first?.fundingTxid, "f2")
+
+        // A scan finds it first: the attempt's txid wins over an older deposit.
+        var scan = obs(conf: 3, balance: 7)
+        scan.fundingTxids = ["someone-else", "f1"]
+        let scanned = PaymentLinksStatusChecker.applying(scan, to: relaunched, transactions: [], now: Date()).record
+        XCTAssertEqual(scanned.fundingTxid, "f1")
+        XCTAssertEqual(scanned.status, .pending)
+    }
+
+    /// A funding the wallet marks failed after the send (gone from the pool
+    /// unmined): the link hides again (no Share, no count) and keeps its
+    /// secret. It shows as Waiting once the funding is live or a scan sees it.
+    func testAFailedFundingHidesTheLinkUntilItIsSeen() throws {
+        var record = storeRecord(vector.id, .sent)
+        record.walletId = "w1"
+        record.fundingStartedAt = Date().addingTimeInterval(-3_600)
+        record.fundingTxid = "f"
+        record.status = .pending
+        let failed = try XCTUnwrap(PaymentLinksStatusChecker.fundingUpdates(
+            sent: [record], activeWalletId: "w1", transactions: [outgoing("f", .failed, to: record.address)]).first)
+        XCTAssertEqual(failed.fundingFailed, true)
+        XCTAssertEqual(failed.status, .notFunded)
+        XCTAssertNil(failed.knownFundingTxid)
+        XCTAssertNotNil(failed.link)
+        XCTAssertFalse(OpenPaymentLinks.isOpenSent(failed, activeWalletId: "w1"))
+        XCTAssertTrue(OpenPaymentLinks.summary(of: [failed], activeWalletId: "w1").isEmpty)
+        let display = PaymentLinkDisplay(record: failed, fundingConfirmations: nil, daemonHeight: nil)
+        XCTAssertEqual(PaymentLinkDetailAction.actions(for: failed, display: display), [])
+        // Its envelope is scanned for the funding; the next history read changes nothing.
+        XCTAssertTrue(EnvelopeStatusRules.needsFundingScan(failed, now: Date()))
+        XCTAssertTrue(PaymentLinksStatusChecker.fundingUpdates(
+            sent: [failed], activeWalletId: "w1", transactions: [outgoing("f", .failed, to: record.address)]).isEmpty)
+
+        // Live again in the history: Waiting.
+        let live = try XCTUnwrap(PaymentLinksStatusChecker.fundingUpdates(
+            sent: [failed], activeWalletId: "w1", transactions: [outgoing("f", .pending, to: record.address)]).first)
+        XCTAssertNil(live.fundingFailed)
+        XCTAssertEqual(live.status, .pending)
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(live, activeWalletId: "w1"))
+        // Or a scan sees the money.
+        var seen = obs(conf: 2, balance: 7)
+        seen.fundingTxids = ["f"]
+        let scanned = PaymentLinksStatusChecker.applying(seen, to: failed, transactions: [], now: Date()).record
+        XCTAssertNil(scanned.fundingFailed)
+        XCTAssertEqual(scanned.status, .pending)
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(scanned, activeWalletId: "w1"))
+    }
+
+    /// The settle's grace counts blocks: dropped only once the scan is more
+    /// than 30 blocks past the settle's height. The clock (60 minutes)
+    /// counts only when no height is known.
+    func testTheSettleGraceCountsBlocks() {
+        let rules = EnvelopeStatusRules.self
+        let now = Date()
+        let longAgo = now.addingTimeInterval(-2 * rules.settleGrace)
+        XCTAssertEqual(rules.settleGraceBlocks, 30)
+        XCTAssertFalse(rules.settleGraceIsOver(settledAt: longAgo, settleHeight: 1_000, scanHeight: 1_030, now: now))
+        XCTAssertTrue(rules.settleGraceIsOver(settledAt: now, settleHeight: 1_000, scanHeight: 1_031, now: now))
+        // No height: the clock.
+        XCTAssertTrue(rules.settleGraceIsOver(settledAt: longAgo, settleHeight: nil, scanHeight: 1_031, now: now))
+        XCTAssertTrue(rules.settleGraceIsOver(settledAt: longAgo, settleHeight: 1_000, scanHeight: 0, now: now))
+        XCTAssertFalse(rules.settleGraceIsOver(settledAt: now.addingTimeInterval(-(rules.settleGrace - 60)), settleHeight: nil, scanHeight: 0, now: now))
+        XCTAssertFalse(rules.settleGraceIsOver(settledAt: nil, settleHeight: nil, scanHeight: 1_031, now: now))
+
+        // A claim that never went out (the app quit before the broadcast)
+        // opens the link again 31 blocks later.
+        var claim = storeRecord("0123456789abcdef", .received)
+        claim.settle(txids: ["never-sent"], amount: 7, walletName: "Main", height: 1_000, leftLocked: false, at: now)
+        var inside = obs(conf: 30, balance: 7, unlocked: 7)
+        inside.height = 1_030
+        XCTAssertEqual(PaymentLinksStatusChecker.applying(inside, to: claim, transactions: [], now: now.addingTimeInterval(7_200)).record.status, .claimed)
+        var past = inside
+        past.height = 1_031
+        let reopened = PaymentLinksStatusChecker.applying(past, to: claim, transactions: [], now: now).record
+        XCTAssertEqual(reopened.status, .ready)
+        XCTAssertNil(reopened.settleTxid)
+        XCTAssertNil(reopened.settleHeight)
+        XCTAssertEqual(reopened.spendsBeforeSettle, ["never-sent"])
+    }
+
+    /// The sweep is saved as the link's settle before its broadcast. An app
+    /// kill after it leaves the link settled, never claimable twice; a sweep
+    /// the node refused puts the link back as it was.
+    @MainActor
+    func testAKillBetweenSweepAndSaveLeavesTheLinkSettled() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        let now = Date()
+        var before = storeRecord(vector.id, .received)
+        before.status = .ready
+        try store.save(before)
+        let attempt = EnvelopeRuntime.SweepAttempt(txids: ["s1", "s2"], amount: 9, height: 2_000, leavesLocked: false)
+        try store.save(EnvelopeSession.settling(before, attempt: attempt, walletName: "Main", now: now))
+
+        // Killed here. Relaunch:
+        let settled = try XCTUnwrap(EnvelopeStore(service: service).record(id: before.id, role: .received))
+        XCTAssertEqual(settled.status, .claimed)
+        XCTAssertEqual(settled.settleTxid, "s1")
+        XCTAssertEqual(settled.settleTxids, ["s1", "s2"])
+        XCTAssertEqual(settled.settledAmount, 9)
+        XCTAssertEqual(settled.settleHeight, 2_000)
+        XCTAssertEqual(settled.ownSettleTxids, ["s1", "s2"])
+        XCTAssertFalse(OpenPaymentLinks.isToClaim(settled))
+        XCTAssertEqual(PaymentLinkDetailAction.actions(for: settled, display: PaymentLinkDisplay(record: settled, fundingConfirmations: nil, daemonHeight: nil)), [])
+        // A look tells whether it went out.
+        XCTAssertTrue(OpenPaymentLinks.needsLook(settled, activeWalletId: "w1", transactions: [], now: now))
+
+        // The commit's error decides what the record keeps.
+        typealias Failure = EnvelopeRuntime.RuntimeError
+        XCTAssertNil(EnvelopeSession.afterFailedSweep(settled, before: before, error: Failure.sweepUnconfirmed("x")))
+        let refused = try XCTUnwrap(EnvelopeSession.afterFailedSweep(settled, before: before, error: Failure.sweepFailed("x")))
+        XCTAssertEqual(refused.status, .ready)
+        XCTAssertNil(refused.settleTxid)
+        XCTAssertNil(refused.settleHeight)
+        let lost = try XCTUnwrap(EnvelopeSession.afterFailedSweep(settled, before: before, error: Failure.alreadyClaimed))
+        XCTAssertEqual(lost.status, .claimed)
+        XCTAssertNil(lost.settleTxid)
+        // Failed before anything was saved: nothing to undo.
+        XCTAssertNil(EnvelopeSession.afterFailedSweep(before, before: before, error: Failure.sweepFailed("x")))
+
+        // Which commit errors may hide a sweep that went out.
+        func mapped(_ error: Error) -> Failure? { EnvelopeRuntime.mapSweepError(error) as? Failure }
+        XCTAssertEqual(mapped(MoneroWallet.BroadcastCancelled(underlying: Failure.walletBusy)), .sweepFailed(Failure.walletBusy.localizedDescription))
+        XCTAssertEqual(mapped(MoneroCoreError.transactionCommitFailed("double spend")), .alreadyClaimed)
+        if case .sweepFailed = mapped(MoneroCoreError.transactionCommitFailed("transaction was rejected by daemon")) {} else { XCTFail("refused") }
+        if case .sweepFailed = mapped(MoneroCoreError.transactionCommitFailed("daemon is busy")) {} else { XCTFail("busy") }
+        if case .sweepUnconfirmed = mapped(MoneroCoreError.transactionCommitFailed("no connection to daemon")) {} else { XCTFail("no answer") }
+        if case .sweepUnconfirmed = mapped(MoneroCoreError.transactionCommitFailed("Unknown exception")) {} else { XCTFail("unknown") }
+    }
+
+    /// A sweep that left newer, still locked money in the envelope keeps
+    /// the link looked at until that money unlocks (the link opens again)
+    /// or a look sees none left.
+    func testASettleThatLeftLockedMoneyKeepsLooking() {
+        let now = Date()
+        var claim = storeRecord("0123456789abcdef", .received)
+        claim.settle(txids: ["c1"], amount: 5, walletName: "Main", height: 1_000, leftLocked: true, at: now)
+        XCTAssertEqual(claim.settleLeftLocked, true)
+        XCTAssertTrue(EnvelopeStatusRules.needsSettleLook(claim, transactions: []))
+        // Not while our claim waits in this wallet's pool.
+        XCTAssertFalse(EnvelopeStatusRules.needsSettleLook(claim, transactions: [history("c1", .pending)]))
+
+        // Mined, the newer money still locked: settled, and the looks go on.
+        let locked = PaymentLinksStatusChecker.applying(obs(conf: 30, balance: 7, unlocked: 0, spends: ["c1"], mined: ["c1"]),
+                                                        to: claim, transactions: [history("c1", .confirmed)], now: now)
+        XCTAssertEqual(locked.record.status, .claimed)
+        XCTAssertFalse(locked.conclusive)
+        XCTAssertEqual(locked.record.settleSeenMined, true)
+        XCTAssertEqual(locked.record.settleLeftLocked, true)
+        XCTAssertTrue(EnvelopeStatusRules.needsSettleLook(locked.record, transactions: [history("c1", .confirmed)]))
+
+        // Unlocked: Ready to claim again.
+        let open = PaymentLinksStatusChecker.applying(obs(conf: 30, balance: 7, unlocked: 7, spends: ["c1"], mined: ["c1"]),
+                                                      to: locked.record, transactions: [], now: now)
+        XCTAssertEqual(open.record.status, .ready)
+        XCTAssertTrue(open.conclusive)
+        XCTAssertNil(open.record.settleTxid)
+        XCTAssertNil(open.record.settleLeftLocked)
+        XCTAssertEqual(open.record.spendsBeforeSettle, ["c1"])
+        XCTAssertTrue(OpenPaymentLinks.isToClaim(open.record))
+
+        // Or the money left: settled for good, no more looks.
+        let empty = PaymentLinksStatusChecker.applying(obs(conf: 30, spends: ["c1", "other"], mined: ["c1", "other"]),
+                                                       to: locked.record, transactions: [], now: now)
+        XCTAssertEqual(empty.record.status, .claimed)
+        XCTAssertTrue(empty.conclusive)
+        XCTAssertNil(empty.record.settleLeftLocked)
+        XCTAssertFalse(EnvelopeStatusRules.needsSettleLook(empty.record, transactions: []))
+    }
+
+    /// Two devices claim one link. Ours lost (a double spend): the envelope
+    /// is empty and another claim is in a block. The link reads "Already
+    /// claimed", and no look follows.
+    func testAClaimThatLostToAnotherDeviceReadsAlreadyClaimed() {
+        let now = Date()
+        var claim = storeRecord("0123456789abcdef", .received)
+        claim.settle(txids: ["ours"], amount: 7, walletName: "Main", height: 1_000, leftLocked: false, at: now)
+        func beaten(_ observation: EnvelopeObservation, role: EnvelopeRecord.Role = .received) -> Bool {
+            EnvelopeStatusRules.claimWasBeaten(role: role, settleTxid: "ours", settleTxids: ["ours"], spendsBeforeSettle: [],
+                                               ownSettleTxids: ["ours"], observation: observation)
+        }
+        XCTAssertTrue(beaten(obs(conf: 30, spends: ["theirs"], mined: ["theirs"])))
+        // Theirs only in the pool, ours seen, money left, or a sent link: not beaten.
+        XCTAssertFalse(beaten(obs(conf: 30, spends: ["theirs"])))
+        XCTAssertFalse(beaten(obs(conf: 30, spends: ["theirs", "ours"], mined: ["theirs"])))
+        XCTAssertFalse(beaten(obs(conf: 30, balance: 7, unlocked: 7, spends: ["theirs"], mined: ["theirs"])))
+        XCTAssertFalse(beaten(obs(conf: 30, spends: ["theirs"], mined: ["theirs"]), role: .sent))
+
+        let lost = PaymentLinksStatusChecker.applying(obs(conf: 30, spends: ["theirs"], mined: ["theirs"]), to: claim, transactions: [], now: now)
+        XCTAssertEqual(lost.record.status, .claimed)
+        XCTAssertTrue(lost.conclusive)
+        XCTAssertNil(lost.record.settleTxid)
+        XCTAssertNil(lost.record.settledAmount)
+        XCTAssertNil(lost.record.walletName)
+        XCTAssertEqual(lost.record.ownSettleTxids, ["ours"])
+        XCTAssertEqual(PaymentLinkDisplay(record: lost.record, fundingConfirmations: nil, daemonHeight: nil).label, "Already claimed")
+        XCTAssertFalse(EnvelopeStatusRules.needsSettleLook(lost.record, transactions: []))
+        XCTAssertFalse(OpenPaymentLinks.needsLook(lost.record, activeWalletId: "w1", transactions: [], now: now))
+    }
+
+    /// Our claim read as dropped, the link opened again, then the claim was
+    /// mined after all: the link reads Claimed by us, with its amount and
+    /// wallet, never "Already claimed".
+    func testALateMinedClaimOfOursIsOursAgain() {
+        let now = Date()
+        var claim = storeRecord("0123456789abcdef", .received)
+        claim.settle(txids: ["slow"], amount: 7, walletName: "Main", height: nil, leftLocked: false,
+                     at: now.addingTimeInterval(-2 * EnvelopeStatusRules.settleGrace))
+        let reopened = PaymentLinksStatusChecker.applying(obs(conf: 30, balance: 8, unlocked: 8), to: claim, transactions: [], now: now).record
+        XCTAssertEqual(reopened.status, .ready)
+        XCTAssertNil(reopened.settleTxid)
+        let mined = PaymentLinksStatusChecker.applying(obs(conf: 40, spends: ["slow"], mined: ["slow"]), to: reopened, transactions: [], now: now)
+        XCTAssertEqual(mined.record.status, .claimed)
+        XCTAssertEqual(mined.record.settleTxid, "slow")
+        XCTAssertEqual(mined.record.settledAmount, 7)
+        XCTAssertEqual(mined.record.walletName, "Main")
+        XCTAssertEqual(mined.record.settleSeenMined, true)
+        XCTAssertEqual(PaymentLinkDisplay(record: mined.record, fundingConfirmations: nil, daemonHeight: nil).label, "Claimed")
+        // A claim made elsewhere: Already claimed.
+        let theirs = PaymentLinksStatusChecker.applying(obs(conf: 40, spends: ["theirs"], mined: ["theirs"]), to: reopened, transactions: [], now: now)
+        XCTAssertEqual(theirs.record.status, .claimed)
+        XCTAssertNil(theirs.record.settleTxid)
+        XCTAssertEqual(PaymentLinkDisplay(record: theirs.record, fundingConfirmations: nil, daemonHeight: nil).label, "Already claimed")
+    }
+
+    /// A reclaim that split into two transactions: both are ours. A scan
+    /// that sees only the second never reads it as a claim that beat ours,
+    /// and every txid we sent stays ours across a reopen and a stale save.
+    @MainActor
+    func testEveryTransactionOfASplitSweepIsOurs() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        let now = Date()
+        var sent = storeRecord(vector.id, .sent)
+        sent.walletId = "w1"
+        sent.fundingTxid = "funding"
+        sent.status = .ready
+        let stale = sent
+        sent.settle(txids: ["r1", "r2"], amount: 9, walletName: "Main", height: 1_000, leftLocked: false, at: now)
+        try store.save(sent)
+        try store.save(stale)
+        XCTAssertEqual(store.record(id: sent.id, role: .sent)?.ownSettleTxids, ["r1", "r2"])
+
+        let second = PaymentLinksStatusChecker.applying(obs(conf: 30, spends: ["r2"], mined: ["r2"]), to: sent, transactions: [], now: now)
+        XCTAssertEqual(second.record.status, .reclaimed)
+        XCTAssertFalse(second.conclusive)
+        let both = PaymentLinksStatusChecker.applying(obs(conf: 30, spends: ["r1", "r2"], mined: ["r1", "r2"]), to: sent, transactions: [], now: now)
+        XCTAssertEqual(both.record.status, .reclaimed)
+        XCTAssertTrue(both.conclusive)
+        XCTAssertEqual(both.record.settleSeenMined, true)
+        // Reopened by a top-up, then emptied by our split reclaim: Reclaimed.
+        var reopened = sent
+        reopened.reopen()
+        XCTAssertEqual(reopened.spendsBeforeSettle, ["r1", "r2"])
+        reopened.status = .ready
+        XCTAssertEqual(EnvelopeStatusRules.status(for: obs(conf: 30, spends: ["r1", "r2"], mined: ["r1", "r2"]), current: .ready,
+                                                  role: .sent, ownSettleTxids: reopened.ownSettleTxids), .reclaimed)
+    }
 }

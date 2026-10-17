@@ -37,6 +37,16 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     /// transaction was never built, or a guard stopped it): no scan looks
     /// for its funding. Nil when the attempt may have gone out.
     var fundingNotSent: Bool?
+    /// Sent: the funding's txids (a send can split into more than one
+    /// transaction), saved after signing and before the broadcast. Not a
+    /// known funding: the link stays hidden until the wallet's history (on
+    /// this or any wallet, after a restart or a seed restore) or a scan
+    /// shows one of them; then that one becomes `fundingTxid`.
+    var attemptTxids: [String]?
+    /// Sent: the wallet marked the funding transaction failed (it left the
+    /// pool unmined). The link is hidden like one with no known funding
+    /// until the history shows the transaction live or a scan sees money.
+    var fundingFailed: Bool?
     /// Sent: the claim fee reserve added to the funding amount, piconero.
     var feeReserve: UInt64?
     /// Sent: our reclaim sweep. Received: our claim sweep.
@@ -50,6 +60,17 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     var walletId: String?
     /// When our settle sweep went out.
     var settledAt: Date?
+    /// The envelope's chain height when our settle sweep went out: its
+    /// grace counts blocks from here (``EnvelopeStatusRules/settleGraceBlocks``).
+    var settleHeight: UInt64?
+    /// Our settle left money in the envelope that was still locked (a newer
+    /// funding), as the sweep or a later look saw it. Looks go on until that
+    /// money unlocks (the link opens again) or a look sees none left.
+    var settleLeftLocked: Bool?
+    /// Every claim or reclaim this device sent for the link, saved before
+    /// each broadcast. A spend on this list is ours, whatever a reopen
+    /// cleared since.
+    var ownSettles: [OwnSettle]?
     /// A scan saw our settle sweep in a block. Until then a background look
     /// tells a sweep that waits from one that dropped.
     var settleSeenMined: Bool?
@@ -82,8 +103,87 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     /// means "use the number".
     var note: String?
 
+    /// A claim or reclaim this device sent.
+    struct OwnSettle: Codable, Equatable {
+        /// Every transaction of the sweep (it can split); the first is the
+        /// record's `settleTxid`.
+        var txids: [String]
+        /// Piconero the sweep moved.
+        var amount: UInt64
+        /// The wallet the money went to.
+        var walletName: String?
+    }
+
     /// The longest note, in characters.
     static let noteLimit = 40
+
+    /// The funding transaction, unless the wallet marked it failed.
+    var knownFundingTxid: String? {
+        fundingFailed == true ? nil : fundingTxid
+    }
+
+    /// Every transaction of our funding: `fundingTxid` and the rest of its
+    /// signed attempt (wallet2 can split a send), `fundingTxid` first.
+    /// Empty while no funding is known.
+    var ownFundingTxids: [String] {
+        guard let fundingTxid, !fundingTxid.isEmpty else { return [] }
+        guard let attempts = attemptTxids, attempts.contains(fundingTxid) else { return [fundingTxid] }
+        return [fundingTxid] + attempts.filter { $0 != fundingTxid }
+    }
+
+    /// The txids of every claim or reclaim this device sent.
+    var ownSettleTxids: [String] { (ownSettles ?? []).flatMap(\.txids) }
+
+    /// Every transaction of our current claim or reclaim: `settleTxid` and
+    /// the rest of its sweep. Empty when none.
+    var settleTxids: [String] {
+        guard let settleTxid, !settleTxid.isEmpty else { return [] }
+        return ownSettles?.first(where: { $0.txids.contains(settleTxid) })?.txids ?? [settleTxid]
+    }
+
+    /// Our claim (received) or reclaim (sent) is signed and about to go out:
+    /// the link reads settled by `txid` before the broadcast, so an app kill
+    /// after it never leaves the link claimable twice. A settle that never
+    /// went out counts as dropped once its grace is over.
+    mutating func settle(txids: [String], amount: UInt64, walletName: String?, height: UInt64?, leftLocked: Bool, at date: Date) {
+        guard let txid = txids.first else { return }
+        settleTxid = txid
+        settledAmount = amount
+        self.walletName = walletName
+        settledAt = date
+        settleHeight = height.flatMap { $0 > 0 ? $0 : nil }
+        settleSeenMined = nil
+        settleLeftLocked = leftLocked ? true : nil
+        status = role == .sent ? .reclaimed : .claimed
+        var own = (ownSettles ?? []).filter { $0.txids.first != txid }
+        own.append(OwnSettle(txids: txids, amount: amount, walletName: walletName))
+        ownSettles = own
+    }
+
+    /// Our settle never reached the network (the node refused it): the
+    /// link is back as it was before it.
+    mutating func undoSettle(to previous: EnvelopeRecord) {
+        settleTxid = previous.settleTxid
+        settledAmount = previous.settledAmount
+        walletName = previous.walletName
+        settledAt = previous.settledAt
+        settleHeight = previous.settleHeight
+        settleSeenMined = previous.settleSeenMined
+        settleLeftLocked = previous.settleLeftLocked
+        status = previous.status
+    }
+
+    /// Our settle lost to a claim made elsewhere: no sweep of ours describes
+    /// the link. It reads "Already claimed".
+    mutating func dropSettle() {
+        settleTxid = nil
+        settledAmount = nil
+        settledAt = nil
+        settleHeight = nil
+        settleSeenMined = nil
+        settleLeftLocked = nil
+        if role == .received { walletName = nil }
+    }
 
     /// The name the app shows: the note, else "Link 7".
     var displayName: String {
@@ -127,12 +227,8 @@ struct EnvelopeRecord: Codable, Identifiable, Equatable {
     /// txid stays in `spendsBeforeSettle`, so a later scan that shows it
     /// reads it as ours.
     mutating func reopen() {
-        if let settleTxid, !settleTxid.isEmpty { noteSpendsBeforeSettle([settleTxid]) }
-        settleTxid = nil
-        settledAmount = nil
-        settledAt = nil
-        settleSeenMined = nil
-        if role == .received { walletName = nil }
+        noteSpendsBeforeSettle(settleTxids)
+        dropSettle()
     }
 
     /// Adds `txids` to `spendsBeforeSettle`, once each.
@@ -251,7 +347,7 @@ final class EnvelopeStore: ObservableObject {
     /// the envelope from the funding block.
     private func reconcileFundedRecords() {
         for var record in records where record.role == .sent {
-            let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
+            let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.knownFundingTxid)
             guard status != record.status else { continue }
             record.status = status
             if (try? write(record)) == nil, let index = index(of: record) {
@@ -282,6 +378,11 @@ final class EnvelopeStore: ObservableObject {
             record.note = stored.note
             record.fundingStartedAt = stored.fundingStartedAt ?? record.fundingStartedAt
             record.fundingTxid = stored.fundingTxid ?? record.fundingTxid
+            record.attemptTxids = stored.attemptTxids ?? record.attemptTxids
+            // Every claim or reclaim we sent stays ours.
+            var own = stored.ownSettles ?? []
+            for settle in record.ownSettles ?? [] where !own.contains(where: { $0.txids == settle.txids }) { own.append(settle) }
+            record.ownSettles = own.isEmpty ? nil : own
         }
         if record.number == nil {
             record.number = nextNumber

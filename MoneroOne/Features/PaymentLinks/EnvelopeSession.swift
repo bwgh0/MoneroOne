@@ -52,7 +52,7 @@ final class EnvelopeSession: ObservableObject {
 
     init(record: EnvelopeRecord, walletManager: WalletManager, store: EnvelopeStore = .shared, runtime: EnvelopeRuntime = .shared) {
         var record = record
-        record.status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
+        record.status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.knownFundingTxid)
         self.record = record
         self.walletManager = walletManager
         self.store = store
@@ -139,31 +139,71 @@ final class EnvelopeSession: ObservableObject {
 
     /// Claim (received link) or reclaim (sent link): sweep everything
     /// unlocked to the chosen wallet. A closed wallet stays closed; the
-    /// money shows when it next syncs.
+    /// money shows when it next syncs. The link reads settled by the sweep
+    /// before the broadcast, so an app kill after it never leaves the link
+    /// claimable a second time.
     func sweep() async {
         guard case .ready = phase, let destination = sweepTarget else { return }
         pollTask?.cancel()
         phase = .sweeping
+        let before = record
         do {
-            let result = try await runtime.sweep(envelopeId: record.id, envelopeAddress: record.address, to: destination.address)
-            record.settleTxid = result.txid
-            record.settledAmount = result.amount
-            record.walletName = destination.walletName
-            record.settledAt = Date()
-            record.status = record.role == .sent ? .reclaimed : .claimed
+            let result = try await runtime.sweep(envelopeId: record.id, envelopeAddress: record.address, to: destination.address) { [self] attempt in
+                // Nothing goes out unless this save holds.
+                let settling = Self.settling(record, attempt: attempt, walletName: destination.walletName, now: Date())
+                try store.save(settling)
+                record = settling
+            }
             PaymentLinksStatusChecker.settledLooks.remove(record.id)
             // Keep the secret until explicit Remove All: a mined sweep can
             // reorg, or leave newer locked funding in this envelope.
-            try? store.save(record)
             phase = .done(txid: result.txid, amount: result.amount)
             await runtime.deleteFiles(id: record.id)
-        } catch EnvelopeRuntime.RuntimeError.alreadyClaimed {
-            record.status = .claimed
-            try? store.save(record)
-            phase = .alreadyClaimed
-            await runtime.deleteFiles(id: record.id)
         } catch {
-            phase = .failed(Self.message(for: error))
+            if let after = Self.afterFailedSweep(record, before: before, error: error) {
+                record = after
+                try? store.save(record)
+            }
+            if case EnvelopeRuntime.RuntimeError.alreadyClaimed = error {
+                phase = .alreadyClaimed
+                await runtime.deleteFiles(id: record.id)
+            } else {
+                phase = .failed(Self.message(for: error))
+            }
+        }
+    }
+
+    /// The record as it is saved before the sweep's broadcast: settled by
+    /// the sweep, which joins the link's own settles.
+    nonisolated static func settling(_ record: EnvelopeRecord, attempt: EnvelopeRuntime.SweepAttempt, walletName: String?, now: Date) -> EnvelopeRecord {
+        var settling = record
+        settling.settle(txids: attempt.txids, amount: attempt.amount, walletName: walletName,
+                        height: attempt.height, leftLocked: attempt.leavesLocked, at: now)
+        return settling
+    }
+
+    /// What a failed sweep leaves in the record: `record` as saved before
+    /// the broadcast (or `before` when the sweep failed earlier), `before`
+    /// the record before the sweep. Nil: keep it as it is.
+    /// - The node refused it as a double spend: a claim made elsewhere took
+    ///   the money. Claimed, with no sweep of ours.
+    /// - No answer from the node: the sweep may have gone out. It stays
+    ///   settled; a settle that dropped opens the link again once its
+    ///   grace is over.
+    /// - Any other failure sent nothing: the link is as it was.
+    nonisolated static func afterFailedSweep(_ record: EnvelopeRecord, before: EnvelopeRecord, error: Error) -> EnvelopeRecord? {
+        var after = record
+        switch error {
+        case EnvelopeRuntime.RuntimeError.alreadyClaimed:
+            after.undoSettle(to: before)
+            after.status = .claimed
+            return after
+        case EnvelopeRuntime.RuntimeError.sweepUnconfirmed:
+            return nil
+        default:
+            guard record != before else { return nil }
+            after.undoSettle(to: before)
+            return after
         }
     }
 
@@ -197,8 +237,10 @@ final class EnvelopeSession: ObservableObject {
     private func update(with observation: EnvelopeObservation) {
         // The store's copy may have learned the funding since this screen
         // opened (the Send flow marks it funded after the broadcast).
-        if let stored = store.record(id: record.id, role: record.role), record.fundingTxid == nil {
-            record.fundingTxid = stored.fundingTxid
+        if let stored = store.record(id: record.id, role: record.role) {
+            if record.fundingTxid == nil { record.fundingTxid = stored.fundingTxid }
+            record.attemptTxids = record.attemptTxids ?? stored.attemptTxids
+            record.fundingFailed = stored.fundingFailed
         }
         record = PaymentLinksStatusChecker.applying(observation, to: record, transactions: walletManager.transactions, now: Date()).record
         let status = record.status

@@ -95,6 +95,19 @@ struct TransactionListView: View {
         )
     }
 
+    private var openSentWithoutRow: [EnvelopeRecord] {
+        TransactionListLogic.openSentWithoutRow(
+            paymentLinks.records,
+            transactions: sourceTransactions,
+            type: filterType,
+            receivingIndex: receivingIndex,
+            search: searchText,
+            asOf: asOf,
+            activeWalletId: walletManager.activeWallet?.id.uuidString,
+            walletIds: walletManager.walletIds
+        )
+    }
+
     private var filteredTransactions: [MoneroTransaction] {
         TransactionListLogic.filter(
             sourceTransactions,
@@ -126,7 +139,7 @@ struct TransactionListView: View {
 
     var body: some View {
         let filtered = filteredTransactions
-        let items = TransactionListLogic.items(transactions: filtered, linksToClaim: linksToClaim)
+        let items = TransactionListLogic.items(transactions: filtered, linksToClaim: linksToClaim, openSent: openSentWithoutRow)
         let totals = TransactionListLogic.totals(of: filtered)
         // Fiat Mode leads with fiat totals priced like the rows below them.
         let fiatTotals = priceService.showFiatFirst
@@ -321,6 +334,12 @@ struct TransactionListView: View {
                 }
             case .linkToClaim(let record):
                 PaymentLinkToClaimRow(record: record)
+            case .openSent(let record):
+                NavigationLink {
+                    PaymentLinkDetailView(recordId: record.id, role: .sent)
+                } label: {
+                    PaymentLinkOpenSentRow(record: record)
+                }
             }
         }
     }
@@ -641,8 +660,31 @@ enum TransactionListLogic {
         asOf: Date? = nil,
         linkRecords: [EnvelopeRecord] = []
     ) -> [MoneroTransaction] {
-        through(asOf, transactions: transactions).filter {
+        let rows = through(asOf, transactions: transactions).filter {
             matches($0, type: type, receivingIndex: receivingIndex, search: search, linkRecords: linkRecords)
+        }
+        return type == .links ? oneFundingRowPerLink(rows, records: linkRecords) : rows
+    }
+
+    /// A funding wallet2 split into several transactions: the Links filter
+    /// shows one row for the link, its funding txid's when shown. All
+    /// keeps every transaction.
+    static func oneFundingRowPerLink(_ rows: [MoneroTransaction], records: [EnvelopeRecord]) -> [MoneroTransaction] {
+        func funding(_ tx: MoneroTransaction) -> EnvelopeRecord? {
+            guard tx.type == .outgoing,
+                  let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: false, records: records),
+                  link.kind == .funding else { return nil }
+            return link.record
+        }
+        var kept: [String: String] = [:]
+        for tx in rows {
+            guard let record = funding(tx) else { continue }
+            let key = EnvelopeStore.account(for: record)
+            if kept[key] == nil || tx.id == record.fundingTxid { kept[key] = tx.id }
+        }
+        return rows.filter { tx in
+            guard let record = funding(tx) else { return true }
+            return kept[EnvelopeStore.account(for: record)] == tx.id
         }
     }
 
@@ -667,10 +709,38 @@ enum TransactionListLogic {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
-    /// The transactions and the links to claim in one list, newest first.
-    static func items(transactions: [MoneroTransaction], linksToClaim: [EnvelopeRecord]) -> [ActivityListItem] {
-        guard !linksToClaim.isEmpty else { return transactions.map(ActivityListItem.transaction) }
+    /// Under Links, our open links whose funding has no row in this
+    /// wallet's history (its funding wallet left this device, or another
+    /// wallet funded it), newest first: each gets a row of its own in Open,
+    /// at the date it was made, so Share and Reclaim stay in reach. Now
+    /// only, with no search or address filter.
+    static func openSentWithoutRow(
+        _ records: [EnvelopeRecord],
+        transactions: [MoneroTransaction],
+        type: TransactionListView.FilterType,
+        receivingIndex: Int?,
+        search: String,
+        asOf: Date?,
+        activeWalletId: String?,
+        walletIds: Set<String>?
+    ) -> [EnvelopeRecord] {
+        guard type == .links, asOf == nil, search.isEmpty, receivingIndex == nil else { return [] }
+        let rows = Set(transactions.filter { $0.type == .outgoing }.map(\.id))
+        return records
+            .filter { record in
+                guard OpenPaymentLinks.isOpenSent(record, activeWalletId: activeWalletId, walletIds: walletIds),
+                      record.knownFundingTxid != nil else { return false }
+                return !record.ownFundingTxids.contains(where: rows.contains)
+            }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The transactions, the links to claim and our open links with no
+    /// funding row in one list, newest first.
+    static func items(transactions: [MoneroTransaction], linksToClaim: [EnvelopeRecord], openSent: [EnvelopeRecord] = []) -> [ActivityListItem] {
+        guard !linksToClaim.isEmpty || !openSent.isEmpty else { return transactions.map(ActivityListItem.transaction) }
         let all = transactions.map(ActivityListItem.transaction) + linksToClaim.map(ActivityListItem.linkToClaim)
+            + openSent.map(ActivityListItem.openSent)
         // Stable: transactions keep their order among equal dates.
         return all.enumerated()
             .sorted { $0.element.date != $1.element.date ? $0.element.date > $1.element.date : $0.offset < $1.offset }
@@ -693,6 +763,8 @@ enum TransactionListLogic {
                 } else {
                     history.append(item)
                 }
+            case .openSent:
+                open.append(item)
             case .transaction(let tx):
                 let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: tx.type == .incoming, records: records)
                 if let link, link.kind == .funding, !link.record.status.isSettled, tx.status != .failed {
@@ -711,7 +783,7 @@ enum TransactionListLogic {
         var links = Set<String>()
         for item in items {
             switch item {
-            case .linkToClaim(let record):
+            case .linkToClaim(let record), .openSent(let record):
                 links.insert(EnvelopeStore.account(for: record))
             case .transaction(let tx):
                 if let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: tx.type == .incoming, records: records) {
@@ -821,11 +893,14 @@ enum TransactionListLogic {
 enum ActivityListItem: Identifiable, Equatable {
     case transaction(MoneroTransaction)
     case linkToClaim(EnvelopeRecord)
+    /// One of our open links whose funding has no row here.
+    case openSent(EnvelopeRecord)
 
     var id: String {
         switch self {
         case .transaction(let tx): return "tx.\(tx.id).\(tx.type == .incoming ? "in" : "out")"
         case .linkToClaim(let record): return "link.\(record.id)"
+        case .openSent(let record): return "sent.\(record.id)"
         }
     }
 
@@ -834,7 +909,7 @@ enum ActivityListItem: Identifiable, Equatable {
     var date: Date {
         switch self {
         case .transaction(let tx): return tx.timestamp
-        case .linkToClaim(let record): return record.createdAt
+        case .linkToClaim(let record), .openSent(let record): return record.createdAt
         }
     }
 }

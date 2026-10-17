@@ -50,6 +50,9 @@ struct SendFlowView: View {
     // envelope instead of paying an address.
     @State private var isLinkMode = false
     @State private var linkDraft: PaymentLinkDraft?
+    /// Bumped when the review's funding transaction is gone at Send: the
+    /// review builds it again, and its fee shows before anything is saved.
+    @State private var linkFundingRebuild = 0
     @State private var linkRecordId: String?
     /// The link's note: a name that stays on this iPhone, never in the link
     /// or the funding transaction's memo.
@@ -194,6 +197,7 @@ struct SendFlowView: View {
     ///     editable instead of stuck on the dead `.sending` step.
     private func handleHardwareSheetDismiss() {
         let outcome = walletManager.lastHardwareSessionOutcome
+        walletManager.pendingBroadcastStep = nil
         Task {
             await walletManager.refresh()
             await MainActor.run {
@@ -306,6 +310,7 @@ struct SendFlowView: View {
                 priceService: priceService,
                 walletManager: walletManager,
                 sendInProgress: sendInProgress,
+                rebuild: linkFundingRebuild,
                 onConfirm: confirmLink
             )
 
@@ -392,6 +397,14 @@ struct SendFlowView: View {
                     sendInProgress = false
                     return
                 }
+            }
+            // Send broadcasts the funding transaction the review built. Gone
+            // (the wallet closed since): the review builds it again and
+            // shows its fee; nothing is saved.
+            guard await PaymentLinkFunder.isReady(draft, walletManager: walletManager) else {
+                sendInProgress = false
+                linkFundingRebuild += 1
+                return
             }
             // Saved (status created) before anything is broadcast, so the
             // words exist on this iPhone whatever happens next.
@@ -617,6 +630,7 @@ struct SendFlowView: View {
                 return
             }
             walletManager.clearTerminalSessionState()
+            walletManager.pendingBroadcastStep = .init(address: record.address, run: PaymentLinkFunder.broadcastStep(id: record.id))
             hardwareSheetIntent = .send(
                 to: record.address,
                 amount: EnvelopeRuntime.xmr(record.amount + (record.feeReserve ?? 0)),
@@ -626,7 +640,7 @@ struct SendFlowView: View {
         }
         Task {
             do {
-                let txHash = try await PaymentLinkFunder.fund(record, walletManager: walletManager)
+                let txHash = try await PaymentLinkFunder.fund(record, funding: linkDraft?.funding, walletManager: walletManager)
                 transactionHash = txHash
                 await walletManager.refresh()
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
@@ -638,7 +652,9 @@ struct SendFlowView: View {
                 sendInProgress = false
                 // A failed broadcast may still have reached the network.
                 let msg: String
-                if case MoneroCoreError.transactionCommitFailed = error {
+                if error is MoneroWallet.BroadcastCancelled {
+                    msg = String(localized: "Could not make the payment link. Nothing was sent.")
+                } else if case MoneroCoreError.transactionCommitFailed = error {
                     msg = PaymentLinkFunder.unconfirmedMessage
                 } else {
                     msg = friendlyErrorMessage(for: error)

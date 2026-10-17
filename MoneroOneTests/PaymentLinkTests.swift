@@ -207,6 +207,100 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["claim"]), reclaimTxid: "ours"), .claimed)
     }
 
+    /// Link 10: the wallet's history has the funding, the envelope's scan
+    /// did not see it. The link waits; it is never Not funded.
+    func testAKnownFundingIsNeverNotFunded() {
+        let rules = EnvelopeStatusRules.self
+        XCTAssertEqual(rules.status(for: .empty, reclaimTxid: nil, fundingKnown: true), .pending)
+        XCTAssertEqual(rules.status(for: .empty, reclaimTxid: nil, fundingKnown: false), .notFunded)
+        // What the scan sees still wins once it sees the funding.
+        XCTAssertEqual(rules.status(for: obs(conf: 12, balance: 5, unlocked: 5), reclaimTxid: nil, fundingKnown: true), .ready)
+        XCTAssertEqual(rules.status(for: obs(conf: 12, spends: ["claim"]), reclaimTxid: nil, fundingKnown: true), .claimed)
+
+        XCTAssertEqual(rules.reconciled(.notFunded, role: .sent, fundingTxid: "f"), .pending)
+        XCTAssertEqual(rules.reconciled(.created, role: .sent, fundingTxid: "f"), .pending)
+        XCTAssertEqual(rules.reconciled(.notFunded, role: .sent, fundingTxid: nil), .notFunded)
+        XCTAssertEqual(rules.reconciled(.created, role: .sent, fundingTxid: nil), .created)
+        XCTAssertEqual(rules.reconciled(.ready, role: .sent, fundingTxid: "f"), .ready)
+        XCTAssertEqual(rules.reconciled(.claimed, role: .sent, fundingTxid: "f"), .claimed)
+        XCTAssertEqual(rules.reconciled(.reclaimed, role: .sent, fundingTxid: "f"), .reclaimed)
+        XCTAssertEqual(rules.reconciled(.notFunded, role: .received, fundingTxid: "f"), .notFunded)
+    }
+
+    func testTheEnvelopeScanStartsNoLaterThanTheFundingBlock() {
+        let rules = EnvelopeStatusRules.self
+        XCTAssertEqual(rules.scanFloor(restoreHeight: 100, fundingHeight: 90), 90)
+        XCTAssertEqual(rules.scanFloor(restoreHeight: 100, fundingHeight: 150), 100)
+        XCTAssertEqual(rules.scanFloor(restoreHeight: 100, fundingHeight: nil), 100)
+        XCTAssertEqual(rules.scanFloor(restoreHeight: 100, fundingHeight: 0), 100)
+    }
+
+    /// The repro: an envelope saved before its first scan reopened with its
+    /// scan start moved to the tip (1947), above its funding block (1934).
+    func testAnEnvelopeThatMissedItsFundingIsScannedAgain() {
+        func rescan(start: UInt64, floor: UInt64 = 1934, seen: Bool = false, funding: UInt64? = 1934,
+                    height: UInt64 = 1947, done: Bool = false) -> Bool {
+            EnvelopeStatusRules.needsRescan(scanStart: start, floor: floor, fundingSeen: seen, fundingHeight: funding,
+                                            walletHeight: height, alreadyRescanned: done)
+        }
+        // The scan started above the floor: always scan again.
+        XCTAssertTrue(rescan(start: 1947))
+        XCTAssertTrue(rescan(start: 1947, seen: true))
+        XCTAssertTrue(rescan(start: 1947, funding: nil))
+        // It started low enough and saw the funding.
+        XCTAssertFalse(rescan(start: 1934, seen: true))
+        XCTAssertFalse(rescan(start: 1900, seen: true))
+        // It started low enough but missed a mined funding: once per run.
+        XCTAssertTrue(rescan(start: 1934))
+        XCTAssertFalse(rescan(start: 1934, done: true))
+        // A funding in the pool, or one above the wallet's height: wait.
+        XCTAssertFalse(rescan(start: 1934, funding: nil))
+        XCTAssertFalse(rescan(start: 1934, height: 1934))
+    }
+
+    func testTheLogNamesTheLinkByItsNumberOnly() {
+        XCTAssertEqual(EnvelopeRuntime.logName(7), "Link 7")
+        XCTAssertEqual(EnvelopeRuntime.logName(nil), "Link ?")
+        let line = "Envelope check: \(EnvelopeRuntime.logName(7)), height 1947/1947, scan from 1934, funded true"
+        XCTAssertEqual(DiagnosticLog.redactingCredentials(in: EnvelopeLink.redacted(in: line)), line)
+        let failed = "Payment link check failed: \(EnvelopeRuntime.logName(10)): opened \(vectorLink)"
+        XCTAssertEqual(EnvelopeLink.redacted(in: failed), "Payment link check failed: Link 10: opened https://monero.one/c#<redacted>")
+    }
+
+    /// No state of any link offers Retry or Remove; a sent link with a
+    /// funding transaction offers Share whatever the last scan said.
+    @MainActor
+    func testLinkActions() {
+        func actions(_ role: EnvelopeRecord.Role, _ status: EnvelopeStatus, fundingTxid: String? = "f",
+                     funding: Int? = nil, expired: Bool = false, secret: Bool = true) -> [PaymentLinkDetailAction] {
+            var record = storeRecord(UUID().uuidString, role)
+            record.status = status
+            record.fundingTxid = role == .sent ? fundingTxid : nil
+            record.expiry = expired ? Int64(Date().timeIntervalSince1970) - 60 : 0
+            if !secret { record.words = nil }
+            let display = PaymentLinkDisplay(record: record, fundingConfirmations: funding, daemonHeight: nil)
+            return PaymentLinkDetailAction.actions(for: record, display: display)
+        }
+        // Link 10: funded, the scan said Not funded.
+        XCTAssertEqual(actions(.sent, .notFunded), [.share, .reclaim])
+        XCTAssertEqual(actions(.sent, .notFunded, funding: 12), [.share, .reclaim])
+        XCTAssertEqual(actions(.sent, .created), [.share, .reclaim])
+        XCTAssertEqual(actions(.sent, .pending), [.share, .reclaim])
+        XCTAssertEqual(actions(.sent, .ready), [.share, .reclaim])
+        XCTAssertEqual(actions(.sent, .ready, expired: true), [.reclaim, .share])
+        XCTAssertEqual(actions(.sent, .ready, secret: false), [.reclaim])
+        // Never funded, or settled: nothing to do.
+        XCTAssertEqual(actions(.sent, .notFunded, fundingTxid: nil), [])
+        XCTAssertEqual(actions(.sent, .created, fundingTxid: nil), [])
+        XCTAssertEqual(actions(.sent, .claimed), [])
+        XCTAssertEqual(actions(.sent, .reclaimed), [])
+        // A received link: Claim until it is settled.
+        XCTAssertEqual(actions(.received, .pending), [.claim])
+        XCTAssertEqual(actions(.received, .ready), [.claim])
+        XCTAssertEqual(actions(.received, .claimed), [])
+        XCTAssertEqual(actions(.received, .notFunded, secret: false), [])
+    }
+
     func testExpiredIsALabelOverPendingAndReady() {
         let now = Date(timeIntervalSince1970: 2_000)
         XCTAssertTrue(EnvelopeStatusRules.isExpired(.ready, expiry: 1_000, now: now))
@@ -229,7 +323,9 @@ final class PaymentLinkTests: XCTestCase {
                               status: status, memo: nil, blockHeight: height)
         }
         let pool = EnvelopeRuntime.observation(transactions: [tx("f", .incoming, height: nil, status: .pending)], balance: 0, unlocked: 0, daemonHeight: 200)
-        XCTAssertEqual(pool, obs(conf: 0))
+        var poolExpected = obs(conf: 0)
+        poolExpected.fundingTxids = ["f"]
+        XCTAssertEqual(pool, poolExpected)
 
         let mined = EnvelopeRuntime.observation(
             transactions: [tx("f", .incoming, height: 190), tx("c", .outgoing, height: 199, amount: "0.4", fee: "0.1"), tx("x", .outgoing, height: nil, status: .failed)],
@@ -237,7 +333,15 @@ final class PaymentLinkTests: XCTestCase {
         )
         var expected = obs(conf: 10, balance: 500_000_000_000, unlocked: 500_000_000_000, spends: ["c"])
         expected.fundingHeight = 190
+        expected.fundingTxids = ["f"]
         XCTAssertEqual(mined, expected)
+
+        // Fundings oldest first; one still in the pool last.
+        let two = EnvelopeRuntime.observation(
+            transactions: [tx("new", .incoming, height: nil, status: .pending), tx("old", .incoming, height: 150), tx("mid", .incoming, height: 0, status: .pending)],
+            balance: 0, unlocked: 0, daemonHeight: 200
+        )
+        XCTAssertEqual(two.fundingTxids.first, "old")
 
         // Reopened from its cache, the kit still stores the balance from
         // before the claim: the history caps it at zero.
@@ -287,7 +391,7 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(reloaded.record(id: record.id, role: .sent)?.link, vector)
         XCTAssertNil(reloaded.record(id: record.id, role: .received))
 
-        reloaded.remove(updated)
+        reloaded.removeAll()
         XCTAssertTrue(EnvelopeStore(service: service).records.isEmpty)
     }
 
@@ -340,8 +444,7 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(store.record(id: "a", role: .sent)?.number, 1)
         XCTAssertEqual(store.record(id: "a", role: .sent)?.status, .pending)
 
-        // A removed link's number is not used again, after a relaunch too.
-        store.remove(try XCTUnwrap(store.record(id: "c", role: .sent)))
+        // Numbers carry on after a relaunch.
         let relaunched = EnvelopeStore(service: service)
         XCTAssertEqual(relaunched.nextNumber, 4)
         try relaunched.save(storeRecord("d", .received))
@@ -350,6 +453,35 @@ final class PaymentLinkTests: XCTestCase {
         // Remove All starts again at 1.
         relaunched.removeAll()
         XCTAssertEqual(EnvelopeStore(service: service).nextNumber, 1)
+    }
+
+    /// A record a missed check wrote Not funded over its funding reads
+    /// Pending again when the store loads; its secret stays.
+    @MainActor
+    func testTheStoreLoadsAFundedLinkAsWaiting() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        var funded = storeRecord("funded", .sent)
+        funded.fundingTxid = "f"
+        funded.status = .notFunded
+        var unfunded = storeRecord("unfunded", .sent)
+        unfunded.status = .notFunded
+        var received = storeRecord("received", .received)
+        received.status = .notFunded
+        try store.save(funded)
+        try store.save(unfunded)
+        try store.save(received)
+
+        let relaunched = EnvelopeStore(service: service)
+        XCTAssertEqual(relaunched.record(id: "funded", role: .sent)?.status, .pending)
+        XCTAssertNotNil(relaunched.record(id: "funded", role: .sent)?.link)
+        // Never funded: kept, with its secret, as it was.
+        XCTAssertEqual(relaunched.record(id: "unfunded", role: .sent)?.status, .notFunded)
+        XCTAssertNotNil(relaunched.record(id: "unfunded", role: .sent)?.link)
+        XCTAssertEqual(relaunched.record(id: "received", role: .received)?.status, .notFunded)
+        // Written back, so the next launch reads it as it is.
+        XCTAssertEqual(EnvelopeStore(service: service).record(id: "funded", role: .sent)?.status, .pending)
     }
 
     @MainActor

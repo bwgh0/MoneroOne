@@ -31,7 +31,8 @@ struct PaymentLinkDisplay {
     @MainActor
     init(record: EnvelopeRecord, walletManager: WalletManager?, now: Date = Date()) {
         var fundingConfirmations: Int?
-        if record.role == .sent, record.status == .pending || record.status == .created,
+        let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
+        if record.role == .sent, status == .pending || status == .created,
            let txid = record.fundingTxid,
            let tx = walletManager?.transactions.first(where: { $0.id == txid }) {
             fundingConfirmations = tx.confirmations
@@ -45,7 +46,9 @@ struct PaymentLinkDisplay {
     ///     fund it.
     ///   - daemonHeight: the active wallet's.
     init(record: EnvelopeRecord, fundingConfirmations: Int?, daemonHeight: UInt64?, now: Date = Date()) {
-        var status = record.status
+        // A sent link with a funding transaction waits for it, whatever a
+        // check that missed it wrote.
+        var status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
         var confirmations = record.confirmations
         if record.role == .sent, status == .pending || status == .created, let fundingConfirmations {
             confirmations = fundingConfirmations
@@ -156,7 +159,7 @@ final class PaymentLinksStatusChecker: ObservableObject {
             // One look per block is enough; a scan stops the active wallet.
             let last = [record.lastCheckedAt, lastFailedLook[record.id]].compactMap { $0 }.max()
             if let last, now.timeIntervalSince(last) < Self.recheckInterval { return false }
-            switch record.status {
+            switch EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid) {
             case .ready: return true
             case .reclaimed:
                 // The reclaim reached this wallet: nothing left to watch.
@@ -197,21 +200,28 @@ final class PaymentLinksStatusChecker: ObservableObject {
                       var record = store.record(id: candidate.id, role: .sent) else { continue }
                 let observation: EnvelopeObservation
                 do {
-                    observation = try await EnvelopeRuntime.shared.check(link: link, address: record.address)
+                    observation = try await EnvelopeRuntime.shared.check(
+                        link: link,
+                        address: record.address,
+                        fundingHeight: Self.fundingHeight(of: record, in: walletManager.transactions),
+                        number: record.number
+                    )
                 } catch {
-                    DiagnosticLog.shared.log("Payment link check failed: \(error.localizedDescription)")
+                    DiagnosticLog.shared.log("Payment link check failed: \(EnvelopeRuntime.logName(record.number)): \(error.localizedDescription)")
                     if !Task.isCancelled { self?.lastFailedLook[candidate.id] = Date() }
                     continue
                 }
+                if record.fundingTxid == nil { record.fundingTxid = observation.fundingTxids.first }
                 let status = EnvelopeStatusRules.status(
                     for: observation,
                     reclaimTxid: record.settleTxid,
-                    reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) }
+                    reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) },
+                    fundingKnown: record.fundingTxid != nil
                 )
                 record.status = status
                 record.lastBalance = observation.balance
                 record.confirmations = observation.fundingConfirmations
-                record.fundingHeight = observation.fundingHeight
+                record.fundingHeight = observation.fundingHeight ?? record.fundingHeight
                 record.lastCheckedAt = Date()
                 try? store.save(record)
                 if status.isSettled {
@@ -260,22 +270,61 @@ final class PaymentLinksStatusChecker: ObservableObject {
         }
     }
 
-    /// A sent record saved but not marked funded (the app quit during the
-    /// broadcast, or the error came after the node took it): adopt a
-    /// funding transaction the active wallet sent to the envelope address.
+    /// A sent link's funding block: the last check's, else its funding
+    /// transaction's in the active wallet's history. Nil while the funding
+    /// is in the pool or another wallet sent it.
+    nonisolated static func fundingHeight(of record: EnvelopeRecord, in transactions: [MoneroTransaction]) -> UInt64? {
+        if let height = record.fundingHeight, height > 0 { return height }
+        guard record.role == .sent, let txid = record.fundingTxid,
+              let height = transactions.first(where: { $0.id == txid && $0.type == .outgoing })?.blockHeight,
+              height > 0 else { return nil }
+        return height
+    }
+
+    /// Saves what the active wallet's history tells about its sent links
+    /// (see `fundingUpdates`).
     static func reconcileFunding(store: EnvelopeStore, walletManager: WalletManager) {
-        let activeId = walletManager.activeWallet?.id.uuidString
-        for var record in store.sent where record.fundingTxid == nil && (record.status == .created || record.status == .notFunded) {
-            // Only the wallet that funded it can hold the funding.
-            if let walletId = record.walletId, walletId != activeId { continue }
-            let funding = walletManager.transactions.first { tx in
-                tx.type == .outgoing && tx.status != .failed && tx.destinations.contains { $0.address == record.address }
-            }
-            guard let funding else { continue }
-            record.fundingTxid = funding.id
-            record.status = .pending
-            record.confirmations = funding.confirmations
+        let updates = fundingUpdates(
+            sent: store.sent,
+            activeWalletId: walletManager.activeWallet?.id.uuidString,
+            transactions: walletManager.transactions
+        )
+        for record in updates {
             try? store.save(record)
+        }
+    }
+
+    /// The sent records the active wallet's history changes:
+    /// - a record saved but not marked funded (the app quit during the
+    ///   broadcast, or the error came after the node took it) adopts a
+    ///   funding transaction the active wallet sent to its address, and
+    ///   shows again as a waiting link;
+    /// - a record with a funding transaction is never Not funded;
+    /// - a mined funding gives its block, where the envelope's scan must
+    ///   start.
+    nonisolated static func fundingUpdates(
+        sent: [EnvelopeRecord],
+        activeWalletId: String?,
+        transactions: [MoneroTransaction]
+    ) -> [EnvelopeRecord] {
+        sent.compactMap { original in
+            guard original.role == .sent else { return nil }
+            var record = original
+            // Only the wallet that funded it can hold the funding.
+            let fromActiveWallet = record.walletId == nil || record.walletId == activeWalletId
+            if record.fundingTxid == nil, fromActiveWallet,
+               record.status == .created || record.status == .notFunded,
+               let funding = transactions.first(where: { tx in
+                   tx.type == .outgoing && tx.status != .failed && tx.destinations.contains { $0.address == record.address }
+               }) {
+                record.fundingTxid = funding.id
+                record.confirmations = funding.confirmations
+            }
+            record.status = EnvelopeStatusRules.reconciled(record.status, role: .sent, fundingTxid: record.fundingTxid)
+            if record.fundingHeight == nil {
+                record.fundingHeight = fundingHeight(of: record, in: transactions)
+            }
+            return record == original ? nil : record
         }
     }
 }
@@ -291,14 +340,8 @@ struct PaymentLinkDetailView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @ObservedObject private var store = EnvelopeStore.shared
-    @Environment(\.dismiss) private var dismiss
-    @State private var showRemoveConfirmation = false
     @State private var showRename = false
     @State private var noteDraft = ""
-    @State private var retrying = false
-    @State private var retryError: String?
-    @State private var hardwareIntent: HardwareSessionSheet.Intent?
-    @State private var showRetryConfirmation = false
     /// Reclaim and Claim open their sheet here, not through the app root:
     /// this screen can sit inside Send or a transaction sheet.
     @State private var claimPresentation: PaymentLinksCoordinator.Presentation?
@@ -306,22 +349,8 @@ struct PaymentLinkDetailView: View {
     /// link looks at its envelope here too, so a claim shows and Reclaim opens.
     @StateObject private var checker = PaymentLinksStatusChecker()
     @State private var isOnScreen = false
-    @StateObject private var biometricAuth = BiometricAuthManager()
-    /// Same setting as Send: re-authenticate before money leaves.
-    @AppStorage("requireAuthForSend") private var requireAuthForSend = true
 
     private var record: EnvelopeRecord? { store.record(id: recordId, role: role) }
-
-    /// A link funded from another wallet: only that wallet can see whether
-    /// the funding went out, so only it may retry.
-    private func fundedElsewhere(_ record: EnvelopeRecord) -> Bool {
-        guard let walletId = record.walletId else { return false }
-        return walletId != walletManager.activeWallet?.id.uuidString
-    }
-
-    private func fundingTotal(_ record: EnvelopeRecord) -> String {
-        XMRFormatter.format(EnvelopeRuntime.xmr(record.amount + (record.feeReserve ?? 0)))
-    }
 
     var body: some View {
         Group {
@@ -348,10 +377,6 @@ struct PaymentLinkDetailView: View {
         // A pending link can reach the unlock depth while this screen is open.
         .onChange(of: reachedUnlockDepth) { _, reached in
             if reached, isOnScreen { checkSentLink() }
-        }
-        .sheet(item: $hardwareIntent, onDismiss: handleHardwareDismiss) { intent in
-            HardwareSessionSheet(intent: intent, trezorManager: walletManager.trezorManager)
-                .environmentObject(walletManager)
         }
         .sheet(item: $claimPresentation) { presentation in
             PaymentLinkClaimSheet(presentation: presentation)
@@ -501,67 +526,22 @@ struct PaymentLinkDetailView: View {
                 }
             }
 
-            Section {
-                actions(record, display: display)
-            } footer: {
-                if let retryError {
-                    Text(retryError).foregroundStyle(.red)
-                } else if (display.status == .created || display.status == .notFunded) && fundedElsewhere(record) {
-                    Text("Switch to \(record.walletName ?? String(localized: "the wallet that made this link")) to retry. Only that wallet can see whether the money went out.")
-                } else if display.status == .pending && !display.isExpired {
-                    Text("Reclaim opens when the link is ready, after 10 confirmations.")
+            let actions = PaymentLinkDetailAction.actions(for: record, display: display)
+            if !actions.isEmpty {
+                Section {
+                    ForEach(actions, id: \.self) { action in
+                        switch action {
+                        case .share: shareButton(record)
+                        case .reclaim: reclaimButton(record, enabled: display.canReclaim)
+                        case .claim: EmptyView()
+                        }
+                    }
+                } footer: {
+                    if display.status == .pending && !display.isExpired {
+                        Text("Reclaim opens when the link is ready, after 10 confirmations.")
+                    }
                 }
             }
-        }
-        .confirmationDialog(
-            "Fund this link again?",
-            isPresented: $showRetryConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Send \(fundingTotal(record)) XMR") { retry(record) }
-        } message: {
-            Text("This sends \(fundingTotal(record)) XMR plus the network fee to the link. Do this only if the first try failed.")
-        }
-        .confirmationDialog(
-            "Remove this link?",
-            isPresented: $showRemoveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Remove", role: .destructive) {
-                let id = record.id
-                store.remove(record)
-                Task { await EnvelopeRuntime.shared.deleteFiles(id: id) }
-                dismiss()
-            }
-        } message: {
-            removeMessage(record)
-        }
-    }
-
-    @ViewBuilder
-    private func actions(_ record: EnvelopeRecord, display: PaymentLinkDisplay) -> some View {
-        let canShare = record.link != nil
-        switch display.status {
-        case .created, .notFunded:
-            Button {
-                showRetryConfirmation = true
-            } label: {
-                Label(retrying ? "Sending…" : "Retry", systemImage: "arrow.clockwise")
-                    .foregroundStyle(.brand)
-            }
-            .disabled(retrying || !walletManager.canSend || fundedElsewhere(record))
-            .accessibilityLabel("Retry funding the link")
-            removeButton
-        case .pending, .ready:
-            if display.isExpired {
-                reclaimButton(record, enabled: display.canReclaim)
-                if canShare { shareButton(record) }
-            } else {
-                if canShare { shareButton(record) }
-                reclaimButton(record, enabled: display.canReclaim)
-            }
-        case .claimed, .reclaimed:
-            removeButton
         }
     }
 
@@ -590,28 +570,8 @@ struct PaymentLinkDetailView: View {
         .accessibilityHint(enabled ? "Moves the money in this link back to your wallet" : "Available after 10 confirmations")
     }
 
-    private var removeButton: some View {
-        Button(role: .destructive) {
-            showRemoveConfirmation = true
-        } label: {
-            Label("Remove", systemImage: "trash")
-        }
-        .accessibilityLabel("Remove the link")
-    }
-
     private func display(_ record: EnvelopeRecord) -> PaymentLinkDisplay {
         PaymentLinkDisplay(record: record, walletManager: walletManager)
-    }
-
-    @ViewBuilder
-    private func removeMessage(_ record: EnvelopeRecord) -> some View {
-        if record.status.isSettled {
-            Text("The link holds no money. This removes it from this list.")
-        } else if record.role == .received {
-            Text("If the link holds money, open the link again to claim it.")
-        } else {
-            Text("If the link holds money, this iPhone can no longer take it back. Anyone who has the link can still claim it.")
-        }
     }
 
     /// A transaction row; it opens the transaction when this wallet has it.
@@ -634,7 +594,7 @@ struct PaymentLinkDetailView: View {
     private func receivedContent(_ record: EnvelopeRecord) -> some View {
         let display = PaymentLinkDisplay(record: record, walletManager: walletManager)
         let amount = record.settledAmount ?? record.claimAmount
-        let canClaim = !record.status.isSettled && record.link != nil
+        let canClaim = PaymentLinkDetailAction.actions(for: record, display: display).contains(.claim)
         return List {
             Section {
                 hero(record, amount: amount, display: display,
@@ -655,8 +615,8 @@ struct PaymentLinkDetailView: View {
                 }
             }
 
-            Section {
-                if canClaim {
+            if canClaim {
+                Section {
                     Button {
                         claimPresentation = .init(id: record.id, kind: .claim)
                     } label: {
@@ -665,27 +625,12 @@ struct PaymentLinkDetailView: View {
                     }
                     .accessibilityLabel("Claim the money")
                     .accessibilityHint("Opens the link and claims it when it is ready")
-                }
-                removeButton
-            } footer: {
-                if canClaim, display.status == .pending {
-                    Text("Claim opens when the link is ready, after 10 confirmations.")
+                } footer: {
+                    if display.status == .pending {
+                        Text("Claim opens when the link is ready, after 10 confirmations.")
+                    }
                 }
             }
-        }
-        .confirmationDialog(
-            "Remove this link?",
-            isPresented: $showRemoveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Remove", role: .destructive) {
-                let id = record.id
-                store.remove(record)
-                Task { await EnvelopeRuntime.shared.deleteFiles(id: id) }
-                dismiss()
-            }
-        } message: {
-            removeMessage(record)
         }
     }
 
@@ -700,53 +645,30 @@ struct PaymentLinkDetailView: View {
         .font(.subheadline)
         .accessibilityElement(children: .combine)
     }
+}
 
-    // MARK: - Retry
+/// What a link's detail offers. There is no Retry and no Remove: a link
+/// with a funding transaction waits for it, and a link's secret stays with
+/// its record until Remove All.
+enum PaymentLinkDetailAction: Hashable {
+    case share
+    case reclaim
+    case claim
 
-    private func retry(_ record: EnvelopeRecord) {
-        retryError = nil
-        guard !fundedElsewhere(record) else { return }
-        if walletManager.requiresHardwareSession {
-            do {
-                try PaymentLinkFunder.save(record, networkType: walletManager.networkType)
-            } catch {
-                retryError = EnvelopeSession.message(for: error)
-                return
-            }
-            walletManager.clearTerminalSessionState()
-            hardwareIntent = .send(
-                to: record.address,
-                amount: EnvelopeRuntime.xmr(record.amount + (record.feeReserve ?? 0)),
-                memo: PaymentLinkFunder.memo
-            )
-            return
-        }
-        retrying = true
-        Task {
-            defer { retrying = false }
-            if requireAuthForSend {
-                let approved = await biometricAuth.authenticateForTransaction(
-                    reason: String(localized: "Confirm sending \(fundingTotal(record)) XMR")
-                )
-                guard approved else { return }
-            }
-            do {
-                _ = try await PaymentLinkFunder.fund(record, walletManager: walletManager)
-                HapticFeedback.shared.transactionSuccess()
-                await walletManager.refresh()
-            } catch {
-                retryError = EnvelopeSession.message(for: error)
-                HapticFeedback.shared.error()
-            }
-        }
-    }
-
-    private func handleHardwareDismiss() {
-        switch walletManager.lastHardwareSessionOutcome {
-        case .sentTransaction(let txid):
-            PaymentLinkFunder.markFunded(id: recordId, txid: txid)
-        default:
-            PaymentLinkFunder.markNotFunded(id: recordId)
+    /// A sent link with a funding transaction (Pending or Ready, whatever
+    /// the last scan said) can be shared again and reclaimed; Reclaim comes
+    /// first once it expired. A sent link without one, or one that was
+    /// claimed or reclaimed, offers nothing. A received link offers Claim
+    /// until it is settled.
+    static func actions(for record: EnvelopeRecord, display: PaymentLinkDisplay) -> [PaymentLinkDetailAction] {
+        let hasLink = record.link != nil
+        switch record.role {
+        case .received:
+            return !record.status.isSettled && hasLink ? [.claim] : []
+        case .sent:
+            guard display.status == .pending || display.status == .ready else { return [] }
+            let share: [PaymentLinkDetailAction] = hasLink ? [.share] : []
+            return display.isExpired ? [.reclaim] + share : share + [.reclaim]
         }
     }
 }

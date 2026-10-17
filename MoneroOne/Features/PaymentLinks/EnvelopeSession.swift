@@ -51,6 +51,8 @@ final class EnvelopeSession: ObservableObject {
     private static let pollInterval: Duration = .seconds(15)
 
     init(record: EnvelopeRecord, walletManager: WalletManager, store: EnvelopeStore = .shared, runtime: EnvelopeRuntime = .shared) {
+        var record = record
+        record.status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
         self.record = record
         self.walletManager = walletManager
         self.store = store
@@ -101,7 +103,13 @@ final class EnvelopeSession: ObservableObject {
             }
             loadDestinations()
             watchProgress()
-            let observation = try await runtime.check(link: link, address: record.address, estimateSweepFee: record.role == .received)
+            let observation = try await runtime.check(
+                link: link,
+                address: record.address,
+                estimateSweepFee: record.role == .received,
+                fundingHeight: fundingHeight,
+                number: record.number
+            )
             progressTask?.cancel()
             update(with: observation)
             guard !stopped else { return }
@@ -178,16 +186,30 @@ final class EnvelopeSession: ObservableObject {
 
     // MARK: - Status
 
+    /// A sent link's funding block, where the envelope's scan must start.
+    private var fundingHeight: UInt64? {
+        PaymentLinksStatusChecker.fundingHeight(of: record, in: walletManager.transactions)
+    }
+
     private func update(with observation: EnvelopeObservation) {
+        // The store's copy may have learned the funding since this screen
+        // opened (the Send flow marks it funded after the broadcast).
+        if let stored = store.record(id: record.id, role: record.role), record.fundingTxid == nil {
+            record.fundingTxid = stored.fundingTxid
+        }
+        if record.role == .sent, record.fundingTxid == nil, let first = observation.fundingTxids.first {
+            record.fundingTxid = first
+        }
         let reclaimTxid = record.role == .sent ? record.settleTxid : nil
         let status = EnvelopeStatusRules.status(
             for: observation,
             reclaimTxid: reclaimTxid,
-            reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) }
+            reclaimAge: record.settledAt.map { Date().timeIntervalSince($0) },
+            fundingKnown: record.role == .sent && record.fundingTxid != nil
         )
         record.noteBalance(observation.balance, sweepFee: observation.sweepFee)
         record.confirmations = observation.fundingConfirmations
-        record.fundingHeight = observation.fundingHeight
+        record.fundingHeight = observation.fundingHeight ?? record.fundingHeight
         record.lastCheckedAt = Date()
         record.status = status
         try? store.save(record)

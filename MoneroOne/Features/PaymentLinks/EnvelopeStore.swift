@@ -200,6 +200,23 @@ final class EnvelopeStore: ObservableObject {
     func reload() {
         records = loadAll()
         numberUnnumberedRecords()
+        reconcileFundedRecords()
+    }
+
+    /// A sent link with a funding transaction is never Not funded: a check
+    /// that missed its funding (its scan started above the funding block)
+    /// wrote that. It waits for its funding again, and the next check scans
+    /// the envelope from the funding block.
+    private func reconcileFundedRecords() {
+        for var record in records where record.role == .sent {
+            let status = EnvelopeStatusRules.reconciled(record.status, role: record.role, fundingTxid: record.fundingTxid)
+            guard status != record.status else { continue }
+            record.status = status
+            if (try? write(record)) == nil, let index = index(of: record) {
+                // The Keychain refused it: the status holds for this run.
+                records[index] = record
+            }
+        }
     }
 
     /// The number the next new link gets ("Link 9"). One counter for sent
@@ -308,16 +325,6 @@ final class EnvelopeStore: ObservableObject {
         SecItemDelete(query as CFDictionary)
         records = []
         UserDefaults.standard.removeObject(forKey: lastNumberKey)
-    }
-
-    func remove(_ record: EnvelopeRecord) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: Self.account(for: record),
-        ]
-        SecItemDelete(query as CFDictionary)
-        records.removeAll { $0.id == record.id && $0.role == record.role }
     }
 
     // MARK: - Private

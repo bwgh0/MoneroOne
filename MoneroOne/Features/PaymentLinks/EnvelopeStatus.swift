@@ -6,7 +6,9 @@ import Foundation
 enum EnvelopeStatus: String, Codable, Equatable {
     /// Saved before the funding broadcast; nothing known yet.
     case created
-    /// No funding seen (the broadcast failed, or the chain has not shown it).
+    /// No funding anywhere: no funding transaction is known and the scan
+    /// saw nothing. A sent link in this state is hidden (the Send flow
+    /// showed the failure); it comes back when a funding turns up.
     case notFunded
     /// Funding seen, fewer than 10 confirmations.
     case pending
@@ -34,6 +36,8 @@ struct EnvelopeObservation: Equatable {
     var unlockedBalance: UInt64
     /// Hashes of outgoing transfers (claims or reclaims) the envelope saw.
     var spendTxids: [String]
+    /// Hashes of the incoming transfers (fundings), oldest first.
+    var fundingTxids: [String] = []
     /// Block height of the oldest mined incoming transfer; nil while every
     /// funding waits in the pool.
     var fundingHeight: UInt64? = nil
@@ -55,7 +59,10 @@ enum EnvelopeStatusRules {
     ///   - observation: what the envelope sync saw.
     ///   - reclaimTxid: our own reclaim sweep, if we sent one.
     ///   - reclaimAge: seconds since that reclaim went out.
-    static func status(for observation: EnvelopeObservation, reclaimTxid: String?, reclaimAge: TimeInterval? = nil) -> EnvelopeStatus {
+    ///   - fundingKnown: a funding transaction is known (a sent link's
+    ///     txid). The wallet's own history wins over a scan that missed it:
+    ///     the link waits, never reads "not funded".
+    static func status(for observation: EnvelopeObservation, reclaimTxid: String?, reclaimAge: TimeInterval? = nil, fundingKnown: Bool = false) -> EnvelopeStatus {
         if let reclaimTxid {
             // Our reclaim went out. It stays "reclaimed" unless the chain
             // shows a different spend, which means a claim won the race.
@@ -71,7 +78,7 @@ enum EnvelopeStatusRules {
                 return .reclaimed
             }
         }
-        guard observation.fundingSeen else { return .notFunded }
+        guard observation.fundingSeen else { return fundingKnown ? .pending : .notFunded }
         if observation.balance == 0 {
             // Claimed only once a spend is on chain (wallet2 sees another
             // device's spend when it is mined). Zero balance and no spend
@@ -89,6 +96,36 @@ enum EnvelopeStatusRules {
     static func isExpired(_ status: EnvelopeStatus, expiry: Int64, now: Date) -> Bool {
         guard expiry > 0, status == .pending || status == .ready else { return false }
         return now.timeIntervalSince1970 > TimeInterval(expiry)
+    }
+
+    /// A sent record whose funding transaction is known reads at least
+    /// pending: "created" and "not funded" would contradict the wallet's
+    /// own history.
+    static func reconciled(_ status: EnvelopeStatus, role: EnvelopeRecord.Role, fundingTxid: String?) -> EnvelopeStatus {
+        guard role == .sent, fundingTxid != nil, status == .created || status == .notFunded else { return status }
+        return .pending
+    }
+
+    /// The height the envelope scan must start at or below: the link's
+    /// restore height, or the funding block when that is lower.
+    static func scanFloor(restoreHeight: UInt64, fundingHeight: UInt64?) -> UInt64 {
+        guard let fundingHeight, fundingHeight > 0 else { return restoreHeight }
+        return min(restoreHeight, fundingHeight)
+    }
+
+    /// The envelope wallet must be scanned again from `floor`. wallet2
+    /// moves the start of a wallet that was saved before its first scan to
+    /// the chain tip when it opens again (WalletImpl::doInit,
+    /// isNewWallet) and skips the blocks below it, so a scan that starts
+    /// above the floor misses the funding. Once that cache is saved, the
+    /// start reads right again (it comes from the keys file) while the
+    /// skipped blocks stay skipped: a funding mined below the scanned
+    /// height that the scan did not see asks for one more scan, once per
+    /// app run.
+    static func needsRescan(scanStart: UInt64, floor: UInt64, fundingSeen: Bool, fundingHeight: UInt64?, walletHeight: UInt64, alreadyRescanned: Bool) -> Bool {
+        if scanStart > floor { return true }
+        guard !alreadyRescanned, !fundingSeen, let fundingHeight, fundingHeight > 0 else { return false }
+        return walletHeight > fundingHeight
     }
 
     /// Minutes until a pending envelope unlocks, at 2 minutes per block.

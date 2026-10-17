@@ -78,6 +78,9 @@ final class EnvelopeRuntime: ObservableObject {
     /// never keeps the active wallet stopped.
     private var generation = 0
     private var observers = Set<AnyCancellable>()
+    /// Envelopes scanned again this run because they missed a mined
+    /// funding; that rescan runs once per run.
+    private var rescannedIds = Set<String>()
     private var lockObserver: AnyCancellable?
 
     private init() {
@@ -182,39 +185,96 @@ final class EnvelopeRuntime: ObservableObject {
     /// Opens the envelope of `link` (closing any other) and syncs it to the
     /// chain tip. Checks that the running wallet's address is `address`.
     /// With `estimateSweepFee`, the observation carries the claim sweep's fee.
-    func check(link: EnvelopeLink, address: String, estimateSweepFee: Bool = false) async throws -> EnvelopeObservation {
+    ///
+    /// The scan must start at or below the link's restore height, and at or
+    /// below `fundingHeight` when the funding block is known. An envelope
+    /// whose scan started higher (wallet2 moves the start of a wallet saved
+    /// before its first scan to the chain tip when it opens again), or that
+    /// missed a funding mined below its height, is scanned again from there:
+    /// its files go and the wallet is restored from the words.
+    /// - Parameters:
+    ///   - fundingHeight: the funding block, when the record or the funding
+    ///     wallet's history knows it.
+    ///   - number: the link's number ("Link 7"), for the diagnostic log.
+    func check(link: EnvelopeLink, address: String, estimateSweepFee: Bool = false, fundingHeight: UInt64? = nil, number: Int? = nil) async throws -> EnvelopeObservation {
         try await serial { [self] in
             guard let walletManager, mainSuspended else { throw RuntimeError.walletBusy }
+            let name = Self.logName(number)
+            let floor = EnvelopeStatusRules.scanFloor(restoreHeight: link.restoreHeight, fundingHeight: fundingHeight)
             if openEnvelopeId != link.id {
-                await closeEnvelopeNow()
-                let wallet = MoneroWallet()
-                syncProgress = 0
-                Self.excludeEnvelopesFromBackup()
-                try await wallet.create(
-                    seed: link.words,
-                    restoreHeight: link.restoreHeight,
-                    networkType: walletManager.networkType,
-                    cacheIdOverride: Self.cacheId(for: link.id)
-                )
-                envelope = wallet
-                openEnvelopeId = link.id
+                try await openEnvelope(link, restoreHeight: link.restoreHeight, networkType: walletManager.networkType)
             } else {
                 envelope?.startSync()
             }
-            guard let wallet = envelope else { throw RuntimeError.walletBusy }
-            // A cached envelope reports synced at its old height before its
-            // first refresh: wait for the chain tip the main wallet last saw.
-            try await waitUntilSynced(wallet, atLeast: walletManager.daemonHeight)
-            syncProgress = nil
-            let runtimeAddress = wallet.primaryAddress
-            if !runtimeAddress.isEmpty, runtimeAddress != address {
-                throw RuntimeError.addressMismatch
+            var observation: EnvelopeObservation
+            var rescan = false
+            var scanStart: UInt64 = 0
+            do {
+                guard let wallet = envelope else { throw RuntimeError.walletBusy }
+                // A cached envelope reports synced at its old height before its
+                // first refresh: wait for the chain tip the main wallet last saw.
+                try await waitUntilSynced(wallet, atLeast: walletManager.daemonHeight)
+                syncProgress = nil
+                try Self.verifyAddress(of: wallet, is: address)
+                observation = await observe(wallet)
+                scanStart = wallet.refreshFromBlockHeight
+                rescan = EnvelopeStatusRules.needsRescan(
+                    scanStart: scanStart,
+                    floor: floor,
+                    fundingSeen: observation.fundingSeen,
+                    fundingHeight: fundingHeight,
+                    walletHeight: wallet.walletHeight,
+                    alreadyRescanned: rescannedIds.contains(link.id)
+                )
             }
-            var observation = await observe(wallet)
+            if rescan {
+                DiagnosticLog.shared.log("Envelope rescan: \(name), scan started at \(scanStart), scanning from \(floor)")
+                rescannedIds.insert(link.id)
+                await closeEnvelopeNow()
+                Self.removeFiles(id: link.id)
+                try await openEnvelope(link, restoreHeight: floor, networkType: walletManager.networkType)
+            }
+            guard let wallet = envelope else { throw RuntimeError.walletBusy }
+            if rescan {
+                try await waitUntilSynced(wallet, atLeast: walletManager.daemonHeight)
+                syncProgress = nil
+                try Self.verifyAddress(of: wallet, is: address)
+                observation = await observe(wallet)
+            }
             if estimateSweepFee { observation.sweepFee = await sweepFee(wallet, balance: observation.balance) }
-            DiagnosticLog.shared.log("Envelope check: height \(wallet.walletHeight)/\(wallet.daemonHeight), funded \(observation.fundingSeen), spends \(observation.spendTxids.count), balance \(observation.balance > 0 ? "yes" : "none"), unlocked \(observation.unlockedBalance > 0 ? "yes" : "none"), confirmations \(observation.fundingConfirmations)")
+            DiagnosticLog.shared.log("Envelope check: \(name), height \(wallet.walletHeight)/\(wallet.daemonHeight), scan from \(wallet.refreshFromBlockHeight), funded \(observation.fundingSeen), spends \(observation.spendTxids.count), balance \(observation.balance > 0 ? "yes" : "none"), unlocked \(observation.unlockedBalance > 0 ? "yes" : "none"), confirmations \(observation.fundingConfirmations)")
             return observation
         }
+    }
+
+    /// Restores the envelope wallet of `link` (or opens its cache) and makes
+    /// it the open envelope.
+    private func openEnvelope(_ link: EnvelopeLink, restoreHeight: UInt64, networkType: MoneroKit.NetworkType) async throws {
+        await closeEnvelopeNow()
+        let wallet = MoneroWallet()
+        syncProgress = 0
+        Self.excludeEnvelopesFromBackup()
+        try await wallet.create(
+            seed: link.words,
+            restoreHeight: restoreHeight,
+            networkType: networkType,
+            cacheIdOverride: Self.cacheId(for: link.id)
+        )
+        envelope = wallet
+        openEnvelopeId = link.id
+    }
+
+    private static func verifyAddress(of wallet: MoneroWallet, is address: String) throws {
+        let runtimeAddress = wallet.primaryAddress
+        if !runtimeAddress.isEmpty, runtimeAddress != address {
+            throw RuntimeError.addressMismatch
+        }
+    }
+
+    /// "Link 7" in the diagnostic log: the number only, never the note,
+    /// the address or the secret.
+    nonisolated static func logName(_ number: Int?) -> String {
+        number.map { "Link \($0)" } ?? "Link ?"
     }
 
     /// Looks for new blocks on the open envelope and returns what it sees.
@@ -271,8 +331,7 @@ final class EnvelopeRuntime: ObservableObject {
     func deleteFiles(id: String) async {
         _ = try? await serial { [self] in
             if openEnvelopeId == id { await closeEnvelopeNow() }
-            guard EnvelopeLink.isEnvelopeId(id), let dir = Self.directory(for: id) else { return }
-            try? FileManager.default.removeItem(at: dir)
+            Self.removeFiles(id: id)
         }
     }
 
@@ -326,12 +385,17 @@ final class EnvelopeRuntime: ObservableObject {
         let balance = min(balance, max(0, received - spent))
         let unlocked = min(unlocked, balance)
         let fundingHeight = incoming.compactMap { $0.status == .confirmed ? $0.blockHeight : nil }.min()
+        // Oldest first; a funding still in the pool last.
+        let fundingTxids = incoming
+            .sorted { ($0.blockHeight.flatMap { $0 > 0 ? $0 : nil } ?? .max) < ($1.blockHeight.flatMap { $0 > 0 ? $0 : nil } ?? .max) }
+            .map(\.id)
         return EnvelopeObservation(
             fundingSeen: !incoming.isEmpty,
             fundingConfirmations: confirmations,
             balance: piconero(balance),
             unlockedBalance: piconero(unlocked),
             spendTxids: outgoing.map(\.id),
+            fundingTxids: fundingTxids,
             fundingHeight: fundingHeight
         )
     }
@@ -392,6 +456,12 @@ final class EnvelopeRuntime: ObservableObject {
     }
 
     nonisolated static func cacheId(for id: String) -> String { "envelopes/\(id)" }
+
+    /// Deletes the envelope's wallet files (never the record or its secret).
+    private static func removeFiles(id: String) {
+        guard EnvelopeLink.isEnvelopeId(id), let dir = directory(for: id) else { return }
+        try? FileManager.default.removeItem(at: dir)
+    }
 
     nonisolated static func directory(for id: String) -> URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?

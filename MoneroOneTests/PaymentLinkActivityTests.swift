@@ -477,6 +477,98 @@ final class PaymentLinkActivityTests: XCTestCase {
         XCTAssertEqual(TransactionListLogic.linksSummaryTitle([items[0]], openCount: 1, records: records), "1 link · 1 open")
     }
 
+    /// A link whose funding never went out (no funding transaction, none to
+    /// its address) is in no filter, no count and no home line. Its record
+    /// and secret stay.
+    func testAnUnfundedLinkIsHidden() {
+        let unfunded = open(.sent, .notFunded, id: "unfunded", fundingTxid: nil)
+        let created = open(.sent, .created, id: "created", fundingTxid: nil)
+        let records = [unfunded, created]
+        let transactions = [tx("other", .outgoing, at: 900), tx("in", .incoming, at: 800)]
+        for type in [TransactionListView.FilterType.all, .links] {
+            let rows = TransactionListLogic.filter(transactions, type: type, receivingIndex: nil, search: "", linkRecords: records)
+            XCTAssertTrue(rows.allSatisfy { PaymentLinkActivity.match(transactionId: $0.id, isIncoming: $0.type == .incoming, records: records) == nil })
+            XCTAssertTrue(TransactionListLogic.linksToClaim(records, type: type, receivingIndex: nil, search: "", asOf: nil).isEmpty)
+        }
+        XCTAssertTrue(TransactionListLogic.filter(transactions, type: .links, receivingIndex: nil, search: "", linkRecords: records).isEmpty)
+        let items = TransactionListLogic.items(transactions: transactions, linksToClaim: [])
+        XCTAssertEqual(TransactionListLogic.linksSummaryTitle([], openCount: 0, records: records), "0 links")
+        XCTAssertTrue(TransactionListLogic.linkSections(items, records: records).open.isEmpty)
+        XCTAssertTrue(OpenPaymentLinks.summary(of: records, activeWalletId: "w1").isEmpty)
+        XCTAssertNotNil(unfunded.link)
+        // The history has nothing for it: nothing changes.
+        XCTAssertTrue(PaymentLinksStatusChecker.fundingUpdates(sent: records, activeWalletId: "w1", transactions: transactions).isEmpty)
+    }
+
+    /// The same link once its funding shows up in the wallet's history: a
+    /// normal waiting link again, in the Links filter, its card and the
+    /// home line.
+    func testAnUnfundedLinkReappearsWhenItsFundingShowsUp() throws {
+        let unfunded = open(.sent, .notFunded, id: "unfunded", fundingTxid: nil)
+        let funding = MoneroTransaction(
+            id: "f-late", type: .outgoing, amount: 1, fee: 0, address: "", timestamp: Date(timeIntervalSince1970: 900),
+            confirmations: 3, status: .confirmed, memo: nil, blockHeight: 1_934,
+            destinations: [MoneroTransactionDestination(address: "addr", amount: 1)]
+        )
+        let updates = PaymentLinksStatusChecker.fundingUpdates(sent: [unfunded], activeWalletId: "w1", transactions: [funding])
+        let found = try XCTUnwrap(updates.first)
+        XCTAssertEqual(updates.count, 1)
+        XCTAssertEqual(found.fundingTxid, "f-late")
+        XCTAssertEqual(found.status, .pending)
+        XCTAssertEqual(found.fundingHeight, 1_934)
+        XCTAssertNotNil(found.link)
+
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(found, activeWalletId: "w1"))
+        XCTAssertEqual(OpenPaymentLinks.summary(of: [found], activeWalletId: "w1").sentCount, 1)
+        let rows = TransactionListLogic.filter([funding], type: .links, receivingIndex: nil, search: "", linkRecords: [found])
+        XCTAssertEqual(rows.map(\.id), ["f-late"])
+        let items = TransactionListLogic.items(transactions: rows, linksToClaim: [])
+        XCTAssertEqual(TransactionListLogic.linkSections(items, records: [found]).open.count, 1)
+        XCTAssertEqual(TransactionListLogic.linksSummaryTitle(items, openCount: 1, records: [found]), "1 link · 1 open")
+
+        // Another wallet's history never claims it.
+        XCTAssertTrue(PaymentLinksStatusChecker.fundingUpdates(sent: [unfunded], activeWalletId: "w2", transactions: [funding]).isEmpty)
+        // A failed send moved nothing.
+        let failed = MoneroTransaction(
+            id: "f-failed", type: .outgoing, amount: 1, fee: 0, address: "", timestamp: Date(), confirmations: 0,
+            status: .failed, memo: nil, blockHeight: nil, destinations: [MoneroTransactionDestination(address: "addr", amount: 1)]
+        )
+        XCTAssertTrue(PaymentLinksStatusChecker.fundingUpdates(sent: [unfunded], activeWalletId: "w1", transactions: [failed]).isEmpty)
+    }
+
+    /// Link 10: a funding transaction in the history and a check that wrote
+    /// Not funded. It reads Waiting or Ready, stays open, and its funding
+    /// block is saved for the next scan.
+    func testAFundedLinkNeverReadsNotFunded() throws {
+        var link10 = open(.sent, .notFunded, id: "link10", fundingTxid: "f10")
+        link10.confirmations = 0
+        let pending = PaymentLinkDisplay(record: link10, fundingConfirmations: 3, daemonHeight: nil)
+        XCTAssertEqual(pending.status, .pending)
+        XCTAssertEqual(pending.label, "Pending 3/10")
+        let ready = PaymentLinkDisplay(record: link10, fundingConfirmations: 81, daemonHeight: nil)
+        XCTAssertEqual(ready.status, .ready)
+        XCTAssertEqual(ready.label, "Ready")
+        XCTAssertTrue(ready.canReclaim)
+        // Funded from another wallet: no count here, still waiting.
+        XCTAssertEqual(PaymentLinkDisplay(record: link10, fundingConfirmations: nil, daemonHeight: nil).label, "Pending 0/10")
+        XCTAssertEqual(PaymentLinkRowStatus.funding(status: pending.status, isExpired: false, confirmations: 3), .waiting)
+
+        XCTAssertTrue(OpenPaymentLinks.isOpenSent(link10, activeWalletId: "w1"))
+        XCTAssertEqual(OpenPaymentLinks.summary(of: [link10], activeWalletId: "w1").sentCount, 1)
+
+        let funding = MoneroTransaction(
+            id: "f10", type: .outgoing, amount: 1, fee: 0, address: "", timestamp: Date(), confirmations: 81,
+            status: .confirmed, memo: nil, blockHeight: 3_785_658
+        )
+        let fixed = try XCTUnwrap(PaymentLinksStatusChecker.fundingUpdates(sent: [link10], activeWalletId: "w1", transactions: [funding]).first)
+        XCTAssertEqual(fixed.status, .pending)
+        XCTAssertEqual(fixed.fundingHeight, 3_785_658)
+        XCTAssertEqual(PaymentLinksStatusChecker.fundingHeight(of: link10, in: [funding]), 3_785_658)
+        XCTAssertNil(PaymentLinksStatusChecker.fundingHeight(of: link10, in: []))
+        // Up to date: nothing to save.
+        XCTAssertTrue(PaymentLinksStatusChecker.fundingUpdates(sent: [fixed], activeWalletId: "w1", transactions: [funding]).isEmpty)
+    }
+
     func testSentLineText() {
         XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 50_000_000_000, count: 1, expired: 0), "0.0500 XMR in 1 open link")
         XCTAssertEqual(OpenPaymentLinks.sentLineText(amount: 150_000_000_000, count: 2, expired: 0), "0.1500 XMR in 2 open links")

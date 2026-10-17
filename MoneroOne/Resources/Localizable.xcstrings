@@ -70832,17 +70832,6 @@
         }
       }
     },
-    "Shows the link" : {
-      "comment" : "VoiceOver hint: the balance card's line for one open payment link",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shows the link"
-          }
-        }
-      }
-    },
     "Shows transaction details" : {
       "localizations" : {
         "de" : {

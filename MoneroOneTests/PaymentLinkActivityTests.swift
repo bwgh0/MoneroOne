@@ -405,20 +405,20 @@ final class PaymentLinkActivityTests: XCTestCase {
 
     // MARK: - Home line
 
-    func testOneOpenLinkOpensItsDetailMoreOpenTheLinksFilter() {
+    /// The line opens the Links filter for any count, one link too; it
+    /// counts only this wallet's open links.
+    func testHomeLineCountsThisWalletsOpenLinks() {
         let one = OpenPaymentLinks.summary(of: [open(.sent, .pending, id: "a"), open(.received, .ready, id: "r")], activeWalletId: "w1")
         XCTAssertEqual(one.sentCount, 1)
-        XCTAssertEqual(OpenPaymentLinks.sentLineDestination(one), .sentLink(id: "a"))
+        XCTAssertEqual(one.toClaimCount, 1)
 
         let two = OpenPaymentLinks.summary(of: [open(.sent, .pending, id: "a"), open(.sent, .ready, id: "b")], activeWalletId: "w1")
         XCTAssertEqual(two.sentCount, 2)
-        XCTAssertNil(two.onlySentLinkId)
-        XCTAssertEqual(OpenPaymentLinks.sentLineDestination(two), .linksFilter)
 
         // A link from another wallet is not this wallet's open link.
         let other = OpenPaymentLinks.summary(of: [open(.sent, .pending, id: "a", walletId: "w2"), open(.sent, .pending, id: "b")], activeWalletId: "w1")
-        XCTAssertEqual(OpenPaymentLinks.sentLineDestination(other), .sentLink(id: "b"))
-        XCTAssertEqual(OpenPaymentLinks.sentLineDestination(OpenPaymentLinks.Summary()), .linksFilter)
+        XCTAssertEqual(other.sentCount, 1)
+        XCTAssertTrue(OpenPaymentLinks.Summary().isEmpty)
     }
 
     // MARK: - Links filter

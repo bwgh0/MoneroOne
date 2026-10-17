@@ -22,7 +22,7 @@ struct BalanceCard: View {
     /// Payment links that still hold money, for the lines under the balance.
     var openLinks = OpenPaymentLinks.Summary()
     /// Opens Activity's Links filter. Nil: no open-link lines.
-    var onOpenLinks: ((OpenPaymentLinks.Destination) -> Void)? = nil
+    var onOpenLinks: (() -> Void)? = nil
     var onHardwareSyncTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

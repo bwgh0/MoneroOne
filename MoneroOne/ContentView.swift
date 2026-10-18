@@ -11,7 +11,13 @@ struct ContentView: View {
             } else if !walletManager.hasWallet {
                 WelcomeView()
             } else if !walletManager.isUnlocked {
-                UnlockView()
+                // No wallet has its keys on this iPhone (device backup,
+                // Quick Start): no PIN can unlock, so offer the restore.
+                if walletManager.allWalletsNeedRestore {
+                    NeedsRestoreView()
+                } else {
+                    UnlockView()
+                }
             } else {
                 MainTabView()
                     .id(walletManager.walletSessionId)
@@ -22,6 +28,7 @@ struct ContentView: View {
         .animation(.easeInOut, value: hasAcceptedDisclaimer)
         .animation(.easeInOut, value: walletManager.hasWallet)
         .animation(.easeInOut, value: walletManager.isUnlocked)
+        .animation(.easeInOut, value: walletManager.allWalletsNeedRestore)
     }
 }
 

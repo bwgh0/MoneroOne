@@ -23,7 +23,9 @@ struct CreateWalletView: View {
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
     @State private var selectedSeedType: WalletManager.SeedType = .polyseed
-    @State private var selectedPINLength = 6
+    /// New PINs are 6 digits. Existing 4-digit PINs still unlock: UnlockView
+    /// reads the stored length.
+    private let selectedPINLength = 6
     @State private var copiedSeed = false
     @FocusState private var focusedField: PINField?
 
@@ -156,71 +158,6 @@ struct CreateWalletView: View {
                 // column is short and the prompt was cut to one ("…schüt…").
                 .fixedSize(horizontal: false, vertical: true)
 
-            // PIN Length Selection
-            VStack(spacing: 8) {
-                Text("PIN Length")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                HStack(spacing: 12) {
-                    // 4 digits option
-                    Button {
-                        selectedPINLength = 4
-                        pin = ""
-                        confirmPin = ""
-                        focusedField = .pin
-                    } label: {
-                        Text("4 Digits")
-                            .font(.subheadline.weight(.medium))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(selectedPINLength == 4 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
-                            .foregroundColor(selectedPINLength == 4 ? .brand : .primary)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(selectedPINLength == 4 ? Color.brand : Color.clear, lineWidth: 1.5)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("4 digit PIN. \(selectedPINLength == 4 ? String(localized: "Selected") : String(localized: "Not selected"))")
-                    .accessibilityHint("Double tap to use a 4 digit PIN")
-
-                    // 6 digits option (recommended)
-                    Button {
-                        selectedPINLength = 6
-                        pin = ""
-                        confirmPin = ""
-                        focusedField = .pin
-                    } label: {
-                        VStack(spacing: 4) {
-                            Text("6 Digits")
-                                .font(.subheadline.weight(.medium))
-                            Text("Recommended")
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.brand.opacity(0.15))
-                                .foregroundColor(.brand)
-                                .clipShape(Capsule())
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(selectedPINLength == 6 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
-                        .foregroundColor(selectedPINLength == 6 ? .brand : .primary)
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(selectedPINLength == 6 ? Color.brand : Color.clear, lineWidth: 1.5)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("6 digit PIN, recommended. \(selectedPINLength == 6 ? String(localized: "Selected") : String(localized: "Not selected"))")
-                    .accessibilityHint("Double tap to use a 6 digit PIN")
-                }
-                .padding(.horizontal, 20)
-            }
-
             // PIN Entry
             PINEntryFieldView(
                 pin: $pin,
@@ -283,7 +220,6 @@ struct CreateWalletView: View {
             Spacer()
         }
         .onAppear {
-            // Always default to 6 digits (recommended) for new wallets
             focusedField = .pin
         }
     }

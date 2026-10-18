@@ -73,17 +73,7 @@ class MoneroWallet: ObservableObject {
             networkType: networkType
         )
 
-        // Detect seed type and create appropriate credentials
-        // 16 words = polyseed, 24 words = bip39, 25 words = legacy
-        let credentials: MoneroKit.MoneroWallet
-        switch seed.count {
-        case 16:
-            credentials = MoneroKit.MoneroWallet.polyseed(seed: seed, passphrase: "")
-        case 25:
-            credentials = MoneroKit.MoneroWallet.legacy(seed: seed, passphrase: "")
-        default:
-            credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
-        }
+        let credentials = Self.credentials(for: seed)
 
         // Heavy Kit init (SQLite + C++ + crypto) off main thread
         let reachability = reachabilityManager
@@ -182,6 +172,57 @@ class MoneroWallet: ObservableObject {
         self.node = walletNode
         kit = newKit
         setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
+    }
+
+    /// Detect seed type and create appropriate credentials.
+    /// 16 words = polyseed, 24 words = bip39, 25 words = legacy.
+    private static func credentials(for seed: [String]) -> MoneroKit.MoneroWallet {
+        switch seed.count {
+        case 16:
+            return MoneroKit.MoneroWallet.polyseed(seed: seed, passphrase: "")
+        case 25:
+            return MoneroKit.MoneroWallet.legacy(seed: seed, passphrase: "")
+        default:
+            return MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
+        }
+    }
+
+    /// The primary address `seed` opens to. A throwaway wallet2 opens in a
+    /// temporary cache directory, which is deleted again; it never connects
+    /// to a node and never refreshes. The library's static address helper
+    /// is a stub, so this is the only way to read the address before the
+    /// wallet is saved. wallet2 runs one wallet at a time: stop the running
+    /// wallet first.
+    func probePrimaryAddress(seed: [String], networkType: MoneroKit.NetworkType) async throws -> String {
+        // 32 hex characters, so the launch sweep removes the directory if
+        // the app dies before the cleanup below.
+        let probeId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        defer {
+            if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                try? FileManager.default.removeItem(at: appSupport.appendingPathComponent("MoneroKit").appendingPathComponent(probeId))
+            }
+        }
+        let credentials = Self.credentials(for: seed)
+        let walletNode = defaultNode(for: networkType)
+        let reachability = reachabilityManager
+        let probe = try await Task.detached {
+            try MoneroKit.Kit(
+                wallet: credentials,
+                account: 0,
+                restoreHeight: 0,
+                walletId: probeId,
+                node: walletNode,
+                networkType: networkType,
+                reachabilityManager: reachability,
+                logger: nil,
+                // See `create` — silence wallet2's unlocked logger writes.
+                moneroCoreLogLevel: 0
+            )
+        }.value
+        await probe.prepareOnly()
+        let address = probe.runtimePrimaryAddress
+        await probe.stopAsync()
+        return address
     }
 
     private func defaultNode(for networkType: MoneroKit.NetworkType = .mainnet) -> MoneroKit.Node {

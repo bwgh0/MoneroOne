@@ -12,6 +12,8 @@ struct UnlockView: View {
     @State private var attempts = 0
     @State private var lastBiometricAttempt: Date?
     @State private var showForgotPINConfirmation = false
+    /// Second step of Forgot PIN: removing every wallet is permanent.
+    @State private var showRemoveAllConfirmation = false
     @State private var lockoutTimer: Timer?
     @State private var lockoutEndDate: Date?
     /// Short screens (iPhone Duo cover, SE, landscape): smaller logo, tighter stack.
@@ -112,6 +114,16 @@ struct UnlockView: View {
             .accessibilityLabel("Forgot PIN")
             .accessibilityHint("Double tap to reset your wallet and start over")
             .padding(.top, 16)
+            // On the button, not the stack: SwiftUI shows one alert per view.
+            .alert(
+                Text(String(localized: "Remove \(walletManager.wallets.count) wallets? This is permanent.", comment: "Confirm: remove every wallet from this iPhone")),
+                isPresented: $showRemoveAllConfirmation
+            ) {
+                Button("Cancel", role: .cancel) { }
+                Button("Remove All", role: .destructive) {
+                    walletManager.deleteAllWallets()
+                }
+            }
 
             Spacer()
         }
@@ -120,13 +132,17 @@ struct UnlockView: View {
         .detectSquatScreen($isSquat)
         .alert("Forgot Your PIN?", isPresented: $showForgotPINConfirmation) {
             Button("Cancel", role: .cancel) { }
-            Button("Reset App", role: .destructive) {
-                walletManager.deleteWallet()
+            Button("Remove All", role: .destructive) {
+                showRemoveAllConfirmation = true
             }
         } message: {
-            Text("This will delete all wallet data from this device. You can restore your wallet using your seed phrase.\n\nThis action cannot be undone.")
+            Text(verbatim: forgotPINMessage)
         }
         .onAppear {
+            // Keys can go missing while the app is closed (device backup,
+            // Quick Start). ContentView shows the restore screen when none
+            // are left.
+            walletManager.refreshWalletsNeedingRestore()
             triggerBiometricsIfAvailable()
         }
         .task {
@@ -138,9 +154,20 @@ struct UnlockView: View {
         }
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
+                walletManager.refreshWalletsNeedingRestore()
                 triggerBiometricsIfAvailable()
             }
         }
+    }
+
+    /// The PIN cannot be reset: every wallet goes, and each comes back with
+    /// its recovery phrase. Lists the wallets so the user knows which
+    /// phrases they need.
+    private var forgotPINMessage: String {
+        let wallets = walletManager.wallets
+        let body = String(localized: "Monero One cannot reset your PIN. To use the app again, remove all \(wallets.count) wallets from this iPhone. Then restore them with their recovery phrases.", comment: "Forgot PIN alert; followed by the list of wallets")
+        let list = wallets.map { "\($0.emoji) \($0.name)" }.joined(separator: "\n")
+        return body + "\n\n" + list
     }
 
     private func triggerBiometricsIfAvailable() {
@@ -174,6 +201,11 @@ struct UnlockView: View {
                 startLockoutTimer()
                 pin = ""
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
+            } catch WalletError.keysMissing {
+                // Not a wrong PIN: the keys are not on this iPhone. With no
+                // wallet left to unlock, ContentView shows the restore screen.
+                errorMessage = WalletError.keysMissing.localizedDescription
+                pin = ""
             } catch {
                 attempts += 1
                 errorMessage = String(localized: "Invalid PIN")

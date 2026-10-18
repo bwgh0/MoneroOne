@@ -30206,6 +30206,100 @@
         }
       }
     },
+    "Double tap to enter the recovery phrase of one of these wallets" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doppeltippen, um die Seed-Phrase einer dieser Wallets einzugeben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para ingresar la frase semilla de una de estas carteras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touchez deux fois pour saisir la phrase de récupération de l’un de ces portefeuilles"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca due volte per inserire la frase seed di uno di questi portafogli"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダブルタップしてこれらのウォレットのいずれかのシードフレーズを入力します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 지갑 중 하나의 시드 문구를 입력하려면 두 번 탭하십시오"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tik dubbel om de seedzin van een van deze portemonnees in te voeren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stuknij dwukrotnie, aby wprowadzić frazę seed jednego z tych portfeli"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque duas vezes para digitar a frase-semente de uma destas carteiras"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apasă dublu pentru a introduce fraza seed a unuia dintre aceste portofele"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коснитесь дважды, чтобы ввести мнемоническую фразу одного из этих кошельков"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cüzdanlardan birinin kurtarma ifadesini girmek için çift dokunun"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Двічі торкніться, щоб ввести мнемонічну фразу одного з цих гаманців"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连按两次以输入其中一个钱包的助记词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點兩下來輸入其中一個錢包的助記詞"
+          }
+        }
+      }
+    },
     "Double tap to make it small again." : {
       "comment" : "VoiceOver hint: the QR code in focus mode",
       "localizations" : {
@@ -30865,6 +30959,100 @@
         }
       }
     },
+    "Double tap to remove every wallet from this iPhone" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doppeltippen, um alle Wallets von diesem iPhone zu entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para eliminar todas las carteras de este iPhone"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touchez deux fois pour supprimer tous les portefeuilles de cet iPhone"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca due volte per rimuovere tutti i portafogli da questo iPhone"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダブルタップしてこのiPhoneからすべてのウォレットを削除します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 iPhone에서 모든 지갑을 제거하려면 두 번 탭하십시오"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tik dubbel om alle portemonnees van deze iPhone te verwijderen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stuknij dwukrotnie, aby usunąć wszystkie portfele z tego iPhone’a"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque duas vezes para remover todas as carteiras deste iPhone"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apasă dublu pentru a elimina toate portofelele de pe acest iPhone"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коснитесь дважды, чтобы удалить все кошельки с этого iPhone"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tüm cüzdanları bu iPhone'dan kaldırmak için çift dokunun"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Двічі торкніться, щоб видалити всі гаманці з цього iPhone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连按两次以从此 iPhone 移除所有钱包"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點兩下來從此 iPhone 移除所有錢包"
+          }
+        }
+      }
+    },
     "Double tap to rename this address" : {
       "comment" : "VoiceOver hint: a subaddress in Select Address edit mode",
       "localizations" : {
@@ -31144,6 +31332,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "點兩下來使用助記詞或檢視金鑰回復現有的錢包"
+          }
+        }
+      }
+    },
+    "Double tap to restore this wallet" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doppeltippen, um diese Wallet wiederherzustellen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para restaurar esta cartera"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touchez deux fois pour restaurer ce portefeuille"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca due volte per ripristinare questo portafoglio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダブルタップしてこのウォレットを復元します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 지갑을 복원하려면 두 번 탭하십시오"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tik dubbel om deze portemonnee te herstellen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stuknij dwukrotnie, aby przywrócić ten portfel"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque duas vezes para restaurar esta carteira"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apasă dublu pentru a restaura acest portofel"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коснитесь дважды, чтобы восстановить этот кошелёк"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cüzdanı geri yüklemek için çift dokunun"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Двічі торкніться, щоб відновити цей гаманець"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连按两次以恢复此钱包"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點兩下來回復此錢包"
           }
         }
       }
@@ -45838,6 +46120,435 @@
     "Monero One" : {
       "shouldTranslate" : false
     },
+    "Monero One cannot read the wallet keys on this iPhone, so it needs to restore them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One kann die Wallet-Schlüssel auf diesem iPhone nicht lesen und muss sie deshalb wiederherstellen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One no puede leer las claves de las carteras en este iPhone, así que debe restaurarlas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One ne peut pas lire les clés des portefeuilles sur cet iPhone, donc il doit les restaurer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One non riesce a leggere le chiavi dei portafogli su questo iPhone, quindi deve ripristinarle."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero OneはこのiPhone上のウォレットのキーを読み取れないため、復元する必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One에서 이 iPhone의 지갑 키를 읽을 수 없으므로 복원해야 합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One kan de sleutels van de portemonnees op deze iPhone niet lezen, dus moet ze herstellen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One nie może odczytać kluczy portfeli na tym iPhonie, więc musi je przywrócić."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Monero One não consegue ler as chaves das carteiras neste iPhone, então precisa restaurá-las."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One nu poate citi cheile portofelelor de pe acest iPhone, așa că trebuie să le restaureze."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One не может прочитать ключи кошельков на этом iPhone, поэтому нужно восстановить их."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One bu iPhone'daki cüzdan anahtarlarını okuyamıyor, bu yüzden bunları geri yüklemelidir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One не може прочитати ключі гаманців на цьому iPhone, тому має відновити їх."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One 无法读取这部 iPhone 上的钱包密钥，因此需要恢复它们。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monero One 無法讀取這支 iPhone 上的錢包金鑰，因此需要回復它們。"
+          }
+        }
+      }
+    },
+    "Monero One cannot reset your PIN. To use the app again, remove all %lld wallets from this iPhone. Then restore them with their recovery phrases." : {
+      "comment" : "Forgot PIN alert; followed by the list of wallets",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One kann deine PIN nicht zurücksetzen. Um die App wieder zu nutzen, entferne deine %lld Wallet von diesem iPhone. Stelle sie dann mit ihrer Seed-Phrase wieder her."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One kann deine PIN nicht zurücksetzen. Um die App wieder zu nutzen, entferne alle %lld Wallets von diesem iPhone. Stelle sie dann mit ihren Seed-Phrasen wieder her."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One cannot reset your PIN. To use the app again, remove your %lld wallet from this iPhone. Then restore it with its recovery phrase."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One cannot reset your PIN. To use the app again, remove all %lld wallets from this iPhone. Then restore them with their recovery phrases."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One no puede restablecer tu PIN. Para volver a usar la app, elimina las %lld carteras de este iPhone. Luego restáuralas con sus frases semilla."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One no puede restablecer tu PIN. Para volver a usar la app, elimina %lld cartera de este iPhone. Luego restáurala con su frase semilla."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One no puede restablecer tu PIN. Para volver a usar la app, elimina las %lld carteras de este iPhone. Luego restáuralas con sus frases semilla."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One ne peut pas réinitialiser votre code PIN. Pour utiliser à nouveau l’app, supprimez les %lld portefeuilles de cet iPhone. Restaurez-les ensuite avec leurs phrases de récupération."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One ne peut pas réinitialiser votre code PIN. Pour utiliser à nouveau l’app, supprimez %lld portefeuille de cet iPhone. Restaurez-le ensuite avec sa phrase de récupération."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One ne peut pas réinitialiser votre code PIN. Pour utiliser à nouveau l’app, supprimez les %lld portefeuilles de cet iPhone. Restaurez-les ensuite avec leurs phrases de récupération."
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One non può reimpostare il PIN. Per usare di nuovo l’app, rimuovi tutti i %lld portafogli da questo iPhone. Poi ripristinali con le loro frasi seed."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One non può reimpostare il PIN. Per usare di nuovo l’app, rimuovi %lld portafoglio da questo iPhone. Poi ripristinalo con la sua frase seed."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One non può reimpostare il PIN. Per usare di nuovo l’app, rimuovi tutti i %lld portafogli da questo iPhone. Poi ripristinali con le loro frasi seed."
+                }
+              }
+            }
+          }
+        },
+        "ja" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero OneはPINをリセットできません。アプリを再び使うには、このiPhoneから%lld個のウォレットをすべて削除してください。その後、シードフレーズで復元します。"
+                }
+              }
+            }
+          }
+        },
+        "ko" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One에서는 PIN을 재설정할 수 없습니다. 앱을 다시 사용하려면 이 iPhone에서 지갑 %lld개를 모두 제거하십시오. 그런 다음 시드 문구로 복원하십시오."
+                }
+              }
+            }
+          }
+        },
+        "nl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One kan je PIN niet resetten. Om de app weer te gebruiken, verwijder je %lld portemonnee van deze iPhone. Herstel hem daarna met zijn seedzin."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One kan je PIN niet resetten. Om de app weer te gebruiken, verwijder je alle %lld portemonnees van deze iPhone. Herstel ze daarna met hun seedzinnen."
+                }
+              }
+            }
+          }
+        },
+        "pl" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One nie może zresetować kodu PIN. Aby znów korzystać z aplikacji, usuń z tego iPhone’a wszystkie %lld portfele. Następnie przywróć je za pomocą ich fraz seed."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One nie może zresetować kodu PIN. Aby znów korzystać z aplikacji, usuń z tego iPhone’a wszystkie %lld portfeli. Następnie przywróć je za pomocą ich fraz seed."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One nie może zresetować kodu PIN. Aby znów korzystać z aplikacji, usuń z tego iPhone’a %lld portfel. Następnie przywróć go za pomocą jego frazy seed."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One nie może zresetować kodu PIN. Aby znów korzystać z aplikacji, usuń z tego iPhone’a wszystkie %lld portfeli. Następnie przywróć je za pomocą ich fraz seed."
+                }
+              }
+            }
+          }
+        },
+        "pt-BR" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "O Monero One não consegue redefinir seu PIN. Para usar o app de novo, remova todas as %lld carteiras deste iPhone. Depois, restaure-as com as frases-semente delas."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "O Monero One não consegue redefinir seu PIN. Para usar o app de novo, remova %lld carteira deste iPhone. Depois, restaure-a com a frase-semente dela."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "O Monero One não consegue redefinir seu PIN. Para usar o app de novo, remova todas as %lld carteiras deste iPhone. Depois, restaure-as com as frases-semente delas."
+                }
+              }
+            }
+          }
+        },
+        "ro" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One nu poate reseta PIN-ul. Ca să folosești din nou aplicația, elimină toate cele %lld portofele de pe acest iPhone. Apoi restaurează-le cu frazele lor seed."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One nu poate reseta PIN-ul. Ca să folosești din nou aplicația, elimină %lld portofel de pe acest iPhone. Apoi restaurează-l cu fraza lui seed."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One nu poate reseta PIN-ul. Ca să folosești din nou aplicația, elimină toate cele %lld de portofele de pe acest iPhone. Apoi restaurează-le cu frazele lor seed."
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One не может сбросить PIN-код. Чтобы снова пользоваться приложением, удалите с этого iPhone все %lld кошелька. Затем восстановите их по мнемоническим фразам."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One не может сбросить PIN-код. Чтобы снова пользоваться приложением, удалите с этого iPhone все %lld кошельков. Затем восстановите их по мнемоническим фразам."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One не может сбросить PIN-код. Чтобы снова пользоваться приложением, удалите с этого iPhone %lld кошелёк. Затем восстановите его по мнемонической фразе."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One не может сбросить PIN-код. Чтобы снова пользоваться приложением, удалите с этого iPhone все %lld кошелька. Затем восстановите их по мнемоническим фразам."
+                }
+              }
+            }
+          }
+        },
+        "tr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One PIN'inizi sıfırlayamaz. Uygulamayı yeniden kullanmak için %lld cüzdanınızı bu iPhone'dan kaldırın. Sonra kurtarma ifadesiyle geri yükleyin."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One PIN'inizi sıfırlayamaz. Uygulamayı yeniden kullanmak için %lld cüzdanın tümünü bu iPhone'dan kaldırın. Sonra kurtarma ifadeleriyle geri yükleyin."
+                }
+              }
+            }
+          }
+        },
+        "uk" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One не може скинути PIN-код. Щоб знову користуватися застосунком, видаліть з цього iPhone усі %lld гаманці. Потім відновіть їх за мнемонічними фразами."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One не може скинути PIN-код. Щоб знову користуватися застосунком, видаліть з цього iPhone усі %lld гаманців. Потім відновіть їх за мнемонічними фразами."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One не може скинути PIN-код. Щоб знову користуватися застосунком, видаліть з цього iPhone %lld гаманець. Потім відновіть його за мнемонічною фразою."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One не може скинути PIN-код. Щоб знову користуватися застосунком, видаліть з цього iPhone усі %lld гаманця. Потім відновіть їх за мнемонічними фразами."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One 无法重置你的 PIN 码。要再次使用该应用，请从这部 iPhone 移除全部 %lld 个钱包，然后用助记词恢复它们。"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Monero One 無法重設你的 PIN 碼。要再次使用此 App，請從這支 iPhone 移除全部 %lld 個錢包，然後用助記詞回復它們。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Monero One has no built-in Tor. Without Orbot or another Tor app running, no node will connect." : {
       "localizations" : {
         "de" : {
@@ -48309,6 +49020,101 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "需要精確位置"
+          }
+        }
+      }
+    },
+    "Needs restore" : {
+      "comment" : "Wallet switcher: the wallet's keys are not on this iPhone",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wiederherstellung nötig"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requiere restauración"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À restaurer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Da ripristinare"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要復元"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "복원 필요"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herstel nodig"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wymaga przywrócenia"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precisa restaurar"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Necesită restaurare"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужно восстановить"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geri yükleme gerekli"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Потрібне відновлення"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要恢复"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要回復"
           }
         }
       }
@@ -55401,6 +56207,101 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Other wallets show their last known balance." : {
+      "comment" : "Wallet switcher: inactive wallets do not sync until selected",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere Wallets zeigen ihr zuletzt bekanntes Guthaben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las demás carteras muestran su último saldo conocido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les autres portefeuilles affichent leur dernier solde connu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli altri portafogli mostrano l’ultimo saldo noto."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ほかのウォレットには最後に確認された残高が表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다른 지갑에는 마지막으로 확인된 잔액이 표시됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere portemonnees tonen hun laatst bekende saldo."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pozostałe portfele pokazują ostatnie znane saldo."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As outras carteiras mostram o último saldo conhecido."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Celelalte portofele afișează ultimul sold cunoscut."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для других кошельков показан последний известный баланс."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diğer cüzdanlar bilinen son bakiyelerini gösterir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Інші гаманці показують останній відомий баланс."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他钱包显示最后已知的余额。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他錢包顯示最後已知的餘額。"
           }
         }
       }
@@ -63758,6 +64659,341 @@
         }
       }
     },
+    "Remove %lld wallets? This is permanent." : {
+      "comment" : "Confirm: remove every wallet from this iPhone",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Wallet entfernen? Das ist endgültig."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Wallets entfernen? Das ist endgültig."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remove %lld wallet? This is permanent."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remove %lld wallets? This is permanent."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "¿Eliminar %lld carteras? Esto es permanente."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "¿Eliminar %lld cartera? Esto es permanente."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "¿Eliminar %lld carteras? Esto es permanente."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Supprimer %lld portefeuilles ? Cette action est définitive."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Supprimer %lld portefeuille ? Cette action est définitive."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Supprimer %lld portefeuilles ? Cette action est définitive."
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Rimuovere %lld portafogli? L’azione è permanente."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Rimuovere %lld portafoglio? L’azione è permanente."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Rimuovere %lld portafogli? L’azione è permanente."
+                }
+              }
+            }
+          }
+        },
+        "ja" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld個のウォレットを削除しますか? この操作は取り消せません。"
+                }
+              }
+            }
+          }
+        },
+        "ko" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "지갑 %lld개를 제거하시겠습니까? 되돌릴 수 없습니다."
+                }
+              }
+            }
+          }
+        },
+        "nl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld portemonnee verwijderen? Dit is permanent."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld portemonnees verwijderen? Dit is permanent."
+                }
+              }
+            }
+          }
+        },
+        "pl" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Usunąć %lld portfele? To jest trwałe."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Usunąć %lld portfeli? To jest trwałe."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Usunąć %lld portfel? To jest trwałe."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Usunąć %lld portfeli? To jest trwałe."
+                }
+              }
+            }
+          }
+        },
+        "pt-BR" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remover %lld carteiras? Isso é permanente."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remover %lld carteira? Isso é permanente."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Remover %lld carteiras? Isso é permanente."
+                }
+              }
+            }
+          }
+        },
+        "ro" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Elimini %lld portofele? Este permanent."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Elimini %lld portofel? Este permanent."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Elimini %lld de portofele? Este permanent."
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Удалить %lld кошелька? Это необратимо."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Удалить %lld кошельков? Это необратимо."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Удалить %lld кошелёк? Это необратимо."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Удалить %lld кошелька? Это необратимо."
+                }
+              }
+            }
+          }
+        },
+        "tr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cüzdan kaldırılsın mı? Bu işlem kalıcıdır."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cüzdan kaldırılsın mı? Bu işlem kalıcıdır."
+                }
+              }
+            }
+          }
+        },
+        "uk" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Видалити %lld гаманці? Це незворотно."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Видалити %lld гаманців? Це незворотно."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Видалити %lld гаманець? Це незворотно."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Видалити %lld гаманця? Це незворотно."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "要移除 %lld 个钱包吗？此操作无法撤销。"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "要移除 %lld 個錢包嗎？此操作無法復原。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Remove All" : {
       "localizations" : {
         "de" : {
@@ -64036,6 +65272,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "要從裝置移除所有錢包嗎？"
+          }
+        }
+      }
+    },
+    "Remove these wallets" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Wallets entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar estas carteras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer ces portefeuilles"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi questi portafogli"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これらのウォレットを削除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 지갑들 제거"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder deze portemonnees"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usuń te portfele"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remover estas carteiras"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimină aceste portofele"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить эти кошельки"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cüzdanları kaldır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити ці гаманці"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除这些钱包"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除這些錢包"
           }
         }
       }
@@ -66117,6 +67447,289 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "要從 %@ 開始回復嗎？"
+          }
+        }
+      }
+    },
+    "Restore this wallet with its recovery phrase." : {
+      "comment" : "Error: the wallet's keys are not on this iPhone",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stelle diese Wallet mit ihrer Seed-Phrase wieder her."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaura esta cartera con su frase semilla."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurez ce portefeuille avec sa phrase de récupération."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina questo portafoglio con la sua frase seed."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このウォレットをシードフレーズで復元してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 지갑을 시드 문구로 복원하십시오."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herstel deze portemonnee met zijn seedzin."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przywróć ten portfel za pomocą jego frazy seed."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaure esta carteira com a frase-semente dela."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurează acest portofel cu fraza lui seed."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановите этот кошелёк по его мнемонической фразе."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cüzdanı kurtarma ifadesiyle geri yükleyin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відновіть цей гаманець за його мнемонічною фразою."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请用助记词恢复此钱包。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請用助記詞回復此錢包。"
+          }
+        }
+      }
+    },
+    "Restore with recovery phrase" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Seed-Phrase wiederherstellen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar con frase semilla"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurer avec la phrase de récupération"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina con frase seed"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "シードフレーズで復元"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시드 문구로 복원"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herstel met seedzin"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przywróć za pomocą frazy seed"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar com frase-semente"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurează cu fraza seed"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановить по мнемонической фразе"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurtarma ifadesiyle geri yükle"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відновити за мнемонічною фразою"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用助记词恢复"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用助記詞回復"
+          }
+        }
+      }
+    },
+    "Restore your wallets" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stelle deine Wallets wieder her"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaura tus carteras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurez vos portefeuilles"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina i portafogli"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ウォレットを復元"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지갑을 복원하십시오"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herstel je portemonnees"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przywróć swoje portfele"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaure suas carteiras"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurează-ți portofelele"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановите кошельки"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cüzdanlarınızı geri yükleyin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відновіть гаманці"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复你的钱包"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回復你的錢包"
           }
         }
       }
@@ -79890,6 +81503,100 @@
         }
       }
     },
+    "This iPhone was set up from a device backup. Wallet keys stay on the old iPhone, so Monero One needs to restore them here." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses iPhone wurde aus einem Geräte-Backup eingerichtet. Die Wallet-Schlüssel bleiben auf dem alten iPhone, deshalb muss Monero One sie hier wiederherstellen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este iPhone se configuró a partir de una copia de seguridad del dispositivo. Las claves de las carteras se quedan en el iPhone anterior, así que Monero One debe restaurarlas aquí."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet iPhone a été configuré à partir d’une sauvegarde de l’appareil. Les clés des portefeuilles restent sur l’ancien iPhone, donc Monero One doit les restaurer ici."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo iPhone è stato configurato da un backup del dispositivo. Le chiavi dei portafogli restano sul vecchio iPhone, quindi Monero One deve ripristinarle qui."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このiPhoneはデバイスのバックアップから設定されました。ウォレットのキーは以前のiPhoneに残っているため、Monero Oneでここに復元する必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 iPhone은 기기 백업으로 설정되었습니다. 지갑 키는 이전 iPhone에 남아 있으므로 Monero One에서 여기에 복원해야 합니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze iPhone is ingesteld vanuit een apparaatreservekopie. De sleutels van de portemonnees blijven op de oude iPhone, dus Monero One moet ze hier herstellen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ten iPhone został skonfigurowany z kopii zapasowej urządzenia. Klucze portfeli zostały na starym iPhonie, więc Monero One musi je tutaj przywrócić."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este iPhone foi configurado a partir de um backup do dispositivo. As chaves das carteiras ficam no iPhone antigo, então o Monero One precisa restaurá-las aqui."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acest iPhone a fost configurat dintr-un backup al dispozitivului. Cheile portofelelor au rămas pe iPhone-ul vechi, așa că Monero One trebuie să le restaureze aici."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот iPhone настроен из резервной копии устройства. Ключи кошельков остались на старом iPhone, поэтому Monero One нужно восстановить их здесь."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu iPhone bir aygıt yedeğinden kuruldu. Cüzdan anahtarları eski iPhone'da kaldı, bu yüzden Monero One bunları burada geri yüklemelidir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей iPhone налаштовано з резервної копії пристрою. Ключі гаманців залишилися на старому iPhone, тому Monero One має відновити їх тут."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 iPhone 是通过设备备份设置的。钱包密钥仍在旧 iPhone 上，所以 Monero One 需要在此恢复它们。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 iPhone 是透過裝置備份設定的。錢包金鑰仍在舊 iPhone 上，因此 Monero One 需要在此回復它們。"
+          }
+        }
+      }
+    },
     "This is not a valid Monero payment link." : {
       "localizations" : {
         "de" : {
@@ -80736,6 +82443,195 @@
         }
       }
     },
+    "This recovery phrase does not match any of these wallets." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Seed-Phrase passt zu keiner dieser Wallets."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta frase semilla no coincide con ninguna de estas carteras."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette phrase de récupération ne correspond à aucun de ces portefeuilles."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa frase seed non corrisponde a nessuno di questi portafogli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このシードフレーズは、これらのどのウォレットとも一致しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 시드 문구는 이 지갑들 중 어느 것과도 일치하지 않습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze seedzin komt met geen van deze portemonnees overeen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta fraza seed nie pasuje do żadnego z tych portfeli."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta frase-semente não corresponde a nenhuma destas carteiras."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Această frază seed nu se potrivește cu niciunul dintre aceste portofele."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эта мнемоническая фраза не подходит ни к одному из этих кошельков."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kurtarma ifadesi bu cüzdanların hiçbiriyle eşleşmiyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ця мнемонічна фраза не підходить до жодного з цих гаманців."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此助记词与这些钱包都不匹配。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此助記詞與這些錢包都不相符。"
+          }
+        }
+      }
+    },
+    "This recovery phrase is for a different wallet. Enter the phrase for \"%@\"." : {
+      "comment" : "Wallet name in quotes",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Seed-Phrase gehört zu einer anderen Wallet. Gib die Phrase für „%@“ ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta frase semilla es de otra cartera. Ingresa la frase de “%@”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette phrase de récupération correspond à un autre portefeuille. Saisissez la phrase de « %@ »."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa frase seed è di un altro portafoglio. Inserisci la frase di “%@”."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このシードフレーズは別のウォレットのものです。「%@」のシードフレーズを入力してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 시드 문구는 다른 지갑의 것입니다. “%@” 지갑의 시드 문구를 입력하십시오."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze seedzin hoort bij een andere portemonnee. Voer de seedzin voor ‘%@’ in."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta fraza seed należy do innego portfela. Wprowadź frazę dla „%@”."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta frase-semente é de outra carteira. Digite a frase de “%@”."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Această frază seed este pentru alt portofel. Introdu fraza pentru „%@”."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эта мнемоническая фраза от другого кошелька. Введите фразу для «%@»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kurtarma ifadesi başka bir cüzdana ait. “%@” için olan ifadeyi girin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ця мнемонічна фраза належить іншому гаманцю. Введіть фразу для «%@»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此助记词属于另一个钱包。请输入“%@”的助记词。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此助記詞屬於另一個錢包。請輸入「%@」的助記詞。"
+          }
+        }
+      }
+    },
     "This removes the wallet from this device. You can recover it with the seed phrase." : {
       "localizations" : {
         "de" : {
@@ -81391,6 +83287,100 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此錢包是用私密檢視金鑰回復的，因此無法在此裝置上簽署交易。如需花費資金，請開啟擁有花費金鑰的錢包。"
+          }
+        }
+      }
+    },
+    "This wallet's keys are not on this iPhone. Delete it, then add it again with Add Wallet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Schlüssel dieser Wallet sind nicht auf diesem iPhone. Lösche sie und füge sie dann mit „Wallet hinzufügen“ erneut hinzu."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las claves de esta cartera no están en este iPhone. Elimínala y vuelve a agregarla con “Agregar cartera”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les clés de ce portefeuille ne sont pas sur cet iPhone. Supprimez-le, puis ajoutez-le à nouveau avec « Ajouter un portefeuille »."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le chiavi di questo portafoglio non sono su questo iPhone. Eliminalo, poi aggiungilo di nuovo con “Aggiungi portafoglio”."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このウォレットのキーはこのiPhoneにありません。削除してから、「ウォレットを追加」でもう一度追加してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 지갑의 키가 이 iPhone에 없습니다. 삭제한 다음 “지갑 추가”로 다시 추가하십시오."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De sleutels van deze portemonnee staan niet op deze iPhone. Verwijder hem en voeg hem daarna opnieuw toe met ‘Voeg portemonnee toe’."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klucze tego portfela nie znajdują się na tym iPhonie. Usuń go, a potem dodaj ponownie przez „Dodaj portfel”."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As chaves desta carteira não estão neste iPhone. Apague-a e adicione-a de novo com “Adicionar Carteira”."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cheile acestui portofel nu sunt pe acest iPhone. Șterge-l, apoi adaugă-l din nou cu „Adaugă portofel”."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ключей этого кошелька нет на этом iPhone. Удалите его, затем добавьте снова через «Добавить кошелёк»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cüzdanın anahtarları bu iPhone'da değil. Cüzdanı silin, sonra “Cüzdan Ekle” ile yeniden ekleyin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ключів цього гаманця немає на цьому iPhone. Видаліть його, а потім додайте знову через «Додати гаманець»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此钱包的密钥不在这部 iPhone 上。请删除它，然后用“添加钱包”重新添加。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此錢包的金鑰不在這支 iPhone 上。請刪除它，然後用「新增錢包」重新加入。"
           }
         }
       }

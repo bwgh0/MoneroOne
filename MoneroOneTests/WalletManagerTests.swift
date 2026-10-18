@@ -425,3 +425,302 @@ final class WalletOrderTests: XCTestCase {
     }
 
 }
+
+// MARK: - Needs Restore Tests
+
+/// A device backup or Quick Start brings the wallet list (UserDefaults) to a
+/// new iPhone without the ThisDeviceOnly keychain items. These tests make
+/// that state by deleting a wallet's keychain items after it is saved.
+@MainActor
+final class NeedsRestoreTests: XCTestCase {
+
+    private let pin = "123456"
+    private let keychain = KeychainStorage()
+    private let store = WalletStore()
+
+    override func setUp() async throws {
+        UserDefaults.standard.set(false, forKey: "isTestnet")
+        WalletManager().deleteAllWallets()
+        keychain.resetFailedAttempts()
+    }
+
+    override func tearDown() async throws {
+        WalletManager().deleteAllWallets()
+        keychain.resetFailedAttempts()
+        UserDefaults.standard.removeObject(forKey: "isTestnet")
+    }
+
+    /// Saves seed wallets the way Create Wallet does, in this order. The
+    /// last one is active.
+    private func addSeedWallets(_ names: [String], restoreHeight: UInt64? = nil) throws -> [(id: UUID, phrase: [String])] {
+        let manager = WalletManager()
+        return try names.map { name in
+            let phrase = manager.generatePolyseed()
+            try manager.addWallet(name: name, mnemonic: phrase, pin: pin, restoreHeight: restoreHeight)
+            return (try XCTUnwrap(manager.activeWallet?.id), phrase)
+        }
+    }
+
+    /// What a device backup leaves: the wallet row without its keychain items.
+    private func dropKeys(_ id: UUID) {
+        keychain.deleteSeed(walletId: id)
+    }
+
+    private func row(_ id: UUID) -> WalletInfo? {
+        store.loadWallets().first { $0.id == id }
+    }
+
+    private func moneroKitCacheEntries() -> Set<String> {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return [] }
+        let dir = appSupport.appendingPathComponent("MoneroKit")
+        return Set((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
+    }
+
+    // MARK: Detection
+
+    func testWalletsWithKeysDoNotNeedRestore() throws {
+        _ = try addSeedWallets(["A", "B"])
+
+        let manager = WalletManager()
+        XCTAssertTrue(manager.walletsNeedingRestore.isEmpty)
+        XCTAssertFalse(manager.allWalletsNeedRestore)
+    }
+
+    func testEveryWalletWithoutKeysNeedsRestore() throws {
+        let made = try addSeedWallets(["A", "B"])
+        made.forEach { dropKeys($0.id) }
+
+        let manager = WalletManager()
+        XCTAssertEqual(manager.walletsNeedingRestore, Set(made.map(\.id)))
+        XCTAssertTrue(manager.allWalletsNeedRestore, "ContentView shows the restore screen, not the PIN screen")
+    }
+
+    func testMissingPinVerifierAloneMeansNeedsRestore() throws {
+        let a = try addSeedWallets(["A"])[0]
+        keychain.deleteKeychainAccount("one.monero.MoneroOne.wallet.\(a.id.uuidString).pinhash")
+
+        XCTAssertTrue(WalletManager().needsRestore(a.id))
+    }
+
+    func testSomeWalletsWithoutKeysUnlockWithAWalletThatHasKeys() throws {
+        let made = try addSeedWallets(["A", "B"])
+        XCTAssertEqual(store.activeWalletId, made[1].id)
+        dropKeys(made[1].id)
+
+        let manager = WalletManager()
+        XCTAssertEqual(manager.walletsNeedingRestore, [made[1].id])
+        XCTAssertFalse(manager.allWalletsNeedRestore, "The PIN screen stays")
+        XCTAssertEqual(manager.activeWallet?.id, made[0].id, "The PIN must unlock a wallet that has its keys")
+        XCTAssertEqual(store.activeWalletId, made[0].id)
+        XCTAssertEqual(manager.wallets.map(\.id), made.map(\.id), "Rows keep their order")
+    }
+
+    /// A device backup carries no wallet2 files, so files still on this
+    /// iPhone (developer team transfer) pick the restore screen's neutral text.
+    func testWalletFilesLeftOnThisIPhoneAreDetected() throws {
+        let a = try addSeedWallets(["A"])[0]
+        dropKeys(a.id)
+        let cacheId = try XCTUnwrap(row(a.id)?.derivedWalletId)
+        let appSupport = try XCTUnwrap(FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first)
+        let dir = appSupport.appendingPathComponent("MoneroKit").appendingPathComponent(cacheId)
+        try? FileManager.default.removeItem(at: dir)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        XCTAssertFalse(WalletManager().needsRestoreWalletFilesRemain, "New iPhone from a device backup: no wallet2 files")
+
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        XCTAssertTrue(WalletManager().needsRestoreWalletFilesRemain, "Same iPhone, keys gone: the files remain")
+    }
+
+    // MARK: Never a wrong PIN
+
+    func testMissingPinVerifierIsNeverAWrongPin() throws {
+        let a = try addSeedWallets(["A"])[0]
+        keychain.deleteKeychainAccount("one.monero.MoneroOne.wallet.\(a.id.uuidString).pinhash")
+
+        for _ in 0..<7 {
+            XCTAssertThrowsError(try keychain.getSeed(pin: "000000", walletId: a.id)) { error in
+                guard let keychainError = error as? KeychainError, case .keysMissing = keychainError else {
+                    return XCTFail("Expected keysMissing, got \(error)")
+                }
+            }
+        }
+        XCTAssertFalse(keychain.isLockedOut, "A missing verifier must not count toward the lockout")
+    }
+
+    func testUnlockWithoutKeysThrowsKeysMissingNotInvalidPin() async throws {
+        let a = try addSeedWallets(["A"])[0]
+        dropKeys(a.id)
+
+        let manager = WalletManager()
+        do {
+            try await manager.unlock(pin: pin)
+            XCTFail("Unlock must fail without keys")
+        } catch WalletError.keysMissing {
+            // Expected: the restore screen handles this wallet.
+        }
+        XCTAssertFalse(manager.isUnlocked)
+        XCTAssertFalse(keychain.isLockedOut)
+    }
+
+    // MARK: Matching a phrase to a wallet
+
+    func testPhraseMatchesItsWalletByCacheId() async throws {
+        let made = try addSeedWallets(["A", "B"])
+        made.forEach { dropKeys($0.id) }
+        let manager = WalletManager()
+
+        let match = try await manager.matchWalletNeedingRestore(mnemonic: made[1].phrase)
+        XCTAssertEqual(match.walletId, made[1].id)
+        XCTAssertEqual(match.derivedWalletId, row(made[1].id)?.derivedWalletId)
+
+        let targeted = try await manager.matchWalletNeedingRestore(mnemonic: made[0].phrase, walletId: made[0].id)
+        XCTAssertEqual(targeted.walletId, made[0].id)
+    }
+
+    func testPhraseOfAnotherWalletIsRejected() async throws {
+        let made = try addSeedWallets(["A", "B"])
+        made.forEach { dropKeys($0.id) }
+        let manager = WalletManager()
+
+        do {
+            _ = try await manager.matchWalletNeedingRestore(mnemonic: made[0].phrase, walletId: made[1].id)
+            XCTFail("A's phrase must not restore B")
+        } catch WalletError.phraseMismatch(let name) {
+            XCTAssertEqual(name, "B")
+        }
+
+        do {
+            _ = try await manager.matchWalletNeedingRestore(mnemonic: manager.generatePolyseed())
+            XCTFail("A new phrase matches no wallet")
+        } catch WalletError.phraseMatchesNoWallet {
+            // Expected.
+        }
+    }
+
+    func testPhraseOfWalletThatHasKeysIsADuplicate() async throws {
+        let made = try addSeedWallets(["A", "B"])
+        dropKeys(made[1].id)
+        let manager = WalletManager()
+
+        do {
+            _ = try await manager.matchWalletNeedingRestore(mnemonic: made[0].phrase)
+            XCTFail("A still has its keys")
+        } catch WalletError.duplicateWallet(let name) {
+            XCTAssertEqual(name, "A")
+        }
+    }
+
+    // MARK: Restoring into the row
+
+    func testRestoreIntoWalletKeepsItsRowAndCacheId() async throws {
+        let made = try addSeedWallets(["A", "B"], restoreHeight: 3_100_000)
+        made.forEach { dropKeys($0.id) }
+        let manager = WalletManager()
+        let before = try XCTUnwrap(row(made[1].id))
+
+        let match = try await manager.matchWalletNeedingRestore(mnemonic: made[1].phrase)
+        try manager.restoreWalletNeedingRestore(match, mnemonic: made[1].phrase, pin: "654321", name: before.name, emoji: before.emoji)
+
+        let after = try XCTUnwrap(row(made[1].id))
+        XCTAssertEqual(after.name, before.name)
+        XCTAssertEqual(after.restoreHeight, 3_100_000)
+        XCTAssertEqual(after.createdAt, before.createdAt)
+        XCTAssertEqual(after.syncResetCount, before.syncResetCount)
+        XCTAssertEqual(after.source, before.source)
+        XCTAssertEqual(after.derivedWalletId, before.derivedWalletId, "walletId lockstep: the cache id must not change")
+        XCTAssertEqual(store.loadWallets().map(\.id), made.map(\.id), "No new row, same order")
+        XCTAssertEqual(store.activeWalletId, made[1].id)
+        XCTAssertEqual(manager.activeWallet?.id, made[1].id)
+        XCTAssertEqual(manager.walletsNeedingRestore, [made[0].id])
+        XCTAssertEqual(try keychain.getSeed(pin: "654321", walletId: made[1].id), made[1].phrase.joined(separator: " "))
+        XCTAssertEqual(WalletManager().walletsNeedingRestore, [made[0].id], "The restored wallet stays restored on the next launch")
+    }
+
+    /// The same wallet in another phrase format hashes to another cache id,
+    /// so its primary address must prove the match. Runs a throwaway wallet2.
+    func testPhraseInAnotherFormatMatchesByAddress() async throws {
+        let phrase = WalletManager().generatePolyseed()
+        let networkType = WalletManager().networkType
+        let cachesBefore = moneroKitCacheEntries()
+        let address = try await MoneroWallet().probePrimaryAddress(seed: phrase, networkType: networkType)
+        XCTAssertEqual(address.count, 95, "Primary address, got \(address)")
+        XCTAssertTrue(address.hasPrefix("4"))
+        XCTAssertEqual(moneroKitCacheEntries(), cachesBefore, "The throwaway wallet2 leaves no cache behind")
+
+        let oldCacheId = String(repeating: "0", count: 32)
+        let id = UUID(), other = UUID()
+        store.addWallet(WalletInfo(
+            id: id, name: "Old", source: .seeded(wordCount: 25), createdAt: Date(), restoreHeight: 0,
+            syncResetCount: 0, userCreatedSubaddressIndices: [], cachedPrimaryAddress: address,
+            cachedBalance: nil, derivedWalletId: oldCacheId
+        ))
+        store.addWallet(WalletInfo(
+            id: other, name: "Other", source: .seeded(wordCount: 25), createdAt: Date(), restoreHeight: 0,
+            syncResetCount: 0, userCreatedSubaddressIndices: [],
+            cachedPrimaryAddress: "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A",
+            cachedBalance: nil, derivedWalletId: String(repeating: "1", count: 32)
+        ))
+        store.setActiveWalletId(id)
+
+        let manager = WalletManager()
+        XCTAssertEqual(manager.walletsNeedingRestore, [id, other])
+
+        do {
+            _ = try await manager.matchWalletNeedingRestore(mnemonic: phrase, walletId: other)
+            XCTFail("The address shows the phrase is not Other's")
+        } catch WalletError.phraseMismatch(let name) {
+            XCTAssertEqual(name, "Other")
+        }
+
+        let match = try await manager.matchWalletNeedingRestore(mnemonic: phrase)
+        XCTAssertEqual(match.walletId, id)
+        XCTAssertNotEqual(match.derivedWalletId, oldCacheId)
+
+        try manager.restoreWalletNeedingRestore(match, mnemonic: phrase, pin: pin, name: "Old", emoji: "\u{1F4B0}")
+        let after = try XCTUnwrap(row(id))
+        XCTAssertEqual(after.derivedWalletId, match.derivedWalletId, "The cache id create() derives from this phrase")
+        XCTAssertEqual(after.source, .seeded(wordCount: 16))
+        XCTAssertEqual(after.cachedPrimaryAddress, address)
+        XCTAssertEqual(manager.walletsNeedingRestore, [other])
+    }
+
+    // MARK: PIN change and removal
+
+    func testChangePinSkipsWalletsThatNeedRestore() throws {
+        let made = try addSeedWallets(["A", "B"])
+        dropKeys(made[1].id)
+        let manager = WalletManager()
+
+        try manager.reencryptAllWallets(oldPin: pin, newPin: "654321")
+
+        XCTAssertEqual(try keychain.getSeed(pin: "654321", walletId: made[0].id), made[0].phrase.joined(separator: " "))
+        XCTAssertTrue(keychain.walletKeysMissing(walletId: made[1].id, holdsSeed: true))
+    }
+
+    func testRemoveAllRemovesWalletsThatNeedRestore() throws {
+        let made = try addSeedWallets(["A", "B"])
+        dropKeys(made[1].id)
+        let manager = WalletManager()
+
+        manager.deleteAllWallets()
+
+        XCTAssertTrue(manager.wallets.isEmpty)
+        XCTAssertTrue(manager.walletsNeedingRestore.isEmpty)
+        XCTAssertFalse(manager.allWalletsNeedRestore, "Onboarding, not the restore screen")
+        XCTAssertNil(manager.activeWallet)
+        XCTAssertTrue(store.loadWallets().isEmpty)
+        XCTAssertTrue(keychain.walletKeysMissing(walletId: made[0].id, holdsSeed: true))
+    }
+
+    func testDeletingActiveWalletMovesToAWalletWithKeys() throws {
+        let made = try addSeedWallets(["A", "B", "C"])
+        dropKeys(made[0].id)
+        let manager = WalletManager()
+        XCTAssertEqual(manager.activeWallet?.id, made[2].id)
+
+        manager.deleteWallet(id: made[2].id)
+
+        XCTAssertEqual(manager.activeWallet?.id, made[1].id, "Skip A: it needs restore")
+    }
+}

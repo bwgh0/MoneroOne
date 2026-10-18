@@ -9,29 +9,32 @@ struct QRCodeView: View {
         GeometryReader { geo in
             let size = min(geo.size.width, geo.size.height)
 
+            let bitmap = Self.bitmap(for: content)
+
             ZStack {
                 // Many pixels per module, scaled down smoothly: the modules
                 // keep clean edges at any size and glide as focus mode
                 // grows the code. One pixel per module scaled up with
                 // interpolation off jumped a pixel at a time mid-grow.
-                if let bitmap = Self.bitmap(for: content) {
+                if let bitmap {
                     Image(uiImage: bitmap.image)
                         .interpolation(.medium)
                         .resizable()
                         .frame(width: size, height: size)
                 }
 
-                // Logo overlay in center: the flat mark on a white disc the
-                // same size the old logo covered, so the modules stay clear
-                // of the mark's edge and the code scans as before.
+                // The flat mark in the center. The rounded code leaves its
+                // center clear, so the mark sits there on its own; the
+                // square fallback puts it on a white disc over the modules.
                 if showLogo {
-                    let plateSize = size * 0.22
+                    let onDisc = bitmap?.logoOnDisc ?? true
+                    let logoSize = size * (bitmap?.logoFraction ?? 0.22)
                     Image("MoneroLogo")
                         .resizable()
                         .scaledToFit()
-                        .padding(plateSize * 0.1)
-                        .frame(width: plateSize, height: plateSize)
-                        .background(Circle().fill(Color.white))
+                        .padding(onDisc ? logoSize * 0.1 : 0)
+                        .frame(width: logoSize, height: logoSize)
+                        .background(Circle().fill(onDisc ? Color.white : Color.clear))
                         .accessibilityHidden(true)
                 }
             }
@@ -53,13 +56,62 @@ struct QRCodeView: View {
     /// mode shows (448 pt) at 3x, so a code is only ever scaled down.
     private static let bitmapWidth: CGFloat = 1344
 
-    /// The code at a whole number of pixels per module, error correction H
-    /// so the logo can cover the center. Nil when the text does not fit in
-    /// a QR code.
+    /// The code at a whole number of pixels per module: the rounded code,
+    /// or the square code when the rounded one cannot be drawn. Nil when
+    /// the text does not fit in a QR code.
     static func bitmap(for string: String) -> QRBitmap? {
         if let cached = cache.object(forKey: string as NSString) {
             return cached
         }
+        guard let bitmap = roundedBitmap(for: string) ?? squareBitmap(for: string) else {
+            return nil
+        }
+        cache.setObject(bitmap, forKey: string as NSString)
+        return bitmap
+    }
+
+    /// Round dots and rounded finder patterns with the center cleared for
+    /// the mark (`QRStyle.swift`), error correction Q. No margin: the plate
+    /// adds the whole quiet zone.
+    private static func roundedBitmap(for string: String) -> QRBitmap? {
+        guard let matrix = QRMatrix.make(string) else { return nil }
+        let style = QRStyle()
+        let modules = matrix.size
+        let pixelWidth = modules * Int((bitmapWidth / CGFloat(modules)).rounded(.up))
+        let side = CGFloat(pixelWidth)
+        guard let context = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelWidth,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceGray(),
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else {
+            return nil
+        }
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+        // y down, like the path. Even-odd: the finder rings have holes.
+        context.translateBy(x: 0, y: side)
+        context.scaleBy(x: 1, y: -1)
+        context.addPath(QRStyledCode.path(matrix: matrix, style: style, side: side))
+        context.setFillColor(CGColor(gray: 0, alpha: 1))
+        context.fillPath(using: .evenOdd)
+        guard let cgImage = context.makeImage() else { return nil }
+        let logo = QRStyledCode.logoRect(matrix: matrix, style: style, side: side)
+        return QRBitmap(
+            image: UIImage(cgImage: cgImage),
+            modules: modules,
+            margin: 0,
+            logoFraction: logo.width / side,
+            logoOnDisc: false
+        )
+    }
+
+    /// Square modules, error correction H so the mark's disc can cover the
+    /// center, with CoreImage's one-module margin.
+    private static func squareBitmap(for string: String) -> QRBitmap? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
         filter.correctionLevel = "H"
@@ -78,112 +130,51 @@ struct QRCodeView: View {
         ) else {
             return nil
         }
-        let bitmap = QRBitmap(image: UIImage(cgImage: cgImage), modules: modules)
-        cache.setObject(bitmap, forKey: string as NSString)
-        return bitmap
-    }
-
-    private func isInFinderPattern(row: Int, col: Int, size: Int) -> Bool {
-        // Top-left finder pattern
-        if row < 7 && col < 7 { return true }
-        // Top-right finder pattern
-        if row < 7 && col >= size - 7 { return true }
-        // Bottom-left finder pattern
-        if row >= size - 7 && col < 7 { return true }
-        return false
-    }
-
-    private func drawFinderPattern(context: inout GraphicsContext, x: CGFloat, y: CGFloat, moduleSize: CGFloat) {
-        let patternSize = moduleSize * 7
-        let cornerRadius = moduleSize * 1.2
-
-        // Outer black rounded square (7x7)
-        let outerRect = CGRect(x: x, y: y, width: patternSize, height: patternSize)
-        context.fill(
-            RoundedRectangle(cornerRadius: cornerRadius).path(in: outerRect),
-            with: .color(.black)
+        return QRBitmap(
+            image: UIImage(cgImage: cgImage),
+            modules: modules,
+            margin: 1,
+            logoFraction: 0.22,
+            logoOnDisc: true
         )
-
-        // Middle white rounded square (5x5, inset by 1 module)
-        let middleInset = moduleSize
-        let middleRect = CGRect(x: x + middleInset, y: y + middleInset,
-                                width: patternSize - (middleInset * 2),
-                                height: patternSize - (middleInset * 2))
-        context.fill(
-            RoundedRectangle(cornerRadius: cornerRadius * 0.7).path(in: middleRect),
-            with: .color(.white)
-        )
-
-        // Inner black rounded square (3x3, inset by 2 modules)
-        let innerInset = moduleSize * 2
-        let innerRect = CGRect(x: x + innerInset, y: y + innerInset,
-                               width: patternSize - (innerInset * 2),
-                               height: patternSize - (innerInset * 2))
-        context.fill(
-            RoundedRectangle(cornerRadius: cornerRadius * 0.5).path(in: innerRect),
-            with: .color(.black)
-        )
-    }
-
-    private func generateQRMatrix(from string: String) -> [[Bool]]? {
-        let context = CIContext()
-        let filter = CIFilter.qrCodeGenerator()
-
-        guard let data = string.data(using: .utf8) else { return nil }
-        filter.setValue(data, forKey: "inputMessage")
-        filter.setValue("H", forKey: "inputCorrectionLevel")
-
-        guard let outputImage = filter.outputImage else { return nil }
-
-        guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else {
-            return nil
-        }
-
-        let width = cgImage.width
-        let height = cgImage.height
-
-        guard let pixelData = cgImage.dataProvider?.data,
-              let dataPtr = CFDataGetBytePtr(pixelData) else {
-            return nil
-        }
-
-        var matrix: [[Bool]] = []
-        let bytesPerPixel = cgImage.bitsPerPixel / 8
-
-        for y in 0..<height {
-            var row: [Bool] = []
-            for x in 0..<width {
-                let pixelIndex = (y * cgImage.bytesPerRow) + (x * bytesPerPixel)
-                let isBlack = dataPtr[pixelIndex] == 0
-                row.append(isBlack)
-            }
-            matrix.append(row)
-        }
-
-        return matrix
     }
 }
 
-/// A QR code bitmap and its width in modules, CoreImage's one-module margin
-/// included.
+/// A QR code bitmap and where the mark goes on it.
 final class QRBitmap {
     let image: UIImage
+    /// The bitmap's width in modules, margin included.
     let modules: Int
+    /// The white modules the bitmap draws around the code.
+    let margin: Int
+    /// The mark's width as a fraction of the bitmap's width.
+    let logoFraction: CGFloat
+    /// True when the mark needs a white disc under it: the square code does
+    /// not clear its center.
+    let logoOnDisc: Bool
 
-    init(image: UIImage, modules: Int) {
+    init(image: UIImage, modules: Int, margin: Int, logoFraction: CGFloat, logoOnDisc: Bool) {
         self.image = image
         self.modules = modules
+        self.margin = margin
+        self.logoFraction = logoFraction
+        self.logoOnDisc = logoOnDisc
     }
 }
 
 // MARK: - QR Code Image Generator (for sharing)
 
 struct QRCodeRenderer {
+    /// The code on white with a four-module quiet zone (the plate's two
+    /// are too few on an unknown background or a print), so the saved or
+    /// shared image scans on its own.
     @MainActor
     static func renderToImage(content: String, size: CGFloat = 400) -> UIImage? {
         let renderer = ImageRenderer(content:
             QRCodeView(content: content)
+                .padding(QRPlate.quietZone(for: content, side: size, modules: 4))
                 .frame(width: size, height: size)
+                .background(Color.white)
         )
         renderer.scale = 3.0 // High resolution
         return renderer.uiImage
@@ -192,9 +183,11 @@ struct QRCodeRenderer {
 
 // MARK: - Plate
 
-/// A QR code on a white plate with a four-module quiet zone, in light and
-/// dark mode: CoreImage draws one module of margin, the plate adds three.
-/// The same plate sits on the Receive card, on Donate and in focus mode.
+/// A QR code on a white plate with a two-module quiet zone, in light and
+/// dark mode: the plate adds what the bitmap's own margin leaves out (both
+/// for the rounded code, one for the square one). Cash App's codes keep
+/// about 1.8. The same plate sits on the Receive card, on Donate and in
+/// focus mode.
 /// It casts its own shadow, so focus mode's copy starts and ends looking
 /// exactly like the code it grows from.
 struct QRPlate: View {
@@ -208,10 +201,8 @@ struct QRPlate: View {
     private var cornerRadius: CGFloat { min(20, max(12, side * 0.045)) }
 
     var body: some View {
-        let modules = CGFloat(QRCodeView.bitmap(for: content)?.modules ?? 49)
-        let quietZone = side * 3 / (modules + 6)
         QRCodeView(content: content)
-            .padding(quietZone)
+            .padding(Self.quietZone(for: content, side: side, modules: 2))
             .frame(width: side, height: side)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius)
@@ -222,6 +213,15 @@ struct QRPlate: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(Color.black.opacity(colorScheme == .light ? 0.06 : 0))
             }
+    }
+
+    /// The white to add on each side of the code in a square `side` wide,
+    /// so the code has `zone` modules of quiet zone.
+    static func quietZone(for content: String, side: CGFloat, modules zone: Int) -> CGFloat {
+        let bitmap = QRCodeView.bitmap(for: content)
+        let modules = CGFloat(bitmap?.modules ?? 49)
+        let added = CGFloat(max(0, zone - (bitmap?.margin ?? 0)))
+        return side * added / (modules + 2 * added)
     }
 }
 

@@ -165,13 +165,14 @@ final class QRBitmap {
 // MARK: - QR Code Image Generator (for sharing)
 
 struct QRCodeRenderer {
-    /// The code on white with the plate's four-module quiet zone, so the
-    /// saved or shared image scans on its own.
+    /// The code on white with a four-module quiet zone (the plate's two
+    /// are too few on an unknown background or a print), so the saved or
+    /// shared image scans on its own.
     @MainActor
     static func renderToImage(content: String, size: CGFloat = 400) -> UIImage? {
         let renderer = ImageRenderer(content:
             QRCodeView(content: content)
-                .padding(QRPlate.quietZone(for: content, side: size))
+                .padding(QRPlate.quietZone(for: content, side: size, modules: 4))
                 .frame(width: size, height: size)
                 .background(Color.white)
         )
@@ -182,9 +183,11 @@ struct QRCodeRenderer {
 
 // MARK: - Plate
 
-/// A QR code on a white plate with a four-module quiet zone, in light and
-/// dark mode: the plate adds what the bitmap's own margin leaves out (all
-/// four for the rounded code, three for the square one). The same plate sits on the Receive card, on Donate and in focus mode.
+/// A QR code on a white plate with a two-module quiet zone, in light and
+/// dark mode: the plate adds what the bitmap's own margin leaves out (both
+/// for the rounded code, one for the square one). Cash App's codes keep
+/// about 1.8. The same plate sits on the Receive card, on Donate and in
+/// focus mode.
 /// It casts its own shadow, so focus mode's copy starts and ends looking
 /// exactly like the code it grows from.
 struct QRPlate: View {
@@ -199,7 +202,7 @@ struct QRPlate: View {
 
     var body: some View {
         QRCodeView(content: content)
-            .padding(Self.quietZone(for: content, side: side))
+            .padding(Self.quietZone(for: content, side: side, modules: 2))
             .frame(width: side, height: side)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius)
@@ -213,11 +216,11 @@ struct QRPlate: View {
     }
 
     /// The white to add on each side of the code in a square `side` wide,
-    /// so the code has four modules of quiet zone.
-    static func quietZone(for content: String, side: CGFloat) -> CGFloat {
+    /// so the code has `zone` modules of quiet zone.
+    static func quietZone(for content: String, side: CGFloat, modules zone: Int) -> CGFloat {
         let bitmap = QRCodeView.bitmap(for: content)
         let modules = CGFloat(bitmap?.modules ?? 49)
-        let added = CGFloat(4 - (bitmap?.margin ?? 0))
+        let added = CGFloat(max(0, zone - (bitmap?.margin ?? 0)))
         return side * added / (modules + 2 * added)
     }
 }

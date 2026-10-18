@@ -53,7 +53,7 @@ final class WalletIntegrationTests: XCTestCase {
         let pin = "1234"
 
         // This should not throw for a valid BIP39 mnemonic
-        try walletManager.restoreWallet(mnemonic: testMnemonic, pin: pin)
+        try await walletManager.restoreWallet(mnemonic: testMnemonic, pin: pin)
 
         XCTAssertTrue(walletManager.hasWallet)
     }
@@ -63,7 +63,7 @@ final class WalletIntegrationTests: XCTestCase {
         let pin = "1234"
 
         do {
-            try walletManager.restoreWallet(mnemonic: invalidMnemonic, pin: pin)
+            try await walletManager.restoreWallet(mnemonic: invalidMnemonic, pin: pin)
             XCTFail("Should throw for invalid mnemonic")
         } catch {
             XCTAssertTrue(error is WalletError)
@@ -80,7 +80,7 @@ final class WalletIntegrationTests: XCTestCase {
         let pin = "1234"
         let restoreDate = Date(timeIntervalSince1970: 1600000000) // Sept 2020
 
-        try walletManager.restoreWallet(mnemonic: testMnemonic, pin: pin, restoreDate: restoreDate)
+        try await walletManager.restoreWallet(mnemonic: testMnemonic, pin: pin, restoreDate: restoreDate)
 
         XCTAssertGreaterThan(walletManager.activeWallet?.restoreHeight ?? 0, 0)
     }

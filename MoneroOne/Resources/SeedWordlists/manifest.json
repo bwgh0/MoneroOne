@@ -1,0 +1,208 @@
+{
+ "source": "monero_c_build/monero src/mnemonics/*.h and external/polyseed/src/lang_*.c",
+ "legacy": [
+  {
+   "file": "legacy/chinese_simplified.txt",
+   "name": "简体中文 (中国)",
+   "englishName": "Chinese (simplified)",
+   "uniquePrefixLength": 1,
+   "count": 1626
+  },
+  {
+   "file": "legacy/dutch.txt",
+   "name": "Nederlands",
+   "englishName": "Dutch",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/english.txt",
+   "name": "English",
+   "englishName": "English",
+   "uniquePrefixLength": 3,
+   "count": 1626
+  },
+  {
+   "file": "legacy/english_old.txt",
+   "name": "EnglishOld",
+   "englishName": "English (old)",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/esperanto.txt",
+   "name": "Esperanto",
+   "englishName": "Esperanto",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/french.txt",
+   "name": "Français",
+   "englishName": "French",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/german.txt",
+   "name": "Deutsch",
+   "englishName": "German",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/italian.txt",
+   "name": "Italiano",
+   "englishName": "Italian",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/japanese.txt",
+   "name": "日本語",
+   "englishName": "Japanese",
+   "uniquePrefixLength": 3,
+   "count": 1626
+  },
+  {
+   "file": "legacy/lojban.txt",
+   "name": "Lojban",
+   "englishName": "Lojban",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/portuguese.txt",
+   "name": "Português",
+   "englishName": "Portuguese",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/russian.txt",
+   "name": "русский язык",
+   "englishName": "Russian",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  },
+  {
+   "file": "legacy/spanish.txt",
+   "name": "Español",
+   "englishName": "Spanish",
+   "uniquePrefixLength": 4,
+   "count": 1626
+  }
+ ],
+ "polyseed": [
+  {
+   "file": "polyseed/cs.txt",
+   "name": "čeština",
+   "englishName": "Czech",
+   "separator": " ",
+   "isSorted": true,
+   "hasPrefix": true,
+   "hasAccents": false,
+   "compose": false,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/en.txt",
+   "name": "English",
+   "englishName": "English",
+   "separator": " ",
+   "isSorted": true,
+   "hasPrefix": true,
+   "hasAccents": false,
+   "compose": false,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/es.txt",
+   "name": "español",
+   "englishName": "Spanish",
+   "separator": " ",
+   "isSorted": true,
+   "hasPrefix": true,
+   "hasAccents": true,
+   "compose": true,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/fr.txt",
+   "name": "français",
+   "englishName": "French",
+   "separator": " ",
+   "isSorted": true,
+   "hasPrefix": true,
+   "hasAccents": true,
+   "compose": true,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/it.txt",
+   "name": "italiano",
+   "englishName": "Italian",
+   "separator": " ",
+   "isSorted": true,
+   "hasPrefix": true,
+   "hasAccents": false,
+   "compose": false,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/jp.txt",
+   "name": "日本語",
+   "englishName": "Japanese",
+   "separator": "\\u3000",
+   "isSorted": true,
+   "hasPrefix": false,
+   "hasAccents": false,
+   "compose": true,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/ko.txt",
+   "name": "한국어",
+   "englishName": "Korean",
+   "separator": " ",
+   "isSorted": true,
+   "hasPrefix": false,
+   "hasAccents": false,
+   "compose": true,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/pt.txt",
+   "name": "português",
+   "englishName": "Portuguese",
+   "separator": " ",
+   "isSorted": true,
+   "hasPrefix": true,
+   "hasAccents": false,
+   "compose": false,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/zh_s.txt",
+   "name": "中文(简体)",
+   "englishName": "Chinese (Simplified)",
+   "separator": " ",
+   "isSorted": false,
+   "hasPrefix": false,
+   "hasAccents": false,
+   "compose": false,
+   "count": 2048
+  },
+  {
+   "file": "polyseed/zh_t.txt",
+   "name": "中文(繁體)",
+   "englishName": "Chinese (Traditional)",
+   "separator": " ",
+   "isSorted": false,
+   "hasPrefix": false,
+   "hasAccents": false,
+   "compose": false,
+   "count": 2048
+  }
+ ]
+}

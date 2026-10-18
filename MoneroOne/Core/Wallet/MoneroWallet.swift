@@ -73,7 +73,7 @@ class MoneroWallet: ObservableObject {
             networkType: networkType
         )
 
-        let credentials = Self.credentials(for: seed)
+        let credentials = Self.kitCredentials(for: seed)
 
         // Heavy Kit init (SQLite + C++ + crypto) off main thread
         let reachability = reachabilityManager
@@ -176,17 +176,6 @@ class MoneroWallet: ObservableObject {
 
     /// Detect seed type and create appropriate credentials.
     /// 16 words = polyseed, 24 words = bip39, 25 words = legacy.
-    private static func credentials(for seed: [String]) -> MoneroKit.MoneroWallet {
-        switch seed.count {
-        case 16:
-            return MoneroKit.MoneroWallet.polyseed(seed: seed, passphrase: "")
-        case 25:
-            return MoneroKit.MoneroWallet.legacy(seed: seed, passphrase: "")
-        default:
-            return MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
-        }
-    }
-
     /// The primary address `seed` opens to. A throwaway wallet2 opens in a
     /// temporary cache directory, which is deleted again; it never connects
     /// to a node and never refreshes. The library's static address helper
@@ -202,7 +191,7 @@ class MoneroWallet: ObservableObject {
                 try? FileManager.default.removeItem(at: appSupport.appendingPathComponent("MoneroKit").appendingPathComponent(probeId))
             }
         }
-        let credentials = Self.credentials(for: seed)
+        let credentials = Self.kitCredentials(for: seed)
         let walletNode = defaultNode(for: networkType)
         let reachability = reachabilityManager
         let probe = try await Task.detached {
@@ -846,6 +835,28 @@ class MoneroWallet: ObservableObject {
     /// Generate a stable wallet ID from seed words - ensures sync data persists across app restarts
     nonisolated static func stableWalletId(for seed: [String]) -> String {
         stableWalletId(for: seed.joined(separator: " "))
+    }
+
+    /// The credentials the kit restores `seed` from: 16 words are Polyseed,
+    /// 25 are legacy, anything else is BIP39.
+    ///
+    /// Legacy words go to the kit in their exact list form. wallet2
+    /// lower-cases with `towlower` in the C locale, which maps ASCII only,
+    /// so a stored "ästhetik" (the old free-text restore lower-cased input)
+    /// never meets the German list word "Ästhetik". The stored words stay as
+    /// they are: `walletCacheId` hashes them, so map only here.
+    nonisolated static func kitCredentials(for seed: [String]) -> MoneroKit.MoneroWallet {
+        switch seed.count {
+        case 16:
+            return .polyseed(seed: seed, passphrase: "")
+        case 25:
+            if case .valid(let phrase) = SeedPhraseValidator.validate(seed, format: .legacy) {
+                return .legacy(seed: phrase.words, passphrase: "")
+            }
+            return .legacy(seed: seed, passphrase: "")
+        default:
+            return .bip39(seed: seed, passphrase: "")
+        }
     }
 
     /// The on-disk wallet2 cache id for a seeded wallet. This is the single

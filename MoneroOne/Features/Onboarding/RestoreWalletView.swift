@@ -29,13 +29,24 @@ struct RestoreWalletView: View {
     @State private var walletName: String = ""
     @State private var walletEmoji: String = "\u{1F4B0}"
 
-    @State private var seedInput = ""
+    /// The typed seed words, in memory only; cleared when the flow ends.
+    @State private var seedEntry = SeedEntryModel()
+    /// The seed step's Continue stays at the bottom, behind the keyboard; the
+    /// grid takes its room while the keyboard is up.
+    @State private var keyboardShown = false
+    @State private var seedContinueHeight: CGFloat = 0
+    /// Between keyboard will-hide and did-hide: a status scroll asked for
+    /// then runs again once Continue's room is back.
+    @State private var keyboardHiding = false
+    @State private var statusScrollAfterKeyboard = false
     @State private var pin = ""
     @State private var confirmPin = ""
     @State private var step: Step = .enterSeed
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
     @State private var isRestoring = false
+    /// The seed step's duplicate check is running (keychain reads).
+    @State private var isCheckingSeed = false
     @State private var walletCreationDate: Date = Date()
     /// Off scans the whole chain. A date within the last 30 days asks for
     /// confirmation: accepting today put the restore height ~1,440 blocks
@@ -106,9 +117,17 @@ struct RestoreWalletView: View {
             }
         }
         .padding()
-        .readableColumn()
+        .readableColumn(maxWidth: step == .enterSeed ? Self.seedColumnWidth : 480)
+        .overlay(alignment: .bottom) {
+            if step == .enterSeed {
+                seedContinueButton
+            }
+        }
         .navigationTitle("Restore Wallet")
         .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            seedEntry.reset()
+        }
         .alert("Error Restoring Wallet", isPresented: $showErrorAlert) {
             Button("OK") {
                 step = .enterSeed
@@ -118,64 +137,126 @@ struct RestoreWalletView: View {
         }
     }
 
+    private static let seedTopID = "seedTop"
+
+    /// The seed step is wider on wide screens (the Duo inner display), so the
+    /// word grid gets 4 columns and shows most of a 25-word phrase at once.
+    /// Phones are narrower than this; nothing changes there.
+    private static let seedColumnWidth: CGFloat = 656
+
+    /// Scrolls above a pinned Continue (`seedContinueButton`), like the date
+    /// step, except that Continue does not ride up with the keyboard: the
+    /// word grid gets that room. The seed input is `SeedPhraseEntryView`.
     private var enterSeedView: some View {
-        VStack(spacing: 24) {
-            Text("Enter your seed phrase")
-                .font(.headline)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 24) {
+                    Text("Enter your seed phrase")
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                        .id(Self.seedTopID)
 
-            Text("16 words (Polyseed), 24 words (BIP39), or 25 words (Legacy)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+                    Text("16 words (Polyseed), 24 words (BIP39), or 25 words (Legacy)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
 
-            TextEditor(text: $seedInput)
-                .frame(height: 150)
-                .padding(8)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(12)
-                .autocapitalization(.none)
-                .autocorrectionDisabled()
-                .accessibilityLabel("Seed phrase input")
-                .accessibilityHint("Enter your seed phrase words separated by spaces")
-                .accessibilityIdentifier("restore.seedInput")
-
-            if let error = errorMessage {
-                Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .accessibilityLabel(error)
+                    SeedPhraseEntryView(model: seedEntry)
+                }
             }
-
-            Text("Separate words with spaces")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Button {
-                validateAndProceed()
-            } label: {
-                HStack(spacing: 8) {
-                    if isMatching {
-                        ProgressView()
-                            .tint(Color.brand)
-                    } else {
-                        Text("Continue")
-                            .font(.callout.weight(.semibold))
-                        Image(systemName: "arrow.right")
-                            .font(.callout.weight(.semibold))
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            // Continue's room under the content while the keyboard is down.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: keyboardShown ? 0 : seedContinueHeight)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                keyboardShown = true
+                keyboardHiding = false
+                statusScrollAfterKeyboard = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardHiding = true
+                withAnimation(.easeOut(duration: 0.25)) {
+                    keyboardShown = false
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+                keyboardHiding = false
+                guard statusScrollAfterKeyboard else { return }
+                statusScrollAfterKeyboard = false
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(SeedPhraseEntryView.statusID, anchor: .bottom)
+                }
+            }
+            // Keep the focused cell above the keyboard and the suggestion bar.
+            .onChange(of: seedEntry.focusedIndex) { _, index in
+                guard let index else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(index)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                guard let index = seedEntry.focusedIndex else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(index)
+                }
+            }
+            // The status line sits under the grid: bring it up when it has
+            // news. Clear goes back to the top.
+            .onChange(of: seedEntry.scrollRequest) { _, request in
+                guard let request else { return }
+                // The keyboard is closing (last word, a valid phrase, a
+                // paste): Continue's room comes back after this scroll.
+                statusScrollAfterKeyboard = request.target == .status && keyboardHiding
+                withAnimation(.easeOut(duration: 0.25)) {
+                    switch request.target {
+                    case .status:
+                        proxy.scrollTo(SeedPhraseEntryView.statusID, anchor: .bottom)
+                    case .top:
+                        proxy.scrollTo(Self.seedTopID, anchor: .top)
                     }
                 }
-                .foregroundStyle(isValidSeedCount ? Color.brand : Color.gray)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
             }
-            .glassButtonStyle()
-            .disabled(!isValidSeedCount || isMatching)
-            .accessibilityLabel("Continue")
-            .accessibilityHint(isValidSeedCount ? "Double tap to proceed with your seed phrase" : "Enter a valid seed phrase to continue")
-            .accessibilityIdentifier("restore.continueButton")
-
-            Spacer()
         }
+    }
+
+    /// The seed step's Continue, pinned at the bottom of the screen. It
+    /// ignores the keyboard, so it stays behind it while the person types;
+    /// the keyboard closes by itself once the phrase is complete.
+    private var seedContinueButton: some View {
+        Button {
+            validateAndProceed()
+        } label: {
+            HStack(spacing: 8) {
+                if isMatching {
+                    ProgressView()
+                        .tint(Color.brand)
+                } else {
+                    Text("Continue")
+                        .font(.callout.weight(.semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.callout.weight(.semibold))
+                }
+            }
+            .foregroundStyle(seedEntry.isValid && !isCheckingSeed ? Color.brand : Color.gray)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+        .glassButtonStyle()
+        .disabled(!seedEntry.isValid || isCheckingSeed || isMatching)
+        .accessibilityLabel("Continue")
+        .accessibilityHint(seedEntry.isValid ? "Double tap to proceed with your seed phrase" : "Enter a valid seed phrase to continue")
+        .accessibilityIdentifier("restore.continueButton")
+        .accessibilityHidden(keyboardShown)
+        .padding(.top, 8)
+        .background(Color(.systemBackground))
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { seedContinueHeight = $0 }
+        .padding([.horizontal, .bottom])
+        .readableColumn(maxWidth: Self.seedColumnWidth)
+        .frame(maxHeight: .infinity, alignment: .bottom)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     private var setPINView: some View {
@@ -330,6 +411,10 @@ struct RestoreWalletView: View {
             Spacer()
 
             Button {
+                // A second tap before the step changes must not start a
+                // second restore.
+                guard !isRestoring else { return }
+                isRestoring = true
                 step = .restoring
                 restoreWallet()
             } label: {
@@ -371,22 +456,9 @@ struct RestoreWalletView: View {
         }
     }
 
-    private var seedWords: [String] {
-        seedInput
-            .lowercased()
-            .split(separator: " ")
-            .map(String.init)
-            .filter { !$0.isEmpty }
-    }
-
-    private var isValidSeedCount: Bool {
-        // Accept 16 (polyseed), 24 (BIP39), or 25 (legacy) words
-        [16, 24, 25].contains(seedWords.count)
-    }
-
     /// Check if the seed is a polyseed (16 words)
     private var isPolyseed: Bool {
-        seedWords.count == 16
+        seedEntry.format == .polyseed
     }
 
     private var canProceed: Bool {
@@ -443,32 +515,50 @@ struct RestoreWalletView: View {
     }
 
     private func validateAndProceed() {
-        guard isValidSeedCount else {
-            errorMessage = String(localized: "Please enter 16, 24, or 25 words")
-            return
-        }
+        guard !isCheckingSeed, !isMatching else { return }
 
-        // Validate mnemonic words (BIP39 word list check for 24-word seeds)
-        guard walletManager.validateMnemonic(seedWords) else {
-            errorMessage = String(localized: "Invalid seed phrase. Please check your words and try again.")
-            return
-        }
+        // Commit the word being typed before reading the phrase.
+        seedEntry.keyboard.dismiss()
+
+        // Continue is enabled only for a valid phrase (wallet2 / Polyseed /
+        // BIP39 checksum); these are the canonical list words.
+        guard let words = seedEntry.validWords else { return }
 
         if let target = needsRestoreTarget {
-            matchWalletNeedingRestore(target)
+            matchWalletNeedingRestore(target, words: words)
             return
         }
 
-        // Check for duplicate wallet (only when PIN is available, i.e. adding to existing wallets)
-        if isAddingWallet, let pin = existingPin {
+        // Check for duplicate wallet (only when PIN is available, i.e. adding
+        // to existing wallets). The keychain reads run off the main actor;
+        // Continue stays disabled until the check ends.
+        guard isAddingWallet, let pin = existingPin else {
+            proceedFromSeed()
+            return
+        }
+        isCheckingSeed = true
+        Task {
+            defer { isCheckingSeed = false }
+            let result: Error?
             do {
-                try walletManager.checkForDuplicateSeed(seedPhrase: seedWords.joined(separator: " "), pin: pin)
+                try await walletManager.checkForDuplicateSeed(seedPhrase: words.joined(separator: " "), pin: pin)
+                result = nil
             } catch {
-                errorMessage = error.localizedDescription
-                return
+                result = error
+            }
+            // The grid stays editable during the check: act only on the
+            // phrase that was checked.
+            guard step == .enterSeed, seedEntry.validWords == words else { return }
+            if let result {
+                seedEntry.showError(result.localizedDescription)
+            } else {
+                proceedFromSeed()
             }
         }
+    }
 
+    private func proceedFromSeed() {
+        seedEntry.showError(nil)
         errorMessage = nil
 
         // All checks passed — proceed
@@ -487,15 +577,19 @@ struct RestoreWalletView: View {
     /// Checks that the phrase belongs to a wallet that needs restore, then
     /// prefills that wallet's name and icon. Its restore height carries
     /// over, so the creation date step is skipped.
-    private func matchWalletNeedingRestore(_ target: NeedsRestoreTarget) {
+    private func matchWalletNeedingRestore(_ target: NeedsRestoreTarget, words: [String]) {
         isMatching = true
+        seedEntry.showError(nil)
         errorMessage = nil
-        let words = seedWords
         var walletId: UUID?
         if case .wallet(let id) = target { walletId = id }
         Task {
+            defer { isMatching = false }
             do {
                 let match = try await walletManager.matchWalletNeedingRestore(mnemonic: words, walletId: walletId)
+                // The grid stays editable during the check: act only on the
+                // phrase that was checked.
+                guard step == .enterSeed, seedEntry.validWords == words else { return }
                 if let wallet = walletManager.wallets.first(where: { $0.id == match.walletId }) {
                     walletName = wallet.name
                     walletEmoji = wallet.emoji
@@ -508,9 +602,9 @@ struct RestoreWalletView: View {
                     step = .setPIN
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                guard step == .enterSeed, seedEntry.validWords == words else { return }
+                seedEntry.showError(error.localizedDescription)
             }
-            isMatching = false
         }
     }
 
@@ -626,10 +720,11 @@ struct RestoreWalletView: View {
 
                 let name = walletName.trimmingCharacters(in: .whitespaces).isEmpty ? WalletStore().nextWalletName(existing: walletManager.wallets) : walletName.trimmingCharacters(in: .whitespaces)
                 let emoji = walletEmoji
+                guard let words = seedEntry.validWords else { throw WalletError.invalidMnemonic }
                 if let match = needsRestoreMatch {
-                    try walletManager.restoreWalletNeedingRestore(match, mnemonic: seedWords, pin: pin, name: name, emoji: emoji)
+                    try walletManager.restoreWalletNeedingRestore(match, mnemonic: words, pin: pin, name: name, emoji: emoji)
                 } else {
-                    try walletManager.restoreWallet(name: name, emoji: emoji, mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
+                    try await walletManager.restoreWallet(name: name, emoji: emoji, mnemonic: words, pin: pin, restoreDate: restoreDate)
                 }
 
                 if !isAddingWallet {
@@ -648,6 +743,7 @@ struct RestoreWalletView: View {
                 }
             } catch {
                 await MainActor.run {
+                    isRestoring = false
                     errorMessage = error.localizedDescription
                     showErrorAlert = true
                 }

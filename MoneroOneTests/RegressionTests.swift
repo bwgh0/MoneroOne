@@ -138,15 +138,21 @@ final class WalletLifecycleRegressionTests: XCTestCase {
     func testMnemonicValidation() async throws {
         // 16-word polyseed should be accepted
         let polyseed = walletManager.generateNewWallet(type: .polyseed)
-        XCTAssertNoThrow(try walletManager.restoreWallet(mnemonic: polyseed, pin: "1234"))
+        try await walletManager.restoreWallet(mnemonic: polyseed, pin: "1234")
         walletManager.deleteWallet()
 
         // 6-word invalid should be rejected
         let invalid = ["one", "two", "three", "four", "five", "six"]
-        XCTAssertThrowsError(try walletManager.restoreWallet(mnemonic: invalid, pin: "1234"))
+        do {
+            try await walletManager.restoreWallet(mnemonic: invalid, pin: "1234")
+            XCTFail("6 words should be rejected")
+        } catch {}
 
         // Empty should be rejected
-        XCTAssertThrowsError(try walletManager.restoreWallet(mnemonic: [], pin: "1234"))
+        do {
+            try await walletManager.restoreWallet(mnemonic: [], pin: "1234")
+            XCTFail("no words should be rejected")
+        } catch {}
     }
 
     /// Send and estimateFee throw when wallet is locked

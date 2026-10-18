@@ -7,6 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5EED00000000000000000026 /* SeedEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000016 /* SeedEntryModel.swift */; };
+		5EED00000000000000000027 /* SeedWordField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000017 /* SeedWordField.swift */; };
+		5EED00000000000000000028 /* SeedPhraseEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000018 /* SeedPhraseEntryView.swift */; };
+		5EED00000000000000000021 /* SeedWordlists.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000011 /* SeedWordlists.swift */; };
+		5EED00000000000000000022 /* LegacySeedCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000012 /* LegacySeedCodec.swift */; };
+		5EED00000000000000000023 /* PolyseedCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000013 /* PolyseedCodec.swift */; };
+		5EED00000000000000000024 /* SeedPhraseValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000014 /* SeedPhraseValidator.swift */; };
+		5EED00000000000000000025 /* SeedPasteParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000015 /* SeedPasteParser.swift */; };
+		5EED00000000000000000041 /* SeedWordlists in Resources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000031 /* SeedWordlists */; };
+		5EED00000000000000000061 /* LegacySeedCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000051 /* LegacySeedCodecTests.swift */; };
+		5EED00000000000000000062 /* PolyseedCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000052 /* PolyseedCodecTests.swift */; };
+		5EED00000000000000000063 /* SeedPhraseValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000053 /* SeedPhraseValidatorTests.swift */; };
+		5EED00000000000000000064 /* LegacyLanguageRestoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */; };
+		5EED00000000000000000066 /* SeedEntryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000056 /* SeedEntryModelTests.swift */; };
+		5EED00000000000000000065 /* legacy-vectors.json in Resources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000055 /* legacy-vectors.json */; };
 		10CA11E0D780EDC7298FD2E7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E0B762CCA121C33098 /* Localizable.xcstrings */; };
 		10CA11E013C9FC8238B72689 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */; };
 		10CA11E0DA7FA5402BCDCC79 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E06B53612C5424F864 /* Localizable.xcstrings */; };
@@ -217,6 +232,21 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		5EED00000000000000000016 /* SeedEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedEntryModel.swift; sourceTree = "<group>"; };
+		5EED00000000000000000017 /* SeedWordField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedWordField.swift; sourceTree = "<group>"; };
+		5EED00000000000000000018 /* SeedPhraseEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseEntryView.swift; sourceTree = "<group>"; };
+		5EED00000000000000000011 /* SeedWordlists.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedWordlists.swift; sourceTree = "<group>"; };
+		5EED00000000000000000012 /* LegacySeedCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacySeedCodec.swift; sourceTree = "<group>"; };
+		5EED00000000000000000013 /* PolyseedCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolyseedCodec.swift; sourceTree = "<group>"; };
+		5EED00000000000000000014 /* SeedPhraseValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseValidator.swift; sourceTree = "<group>"; };
+		5EED00000000000000000015 /* SeedPasteParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPasteParser.swift; sourceTree = "<group>"; };
+		5EED00000000000000000031 /* SeedWordlists */ = {isa = PBXFileReference; lastKnownFileType = folder; path = SeedWordlists; sourceTree = "<group>"; };
+		5EED00000000000000000051 /* LegacySeedCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacySeedCodecTests.swift; sourceTree = "<group>"; };
+		5EED00000000000000000052 /* PolyseedCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolyseedCodecTests.swift; sourceTree = "<group>"; };
+		5EED00000000000000000053 /* SeedPhraseValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseValidatorTests.swift; sourceTree = "<group>"; };
+		5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyLanguageRestoreTests.swift; sourceTree = "<group>"; };
+		5EED00000000000000000056 /* SeedEntryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedEntryModelTests.swift; sourceTree = "<group>"; };
+		5EED00000000000000000055 /* legacy-vectors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "legacy-vectors.json"; sourceTree = "<group>"; };
 		10CA11E0B762CCA121C33098 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		10CA11E06B53612C5424F864 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -404,6 +434,28 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		5EED00000000000000000002 /* SeedEntry */ = {
+			isa = PBXGroup;
+			children = (
+				5EED00000000000000000018 /* SeedPhraseEntryView.swift */,
+				5EED00000000000000000017 /* SeedWordField.swift */,
+				5EED00000000000000000016 /* SeedEntryModel.swift */,
+			);
+			path = SeedEntry;
+			sourceTree = "<group>";
+		};
+		5EED00000000000000000001 /* Seed */ = {
+			isa = PBXGroup;
+			children = (
+				5EED00000000000000000015 /* SeedPasteParser.swift */,
+				5EED00000000000000000014 /* SeedPhraseValidator.swift */,
+				5EED00000000000000000013 /* PolyseedCodec.swift */,
+				5EED00000000000000000012 /* LegacySeedCodec.swift */,
+				5EED00000000000000000011 /* SeedWordlists.swift */,
+			);
+			path = Seed;
+			sourceTree = "<group>";
+		};
 		0146C3A1174ABD80CCA8B4F6 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
@@ -415,6 +467,12 @@
 		02EFD0FFD04912A60D8FC21D /* MoneroOneTests */ = {
 			isa = PBXGroup;
 			children = (
+				5EED00000000000000000053 /* SeedPhraseValidatorTests.swift */,
+				5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */,
+				5EED00000000000000000056 /* SeedEntryModelTests.swift */,
+				5EED00000000000000000055 /* legacy-vectors.json */,
+				5EED00000000000000000052 /* PolyseedCodecTests.swift */,
+				5EED00000000000000000051 /* LegacySeedCodecTests.swift */,
 				B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */,
 				78543F60FF832ABD15C47107 /* BiometricAuthManagerTests.swift */,
 				6A5A1C5565C8122238D41E47 /* NetworkMonitorTests.swift */,
@@ -486,6 +544,7 @@
 		355B80F2AADB94A31B38327D /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				5EED00000000000000000001 /* Seed */,
 				XMRFORMATGRP1234567890AB /* Formatters */,
 				5B41E4CE7002C3EA9370D135 /* Services */,
 				TRZCOR001234567890ABCDEF /* Trezor */,
@@ -665,6 +724,7 @@
 		762B13FD658C85E63D2F6F09 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				5EED00000000000000000031 /* SeedWordlists */,
 				D5B417D8D6615D3C56F22085 /* Assets.xcassets */,
 				10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */,
 				10CA11E0B762CCA121C33098 /* Localizable.xcstrings */,
@@ -789,6 +849,7 @@
 		E60BB1617649DB1D49B6DDB9 /* Onboarding */ = {
 			isa = PBXGroup;
 			children = (
+				5EED00000000000000000002 /* SeedEntry */,
 				ODQJXDB7WZ1Y63YXSA1J7XWS /* DisclaimerView.swift */,
 5488A55F65931268A5493C9B /* CreateWalletView.swift */,
 				B7E5A0C1D2F3A4B5C6D7E8FA /* NeedsRestoreView.swift */,
@@ -974,6 +1035,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5EED00000000000000000041 /* SeedWordlists in Resources */,
 				AF8CD53F523DABC80F06F168 /* Assets.xcassets in Resources */,
 				093E2F482F307A6400A0715B /* monero-one.icon in Resources */,
 				PRIVACYINFOBUILD1234ABCD /* PrivacyInfo.xcprivacy in Resources */,
@@ -986,6 +1048,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5EED00000000000000000065 /* legacy-vectors.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1006,6 +1069,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5EED00000000000000000063 /* SeedPhraseValidatorTests.swift in Sources */,
+				5EED00000000000000000064 /* LegacyLanguageRestoreTests.swift in Sources */,
+				5EED00000000000000000066 /* SeedEntryModelTests.swift in Sources */,
+				5EED00000000000000000062 /* PolyseedCodecTests.swift in Sources */,
+				5EED00000000000000000061 /* LegacySeedCodecTests.swift in Sources */,
 D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				DEE91100000000000000B002 /* MoneroPaymentURITests.swift in Sources */,
 				0A1A50000000000000000B04 /* OpenAliasTests.swift in Sources */,
@@ -1061,6 +1129,14 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5EED00000000000000000028 /* SeedPhraseEntryView.swift in Sources */,
+				5EED00000000000000000027 /* SeedWordField.swift in Sources */,
+				5EED00000000000000000026 /* SeedEntryModel.swift in Sources */,
+				5EED00000000000000000025 /* SeedPasteParser.swift in Sources */,
+				5EED00000000000000000024 /* SeedPhraseValidator.swift in Sources */,
+				5EED00000000000000000023 /* PolyseedCodec.swift in Sources */,
+				5EED00000000000000000022 /* LegacySeedCodec.swift in Sources */,
+				5EED00000000000000000021 /* SeedWordlists.swift in Sources */,
 								79EHBYMQ890HSWGX9A766GWT /* TrustedLocation.swift in Sources */,
 				QAMZ0UB2O8VQDF4FSC4AUXUE /* TrustedLocationsManager.swift in Sources */,
 				BAN47YMLAVTQLXS17K9HBS4H /* TrustedLocationsView.swift in Sources */,

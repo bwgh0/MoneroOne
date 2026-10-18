@@ -1750,15 +1750,22 @@ class WalletManager: ObservableObject {
         }
     }
 
-    func restoreWallet(name: String, emoji: String = "\u{1F4B0}", mnemonic: [String], pin: String, restoreDate: Date? = nil) throws {
-        guard validateMnemonic(mnemonic) else {
+    func restoreWallet(name: String, emoji: String = "\u{1F4B0}", mnemonic typedMnemonic: [String], pin: String, restoreDate: Date? = nil) async throws {
+        // Same validator as the entry screen. Save the list words it
+        // resolves to, never the typed text: a BIP39 prefix such as "aban"
+        // would otherwise derive a different wallet.
+        guard let mnemonic = canonicalMnemonic(typedMnemonic) else {
             throw WalletError.invalidMnemonic
         }
 
         let seedPhrase = mnemonic.joined(separator: " ")
 
         let candidateDerivedId = derivedWalletId(seedPhrase: seedPhrase, syncResetCount: 0)
-        try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: candidateDerivedId, pin: pin)
+        try await checkForDuplicateRestore(seedPhrase: seedPhrase, derivedId: candidateDerivedId, pin: pin)
+        // The keychain reads ran off the main actor, so a second restore of
+        // this phrase can have saved in the meantime. Check the IDs again;
+        // from here to the save there is no suspension point.
+        try checkDerivedWalletIds(candidateDerivedId)
 
         // See `addWallet` — snapshot prior active so its balance doesn't
         // read as 0 in the switcher after the restore swaps active.
@@ -1794,9 +1801,9 @@ class WalletManager: ObservableObject {
     }
 
     /// Legacy restoreWallet without name parameter (used by existing callers during transition)
-    func restoreWallet(mnemonic: [String], pin: String, restoreDate: Date? = nil) throws {
+    func restoreWallet(mnemonic: [String], pin: String, restoreDate: Date? = nil) async throws {
         let name = walletStore.nextWalletName(existing: wallets)
-        try restoreWallet(name: name, mnemonic: mnemonic, pin: pin, restoreDate: restoreDate)
+        try await restoreWallet(name: name, mnemonic: mnemonic, pin: pin, restoreDate: restoreDate)
     }
 
     // MARK: - Restore a wallet that needs restore
@@ -2169,24 +2176,25 @@ class WalletManager: ObservableObject {
         )
     }
 
+    /// 16 words (Polyseed), 24 (BIP39) or 25 (legacy), checked the way the
+    /// native library will read them: word lists, checksum, feature bits.
     func validateMnemonic(_ mnemonic: [String]) -> Bool {
-        // Accept 16 (polyseed), 24 (BIP39), or 25 (legacy Monero) word mnemonics
-        let validCounts = [16, 24, 25]
-        guard validCounts.contains(mnemonic.count) else { return false }
+        canonicalMnemonic(mnemonic) != nil
+    }
 
-        // Polyseed (16 words) uses its own word list, so skip BIP39 validation
-        if mnemonic.count == 16 {
-            return true
-        }
+    /// The list words a valid mnemonic resolves to, or nil when the native
+    /// restore would reject it (or, for a Polyseed, it needs a passphrase).
+    func canonicalMnemonic(_ mnemonic: [String]) -> [String]? {
+        Self.canonicalWords(mnemonic)
+    }
 
-        // Validate against BIP39 word list for 24-word seeds
-        do {
-            try Mnemonic.validate(words: mnemonic)
-            return true
-        } catch {
-            // Allow 25-word legacy Monero seeds which don't pass BIP39 validation
-            return mnemonic.count == 25
+    /// `canonicalMnemonic` for code off the main actor.
+    nonisolated static func canonicalWords(_ mnemonic: [String]) -> [String]? {
+        guard let format = SeedFormat(wordCount: mnemonic.count),
+              case .valid(let phrase) = SeedPhraseValidator.validate(mnemonic, format: format) else {
+            return nil
         }
+        return phrase.words
     }
 
     // MARK: - Wallet Unlock
@@ -4216,11 +4224,11 @@ class WalletManager: ObservableObject {
         currentPin = newPin
     }
 
-    /// Convenience that derives the ID internally — use when the caller
-    /// only has the seed string on hand (e.g. pre-restore UI checks).
-    func checkForDuplicateSeed(seedPhrase: String, pin: String) throws {
+    /// The restore check for the seed step (a wallet is being added), before
+    /// the person goes on. See `checkForDuplicateRestore`.
+    func checkForDuplicateSeed(seedPhrase: String, pin: String) async throws {
         let derivedId = derivedWalletId(seedPhrase: seedPhrase, syncResetCount: 0)
-        try checkForDuplicateSeed(seedPhrase: seedPhrase, derivedId: derivedId, pin: pin)
+        try await checkForDuplicateRestore(seedPhrase: seedPhrase, derivedId: derivedId, pin: pin)
     }
 
     /// Reject a seed that matches one already on-device. Primary check is
@@ -4229,18 +4237,83 @@ class WalletManager: ObservableObject {
     /// under. The PIN-gated seed comparison is kept as a fallback for
     /// wallets created before `derivedWalletId` existed.
     func checkForDuplicateSeed(seedPhrase: String, derivedId: String, pin: String) throws {
-        for wallet in wallets {
-            if let storedId = wallet.derivedWalletId, storedId == derivedId {
-                throw WalletError.duplicateWallet(existingName: wallet.name)
+        try checkDerivedWalletIds(derivedId)
+        let candidates = storedSeedCandidates(sameType: nil)
+        if let name = Self.walletWithStoredSeed(matching: seedPhrase, canonical: nil, in: candidates, pin: pin) {
+            throw WalletError.duplicateWallet(existingName: name)
+        }
+    }
+
+    /// The duplicate check for restores. It also catches a wallet whose
+    /// stored seed spells the same phrase differently: restores from before
+    /// the seed entry screen saved the phrase as typed ("abb" for "abbey",
+    /// capitals), and their derived ID hashes that text. A wallet records
+    /// only its seed type, not whether it was created or restored, so the
+    /// check reads every wallet of the phrase's type. The stored seed goes
+    /// through the entry screen's validator for the comparison only; it and
+    /// `derivedWalletId` stay as they are (wallet-id lockstep).
+    ///
+    /// The derived-ID pass runs first and costs nothing. The keychain reads
+    /// (two PBKDF2 runs, about 0.2 s per wallet) run off the main actor.
+    private func checkForDuplicateRestore(seedPhrase: String, derivedId: String, pin: String) async throws {
+        try checkDerivedWalletIds(derivedId)
+        let words = seedPhrase.split(separator: " ").map(String.init)
+        let canonical = Self.canonicalWords(words)
+        let candidates = storedSeedCandidates(sameType: canonical == nil ? nil : WalletSource.seeded(wordCount: words.count))
+        guard !candidates.isEmpty else { return }
+        let match = await Task.detached(priority: .userInitiated) {
+            WalletManager.walletWithStoredSeed(matching: seedPhrase, canonical: canonical, in: candidates, pin: pin)
+        }.value
+        if let match {
+            throw WalletError.duplicateWallet(existingName: match)
+        }
+    }
+
+    /// No PIN, no keychain: a wallet on this device already has this ID.
+    private func checkDerivedWalletIds(_ derivedId: String) throws {
+        if let wallet = wallets.first(where: { $0.derivedWalletId == derivedId }) {
+            throw WalletError.duplicateWallet(existingName: wallet.name)
+        }
+    }
+
+    /// A wallet whose stored seed the duplicate check reads.
+    private struct StoredSeedCandidate: Sendable {
+        let walletId: UUID
+        let name: String
+        /// The unlocked wallet's words, from memory. Nil: read the keychain.
+        let seedInMemory: String?
+    }
+
+    /// Wallets without a derived ID, and every wallet of `sameType`.
+    private func storedSeedCandidates(sameType seedType: WalletSource?) -> [StoredSeedCandidate] {
+        wallets
+            .filter { $0.derivedWalletId == nil || $0.source == seedType }
+            .map { wallet in
+                StoredSeedCandidate(
+                    walletId: wallet.id,
+                    name: wallet.name,
+                    seedInMemory: wallet.id == activeWallet?.id ? currentSeed?.joined(separator: " ") : nil
+                )
+            }
+    }
+
+    /// The name of the first wallet whose stored seed is `seedPhrase` or,
+    /// with `canonical`, resolves to the same list words. Each keychain read
+    /// is a PIN-keyed decryption, about 0.2 s.
+    nonisolated private static func walletWithStoredSeed(matching seedPhrase: String, canonical: [String]?, in candidates: [StoredSeedCandidate], pin: String) -> String? {
+        let keychain = KeychainStorage()
+        for candidate in candidates {
+            guard let stored = candidate.seedInMemory ?? (try? keychain.getSeed(pin: pin, walletId: candidate.walletId)) else {
+                continue
+            }
+            if stored == seedPhrase {
+                return candidate.name
+            }
+            if let canonical, canonicalWords(stored.split(separator: " ").map(String.init)) == canonical {
+                return candidate.name
             }
         }
-        // Fallback: only hits legacy wallets whose derivedWalletId is nil.
-        for wallet in wallets where wallet.derivedWalletId == nil {
-            if let existingSeed = try? keychain.getSeed(pin: pin, walletId: wallet.id),
-               existingSeed == seedPhrase {
-                throw WalletError.duplicateWallet(existingName: wallet.name)
-            }
-        }
+        return nil
     }
 
     /// Update restore height for the active wallet and persist

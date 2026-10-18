@@ -1,4 +1,5 @@
 import SwiftUI
+import MoneroKit
 
 struct SendReviewStep: View {
     let recipientAddress: String
@@ -6,6 +7,12 @@ struct SendReviewStep: View {
     let memo: String
     let isSendingAll: Bool
     @Binding var estimatedFee: Decimal?
+    /// The transaction this review built and signed, not sent (software
+    /// wallets). Send broadcasts this same transaction, so the fee shown is
+    /// the fee paid. Nil for a hardware wallet, which keeps the estimate.
+    @Binding var preparedSend: PreparedTransaction?
+    /// A new value builds the transaction again: the one built here is gone.
+    var rebuild = 0
     let priceService: PriceService
     let walletManager: WalletManager
     let sendInProgress: Bool
@@ -21,6 +28,10 @@ struct SendReviewStep: View {
     }
 
     private var total: Decimal? {
+        // What leaves the wallet: the amount sent (a sweep's too) and its fee.
+        if let prepared = preparedSend {
+            return SendReviewFee.total(sent: prepared.amount, fee: prepared.fee)
+        }
         guard let fee = estimatedFee else { return nil }
         return amount + fee
     }
@@ -65,7 +76,8 @@ struct SendReviewStep: View {
                                 Text("All Funds")
                                     .font(.title.weight(.bold))
                                 if let fee = estimatedFee {
-                                    let sendAmount = walletManager.displayUnlockedBalance - fee
+                                    let sendAmount = preparedSend.map { SendReviewFee.xmr($0.amount) }
+                                        ?? walletManager.displayUnlockedBalance - fee
                                     Text("\(XMRFormatter.format(sendAmount)) XMR")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
@@ -196,7 +208,26 @@ struct SendReviewStep: View {
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
-        .task {
+        .task(id: rebuild) {
+            await loadFee()
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+                showContent = true
+            }
+        }
+    }
+
+    /// Software wallets: builds and signs the transaction (not sent) and
+    /// shows the fee it pays for the inputs it really spends. A hardware
+    /// wallet would need the device to build it, so it keeps wallet2's
+    /// estimate, which counts one input.
+    private func loadFee() async {
+        feeError = nil
+        estimatedFee = nil
+        preparedSend = nil
+
+        guard !walletManager.requiresHardwareSession else {
             do {
                 estimatedFee = try await walletManager.estimateFee(to: recipientAddress, amount: amount)
 
@@ -208,15 +239,81 @@ struct SendReviewStep: View {
             } catch {
                 feeError = error.localizedDescription
             }
+            return
         }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
-                showContent = true
+
+        let memoText = memo.isEmpty ? nil : memo
+        let sweep = isSendingAll || upgradedToSendAll
+        do {
+            let prepared: PreparedTransaction
+            do {
+                prepared = try await walletManager.prepareSend(to: recipientAddress, amount: sweep ? nil : amount, memo: memoText)
+            } catch let error where !sweep && SendReviewFee.shouldSweep(
+                after: error, amount: amount, unlockedBalance: walletManager.displayUnlockedBalance
+            ) {
+                // The amount fits the balance, the amount and its fee do
+                // not: the review offers All Funds, as it always has.
+                guard !Task.isCancelled else { return }
+                prepared = try await walletManager.prepareSend(to: recipientAddress, amount: nil, memo: memoText)
+                guard !Task.isCancelled else { return }
+                upgradedToSendAll = true
+                onUpgradeToSendAll?()
             }
+            // Back or a rebuild while it was signing: that review is gone.
+            guard !Task.isCancelled else { return }
+            preparedSend = prepared
+            estimatedFee = SendReviewFee.xmr(prepared.fee)
+        } catch {
+            guard !Task.isCancelled else { return }
+            feeError = error.localizedDescription
         }
     }
 
     private func formatAddress(_ addr: String) -> String {
         ReceiveAddressLogic.shortAddress(addr)
+    }
+}
+
+/// The review's fee rules, apart from the view so tests can pin them.
+enum SendReviewFee {
+    static func xmr(_ piconero: UInt64) -> Decimal {
+        Decimal(piconero) / 1_000_000_000_000
+    }
+
+    /// What leaves the wallet: the amount sent and its fee. For a sweep
+    /// that is the whole unlocked balance.
+    static func total(sent: UInt64, fee: UInt64) -> Decimal {
+        xmr(sent) + xmr(fee)
+    }
+
+    /// wallet2 refused the transfer for lack of unlocked money, with its
+    /// real inputs and fee counted.
+    static func isNotEnoughMoney(_ error: Error) -> Bool {
+        guard let coreError = error as? MoneroCoreError else { return false }
+        switch coreError {
+        case .insufficientFunds:
+            return true
+        case .transactionSendFailed(let message):
+            return message.lowercased().contains("not enough")
+        default:
+            return false
+        }
+    }
+
+    /// Offer All Funds instead: the amount fits the unlocked balance, but
+    /// the amount and its fee do not.
+    static func shouldSweep(after error: Error, amount: Decimal, unlockedBalance: Decimal) -> Bool {
+        isNotEnoughMoney(error) && amount > 0 && amount <= unlockedBalance
+    }
+
+    /// A transaction the review built is the payment on screen: it pays
+    /// `recipient`, and a transfer (`amount` set) sends exactly that many
+    /// XMR. A sweep (`amount` nil) sends what the review showed it would.
+    static func matches(preparedAddress: String, preparedAmount: UInt64, preparedFee: UInt64,
+                        recipient: String, amount: Decimal?) -> Bool {
+        guard preparedAddress == recipient, preparedAmount > 0, preparedFee > 0 else { return false }
+        guard let amount else { return true }
+        let piconero = MoneroWallet.piconero(amount)
+        return piconero > 0 && preparedAmount == UInt64(piconero)
     }
 }

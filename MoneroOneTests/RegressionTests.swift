@@ -3,6 +3,7 @@ import CoreLocation
 import CoreImage.CIFilterBuiltins
 import AVFoundation
 import UIKit
+import MoneroKit
 @testable import MoneroOne
 
 // MARK: - Wallet Lifecycle Regression Tests
@@ -169,6 +170,16 @@ final class WalletLifecycleRegressionTests: XCTestCase {
             XCTFail("estimateFee should throw when locked")
         } catch {
             XCTAssertEqual(error as? WalletError, .notUnlocked)
+        }
+
+        // The review's real transaction: a transfer and a sweep.
+        for amount in [Decimal(1), nil] {
+            do {
+                _ = try await walletManager.prepareSend(to: "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A", amount: amount)
+                XCTFail("prepareSend should throw when locked")
+            } catch {
+                XCTAssertEqual(error as? WalletError, .notUnlocked)
+            }
         }
     }
 
@@ -2015,5 +2026,85 @@ final class AppLanguageTests: XCTestCase {
         setting.set(nil)
         XCTAssertNil(setting.choice)
         XCTAssertNil(defaults.persistentDomain(forName: suiteName)?["AppleLanguages"])
+    }
+}
+
+// MARK: - Send review fee
+
+/// The normal Send review shows the fee of the transaction it built, and
+/// Send broadcasts that same transaction. wallet2's estimate counts one
+/// input, so a send that spends several outputs showed a fee lower than
+/// the one it paid.
+final class SendReviewFeeTests: XCTestCase {
+
+    private let recipient = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
+
+    func testFeeIsShownInXMR() {
+        XCTAssertEqual(SendReviewFee.xmr(30_660_000), Decimal(string: "0.00003066"))
+        XCTAssertEqual(SendReviewFee.xmr(1_000_000_000_000), 1)
+        XCTAssertEqual(SendReviewFee.xmr(0), 0)
+    }
+
+    /// Total is what leaves the wallet. A sweep's total is the unlocked
+    /// balance, never the balance plus the fee.
+    func testTotalIsAmountSentPlusFee() {
+        XCTAssertEqual(SendReviewFee.total(sent: 300_000_000_000, fee: 61_380_000), Decimal(string: "0.30006138"))
+        let unlocked: UInt64 = 1_234_567_890_000
+        let sweepFee: UInt64 = 45_000_000
+        XCTAssertEqual(SendReviewFee.total(sent: unlocked - sweepFee, fee: sweepFee), SendReviewFee.xmr(unlocked))
+    }
+
+    func testNotEnoughMoneyErrors() {
+        XCTAssertTrue(SendReviewFee.isNotEnoughMoney(MoneroCoreError.insufficientFunds("0.5")))
+        XCTAssertTrue(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionSendFailed(
+            "not enough money to transfer, available only 0.300000000000, transaction amount 0.300061380000 = 0.300000000000 + 0.000061380000 (fee)")))
+        XCTAssertTrue(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionSendFailed(
+            "Not enough money to transfer, overall balance only 0.3, sent amount 0.3")))
+        XCTAssertFalse(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionSendFailed("failed to get random outputs to mix")))
+        XCTAssertFalse(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionCommitFailed("not enough money")))
+        XCTAssertFalse(SendReviewFee.isNotEnoughMoney(MoneroCoreError.walletNotInitialized))
+        XCTAssertFalse(SendReviewFee.isNotEnoughMoney(WalletError.notUnlocked))
+    }
+
+    /// All Funds only when the amount fits the unlocked balance and the
+    /// amount with its real fee does not.
+    func testSweepOnlyWhenTheFeeDoesNotFit() {
+        let notEnough = MoneroCoreError.transactionSendFailed("not enough money to transfer, available only 0.3")
+        XCTAssertTrue(SendReviewFee.shouldSweep(after: notEnough, amount: 0.3, unlockedBalance: 0.3))
+        XCTAssertTrue(SendReviewFee.shouldSweep(after: notEnough, amount: Decimal(string: "0.29999")!, unlockedBalance: 0.3))
+        XCTAssertFalse(SendReviewFee.shouldSweep(after: notEnough, amount: Decimal(string: "0.31")!, unlockedBalance: 0.3))
+        XCTAssertFalse(SendReviewFee.shouldSweep(after: notEnough, amount: 0, unlockedBalance: 0.3))
+        XCTAssertFalse(SendReviewFee.shouldSweep(
+            after: MoneroCoreError.transactionSendFailed("no connection to daemon"), amount: 0.1, unlockedBalance: 0.3))
+    }
+
+    /// Send broadcasts the review's transaction only when it is the
+    /// payment on screen.
+    func testPreparedTransactionMustMatchTheReview() {
+        XCTAssertTrue(SendReviewFee.matches(preparedAddress: recipient, preparedAmount: 300_000_000_000, preparedFee: 61_380_000,
+                                            recipient: recipient, amount: Decimal(string: "0.3")))
+        // Another amount (edited after the review was built).
+        XCTAssertFalse(SendReviewFee.matches(preparedAddress: recipient, preparedAmount: 300_000_000_000, preparedFee: 61_380_000,
+                                             recipient: recipient, amount: Decimal(string: "0.300000000001")))
+        // Another recipient.
+        XCTAssertFalse(SendReviewFee.matches(preparedAddress: recipient, preparedAmount: 300_000_000_000, preparedFee: 61_380_000,
+                                             recipient: String(recipient.dropLast()) + "4", amount: Decimal(string: "0.3")))
+        // A sweep sends what its review showed.
+        XCTAssertTrue(SendReviewFee.matches(preparedAddress: recipient, preparedAmount: 1_234_000_000_000, preparedFee: 45_000_000,
+                                            recipient: recipient, amount: nil))
+        // A transfer review never broadcasts a sweep (wallet2 reads 0 as all).
+        XCTAssertFalse(SendReviewFee.matches(preparedAddress: recipient, preparedAmount: 1_234_000_000_000, preparedFee: 45_000_000,
+                                             recipient: recipient, amount: 0))
+        // Nothing to send, or no fee read.
+        XCTAssertFalse(SendReviewFee.matches(preparedAddress: recipient, preparedAmount: 0, preparedFee: 45_000_000,
+                                             recipient: recipient, amount: nil))
+        XCTAssertFalse(SendReviewFee.matches(preparedAddress: recipient, preparedAmount: 300_000_000_000, preparedFee: 0,
+                                             recipient: recipient, amount: Decimal(string: "0.3")))
+    }
+
+    func testPiconeroMatchesTheSendConversion() {
+        XCTAssertEqual(MoneroWallet.piconero(Decimal(string: "0.3")!), 300_000_000_000)
+        XCTAssertEqual(MoneroWallet.piconero(Decimal(string: "0.000000000001")!), 1)
+        XCTAssertEqual(MoneroWallet.piconero(Decimal(string: "12.345678901234")!), 12_345_678_901_234)
     }
 }

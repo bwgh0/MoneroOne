@@ -577,6 +577,67 @@ class MoneroWallet: ObservableObject {
         return txId
     }
 
+    /// Builds and signs a transfer (or, with `amount` nil, a sweep of the
+    /// unlocked balance) and keeps it unsent. Its fee is the fee it pays
+    /// for the inputs it really spends; wallet2's estimate counts one.
+    /// `send(_:)` broadcasts this same transaction.
+    func prepareSend(to address: String, amount: Decimal?, priority: SendPriority = .default, memo: String? = nil) async throws -> PreparedTransaction {
+        guard let kit = kit else { throw WalletError.notUnlocked }
+
+        // Same gate as estimateFee: the review needs a daemon connection.
+        switch syncState {
+        case .synced, .syncing:
+            break
+        default:
+            writeDebugLog("prepareSend: wallet not synced (state: \(syncState))")
+            throw MoneroCoreError.transactionEstimationFailed(String(localized: "Wallet is not synced. Please wait for sync to complete."))
+        }
+
+        let sendAmount: SendAmount
+        if let amount {
+            // wallet2 reads an amount of 0 as a sweep of the whole balance.
+            let piconero = Self.piconero(amount)
+            guard piconero > 0 else {
+                throw MoneroCoreError.transactionSendFailed(String(localized: "Invalid amount"))
+            }
+            sendAmount = .value(piconero)
+        } else {
+            sendAmount = .all
+        }
+        let prepared = try await Task.detached {
+            try kit.prepareSend(to: address, amount: sendAmount, priority: priority, memo: memo)
+        }.value
+        writeDebugLog("prepareSend: fee=\(prepared.fee), txs=\(prepared.txids.count)")
+        return prepared
+    }
+
+    /// The transaction from `prepareSend` can still go out: the wallet it
+    /// was signed in is still open, and it was not sent.
+    func isPrepared(_ prepared: PreparedTransaction) async -> Bool {
+        guard let kit = kit else { return false }
+        return await Task.detached { kit.isPrepared(prepared) }.value
+    }
+
+    /// Broadcasts the transaction from `prepareSend` as it is. Returns its
+    /// txid. Throws `MoneroCoreError.walletNotInitialized`, with nothing
+    /// sent, when the wallet it was signed in closed since.
+    func send(_ prepared: PreparedTransaction) async throws -> String {
+        guard let kit = kit else { throw WalletError.notUnlocked }
+        try await Task.detached {
+            try kit.commit(prepared)
+        }.value
+        let txId = prepared.txids.first ?? ""
+        writeDebugLog("send: committed txId=\(txId)")
+
+        fetchTransactions()
+        return txId
+    }
+
+    /// XMR to piconero, as `send(to:amount:)` converts it.
+    nonisolated static func piconero(_ amount: Decimal) -> Int {
+        Int((amount * 1_000_000_000_000) as NSDecimalNumber)
+    }
+
     // MARK: - Seed Export
 
     /// Returns the legacy 25-word seed from the running wallet.

@@ -16,6 +16,12 @@ struct SendFlowView: View {
     @State private var memo = ""
     @State private var isSendingAll = false
     @State private var estimatedFee: Decimal?
+    /// The transaction the review built and signed, not sent (software
+    /// wallets). Send broadcasts it, so the fee shown is the fee paid.
+    @State private var preparedSend: PreparedTransaction?
+    /// Bumped when that transaction is gone at Send: the review builds it
+    /// again and shows its fee; nothing is sent.
+    @State private var reviewRebuild = 0
     @State private var transactionHash: String?
 
     // UI state
@@ -258,6 +264,8 @@ struct SendFlowView: View {
                 memo: memo,
                 isSendingAll: isSendingAll,
                 estimatedFee: $estimatedFee,
+                preparedSend: $preparedSend,
+                rebuild: reviewRebuild,
                 priceService: priceService,
                 walletManager: walletManager,
                 sendInProgress: sendInProgress,
@@ -265,6 +273,16 @@ struct SendFlowView: View {
                     guard !sendInProgress else { return }
                     sendInProgress = true
                     Task {
+                        // A software wallet broadcasts the transaction this
+                        // review built. Gone (the wallet closed since) or not
+                        // this payment: the review builds it again and shows
+                        // its fee; nothing is sent.
+                        if !walletManager.requiresHardwareSession, !(await preparedSendIsReady()) {
+                            sendInProgress = false
+                            discardPreparedSend()
+                            reviewRebuild += 1
+                            return
+                        }
                         // Hardware wallets are already re-authenticated
                         // out-of-band — the user has to confirm on the device
                         // before it will sign — so only gate software wallets.
@@ -295,6 +313,15 @@ struct SendFlowView: View {
                 onDone: { dismiss() },
                 onRetry: {
                     guard !sendInProgress else { return }
+                    // A software send broadcasts only a transaction a review
+                    // built and showed. Retry builds a new one there, with
+                    // its own fee.
+                    guard walletManager.requiresHardwareSession else {
+                        HapticFeedback.shared.buttonPress()
+                        discardPreparedSend()
+                        goBack(to: .review)
+                        return
+                    }
                     sendInProgress = true
                     Task {
                         if requireAuthForSend, !walletManager.requiresHardwareSession {
@@ -360,6 +387,10 @@ struct SendFlowView: View {
     }
 
     private func goBack(to newPhase: SendFlowPhase) {
+        // Leaving the review: its transaction belongs to what it showed.
+        if newPhase == .address || newPhase == .amount {
+            discardPreparedSend()
+        }
         navigatingForward = false
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             phase = newPhase
@@ -397,7 +428,7 @@ struct SendFlowView: View {
         amountString = request.amount ?? ""
         amountPrefill = request.amount == nil ? nil : .paymentLink
         isSendingAll = false
-        estimatedFee = nil
+        discardPreparedSend()
 
         guard phase != .amount else { return }
         if !animated {
@@ -410,6 +441,27 @@ struct SendFlowView: View {
     }
 
     // MARK: - Send
+
+    /// Drops the review's signed transaction and its fee. A transaction
+    /// never committed never reaches the network.
+    private func discardPreparedSend() {
+        preparedSend = nil
+        estimatedFee = nil
+    }
+
+    /// The review's transaction pays what is on screen and can still be
+    /// broadcast in the open wallet.
+    private func preparedSendIsReady() async -> Bool {
+        guard let prepared = preparedSend,
+              SendReviewFee.matches(
+                preparedAddress: prepared.address,
+                preparedAmount: prepared.amount,
+                preparedFee: prepared.fee,
+                recipient: recipientAddress,
+                amount: isSendingAll ? nil : Decimal(string: amountString)
+              ) else { return false }
+        return await walletManager.isPrepared(prepared)
+    }
 
     private func sendTransaction() {
         // Hardware wallets can't sign locally — hand off to the
@@ -437,26 +489,16 @@ struct SendFlowView: View {
             return
         }
 
+        // The transaction the review built and showed, broadcast as it is.
+        guard let prepared = preparedSend else {
+            sendInProgress = false
+            goBack(to: .review)
+            return
+        }
         Task {
             do {
-                let txHash: String
-                if isSendingAll {
-                    txHash = try await walletManager.sendAll(
-                        to: recipientAddress,
-                        memo: memo.isEmpty ? nil : memo
-                    )
-                } else {
-                    guard let amountDecimal = Decimal(string: amountString) else {
-                        sendInProgress = false
-                        phase = .error(message: String(localized: "Invalid amount"))
-                        return
-                    }
-                    txHash = try await walletManager.send(
-                        to: recipientAddress,
-                        amount: amountDecimal,
-                        memo: memo.isEmpty ? nil : memo
-                    )
-                }
+                let txHash = try await walletManager.send(prepared)
+                preparedSend = nil
                 transactionHash = txHash
                 await walletManager.refresh()
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {

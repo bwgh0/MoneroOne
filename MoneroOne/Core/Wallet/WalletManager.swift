@@ -2477,6 +2477,34 @@ class WalletManager: ObservableObject {
         return try await wallet.sendAll(to: address, memo: memo)
     }
 
+    /// Builds and signs the transfer the review shows (a sweep when
+    /// `amount` is nil) and keeps it unsent, so the review shows the fee it
+    /// really pays. Software wallets only: a hardware wallet would sign on
+    /// the device, so its review keeps the estimate.
+    func prepareSend(to address: String, amount: Decimal?, memo: String? = nil) async throws -> PreparedTransaction {
+        if isHardwareWallet { throw WalletError.hardwareSessionRequired }
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
+        guard let wallet = moneroWallet else { throw WalletError.notUnlocked }
+        return try await wallet.prepareSend(to: address, amount: amount, memo: memo)
+    }
+
+    /// The transaction from `prepareSend` can still go out on the open
+    /// wallet. False once that wallet closed (a lock, a switch) or the
+    /// transaction was sent.
+    func isPrepared(_ prepared: PreparedTransaction) async -> Bool {
+        guard !isHardwareWallet, let wallet = moneroWallet else { return false }
+        return await wallet.isPrepared(prepared)
+    }
+
+    /// Broadcasts the transaction from `prepareSend` as it is. Returns its
+    /// txid.
+    func send(_ prepared: PreparedTransaction) async throws -> String {
+        if isHardwareWallet { throw WalletError.hardwareSessionRequired }
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
+        guard let wallet = moneroWallet else { throw WalletError.notUnlocked }
+        return try await wallet.send(prepared)
+    }
+
     // MARK: - Seed Export
 
     /// Returns the legacy 25-word seed from the running wallet.

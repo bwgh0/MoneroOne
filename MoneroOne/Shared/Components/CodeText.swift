@@ -9,24 +9,32 @@ struct CodeText: View {
     let text: String
     var style: UIFont.TextStyle = .caption1
     var monospaced = true
+    var weight: UIFont.Weight = .regular
     var color: UIColor = .secondaryLabel
     var alignment: NSTextAlignment = .natural
     var selectable = false
+    /// `.byWordWrapping` breaks at spaces and zero-width spaces first, and
+    /// between characters only inside a part longer than the line.
+    var lineBreakMode: NSLineBreakMode = .byCharWrapping
 
     init(
         _ text: String,
         style: UIFont.TextStyle = .caption1,
         monospaced: Bool = true,
+        weight: UIFont.Weight = .regular,
         color: UIColor = .secondaryLabel,
         alignment: NSTextAlignment = .natural,
-        selectable: Bool = false
+        selectable: Bool = false,
+        lineBreakMode: NSLineBreakMode = .byCharWrapping
     ) {
         self.text = text
         self.style = style
         self.monospaced = monospaced
+        self.weight = weight
         self.color = color
         self.alignment = alignment
         self.selectable = selectable
+        self.lineBreakMode = lineBreakMode
     }
 
     var body: some View {
@@ -34,9 +42,11 @@ struct CodeText: View {
             text: text,
             style: style,
             monospaced: monospaced,
+            weight: weight,
             color: color,
             alignment: alignment,
-            selectable: selectable
+            selectable: selectable,
+            lineBreakMode: lineBreakMode
         )
         // VoiceOver reads it as the Text it replaces.
         .accessibilityRepresentation { Text(verbatim: text) }
@@ -47,9 +57,11 @@ private struct CharacterWrappedText: UIViewRepresentable {
     let text: String
     let style: UIFont.TextStyle
     let monospaced: Bool
+    let weight: UIFont.Weight
     let color: UIColor
     let alignment: NSTextAlignment
     let selectable: Bool
+    let lineBreakMode: NSLineBreakMode
 
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
@@ -58,7 +70,6 @@ private struct CharacterWrappedText: UIViewRepresentable {
         view.backgroundColor = .clear
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
-        view.textContainer.lineBreakMode = .byCharWrapping
         view.adjustsFontForContentSizeCategory = true
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return view
@@ -69,7 +80,8 @@ private struct CharacterWrappedText: UIViewRepresentable {
         // Not selectable: taps reach what it sits in (a button, a link).
         view.isUserInteractionEnabled = selectable
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byCharWrapping
+        view.textContainer.lineBreakMode = lineBreakMode
+        paragraph.lineBreakMode = lineBreakMode
         paragraph.hyphenationFactor = 0
         paragraph.alignment = alignment
         view.attributedText = NSAttributedString(string: text, attributes: [
@@ -99,8 +111,8 @@ private struct CharacterWrappedText: UIViewRepresentable {
             compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)
         ).pointSize
         let face = monospaced
-            ? UIFont.monospacedSystemFont(ofSize: base, weight: .regular)
-            : UIFont.systemFont(ofSize: base)
+            ? UIFont.monospacedSystemFont(ofSize: base, weight: weight)
+            : UIFont.systemFont(ofSize: base, weight: weight)
         return UIFontMetrics(forTextStyle: style).scaledFont(for: face)
     }
 }

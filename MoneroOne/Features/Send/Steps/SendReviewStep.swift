@@ -3,6 +3,8 @@ import MoneroKit
 
 struct SendReviewStep: View {
     let recipientAddress: String
+    /// Set when the recipient came from an OpenAlias name.
+    var aliasSummary: OpenAliasSummary? = nil
     let amountString: String
     let memo: String
     let isSendingAll: Bool
@@ -44,29 +46,56 @@ struct SendReviewStep: View {
 
                     // Transaction card
                     VStack(spacing: 0) {
-                        // Recipient
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.brand.opacity(0.15))
-                                    .frame(width: 40, height: 40)
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.brand)
+                        // Recipient. A name shows its picture, the name,
+                        // the OpenAlias name and every character of the address.
+                        HStack(alignment: aliasSummary == nil ? .center : .top, spacing: 12) {
+                            if let aliasSummary {
+                                RecipientAvatar(summary: aliasSummary, diameter: 40)
+                            } else {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.brand.opacity(0.15))
+                                        .frame(width: 40, height: 40)
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(.brand)
+                                }
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Recipient")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                CodeText(formatAddress(recipientAddress), color: .label)
+                                if let aliasSummary {
+                                    if let recipientName = aliasSummary.recipientName {
+                                        Text(verbatim: recipientName)
+                                            .font(.headline)
+                                        OpenAliasNameText(name: aliasSummary.name.display)
+                                    } else {
+                                        OpenAliasNameText(name: aliasSummary.name.display, style: .headline, weight: .semibold, color: .label)
+                                    }
+                                    CodeText(recipientAddress, color: .label)
+                                        .padding(.top, 4)
+                                } else {
+                                    CodeText(formatAddress(recipientAddress), color: .label)
+                                }
                             }
 
                             Spacer()
                         }
-                        .padding()
+                        .padding(aliasSummary == nil ? .all : [.horizontal, .top])
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Recipient: \(recipientAddress)")
+                        .accessibilityLabel(recipientLabel)
+
+                        if let aliasSummary {
+                            // Under the text column: the 16 pt padding, the
+                            // 40 pt icon disc and the 12 pt spacing of the row.
+                            OpenAliasReviewNotes(summary: aliasSummary)
+                                .padding(.leading, 68)
+                                .padding(.trailing)
+                                .padding(.top, 8)
+                                .padding(.bottom)
+                        }
 
                         Divider().padding(.horizontal)
 
@@ -152,6 +181,14 @@ struct SendReviewStep: View {
                             }
                             .font(.subheadline)
                             .padding()
+                        }
+
+                        // The description in the OpenAlias record.
+                        if let txDescription = aliasSummary?.txDescription {
+                            Divider().padding(.horizontal)
+
+                            OpenAliasDescriptionRow(text: txDescription)
+                                .padding()
                         }
 
                         // Memo
@@ -267,6 +304,13 @@ struct SendReviewStep: View {
             guard !Task.isCancelled else { return }
             feeError = error.localizedDescription
         }
+    }
+
+    private var recipientLabel: Text {
+        if let aliasSummary {
+            return Text("Recipient: \(aliasSummary.spokenName), address \(recipientAddress)")
+        }
+        return Text("Recipient: \(recipientAddress)")
     }
 
     private func formatAddress(_ addr: String) -> String {

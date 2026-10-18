@@ -10,7 +10,13 @@ struct SendFlowView: View {
     @State private var phase: SendFlowPhase = .address
 
     // Send data
+    /// The only address that reaches the fee estimate and the send.
     @State private var recipientAddress = ""
+    /// The text of the recipient field: an address or an OpenAlias name.
+    @State private var recipientInput = ""
+    /// Set on Continue with a resolved OpenAlias name, nil for an address.
+    @State private var aliasSummary: OpenAliasSummary?
+    @StateObject private var aliasLookup = OpenAliasLookupModel()
     @State private var amountString = ""
     @State private var memo = ""
     @State private var isSendingAll = false
@@ -119,7 +125,12 @@ struct SendFlowView: View {
                 QRScannerView { scannedAddress, scannedAmount in
                     // A scanned address replaces a chosen link.
                     isLinkMode = false
-                    recipientAddress = scannedAddress
+                    recipientInput = scannedAddress
+                    if case .address = OpenAlias.classify(scannedAddress) {
+                        recipientAddress = scannedAddress
+                    }
+                    // A name starts its lookup at once, on this step.
+                    aliasLookup.submit(scannedAddress)
                     if let amount = scannedAmount {
                         amountString = amount
                         amountPrefill = .qrCode
@@ -130,7 +141,11 @@ struct SendFlowView: View {
         .interactiveDismissDisabled(phase.isSendingState)
         .onAppear {
             walletManager.isSendFlowPresented = true
+            aliasLookup.network = walletManager.networkType
             handlePrefill()
+        }
+        .onChange(of: recipientInput) { _, newValue in
+            aliasLookup.textChanged(newValue)
         }
         .onChange(of: walletManager.pendingPaymentRequest) { _, newRequest in
             // A link tapped while Send is open replaces what is on screen.
@@ -155,11 +170,12 @@ struct SendFlowView: View {
             }
         }
         .onChange(of: phase) { _, newPhase in
+            aliasLookup.recordPinIfSent(phase: newPhase, summary: aliasSummary, sentAddress: recipientAddress)
             // Confirmed: this link must never open Send again.
             guard newPhase.isSendingState, let shownPaymentRequest else { return }
             walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: true)
         }
-        .onChange(of: recipientAddress) { old, text in
+        .onChange(of: recipientInput) { old, text in
             // A claim link pasted or scanned here opens the claim sheet. It is
             // never an address.
             guard EnvelopeLink.looksLikeClaimLink(text) else { return }
@@ -168,12 +184,15 @@ struct SendFlowView: View {
             // answer even when it is broken.
             let pasted = text.count - old.count > 16
             if !pasted, (try? EnvelopeLink.parse(text)) == nil { return }
+            aliasLookup.cancel()
+            recipientInput = ""
             recipientAddress = ""
             PaymentLinksCoordinator.shared.handle(text: text, networkType: walletManager.networkType, activeAddress: walletManager.primaryAddress)
             dismiss()
         }
         .onDisappear {
             walletManager.isSendFlowPresented = false
+            aliasLookup.cancel()
             guard let shownPaymentRequest else { return }
             walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: false)
         }
@@ -290,13 +309,20 @@ struct SendFlowView: View {
         switch shown {
         case .address:
             SendAddressStep(
-                recipientAddress: $recipientAddress,
+                recipientInput: $recipientInput,
                 showScanner: $showScanner,
                 isLinkMode: linkModeBinding,
                 isConnected: networkMonitor.isConnected,
-                isValidAddress: walletManager.isValidAddress(recipientAddress),
-                onContinue: {
+                isValidAddress: walletManager.isValidAddress(recipientInput),
+                lookup: aliasLookup,
+                onContinue: { summary in
                     HapticFeedback.shared.buttonPress()
+                    if let summary {
+                        recipientAddress = summary.address
+                    } else {
+                        recipientAddress = recipientInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                    aliasSummary = summary
                     goForward(to: .amount)
                 }
             )
@@ -307,6 +333,7 @@ struct SendFlowView: View {
                 memo: isLinkMode ? $linkNote : $memo,
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
+                recipientDisplayName: aliasSummary?.name.display,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
@@ -336,6 +363,7 @@ struct SendFlowView: View {
         case .review:
             SendReviewStep(
                 recipientAddress: recipientAddress,
+                aliasSummary: aliasSummary,
                 amountString: amountString,
                 memo: memo,
                 isSendingAll: isSendingAll,
@@ -546,6 +574,10 @@ struct SendFlowView: View {
 
         if let addr = walletManager.prefillSendAddress {
             recipientAddress = addr
+            recipientInput = addr
+            // Filled in, not typed: its row shows at once.
+            aliasLookup.submit(addr)
+            aliasSummary = nil
             walletManager.prefillSendAddress = nil
 
             if let amt = walletManager.prefillSendAmount {
@@ -566,6 +598,10 @@ struct SendFlowView: View {
         // A `monero:` link pays its address, not a payment link.
         isLinkMode = false
         recipientAddress = request.address
+        recipientInput = request.address
+        // Filled in, not typed: its row shows at once.
+        aliasLookup.submit(request.address)
+        aliasSummary = nil
         amountString = request.amount ?? ""
         amountPrefill = request.amount == nil ? nil : .paymentLink
         isSendingAll = false

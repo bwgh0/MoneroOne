@@ -3701,6 +3701,8 @@ class WalletManager: ObservableObject {
         // Remove All is the full wipe: payment links and their secrets too.
         EnvelopeStore.shared.removeAll()
         Task { await EnvelopeRuntime.shared.wipeAll() }
+        // OpenAlias pins belong to this device's payment history.
+        OpenAliasPinStore().clearAll()
     }
 
     func deleteWallet(id: UUID) {

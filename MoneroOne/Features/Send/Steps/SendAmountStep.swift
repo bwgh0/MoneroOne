@@ -5,6 +5,8 @@ struct SendAmountStep: View {
     @Binding var memo: String
     @Binding var isSendingAll: Bool
     let recipientAddress: String
+    /// The OpenAlias name, when the recipient came from one.
+    var recipientDisplayName: String? = nil
     let unlockedBalance: Decimal
     let priceService: PriceService
     /// Where a filled-in amount came from; the step says so above the amount.
@@ -244,7 +246,7 @@ struct SendAmountStep: View {
             .padding(.horizontal)
             .padding(.bottom, 8)
         }
-        .navigationTitle(isLinkMode ? String(localized: "Send with a Link") : String(localized: "Send to \(formatAddress(recipientAddress))"))
+        .navigationTitle(isLinkMode ? String(localized: "Send with a Link") : String(localized: "Send to \(recipientDisplayName ?? formatAddress(recipientAddress))"))
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
         .onChange(of: amountString) { newValue in

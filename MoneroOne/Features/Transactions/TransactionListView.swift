@@ -7,10 +7,21 @@ struct TransactionListView: View {
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    /// Looks at sent links' envelopes while the Links filter is on screen.
+    @StateObject private var linkChecker = PaymentLinksStatusChecker()
+    @State private var isOnScreen = false
     /// Minor index of the receiving subaddress to show, nil for any.
     @State private var receivingIndex: Int?
     var asOf: Date? = nil
     var historyTransactions: [MoneroTransaction]? = nil
+
+    /// `initialFilter`: Links when the balance card's open-link lines open it.
+    init(asOf: Date? = nil, historyTransactions: [MoneroTransaction]? = nil, initialFilter: FilterType = .all) {
+        self.asOf = asOf
+        self.historyTransactions = historyTransactions
+        _filterType = State(initialValue: initialFilter)
+    }
 
     private var sourceTransactions: [MoneroTransaction] {
         asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
@@ -21,6 +32,8 @@ struct TransactionListView: View {
         case incoming = "Received"
         case outgoing = "Sent"
         case pending = "Pending"
+        /// Payment link transactions: funding, reclaim and claim.
+        case links = "Links"
 
         /// The menu and empty-state name, in the user's language.
         var title: String {
@@ -29,6 +42,7 @@ struct TransactionListView: View {
             case .incoming: return String(localized: "Received", comment: "Transaction filter")
             case .outgoing: return String(localized: "Sent", comment: "Transaction filter")
             case .pending: return String(localized: "Pending", comment: "Transaction filter")
+            case .links: return String(localized: "Links", comment: "Transaction filter: payment link transactions")
             }
         }
 
@@ -39,6 +53,7 @@ struct TransactionListView: View {
             case .incoming: return String(localized: "Currently showing received transactions")
             case .outgoing: return String(localized: "Currently showing sent transactions")
             case .pending: return String(localized: "Currently showing pending transactions")
+            case .links: return String(localized: "Currently showing payment link transactions")
             }
         }
 
@@ -49,6 +64,15 @@ struct TransactionListView: View {
             case .incoming: return String(localized: "No received transactions")
             case .outgoing: return String(localized: "No sent transactions")
             case .pending: return String(localized: "No pending transactions")
+            case .links: return String(localized: "No payment links yet")
+            }
+        }
+
+        /// Second empty-state line, for a filter that needs one.
+        var emptyHint: String? {
+            switch self {
+            case .links: return String(localized: "In Send, choose Link to make one.", comment: "Activity, Links filter with no links")
+            default: return nil
             }
         }
     }
@@ -61,13 +85,37 @@ struct TransactionListView: View {
     // sync/send), so the All Transactions screen matches the
     // Recent list on the home view instead of mis-tagging
     // outgoing sends as Received.
+    private var linksToClaim: [EnvelopeRecord] {
+        TransactionListLogic.linksToClaim(
+            paymentLinks.records,
+            type: filterType,
+            receivingIndex: receivingIndex,
+            search: searchText,
+            asOf: asOf
+        )
+    }
+
+    private var openSentWithoutRow: [EnvelopeRecord] {
+        TransactionListLogic.openSentWithoutRow(
+            paymentLinks.records,
+            transactions: sourceTransactions,
+            type: filterType,
+            receivingIndex: receivingIndex,
+            search: searchText,
+            asOf: asOf,
+            activeWalletId: walletManager.activeWallet?.id.uuidString,
+            walletIds: walletManager.walletIds
+        )
+    }
+
     private var filteredTransactions: [MoneroTransaction] {
         TransactionListLogic.filter(
             sourceTransactions,
             type: filterType,
             receivingIndex: receivingIndex,
             search: searchText,
-            asOf: asOf
+            asOf: asOf,
+            linkRecords: paymentLinks.records
         )
     }
 
@@ -91,6 +139,7 @@ struct TransactionListView: View {
 
     var body: some View {
         let filtered = filteredTransactions
+        let items = TransactionListLogic.items(transactions: filtered, linksToClaim: linksToClaim, openSent: openSentWithoutRow)
         let totals = TransactionListLogic.totals(of: filtered)
         // Fiat Mode leads with fiat totals priced like the rows below them.
         let fiatTotals = priceService.showFiatFirst
@@ -105,27 +154,40 @@ struct TransactionListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            if filtered.isEmpty {
+            if items.isEmpty {
                 emptyState
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+            } else if filterType == .links {
+                // The card first, then the links that still hold money, then
+                // the rest.
+                let sections = TransactionListLogic.linkSections(items, records: paymentLinks.records)
+                summaryCard(
+                    totals,
+                    fiatTotals: fiatTotals,
+                    title: TransactionListLogic.linksSummaryTitle(items, openCount: sections.open.count, records: paymentLinks.records)
+                )
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                if !sections.open.isEmpty {
+                    sectionHeader(String(localized: "Open", comment: "Activity, Links filter: links that still hold money"))
+                    rows(sections.open)
+                }
+                if !sections.history.isEmpty {
+                    sectionHeader(String(localized: "History", comment: "Activity, Links filter: links that are done"))
+                    rows(sections.history)
+                }
             } else {
                 summaryCard(totals, fiatTotals: fiatTotals)
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-
-                ForEach(filtered) { transaction in
-                    NavigationLink {
-                        TransactionDetailView(transaction: transaction)
-                    } label: {
-                        TransactionRow(transaction: transaction)
-                    }
-                }
+                rows(items)
             }
         }
         .listStyle(.plain)
-        .animation(.easeInOut(duration: 0.25), value: filtered.isEmpty)
+        .animation(.easeInOut(duration: 0.25), value: items.isEmpty)
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
@@ -139,6 +201,55 @@ struct TransactionListView: View {
             // Subaddress indices belong to one wallet; drop the
             // filter when the wallet underneath changes.
             receivingIndex = nil
+        }
+        .onAppear {
+            isOnScreen = true
+            tidyPaymentLinks()
+            checkLinksIfShown()
+        }
+        .onDisappear {
+            isOnScreen = false
+            linkChecker.stop()
+        }
+        .onChange(of: filterType) { _, type in
+            if type == .links { checkLinksIfShown() } else { linkChecker.stop() }
+        }
+        // The active wallet publishes each new block, so a pending link can
+        // reach the unlock depth while the Links filter is open.
+        .onChange(of: unlockedPendingLinkCounts) { _, counts in
+            guard !counts.isEmpty else { return }
+            checkLinksIfShown()
+        }
+    }
+
+    // MARK: - Payment link checks
+
+    /// Housekeeping that needs no envelope: adopt a funding transaction a
+    /// sent record missed, and forget a received link's words once our
+    /// claim is mined.
+    private func tidyPaymentLinks() {
+        guard asOf == nil else { return }
+        PaymentLinksStatusChecker.reconcileFunding(store: paymentLinks, walletManager: walletManager)
+    }
+
+    /// Under Links (now only), look at sent links someone could have
+    /// claimed, so their rows say so. A look stops the active wallet for
+    /// a moment, so no other filter runs it.
+    private func checkLinksIfShown() {
+        guard isOnScreen, asOf == nil, filterType == .links else { return }
+        paymentLinks.reload()
+        tidyPaymentLinks()
+        linkChecker.start(walletManager: walletManager, store: paymentLinks)
+    }
+
+    /// Live counts of the pending sent links at the unlock depth or more.
+    private var unlockedPendingLinkCounts: [Int] {
+        guard filterType == .links else { return [] }
+        return paymentLinks.sent.compactMap { record in
+            guard record.status == .pending,
+                  let count = PaymentLinkDisplay(record: record, walletManager: walletManager).confirmations,
+                  count >= EnvelopeLink.confirmationsToUnlock else { return nil }
+            return count
         }
     }
 
@@ -209,19 +320,54 @@ struct TransactionListView: View {
         return hint
     }
 
+    // MARK: - Rows
+
+    @ViewBuilder
+    private func rows(_ items: [ActivityListItem]) -> some View {
+        ForEach(items) { item in
+            switch item {
+            case .transaction(let transaction):
+                NavigationLink {
+                    ActivityDetailView(transaction: transaction)
+                } label: {
+                    TransactionRow(transaction: transaction)
+                }
+            case .linkToClaim(let record):
+                PaymentLinkToClaimRow(record: record)
+            case .openSent(let record):
+                NavigationLink {
+                    PaymentLinkDetailView(recordId: record.id, role: .sent)
+                } label: {
+                    PaymentLinkOpenSentRow(record: record)
+                }
+            }
+        }
+    }
+
+    /// "Open", "History": a heading row, as Wallet's Recent Activity.
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+            .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 6, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     // MARK: - Summary card
 
     /// Totals for the rows on screen. Review-card style (radius 16,
     /// `secondarySystemBackground`) like the send review, since it is a
     /// table of amounts, not a hero. `fiatTotals` (Fiat Mode, every row
     /// priced) puts fiat on top of each column.
-    private func summaryCard(_ totals: TransactionTotals, fiatTotals: FiatTotals?) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(TransactionListLogic.summaryTitle(
-                count: totals.count,
-                type: filterType,
-                receivingName: receivingFilterName
-            ))
+    private func summaryCard(_ totals: TransactionTotals, fiatTotals: FiatTotals?, title: String? = nil) -> some View {
+        let title = title ?? TransactionListLogic.summaryTitle(
+            count: totals.count,
+            type: filterType,
+            receivingName: receivingFilterName
+        )
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(title)
             .font(.subheadline)
             .fontWeight(.semibold)
             .contentTransition(.numericText())
@@ -254,7 +400,7 @@ struct TransactionListView: View {
         .cornerRadius(16)
         .animation(.easeInOut(duration: 0.2), value: totals)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(summaryAccessibilityLabel(totals, fiatTotals: fiatTotals))
+        .accessibilityLabel(summaryAccessibilityLabel(totals, fiatTotals: fiatTotals, title: title))
     }
 
     /// One column of the summary card. XMR on top with today's fiat value
@@ -300,12 +446,8 @@ struct TransactionListView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func summaryAccessibilityLabel(_ totals: TransactionTotals, fiatTotals: FiatTotals?) -> String {
-        var parts = [TransactionListLogic.summaryTitle(
-            count: totals.count,
-            type: filterType,
-            receivingName: receivingFilterName
-        )]
+    private func summaryAccessibilityLabel(_ totals: TransactionTotals, fiatTotals: FiatTotals?, title: String) -> String {
+        var parts = [title]
         if let fiatTotals {
             parts.append(String(localized: "received \(priceService.formatFiat(fiatTotals.received)) at the time, \(XMRFormatter.format(totals.received)) XMR", comment: "VoiceOver: Fiat Mode total received in the list, fiat at each transaction's date, then XMR"))
             if receivingIndex == nil {
@@ -348,12 +490,18 @@ struct TransactionListView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             } else if filterType != .all {
-                Image(systemName: "line.3.horizontal.decrease.circle")
+                Image(systemName: filterType == .links ? "link" : "line.3.horizontal.decrease.circle")
                     .font(.largeTitle)
                     .foregroundColor(.secondary)
                 Text(filterType.emptyTitle)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                if let hint = filterType.emptyHint {
+                    Text(hint)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             } else {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.largeTitle)
@@ -468,12 +616,14 @@ enum TransactionListLogic {
 
     /// Type filter, receiving-address filter and search compose with AND.
     /// A receiving-address filter keeps incoming transactions only:
-    /// sends spend from the account, not from one subaddress.
+    /// sends spend from the account, not from one subaddress. Links keeps
+    /// the transactions of a payment link in `linkRecords`.
     static func matches(
         _ tx: MoneroTransaction,
         type: TransactionListView.FilterType,
         receivingIndex: Int?,
-        search: String
+        search: String,
+        linkRecords: [EnvelopeRecord] = []
     ) -> Bool {
         switch type {
         case .all:
@@ -484,6 +634,8 @@ enum TransactionListLogic {
             guard tx.type == .outgoing else { return false }
         case .pending:
             guard tx.status == .pending else { return false }
+        case .links:
+            guard PaymentLinkActivity.match(transactionId: tx.id, isIncoming: tx.type == .incoming, records: linkRecords) != nil else { return false }
         }
 
         if let receivingIndex {
@@ -505,9 +657,143 @@ enum TransactionListLogic {
         type: TransactionListView.FilterType,
         receivingIndex: Int?,
         search: String,
-        asOf: Date? = nil
+        asOf: Date? = nil,
+        linkRecords: [EnvelopeRecord] = []
     ) -> [MoneroTransaction] {
-        through(asOf, transactions: transactions).filter { matches($0, type: type, receivingIndex: receivingIndex, search: search) }
+        let rows = through(asOf, transactions: transactions).filter {
+            matches($0, type: type, receivingIndex: receivingIndex, search: search, linkRecords: linkRecords)
+        }
+        return type == .links ? oneFundingRowPerLink(rows, records: linkRecords) : rows
+    }
+
+    /// A funding wallet2 split into several transactions: the Links filter
+    /// shows one row for the link, its funding txid's when shown. All
+    /// keeps every transaction.
+    static func oneFundingRowPerLink(_ rows: [MoneroTransaction], records: [EnvelopeRecord]) -> [MoneroTransaction] {
+        func funding(_ tx: MoneroTransaction) -> EnvelopeRecord? {
+            guard tx.type == .outgoing,
+                  let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: false, records: records),
+                  link.kind == .funding else { return nil }
+            return link.record
+        }
+        var kept: [String: String] = [:]
+        for tx in rows {
+            guard let record = funding(tx) else { continue }
+            let key = EnvelopeStore.account(for: record)
+            if kept[key] == nil || tx.id == record.fundingTxid { kept[key] = tx.id }
+        }
+        return rows.filter { tx in
+            guard let record = funding(tx) else { return true }
+            return kept[EnvelopeStore.account(for: record)] == tx.id
+        }
+    }
+
+    /// Under All and Links, the links sent to us that wait to be claimed,
+    /// newest first: their claim is no transaction yet, so each gets a row
+    /// of its own among the transactions, at the date it was opened. Now
+    /// only, with no search or address filter. Our open links are not here:
+    /// their funding rows say where each one stands, so every link shows
+    /// once. Links also lists the ones whose money never came in their
+    /// days to claim, under History as Expired; All leaves them out.
+    static func linksToClaim(
+        _ records: [EnvelopeRecord],
+        type: TransactionListView.FilterType,
+        receivingIndex: Int?,
+        search: String,
+        asOf: Date?,
+        now: Date = Date()
+    ) -> [EnvelopeRecord] {
+        guard type == .all || type == .links, asOf == nil, search.isEmpty, receivingIndex == nil else { return [] }
+        return records
+            .filter { type == .links ? OpenPaymentLinks.isToClaim($0) : OpenPaymentLinks.isWaitingToClaim($0, now: now) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Under Links, our open links whose funding has no row in this
+    /// wallet's history (its funding wallet left this device, or another
+    /// wallet funded it), newest first: each gets a row of its own in Open,
+    /// at the date it was made, so Share and Reclaim stay in reach. Now
+    /// only, with no search or address filter.
+    static func openSentWithoutRow(
+        _ records: [EnvelopeRecord],
+        transactions: [MoneroTransaction],
+        type: TransactionListView.FilterType,
+        receivingIndex: Int?,
+        search: String,
+        asOf: Date?,
+        activeWalletId: String?,
+        walletIds: Set<String>?
+    ) -> [EnvelopeRecord] {
+        guard type == .links, asOf == nil, search.isEmpty, receivingIndex == nil else { return [] }
+        let rows = Set(transactions.filter { $0.type == .outgoing }.map(\.id))
+        return records
+            .filter { record in
+                guard OpenPaymentLinks.isOpenSent(record, activeWalletId: activeWalletId, walletIds: walletIds),
+                      record.knownFundingTxid != nil else { return false }
+                return !record.ownFundingTxids.contains(where: rows.contains)
+            }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The transactions, the links to claim and our open links with no
+    /// funding row in one list, newest first.
+    static func items(transactions: [MoneroTransaction], linksToClaim: [EnvelopeRecord], openSent: [EnvelopeRecord] = []) -> [ActivityListItem] {
+        guard !linksToClaim.isEmpty || !openSent.isEmpty else { return transactions.map(ActivityListItem.transaction) }
+        let all = transactions.map(ActivityListItem.transaction) + linksToClaim.map(ActivityListItem.linkToClaim)
+            + openSent.map(ActivityListItem.openSent)
+        // Stable: transactions keep their order among equal dates.
+        return all.enumerated()
+            .sorted { $0.element.date != $1.element.date ? $0.element.date > $1.element.date : $0.offset < $1.offset }
+            .map(\.element)
+    }
+
+    /// The Links filter's two groups. Open: the links that still hold
+    /// money (our funding rows that are Waiting, Ready or Expired, and the
+    /// links sent to us not claimed yet). History: every other link row,
+    /// a link sent to us whose money never came in its days to claim among
+    /// them. Each newest first; every row once.
+    static func linkSections(_ items: [ActivityListItem], records: [EnvelopeRecord], now: Date = Date()) -> (open: [ActivityListItem], history: [ActivityListItem]) {
+        var open: [ActivityListItem] = []
+        var history: [ActivityListItem] = []
+        for item in items {
+            switch item {
+            case .linkToClaim(let record):
+                if OpenPaymentLinks.isWaitingToClaim(record, now: now) {
+                    open.append(item)
+                } else {
+                    history.append(item)
+                }
+            case .openSent:
+                open.append(item)
+            case .transaction(let tx):
+                let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: tx.type == .incoming, records: records)
+                if let link, link.kind == .funding, !link.record.status.isSettled, tx.status != .failed {
+                    open.append(item)
+                } else {
+                    history.append(item)
+                }
+            }
+        }
+        return (open, history)
+    }
+
+    /// The Links filter's card: "7 links · 4 open", counting each link once
+    /// (a reclaimed link has a funding row and a reclaim row).
+    static func linksSummaryTitle(_ items: [ActivityListItem], openCount: Int, records: [EnvelopeRecord]) -> String {
+        var links = Set<String>()
+        for item in items {
+            switch item {
+            case .linkToClaim(let record), .openSent(let record):
+                links.insert(EnvelopeStore.account(for: record))
+            case .transaction(let tx):
+                if let link = PaymentLinkActivity.match(transactionId: tx.id, isIncoming: tx.type == .incoming, records: records) {
+                    links.insert(EnvelopeStore.account(for: link.record))
+                }
+            }
+        }
+        let count = String(localized: "\(links.count) links", comment: "Activity, Links filter card: how many payment links")
+        guard openCount > 0 else { return count }
+        return String(localized: "\(count) · \(openCount) open", comment: "Activity, Links filter card: how many links, then how many still hold money")
     }
 
     /// Received and sent (amount plus fee) over `transactions`. Failed
@@ -590,6 +876,7 @@ enum TransactionListLogic {
         case .incoming: title = String(localized: "\(count) received transactions")
         case .outgoing: title = String(localized: "\(count) sent transactions")
         case .pending: title = String(localized: "\(count) pending transactions")
+        case .links: title = String(localized: "\(count) link transactions", comment: "Activity summary under the Links filter: payment link transactions")
         }
         if let receivingName {
             title = String(localized: "\(title) on \(receivingName)", comment: "Transaction count, then the receiving address name")
@@ -599,6 +886,34 @@ enum TransactionListLogic {
 }
 
 
+// MARK: - List items
+
+/// One Activity row: a transaction, or a link sent to us that waits to be
+/// claimed (no transaction yet).
+enum ActivityListItem: Identifiable, Equatable {
+    case transaction(MoneroTransaction)
+    case linkToClaim(EnvelopeRecord)
+    /// One of our open links whose funding has no row here.
+    case openSent(EnvelopeRecord)
+
+    var id: String {
+        switch self {
+        case .transaction(let tx): return "tx.\(tx.id).\(tx.type == .incoming ? "in" : "out")"
+        case .linkToClaim(let record): return "link.\(record.id)"
+        case .openSent(let record): return "sent.\(record.id)"
+        }
+    }
+
+    /// Where the row sits: the transaction's date, or when the link was
+    /// opened here.
+    var date: Date {
+        switch self {
+        case .transaction(let tx): return tx.timestamp
+        case .linkToClaim(let record), .openSent(let record): return record.createdAt
+        }
+    }
+}
+
 // MARK: - Transaction Row (Standard List Style)
 
 struct TransactionRow: View {
@@ -606,48 +921,30 @@ struct TransactionRow: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
+    /// Payment link transactions show the link's name, amount and state.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon
-            Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(transaction.type == .incoming ? .green : .brand)
-                .frame(width: 36, height: 36)
-                .background(
-                    (transaction.type == .incoming ? Color.green : Color.brand)
-                        .opacity(0.15)
-                )
-                .cornerRadius(8)
-
-            // Details
-            VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.type == .incoming ? "Received" : "Sent")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    // Whole: next to a long amount, "Получено" broke with a
-                    // hyphen; the amount column gives way instead.
-                    .fixedSize()
-
-                Text(formattedDate)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            // Amount & Status
-            TransactionAmountColumn(transaction: transaction, amount: amount)
+        let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
+        let amount = amount(row.xmr)
+        ActivityRowLayout(
+            systemImage: row.systemImage,
+            isIncoming: transaction.type == .incoming,
+            showsLinkBadge: row.showsLinkBadge,
+            title: row.title,
+            subtitle: row.subtitle
+        ) { alignment in
+            TransactionAmountColumn(transaction: transaction, amount: amount, linkStatus: row.linkStatus, alignment: alignment)
         }
-        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel(row.accessibilityLabel(amount: amount))
     }
 
-    private var amount: TransactionAmountText {
+    private func amount(_ xmr: Decimal) -> TransactionAmountText {
         TransactionAmountText(
-            transaction: transaction,
-            fiatAtTime: fiatAtTime,
+            isIncoming: transaction.type == .incoming,
+            xmr: xmr,
+            fiatAtTime: fiatAtTime(xmr),
             fiatFirst: priceService.showFiatFirst,
             receivedOn: receivedOn
         )
@@ -668,9 +965,93 @@ struct TransactionRow: View {
 
     /// What the amount was worth when the transaction happened, in the
     /// selected currency. Nil until price history has loaded.
-    private var fiatAtTime: String? {
-        priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+    private func fiatAtTime(_ xmr: Decimal) -> String? {
+        priceHistoryService.fiatValue(xmr: xmr, at: transaction.timestamp)
             .map { priceService.formatFiat($0) }
+    }
+}
+
+// MARK: - Row layout (shared by Activity's rows)
+
+/// One Activity row: the direction's glyph in its tinted tile, the title
+/// with the date under it, and the amount column at the end. A transaction
+/// and a payment link waiting to be claimed both use it, so they read
+/// alike.
+struct ActivityRowLayout<Amount: View>: View {
+    let systemImage: String
+    let isIncoming: Bool
+    /// A payment link's row: the tile gets the link badge.
+    var showsLinkBadge = false
+    /// "Received", "Sent", or a payment link's name.
+    let title: String
+    let subtitle: String
+    /// The amount column, aligned for where it sits.
+    @ViewBuilder let amount: (HorizontalAlignment) -> Amount
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            // At accessibility sizes the amount goes under the title: side
+            // by side, a whole "Reclaimed by Link" pushed the row off screen.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        icon
+                        details(stacked: true)
+                    }
+                    // Under the title text: 36 icon + 12.
+                    amount(.leading)
+                        .padding(.leading, 48)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    icon
+                    details(stacked: false)
+
+                    Spacer()
+
+                    // Amount & Status
+                    amount(.trailing)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var tint: Color { isIncoming ? .green : .brand }
+
+    private var icon: some View {
+        Image(systemName: systemImage)
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(tint)
+            .frame(width: 36, height: 36)
+            .background(tint.opacity(0.15))
+            .cornerRadius(8)
+            .paymentLinkBadge(tint, isShown: showsLinkBadge)
+    }
+
+    private func details(stacked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                // The label color inside a Button too, which would tint it.
+                .foregroundStyle(.primary)
+                // Whole: next to a long amount, "Получено" broke with a
+                // hyphen; the amount column gives way instead. A link's
+                // name can be long: it ends in "…" before the amount does.
+                // Stacked, the title has the row's width and wraps if it must.
+                .fixedSize(horizontal: !stacked && !showsLinkBadge, vertical: true)
+                .lineLimit(stacked ? nil : 1)
+
+            Text(subtitle)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                // The date on one line at the usual sizes: next to a link's
+                // "Ready to claim" it broke after "at". The amount column
+                // puts its status over the value instead.
+                .fixedSize(horizontal: !stacked && dynamicTypeSize <= .large, vertical: false)
+        }
     }
 }
 
@@ -719,6 +1100,37 @@ struct TransactionAmountText: Equatable {
             receivedOn: receivedOn
         )
     }
+
+    private init(primary: String, secondary: String?, isFiatFirst: Bool, spoken: String) {
+        self.primary = primary
+        self.secondary = secondary
+        self.isFiatFirst = isFiatFirst
+        self.spoken = spoken
+    }
+
+    /// Money coming in that is not ours yet, an estimate (a payment link's
+    /// claim, less a fee not known exactly): "+~0.0154" over "~$2.47", or
+    /// "+~$2.47" over "~0.0154 XMR" in Fiat Mode. `fiatNow` is its value
+    /// at today's price; nil with no price.
+    static func incomingEstimate(xmr: Decimal, fiatNow: String?, fiatFirst: Bool) -> TransactionAmountText {
+        let xmrText = XMRFormatter.format(xmr)
+        if fiatFirst, let fiatNow {
+            let compact = XMRFormatter.formatCompact(xmr)
+            return TransactionAmountText(
+                primary: "+~" + fiatNow,
+                secondary: "~\(compact) XMR",
+                isFiatFirst: true,
+                spoken: String(localized: "about \(fiatNow), about \(compact) XMR", comment: "VoiceOver: Fiat Mode, an estimated amount not received yet: fiat at today's price, then XMR")
+            )
+        }
+        return TransactionAmountText(
+            primary: "+~" + xmrText,
+            secondary: fiatNow.map { "~" + $0 },
+            isFiatFirst: false,
+            spoken: String(localized: "about \(xmrText) XMR", comment: "VoiceOver: an estimated amount not received yet")
+                + (fiatNow.map { String(localized: ", worth about \($0)", comment: "VoiceOver: fiat value at today's price of an amount not received yet") } ?? "")
+        )
+    }
 }
 
 /// The trailing column of a transaction row: the amount on top, then the
@@ -727,22 +1139,51 @@ struct TransactionAmountText: Equatable {
 /// Mode the XMR amount is too long to share that line with the status, so
 /// it gets a line of its own under it.
 struct TransactionAmountColumn: View {
-    let transaction: MoneroTransaction
     let amount: TransactionAmountText
+    let isIncoming: Bool
+    /// The transaction whose status shows under the amount.
+    let transaction: MoneroTransaction?
+    /// A payment link's state, shown in place of the transaction's status.
+    let linkStatus: PaymentLinkRowStatus?
+    /// Leading when the column sits under the title (accessibility sizes).
+    var alignment: HorizontalAlignment = .trailing
+
+    init(
+        transaction: MoneroTransaction,
+        amount: TransactionAmountText,
+        linkStatus: PaymentLinkRowStatus? = nil,
+        alignment: HorizontalAlignment = .trailing
+    ) {
+        self.amount = amount
+        self.isIncoming = transaction.type == .incoming
+        self.transaction = transaction
+        self.linkStatus = linkStatus
+        self.alignment = alignment
+    }
+
+    /// No transaction yet (a link sent to us, not claimed): the link's
+    /// state under the amount.
+    init(amount: TransactionAmountText, isIncoming: Bool, linkStatus: PaymentLinkRowStatus, alignment: HorizontalAlignment = .trailing) {
+        self.amount = amount
+        self.isIncoming = isIncoming
+        self.transaction = nil
+        self.linkStatus = linkStatus
+        self.alignment = alignment
+    }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 4) {
+        VStack(alignment: alignment, spacing: 4) {
             Text(amount.primary)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(transaction.type == .incoming ? .green : .primary)
+                .foregroundColor(isIncoming ? .green : .primary)
                 // One line: a 12-decimal amount in the narrow iPad panel
                 // wrapped its last digit onto a line of its own.
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
 
             if amount.isFiatFirst {
-                VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: alignment, spacing: 2) {
                     status
                     secondary
                 }
@@ -755,7 +1196,7 @@ struct TransactionAmountColumn: View {
                         status
                         secondary
                     }
-                    VStack(alignment: .trailing, spacing: 2) {
+                    VStack(alignment: alignment, spacing: 2) {
                         status
                         secondary
                     }
@@ -767,7 +1208,16 @@ struct TransactionAmountColumn: View {
         .layoutPriority(1)
     }
 
+    @ViewBuilder
     private var status: some View {
+        if let linkStatus {
+            PaymentLinkStatusLabel(status: linkStatus)
+        } else if let transaction {
+            status(of: transaction)
+        }
+    }
+
+    private func status(of transaction: MoneroTransaction) -> some View {
         HStack(spacing: 4) {
             if transaction.isStatusLoading {
                 ProgressView()

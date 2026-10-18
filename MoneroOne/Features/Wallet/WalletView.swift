@@ -12,6 +12,9 @@ struct WalletView: View {
     @State private var selectedHistoryPoint: PortfolioDataPoint?
     @State private var selectedHistoryRange: ChartTimeRange = .week
     @State private var historyModel = BalanceHistoryModel()
+    /// The balance card's open-link lines open Activity's Links filter.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    @State private var showLinks = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Viewport and above-activity heights, so the empty activity card can
     /// fill the leftover height on short screens (iPhone Duo cover).
@@ -82,6 +85,12 @@ struct WalletView: View {
                             selectedHistoryPoint: $selectedHistoryPoint,
                             selectedHistoryRange: $selectedHistoryRange,
                             historyModel: historyModel,
+                            openLinks: OpenPaymentLinks.summary(
+                                of: paymentLinks.records,
+                                activeWalletId: walletManager.activeWallet?.id.uuidString,
+                                walletIds: walletManager.walletIds
+                            ),
+                            onOpenLinks: { showLinks = true },
                             onHardwareSyncTap: {
                                 // Clear any leftover .complete/.failed
                                 // state from the prior run so the
@@ -140,6 +149,13 @@ struct WalletView: View {
                 Color.clear.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
             }
             .walletHeader(showWalletManager: $showWalletManager)
+            .navigationDestination(isPresented: $showLinks) {
+                TransactionListView(initialFilter: .links)
+            }
+            // Looks at sent links on new blocks, so a claimed link leaves
+            // the balance card's line. Never during History or a sheet.
+            .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil && !isHistoryExpanded
+                                    && !showSend && !showReceive && !showWalletManager)
             .onChange(of: walletManager.walletSessionId) { _, _ in
                 selectedHistoryPoint = nil
                 historyModel = BalanceHistoryModel()
@@ -337,7 +353,7 @@ struct RecentTransactionsSection: View {
         }
         .sheet(item: $selectedTransaction) { transaction in
             NavigationStack {
-                TransactionDetailView(transaction: transaction)
+                ActivityDetailView(transaction: transaction)
             }
             .closesForPaymentLink()
             .presentationDetents([.fraction(0.75), .large])
@@ -379,8 +395,12 @@ struct RecentTransactionCard: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
+    /// Payment link transactions show the link's name, amount and state.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
 
     var body: some View {
+        let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
+        let amount = amount(row.xmr)
         Button(action: onTap) {
             HStack(spacing: 12) {
                 ZStack {
@@ -388,28 +408,31 @@ struct RecentTransactionCard: View {
                         .fill(iconColor.opacity(0.15))
                         .frame(width: 40, height: 40)
 
-                    Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
+                    Image(systemName: row.systemImage)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(iconColor)
                 }
+                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(transaction.type == .incoming ? "Received" : "Sent")
+                    Text(row.title)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         // Whole: next to a long amount, "Получено" broke with a
-                        // hyphen; the amount column gives way instead.
-                        .fixedSize()
+                        // hyphen; the amount column gives way instead. A
+                        // link's name can be long: it ends in "…".
+                        .fixedSize(horizontal: !row.showsLinkBadge, vertical: true)
+                        .lineLimit(1)
                         .foregroundColor(.primary)
 
-                    Text(formattedDate)
+                    Text(row.subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
 
                 Spacer()
 
-                TransactionAmountColumn(transaction: transaction, amount: amount)
+                TransactionAmountColumn(transaction: transaction, amount: amount, linkStatus: row.linkStatus)
 
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -420,15 +443,16 @@ struct RecentTransactionCard: View {
         }
         .glassButtonStyle()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel(row.accessibilityLabel(amount: amount))
         .accessibilityHint("Shows transaction details")
         .accessibilityIdentifier("wallet.transaction.\(transaction.id)")
     }
 
-    private var amount: TransactionAmountText {
+    private func amount(_ xmr: Decimal) -> TransactionAmountText {
         TransactionAmountText(
-            transaction: transaction,
-            fiatAtTime: fiatAtTime,
+            isIncoming: transaction.type == .incoming,
+            xmr: xmr,
+            fiatAtTime: fiatAtTime(xmr),
             fiatFirst: priceService.showFiatFirst,
             receivedOn: receivedOn
         )
@@ -446,8 +470,8 @@ struct RecentTransactionCard: View {
 
     /// What the amount was worth when the transaction happened, in the
     /// selected currency. Nil until price history has loaded.
-    private var fiatAtTime: String? {
-        priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+    private func fiatAtTime(_ xmr: Decimal) -> String? {
+        priceHistoryService.fiatValue(xmr: xmr, at: transaction.timestamp)
             .map { priceService.formatFiat($0) }
     }
 

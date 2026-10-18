@@ -1107,6 +1107,17 @@
         }
       }
     },
+    "%@ · %lld open" : {
+      "comment" : "Activity, Links filter card: how many links, then how many still hold money",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %lld open"
+          }
+        }
+      }
+    },
     "%@ • Live" : {
       "comment" : "Hardware wallet pill: device name, then that the link is up",
       "localizations" : {
@@ -1857,6 +1868,75 @@
     "%lld" : {
       "shouldTranslate" : false
     },
+    "%lld link transactions" : {
+      "comment" : "Activity summary under the Links filter: payment link transactions",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld link transaction"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld link transactions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld links" : {
+      "comment" : "Activity, Links filter card: how many payment links",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld link"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld links"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld links to claim" : {
+      "comment" : "Balance card: payment links sent to you, amount not known yet",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld link to claim"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld links to claim"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld locations" : {
       "localizations" : {
         "de" : {
@@ -2184,6 +2264,29 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld 個位置"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld open links" : {
+      "comment" : "Balance card: payment links you sent that nobody claimed yet",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld open link"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld open links"
                 }
               }
             }
@@ -5916,6 +6019,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "，當時價值 %@"
+          }
+        }
+      }
+    },
+    ", worth about %@" : {
+      "comment" : "VoiceOver: fiat value at today's price of an amount not received yet",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", worth about %@"
           }
         }
       }
@@ -10179,6 +10293,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新增備註"
+          }
+        }
+      }
+    },
+    "Add note" : {
+      "comment" : "Send, link mode: shows the field for the link's note (a name kept on this iPhone)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add note"
           }
         }
       }
@@ -18482,6 +18607,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇其他日期"
+          }
+        }
+      }
+    },
+    "Claim to" : {
+      "comment" : "Claim sheet: the label over the wallet that gets the money, and the title of the wallet list; VoiceOver reads the wallet name after it",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claim to"
+          }
+        }
+      }
+    },
+    "Claim your Monero" : {
+      "comment" : "Title of a shared payment link's preview in Messages and the share sheet",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claim your Monero"
           }
         }
       }
@@ -37594,6 +37741,17 @@
         }
       }
     },
+    "Hide note" : {
+      "comment" : "Send, link mode: hides the field for the link's note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide note"
+          }
+        }
+      }
+    },
     "Hides balance history and returns to now" : {
       "localizations" : {
         "de" : {
@@ -38813,6 +38971,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "我知道建立日期"
+          }
+        }
+      }
+    },
+    "I sent you %@ XMR. Tap to claim it in Monero One: %@" : {
+      "comment" : "Text shared with a payment link. The first value is the amount, the second the link",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I sent you %@ XMR. Tap to claim it in Monero One: %@"
           }
         }
       }
@@ -41693,6 +41862,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "淺色"
+          }
+        }
+      }
+    },
+    "Link %lld" : {
+      "comment" : "Default name of a payment link: its number on this iPhone",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link %lld"
           }
         }
       }
@@ -45769,6 +45949,17 @@
         }
       }
     },
+    "Name this link" : {
+      "comment" : "Payment link rename: alert title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name this link"
+          }
+        }
+      }
+    },
     "Name, number, or address" : {
       "localizations" : {
         "de" : {
@@ -46425,6 +46616,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "網路錯誤。請檢查你的連線。"
+          }
+        }
+      }
+    },
+    "Network fee" : {
+      "comment" : "Payment link detail: the funding transaction's network fee",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network fee"
           }
         }
       }
@@ -50383,6 +50585,39 @@
         }
       }
     },
+    "Note" : {
+      "comment" : "A payment link's note: the name only this iPhone keeps",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note"
+          }
+        }
+      }
+    },
+    "Note, %@" : {
+      "comment" : "VoiceOver: a payment link's note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note, %@"
+          }
+        }
+      }
+    },
+    "Note, none" : {
+      "comment" : "VoiceOver: a payment link with no note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note, none"
+          }
+        }
+      }
+    },
     "Notifications Disabled" : {
       "localizations" : {
         "de" : {
@@ -51320,6 +51555,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "僅在受信任區域內同步"
+          }
+        }
+      }
+    },
+    "Only this iPhone keeps the note." : {
+      "comment" : "Payment link note: it stays on this device and is never in the link",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only this iPhone keeps the note."
+          }
+        }
+      }
+    },
+    "Open" : {
+      "comment" : "Activity, Links filter: links that still hold money",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open"
           }
         }
       }
@@ -52542,6 +52799,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 App 內建瀏覽器中開啟此交易"
+          }
+        }
+      }
+    },
+    "Opens the wallet list to choose where the money goes" : {
+      "comment" : "VoiceOver: hint on the claim sheet's wallet row",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the wallet list to choose where the money goes"
           }
         }
       }
@@ -60940,6 +61208,17 @@
         }
       }
     },
+    "Reclaim to" : {
+      "comment" : "Claim sheet on a sent link: the label over the wallet that gets the money back, and the title of the wallet list; VoiceOver reads the wallet name after it",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reclaim to"
+          }
+        }
+      }
+    },
     "Recommended" : {
       "localizations" : {
         "de" : {
@@ -61972,6 +62251,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新命名，%@"
+          }
+        }
+      }
+    },
+    "Renames the link" : {
+      "comment" : "VoiceOver hint: the payment link's Note row",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renames the link"
           }
         }
       }
@@ -76300,6 +76590,107 @@
         }
       }
     },
+    "The payment could not be confirmed. If it went through, the link appears in Activity." : {
+      "comment" : "Send flow error: a payment link's funding may or may not have reached the network",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Zahlung konnte nicht bestätigt werden. Falls sie durchgegangen ist, erscheint der Link unter Aktivität."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The payment could not be confirmed. If it went through, the link appears in Activity."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo confirmar el pago. Si se realizó, el enlace aparece en Actividad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le paiement n’a pas pu être confirmé. S’il a abouti, le lien apparaît dans Activité."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile confermare il pagamento. Se è andato a buon fine, il link compare in Attività."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支払いを確認できませんでした。送信されていれば、リンクはアクティビティに表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "결제를 확인할 수 없습니다. 결제가 완료되었다면 링크가 활동에 표시됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De betaling kon niet worden bevestigd. Als ze is gelukt, verschijnt de link bij Activiteit."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie udało się potwierdzić płatności. Jeśli przeszła, link pojawi się w Aktywności."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível confirmar o pagamento. Se ele foi concluído, o link aparece em Atividade."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plata nu a putut fi confirmată. Dacă a reușit, linkul apare în Activitate."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось подтвердить платёж. Если он прошёл, ссылка появится в списке операций."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ödeme onaylanamadı. Gerçekleştiyse bağlantı Etkinlik bölümünde görünür."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося підтвердити платіж. Якщо він пройшов, посилання з’явиться в розділі «Активність»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法确认这笔付款。如果付款已完成，链接会显示在活动中。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法確認這筆付款。如果付款已完成，連結會顯示在活動中。"
+          }
+        }
+      }
+    },
     "The price feed has no %@ quote." : {
       "comment" : "Currency code, e.g. EUR",
       "localizations" : {
@@ -86394,6 +86785,17 @@
         }
       }
     },
+    "Waiting" : {
+      "comment" : "Activity row: the payment link is not claimed yet, or not ready",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting"
+          }
+        }
+      }
+    },
     "Waiting for fee estimate" : {
       "localizations" : {
         "de" : {
@@ -90255,6 +90657,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的錢包正在從不受信任的位置同步。如果這是刻意的，請在「設定」中將此位置加入信任的位置。"
+          }
+        }
+      }
+    },
+    "about %@" : {
+      "comment" : "VoiceOver: an estimated amount",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %@"
+          }
+        }
+      }
+    },
+    "about %@ XMR" : {
+      "comment" : "VoiceOver: an estimated amount not received yet",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %@ XMR"
+          }
+        }
+      }
+    },
+    "about %@, about %@ XMR" : {
+      "comment" : "VoiceOver: Fiat Mode, an estimated amount not received yet: fiat at today's price, then XMR",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %1$@, about %2$@ XMR"
           }
         }
       }

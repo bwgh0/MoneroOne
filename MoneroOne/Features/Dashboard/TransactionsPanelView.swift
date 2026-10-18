@@ -77,7 +77,7 @@ struct TransactionsPanelView: View {
         }
         .sheet(item: $selectedTransaction) { transaction in
             NavigationStack {
-                TransactionDetailView(transaction: transaction)
+                ActivityDetailView(transaction: transaction)
             }
             .closesForPaymentLink()
             .presentationDetents([.fraction(0.75), .large])
@@ -129,8 +129,12 @@ struct TransactionPanelRow: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
+    /// Payment link transactions show the link's name, amount and state.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
 
     var body: some View {
+        let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
+        let amount = amount(row.xmr)
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Icon
@@ -139,22 +143,25 @@ struct TransactionPanelRow: View {
                         .fill(iconColor.opacity(0.15))
                         .frame(width: 40, height: 40)
 
-                    Image(systemName: transaction.type == .incoming ? "arrow.down.left" : "arrow.up.right")
+                    Image(systemName: row.systemImage)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(iconColor)
                 }
+                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge)
 
                 // Details
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(transaction.type == .incoming ? "Received" : "Sent")
+                    Text(row.title)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         // Whole: next to a long amount, "Получено" broke with a
-                        // hyphen; the amount column gives way instead.
-                        .fixedSize()
+                        // hyphen; the amount column gives way instead. A
+                        // link's name can be long: it ends in "…".
+                        .fixedSize(horizontal: !row.showsLinkBadge, vertical: true)
+                        .lineLimit(1)
                         .foregroundColor(.primary)
 
-                    Text(formattedDate)
+                    Text(row.subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -162,7 +169,7 @@ struct TransactionPanelRow: View {
                 Spacer()
 
                 // Amount & Status
-                TransactionAmountColumn(transaction: transaction, amount: amount)
+                TransactionAmountColumn(transaction: transaction, amount: amount, linkStatus: row.linkStatus)
 
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -173,13 +180,14 @@ struct TransactionPanelRow: View {
         .glassButtonStyle()
         .accessibilityIdentifier("wallet.transaction.\(transaction.id)")
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")) \(amount.spoken), \(formattedDate), \(transaction.displayStatusText)")
+        .accessibilityLabel(row.accessibilityLabel(amount: amount))
     }
 
-    private var amount: TransactionAmountText {
+    private func amount(_ xmr: Decimal) -> TransactionAmountText {
         TransactionAmountText(
-            transaction: transaction,
-            fiatAtTime: fiatAtTime,
+            isIncoming: transaction.type == .incoming,
+            xmr: xmr,
+            fiatAtTime: fiatAtTime(xmr),
             fiatFirst: priceService.showFiatFirst,
             receivedOn: receivedOn
         )
@@ -197,8 +205,8 @@ struct TransactionPanelRow: View {
 
     /// What the amount was worth when the transaction happened, in the
     /// selected currency. Nil until price history has loaded.
-    private var fiatAtTime: String? {
-        priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+    private func fiatAtTime(_ xmr: Decimal) -> String? {
+        priceHistoryService.fiatValue(xmr: xmr, at: transaction.timestamp)
             .map { priceService.formatFiat($0) }
     }
 

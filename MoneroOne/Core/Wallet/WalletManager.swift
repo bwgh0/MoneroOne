@@ -11,6 +11,9 @@ import WidgetKit
 class WalletManager: ObservableObject {
     // MARK: - Published State
     @Published var wallets: [WalletInfo] = []
+
+    /// The ids of the wallets on this device, as payment link records keep them.
+    var walletIds: Set<String> { Set(wallets.map(\.id.uuidString)) }
     @Published var activeWallet: WalletInfo? {
         didSet {
             if let id = activeWallet?.id {
@@ -141,9 +144,108 @@ class WalletManager: ObservableObject {
     enum HardwareSessionOutcome: Equatable {
         case sentTransaction(txId: String)
         case syncedOnly
-        case failed
+        /// The error the sheet showed. `mayHaveSent`: the failure came at
+        /// the send, so the transaction may have reached the network.
+        case failed(message: String, mayHaveSent: Bool = false)
+    }
+
+    /// A send error on the list of errors that come before any broadcast:
+    /// the wallet was not ready or could not send, or wallet2 never built
+    /// the transaction. Any other error (a failed relay, a wallet2 status
+    /// error, an unknown kind) may have reached the node.
+    nonisolated static func sendLeftNothingOnNetwork(_ error: Error) -> Bool {
+        switch error {
+        case WalletError.notUnlocked, WalletError.viewOnlyCannotSend, WalletError.hardwareSessionRequired:
+            return true
+        case MoneroCoreError.walletNotInitialized, MoneroCoreError.insufficientFunds,
+             MoneroCoreError.transactionEstimationFailed, MoneroCoreError.transactionSendFailed:
+            return true
+        case is MoneroWallet.BroadcastCancelled:
+            return true
+        case MoneroCoreError.transactionCommitFailed(let message):
+            return broadcastWasRefused(message)
+        default:
+            return false
+        }
+    }
+
+    /// wallet2's commit error for a transaction the node answered and
+    /// refused (`tx_rejected`, a double spend among them, or `daemon_busy`).
+    /// A lost connection or an unknown error may hide a broadcast that
+    /// went through.
+    nonisolated static func broadcastWasRefused(_ message: String) -> Bool {
+        let text = message.lowercased()
+        return text.contains("was rejected by daemon") || text.contains("daemon is busy")
+    }
+
+    /// A payment link's step between signing and broadcast on a hardware
+    /// wallet: the Send flow sets it before the session sheet opens and
+    /// clears it when the sheet closes. The session runs it for a send to
+    /// `address` (the link's envelope). It stays for every run of the
+    /// sheet, so a second signed funding meets the link's one attempt
+    /// (``PaymentLinkFunder/saveAttempt(id:txids:store:)``) and is never
+    /// broadcast.
+    struct PendingBroadcastStep {
+        let address: String
+        let run: MoneroWallet.BeforeBroadcast
+        /// Runs in the session as soon as the node took the send, with its
+        /// txid: the link reads funded before the view wallet starts again.
+        /// That start rebuilds the screens (`walletSessionId`), so the Send
+        /// flow's sheet-dismiss handler can come too late or not at all.
+        var didBroadcast: (@MainActor (String) -> Void)? = nil
+    }
+    var pendingBroadcastStep: PendingBroadcastStep?
+
+    /// The pending step when it belongs to a send to `address`. It stays
+    /// pending.
+    nonisolated static func broadcastStep(_ step: PendingBroadcastStep?, for address: String) -> MoneroWallet.BeforeBroadcast? {
+        guard let step, step.address == address else { return nil }
+        return step.run
+    }
+
+    /// The pending step's after-broadcast action, for a send to `address`.
+    nonisolated static func broadcastDone(_ step: PendingBroadcastStep?, for address: String) -> (@MainActor (String) -> Void)? {
+        guard let step, step.address == address else { return nil }
+        return step.didBroadcast
     }
     @Published private(set) var lastHardwareSessionOutcome: HardwareSessionOutcome?
+
+    /// A hardware session runs, from its start until the view wallet is
+    /// back. The state can read idle meanwhile (Cancel resets it), so this
+    /// flag, not the state, keeps a second session and the payment-link
+    /// checks out of MoneroKit's one wallet slot.
+    @Published private(set) var hardwareSessionRunning = false
+    /// The sheet's Cancel: the session stops at its next step.
+    private var hardwareSessionCancelled = false
+    private var hardwareSessionRun: Task<Void, Never>?
+
+    /// What a new hardware session does, given the one before it.
+    enum HardwareSessionStart: Equatable {
+        case start
+        /// A cancelled session still winds down: wait for it, then start.
+        case waitForCancelled
+        /// A session runs, or a finished one's result is still on screen
+        /// (a fresh sheet instance asks again after `.complete`).
+        case reject
+    }
+
+    nonisolated static func hardwareSessionStart(running: Bool, cancelled: Bool, state: HardwareSessionState) -> HardwareSessionStart {
+        if running { return cancelled ? .waitForCancelled : .reject }
+        guard case .idle = state else { return .reject }
+        return .start
+    }
+
+    /// The sheet's Cancel. The session stops at its next step: the FULL
+    /// wallet stops (also while it waits for MoneroKit's slot) and the view
+    /// wallet starts again on the screen the user is on. A send the Trezor
+    /// already signed still goes out.
+    func cancelHardwareSession() {
+        if hardwareSessionRunning {
+            TrezorLog.log("[Session] cancel requested (state=%@)", String(describing: hardwareSessionState))
+            hardwareSessionCancelled = true
+        }
+        hardwareSessionState = .idle
+    }
 
     @Published private(set) var hardwareSessionState: HardwareSessionState = .idle {
         didSet {
@@ -286,6 +388,34 @@ class WalletManager: ObservableObject {
         send: HardwareSendIntent? = nil,
         onSent: ((String) -> Void)? = nil
     ) async {
+        // Reject duplicate calls. The HardwareSessionSheet's
+        // `@State sessionStarted` guard turned out to be racy — when
+        // `evaluateBleState()` fires twice in quick succession (e.g.
+        // onAppear + onChange both seeing state == .bridgeRunning),
+        // both calls spawn a Task before the @State write becomes
+        // visible to the second read. Both Tasks then `await
+        // runHardwareSyncSession()` and the second one tears down
+        // the bridge mid-warm-window, ending the just-completed
+        // session with a "Sync failed" and forcing a re-pair.
+        // `hardwareSessionRunning` dedupes at the source: Cancel sets the
+        // state back to idle while the session still winds down.
+        switch Self.hardwareSessionStart(running: hardwareSessionRunning, cancelled: hardwareSessionCancelled, state: hardwareSessionState) {
+        case .start:
+            break
+        case .waitForCancelled:
+            TrezorLog.log("[Session] waiting for the cancelled session to end")
+            await hardwareSessionRun?.value
+            guard !hardwareSessionRunning else {
+                TrezorLog.log("[Session] rejected duplicate runHardwareSession (another session started)")
+                return
+            }
+            // The cancelled session's sheet is gone: nothing reads its result.
+            hardwareSessionState = .idle
+            lastHardwareSessionOutcome = nil
+        case .reject:
+            TrezorLog.log("[Session] rejected duplicate runHardwareSession (state=%@)", String(describing: hardwareSessionState))
+            return
+        }
         guard let active = activeWallet, isHardwareWallet else {
             hardwareSessionState = .failed(message: String(localized: "Active wallet is not hardware-backed."))
             return
@@ -303,20 +433,30 @@ class WalletManager: ObservableObject {
             return
         }
 
-        // Reject duplicate calls. The HardwareSessionSheet's
-        // `@State sessionStarted` guard turned out to be racy — when
-        // `evaluateBleState()` fires twice in quick succession (e.g.
-        // onAppear + onChange both seeing state == .bridgeRunning),
-        // both calls spawn a Task before the @State write becomes
-        // visible to the second read. Both Tasks then `await
-        // runHardwareSyncSession()` and the second one tears down
-        // the bridge mid-warm-window, ending the just-completed
-        // session with a "Sync failed" and forcing a re-pair.
-        // The fix is to dedupe at the source — only run if we're
-        // currently idle.
-        guard case .idle = hardwareSessionState else {
-            TrezorLog.log("[Session] rejected duplicate runHardwareSession (state=%@)", String(describing: hardwareSessionState))
-            return
+        hardwareSessionRunning = true
+        hardwareSessionCancelled = false
+        // Its own task: the sheet's task ending cannot cut a send or the
+        // view wallet's restart short.
+        let run = Task { @MainActor in
+            await self.runHardwareSessionSteps(send: send, onSent: onSent, active: active,
+                                               deviceWalletId: deviceWalletId, viewKeys: viewKeys)
+        }
+        hardwareSessionRun = run
+        await run.value
+    }
+
+    private func runHardwareSessionSteps(
+        send: HardwareSendIntent?,
+        onSent: ((String) -> Void)?,
+        active: WalletInfo,
+        deviceWalletId: String,
+        viewKeys: (address: String, viewKey: String)
+    ) async {
+        defer {
+            hardwareSessionRunning = false
+            hardwareSessionCancelled = false
+            hardwareSessionRun = nil
+            EnvelopeRuntime.shared.endHardwareSession()
         }
         // A lock during the session leaves VIEW closed. The next unlock opens it.
         let openLockCount = lockCount
@@ -346,6 +486,11 @@ class WalletManager: ObservableObject {
         let viewBaselineBalance = balance
         let viewBaselineUnlocked = unlockedBalance
 
+        // 0. A payment-link check stops first: its envelope wallet would
+        //    hold MoneroKit's one slot, and FULL would wait behind it with
+        //    the device never asked.
+        await EnvelopeRuntime.shared.beginHardwareSession()
+
         // 1. Stop VIEW so KitManager has a free slot for FULL.
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
@@ -358,6 +503,10 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
+        if hardwareSessionCancelled {
+            await endCancelledSession(viewKeys: viewKeys, lockCount: openLockCount)
+            return
+        }
 
         // 2/3. Open FULL via createFromDevice (uses openWallet under
         //    the hood when the cache exists) and wait for its refresh,
@@ -394,6 +543,11 @@ class WalletManager: ObservableObject {
                 return
             }
 
+            if hardwareSessionCancelled {
+                await fullWallet.stopAsync()
+                await endCancelledSession(viewKeys: viewKeys, lockCount: openLockCount)
+                return
+            }
             hardwareSessionState = .syncingFull(progress: 0, blocksRemaining: nil)
             bindFullWalletSyncProgress(fullWallet)
 
@@ -412,6 +566,13 @@ class WalletManager: ObservableObject {
                 try await waitForSyncedOrThrow(fullWallet, timeout: 600)
                 break
             } catch {
+                // Cancel: stop FULL (it may still wait for the kit slot) and
+                // keep its cache. Not a failed refresh.
+                if hardwareSessionCancelled {
+                    await fullWallet.stopAsync()
+                    await endCancelledSession(viewKeys: viewKeys, lockCount: openLockCount)
+                    return
+                }
                 TrezorLog.log("[Session] FULL refresh FAILED: %@ | wallet2: %@",
                               error.localizedDescription, fullWallet.latestErrorString)
                 await fullWallet.stopAsync()
@@ -443,6 +604,11 @@ class WalletManager: ObservableObject {
         //    on this send, not a correctness problem.
         //    The 300s window matches the BLE warm-window — same
         //    "recent enough to skip the slow path" semantics.
+        if hardwareSessionCancelled {
+            await fullWallet.stopAsync()
+            await endCancelledSession(viewKeys: viewKeys, lockCount: openLockCount)
+            return
+        }
         let recentKICutoff: TimeInterval = 300
         let lastKISync = loadHardwareBalanceSnapshot(walletId: active.id)?.savedAt
         let skipKI = lastKISync.map { Date().timeIntervalSince($0) < recentKICutoff } ?? false
@@ -452,6 +618,11 @@ class WalletManager: ObservableObject {
         } else {
             hardwareSessionState = .syncingKeyImages
             let kiOK = await fullWallet.coldKeyImageSync()
+            if !kiOK, hardwareSessionCancelled {
+                await fullWallet.stopAsync()
+                await endCancelledSession(viewKeys: viewKeys, lockCount: openLockCount)
+                return
+            }
             if !kiOK {
                 // wallet2 throws (no status set) when the device doesn't
                 // finish the export — most often the confirmation on the
@@ -465,14 +636,20 @@ class WalletManager: ObservableObject {
             }
         }
 
-        // 5. Optional send.
+        // 5. Optional send. After a Cancel nothing is signed.
+        if send != nil, hardwareSessionCancelled {
+            await fullWallet.stopAsync()
+            await endCancelledSession(viewKeys: viewKeys, lockCount: openLockCount)
+            return
+        }
         var sentTxId: String?
         switch send {
         case .none: break
         case .single(let to, let amount, let memo):
             hardwareSessionState = .signing
             do {
-                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo)
+                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo, beforeBroadcast: broadcastingStep(for: to))
+                Self.broadcastDone(pendingBroadcastStep, for: to)?(txId)
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {
@@ -482,13 +659,15 @@ class WalletManager: ObservableObject {
                               String(describing: type(of: error)),
                               walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys, lockCount: openLockCount)
+                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys,
+                                                lockCount: openLockCount, mayHaveSent: !Self.sendLeftNothingOnNetwork(error))
                 return
             }
         case .all(let to, let memo):
             hardwareSessionState = .signing
             do {
-                let txId = try await fullWallet.sendAll(to: to, memo: memo)
+                let txId = try await fullWallet.sendAll(to: to, memo: memo, beforeBroadcast: broadcastingStep(for: to))
+                Self.broadcastDone(pendingBroadcastStep, for: to)?(txId)
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {
@@ -498,7 +677,8 @@ class WalletManager: ObservableObject {
                               String(describing: type(of: error)),
                               walletErr)
                 await fullWallet.stopAsync()
-                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys, lockCount: openLockCount)
+                await failSessionAndRestoreView(message: String(localized: "Send failed: \(walletErr.isEmpty ? error.localizedDescription : walletErr)"), viewKeys: viewKeys,
+                                                lockCount: openLockCount, mayHaveSent: !Self.sendLeftNothingOnNetwork(error))
                 return
             }
         }
@@ -539,7 +719,7 @@ class WalletManager: ObservableObject {
 
         // 8. Reopen VIEW, unless the app locked during the session.
         do {
-            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey, lockCount: openLockCount)
+            try await restartViewWallet(viewKeys, lockCount: openLockCount)
         } catch _ where lockCount != openLockCount {
             TrezorLog.log("[Session] app locked during the session; VIEW opens at the next unlock")
         } catch {
@@ -564,6 +744,9 @@ class WalletManager: ObservableObject {
             lastHardwareSessionOutcome = .syncedOnly
             hardwareSessionState = .complete(message: String(localized: "Sent transactions are up to date."))
         }
+        // Cancelled late (the key images were in, or the Trezor signed):
+        // the sheet is gone, so no result stays on screen.
+        if hardwareSessionCancelled { hardwareSessionState = .idle }
         TrezorLog.log("[Session] session complete (warm window started)")
         DiagnosticLog.shared.log("Trezor session complete")
     }
@@ -598,6 +781,7 @@ class WalletManager: ObservableObject {
         var heightAtError: UInt64 = 0
 
         while Date() < deadline {
+            if hardwareSessionCancelled { throw CancellationError() }
             let walletH = wallet.walletHeight
             let daemonH = wallet.daemonHeight
             let elapsed = Date().timeIntervalSince(startedAt)
@@ -660,16 +844,53 @@ class WalletManager: ObservableObject {
     }
 
     private func failSessionAndRestoreView(message: String, viewKeys: (address: String, viewKey: String),
-                                           lockCount openLockCount: Int) async {
+                                           lockCount openLockCount: Int, mayHaveSent: Bool = false) async {
         DiagnosticLog.shared.log("Trezor session failed: \(message)")
         hardwareSessionState = .tearingDown
         do {
-            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey, lockCount: openLockCount)
+            try await restartViewWallet(viewKeys, lockCount: openLockCount)
         } catch {
             TrezorLog.log("[Session] could not restore VIEW after failure: %@", error.localizedDescription)
         }
-        lastHardwareSessionOutcome = .failed
-        hardwareSessionState = .failed(message: message)
+        lastHardwareSessionOutcome = .failed(message: message, mayHaveSent: mayHaveSent)
+        hardwareSessionState = hardwareSessionCancelled ? .idle : .failed(message: message)
+    }
+
+    /// The sheet's Cancel took effect and FULL is stopped: the view wallet
+    /// starts again. The state stays idle, since the sheet is gone.
+    private func endCancelledSession(viewKeys: (address: String, viewKey: String), lockCount openLockCount: Int) async {
+        TrezorLog.log("[Session] cancelled, restoring VIEW")
+        DiagnosticLog.shared.log("Trezor session cancelled")
+        hardwareSessionState = .tearingDown
+        do {
+            try await restartViewWallet(viewKeys, lockCount: openLockCount)
+        } catch {
+            TrezorLog.log("[Session] could not restore VIEW after cancel: %@", error.localizedDescription)
+        }
+        hardwareSessionState = .idle
+    }
+
+    /// Starts the view wallet at the end of a session. After a Cancel the
+    /// user is back on the screen the sheet came from, so the screens are
+    /// not rebuilt (`walletSessionId` stays).
+    private func restartViewWallet(_ viewKeys: (address: String, viewKey: String), lockCount openLockCount: Int) async throws {
+        let keepScreens = hardwareSessionCancelled
+        if keepScreens { sessionBumpedForSwitch = true }
+        defer { if keepScreens { sessionBumpedForSwitch = false } }
+        try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey, lockCount: openLockCount)
+    }
+
+    /// The step a hardware send runs once the Trezor signed, before the
+    /// broadcast: a link funding's step (`pendingBroadcastStep`), then the
+    /// sheet shows Broadcasting while the node takes the transaction.
+    private func broadcastingStep(for address: String) -> MoneroWallet.BeforeBroadcast {
+        let linkStep = Self.broadcastStep(pendingBroadcastStep, for: address)
+        return { [weak self] prepared in
+            // Cancel while the Trezor signed: nothing goes out.
+            if self?.hardwareSessionCancelled == true { throw CancellationError() }
+            try await linkStep?(prepared)
+            self?.hardwareSessionState = .broadcasting
+        }
     }
 
     // MARK: - Hardware tx snapshot
@@ -968,6 +1189,18 @@ class WalletManager: ObservableObject {
     /// Phase 1 of a switch already rebuilt the tree for the target wallet;
     /// the start path that follows must not rebuild it a second time.
     private var sessionBumpedForSwitch = false
+    /// Set while the active wallet starts again after a payment-link check:
+    /// its history stays on screen until the restarted wallet loads it.
+    private var historyHeldForWalletId: UUID?
+    /// Set while the active wallet starts again after a payment-link check
+    /// that found it synced. "Synced" stays on screen until the restarted
+    /// wallet is synced again, fails, or a minute passes: each check stops
+    /// and starts the wallet, and its connection steps are not news.
+    private var syncedHeldForWalletId: UUID?
+    private var syncedHoldTimeout: Task<Void, Never>?
+    private var isHoldingSynced: Bool {
+        syncedHeldForWalletId != nil && syncedHeldForWalletId == activeWallet?.id && syncState == .synced
+    }
 
     private func bumpSessionUnlessSwitching() {
         if sessionBumpedForSwitch {
@@ -1639,6 +1872,74 @@ class WalletManager: ObservableObject {
         subaddresses = []
     }
 
+    // MARK: - Payment links (envelope wallets)
+
+    /// Stops the active wallet so a payment-link envelope wallet can run in
+    /// its place: MoneroKit runs one wallet at a time. Unlike the pairing
+    /// suspend it keeps the published balance and address, so the dashboard
+    /// and the widget keep their last values meanwhile. `isUnlocked` stays
+    /// true. Returns false when a hardware session holds the wallet.
+    func suspendActiveWalletForEnvelope() async -> Bool {
+        guard isUnlocked, !hardwareSessionRunning, case .idle = hardwareSessionState else { return false }
+        cancellables.removeAll()
+        if let oldWallet = moneroWallet {
+            moneroWallet = nil
+            await oldWallet.stopAsync()
+        }
+        return true
+    }
+
+    /// Starts the active wallet again after an envelope wallet ran in its
+    /// place. Same start path as unlock, without rebuilding the view tree,
+    /// so the screen the user is on stays.
+    func resumeActiveWalletAfterEnvelope() async throws {
+        guard isUnlocked, moneroWallet == nil, let pin = currentPin else { return }
+        historyHeldForWalletId = activeWallet?.id
+        if syncState == .synced { holdSyncedThroughRestart() }
+        sessionBumpedForSwitch = true
+        defer { sessionBumpedForSwitch = false }
+        do {
+            try await unlock(pin: pin)
+        } catch {
+            if syncedHeldForWalletId != nil {
+                endSyncedHold()
+                syncState = .connecting
+            }
+            throw error
+        }
+    }
+
+    private func holdSyncedThroughRestart() {
+        syncedHeldForWalletId = activeWallet?.id
+        syncedHoldTimeout?.cancel()
+        syncedHoldTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            guard let self, !Task.isCancelled else { return }
+            let wasHolding = self.isHoldingSynced
+            self.endSyncedHold()
+            guard wasHolding else { return }
+            // Not synced again after a minute: show where the wallet is.
+            self.syncState = self.moneroWallet.map { Self.syncState(from: $0.syncState) } ?? .connecting
+            self.updateConnectionStage()
+        }
+    }
+
+    private func endSyncedHold() {
+        syncedHeldForWalletId = nil
+        syncedHoldTimeout?.cancel()
+        syncedHoldTimeout = nil
+    }
+
+    private static func syncState(from state: MoneroWallet.SyncState) -> SyncState {
+        switch state {
+        case .idle: return .idle
+        case .connecting: return .connecting
+        case .syncing(let progress, let remaining): return .syncing(progress: progress, remaining: remaining)
+        case .synced: return .synced
+        case .error(let msg): return .error(msg)
+        }
+    }
+
     /// Pair a Trezor and create the corresponding hardware-backed wallet
     /// on this device. The caller has already brought the device online
     /// over BLE/THP and pulled the watch key (address + view key) via
@@ -1821,7 +2122,7 @@ class WalletManager: ObservableObject {
         // tripping the same crash. Guard with an equality check so the
         // publisher only fires when the state genuinely transitioned (i.e.
         // we entered through `unlock`, not `switchToWallet`).
-        if syncState != .connecting {
+        if syncState != .connecting, !isHoldingSynced {
             syncState = .connecting
         }
 
@@ -1894,7 +2195,7 @@ class WalletManager: ObservableObject {
         // @Published resets and only nudge `syncState` if it actually
         // changed, otherwise the redundant publisher fire races the
         // collapsing wallet-switcher sheet's AttributeGraph teardown.
-        if syncState != .connecting {
+        if syncState != .connecting, !isHoldingSynced {
             syncState = .connecting
         }
 
@@ -1980,20 +2281,24 @@ class WalletManager: ObservableObject {
                 // (wallet2 may fire trailing callbacks after pauseRefresh)
                 if self.isSyncBlocked { return }
 
-                let newState: SyncState
-                switch state {
-                case .idle: newState = .idle
-                case .connecting: newState = .connecting
-                case .syncing(let progress, let remaining):
-                    newState = .syncing(progress: progress, remaining: remaining)
-                case .synced: newState = .synced
-                case .error(let msg): newState = .error(msg)
-                }
+                let newState = Self.syncState(from: state)
 
                 #if DEBUG
                 NSLog("[WalletManager] wallet2 syncState: %@ (current: %@)", "\(state)", "\(self.syncState)")
                 #endif
                 DiagnosticLog.shared.log("Sync: \(state)")
+
+                // The wallet starting again after a payment-link check:
+                // "Synced" stays until it is synced again or fails.
+                if self.syncedHeldForWalletId != nil {
+                    switch newState {
+                    case .idle, .connecting, .syncing:
+                        if self.isHoldingSynced { return }
+                    case .synced, .error:
+                        break
+                    }
+                    self.endSyncedHold()
+                }
 
                 // Don't let the wallet's initial .idle publish regress from .connecting
                 // during a restart — restartWallet() sets .connecting manually before
@@ -2095,6 +2400,13 @@ class WalletManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newTransactions in
                 guard let self = self else { return }
+                // The same wallet starting again after a payment-link check
+                // publishes an empty history before it loads its own; keep
+                // the one on screen.
+                if let heldId = self.historyHeldForWalletId {
+                    if newTransactions.isEmpty, heldId == self.activeWallet?.id { return }
+                    self.historyHeldForWalletId = nil
+                }
                 self.transactions = newTransactions
                 self.saveWidgetDataIfEnabled()
                 self.reconcileReceiveAddress()
@@ -2548,15 +2860,19 @@ class WalletManager: ObservableObject {
         return !isViewOnly
     }
 
-    func estimateFee(to address: String, amount: Decimal) async throws -> Decimal {
+    func estimateFee(to address: String, amount: Decimal, priority: SendPriority = .default) async throws -> Decimal {
         if isViewOnly && !isHardwareWallet { throw WalletError.viewOnlyCannotSend }
+        // A payment-link check (Activity's Links filter or a link's detail)
+        // may have just let go of the wallet: wait for it to start again.
+        if moneroWallet == nil { await EnvelopeRuntime.shared.waitForActiveWallet() }
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
-        return try await wallet.estimateFee(to: address, amount: amount)
+        return try await wallet.estimateFee(to: address, amount: amount, priority: priority)
     }
 
-    func send(to address: String, amount: Decimal, memo: String? = nil) async throws -> String {
+    func send(to address: String, amount: Decimal, memo: String? = nil,
+              beforeBroadcast: MoneroWallet.BeforeBroadcast? = nil) async throws -> String {
         if isHardwareWallet {
             // Hardware sends route through a device session — Send tap
             // in the UI presents `HardwareSessionSheet` which kicks off
@@ -2569,7 +2885,36 @@ class WalletManager: ObservableObject {
         guard let wallet = moneroWallet else {
             throw WalletError.notUnlocked
         }
-        return try await wallet.send(to: address, amount: amount, memo: memo)
+        return try await wallet.send(to: address, amount: amount, memo: memo, beforeBroadcast: beforeBroadcast)
+    }
+
+    /// Signs a transfer and keeps it for `send(_:beforeBroadcast:)`, not
+    /// sent: the fee it pays for the inputs it really spends. Software
+    /// wallets only; a hardware wallet would sign on the device.
+    func prepareSend(to address: String, amount: Decimal, memo: String? = nil) async throws -> PreparedTransaction {
+        if isHardwareWallet { throw WalletError.hardwareSessionRequired }
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
+        // A payment-link check may have just let go of the wallet.
+        if moneroWallet == nil { await EnvelopeRuntime.shared.waitForActiveWallet() }
+        guard let wallet = moneroWallet else { throw WalletError.notUnlocked }
+        return try await wallet.prepareSend(to: address, amount: amount, memo: memo)
+    }
+
+    /// The transaction from `prepareSend` can still go out on the open
+    /// wallet. False once that wallet closed (a payment-link check, a
+    /// switch, a restart) or the transaction was sent.
+    func isPrepared(_ prepared: PreparedTransaction) async -> Bool {
+        guard !isHardwareWallet, let wallet = moneroWallet else { return false }
+        return await wallet.isPrepared(prepared)
+    }
+
+    /// Broadcasts the transaction from `prepareSend` as it is, after
+    /// `beforeBroadcast`. Returns its txid.
+    func send(_ prepared: PreparedTransaction, beforeBroadcast: MoneroWallet.BeforeBroadcast? = nil) async throws -> String {
+        if isHardwareWallet { throw WalletError.hardwareSessionRequired }
+        if isViewOnly { throw WalletError.viewOnlyCannotSend }
+        guard let wallet = moneroWallet else { throw WalletError.notUnlocked }
+        return try await wallet.send(prepared, beforeBroadcast: beforeBroadcast)
     }
 
     func sendAll(to address: String, memo: String? = nil) async throws -> String {
@@ -3351,6 +3696,9 @@ class WalletManager: ObservableObject {
         for id in ids {
             deleteWallet(id: id)
         }
+        // Remove All is the full wipe: payment links and their secrets too.
+        EnvelopeStore.shared.removeAll()
+        Task { await EnvelopeRuntime.shared.wipeAll() }
     }
 
     func deleteWallet(id: UUID) {
@@ -3446,6 +3794,8 @@ class WalletManager: ObservableObject {
         balance = target.cachedBalance ?? 0
         primaryAddress = target.cachedPrimaryAddress ?? ""
         address = target.cachedPrimaryAddress ?? ""
+        historyHeldForWalletId = nil
+        endSyncedHold()
         syncState = .connecting
         currentSeed = nil
         connectionStage = .connecting

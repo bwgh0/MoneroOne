@@ -19,6 +19,10 @@ struct BalanceCard: View {
     var selectedHistoryPoint: Binding<PortfolioDataPoint?> = .constant(nil)
     var selectedHistoryRange: Binding<ChartTimeRange> = .constant(.week)
     var historyModel = BalanceHistoryModel()
+    /// Payment links that still hold money, for the lines under the balance.
+    var openLinks = OpenPaymentLinks.Summary()
+    /// Opens Activity's Links filter. Nil: no open-link lines.
+    var onOpenLinks: (() -> Void)? = nil
     var onHardwareSyncTap: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -34,6 +38,7 @@ struct BalanceCard: View {
     private static let cardSpace = "BalanceCard"
 
     private var historicalPoint: PortfolioDataPoint? { selectedHistoryPoint.wrappedValue }
+    private var showsOpenLinks: Bool { onOpenLinks != nil && !openLinks.isEmpty }
     private var displayedBalance: Decimal { historicalPoint?.balance ?? balance }
 
     /// A historical amount uses the sampled price at that same moment.
@@ -239,8 +244,20 @@ struct BalanceCard: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Location status: trusted, syncing from \(name)")
             }
+
+            // Money still in payment links: the live balance only. Kept in
+            // place while scrubbing History, so the card keeps its height.
+            if showsOpenLinks, let onOpenLinks {
+                OpenPaymentLinkLines(summary: openLinks, onOpenLinks: onOpenLinks)
+                    .opacity(historicalPoint == nil ? 1 : 0)
+                    .accessibilityHidden(historicalPoint != nil)
+                    .allowsHitTesting(historicalPoint == nil)
+            }
         }
-        .padding(24)
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        // The lines are 44 tall; their own space closes the card.
+        .padding(.bottom, showsOpenLinks ? 12 : 24)
         .background {
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color(.secondarySystemGroupedBackground))

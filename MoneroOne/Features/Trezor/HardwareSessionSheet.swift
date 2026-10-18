@@ -358,6 +358,19 @@ struct HardwareSessionSheet: View {
                     .padding(.vertical, 16)
             }
             .glassButtonStyle()
+        case .failed where !offersTryAgain:
+            // A payment link's funding has one attempt: no Try Again.
+            Button {
+                walletManager.resetHardwareSessionState()
+                dismiss()
+            } label: {
+                Text("Cancel")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            }
+            .glassButtonStyle()
         case .failed:
             HStack(spacing: 12) {
                 // Pairs are equal: Cancel takes the same glass capsule as
@@ -397,6 +410,21 @@ struct HardwareSessionSheet: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
+        }
+    }
+
+    private var offersTryAgain: Bool {
+        Self.offersTryAgain(intent: intent, linkFundingAddress: walletManager.pendingBroadcastStep?.address)
+    }
+
+    /// A failed run offers Try Again, except for a payment link's funding
+    /// (a send to `linkFundingAddress`, the envelope): it has one attempt,
+    /// and a second run could pay the link twice.
+    nonisolated static func offersTryAgain(intent: Intent, linkFundingAddress: String?) -> Bool {
+        guard let linkFundingAddress else { return true }
+        switch intent {
+        case .syncSentTransactions: return true
+        case .send(let to, _, _), .sendAll(let to, _): return to != linkFundingAddress
         }
     }
 
@@ -477,7 +505,9 @@ struct HardwareSessionSheet: View {
     }
 
     private func cancelAndDismiss() {
-        walletManager.resetHardwareSessionState()
+        // Stops the session itself, not only the sheet: FULL stops and the
+        // view wallet starts again.
+        walletManager.cancelHardwareSession()
         walletManager.disconnectHardwareDevice()
         dismiss()
     }

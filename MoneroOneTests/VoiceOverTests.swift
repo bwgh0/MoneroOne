@@ -305,6 +305,37 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertTrue(after.contains { $0.accessibilityLabel == "Behind" }, "the screen is back")
     }
 
+    // MARK: - Send: Link as the recipient
+
+    private func addressStep(isLinkMode: Bool) -> [NSObject] {
+        let step = SendAddressStep(
+            recipientAddress: .constant(""),
+            showScanner: .constant(false),
+            isLinkMode: .constant(isLinkMode),
+            isConnected: true,
+            isValidAddress: false,
+            onContinue: {}
+        )
+        return accessibilityElements(in: host(NavigationStack { step }, height: 600))
+    }
+
+    /// The Link button reads as on screen and says what it does.
+    func testSendLinkButtonReadsLink() {
+        let link = addressStep(isLinkMode: false).first { $0.accessibilityLabel == "Link" }
+        XCTAssertNotNil(link)
+        XCTAssertEqual(link?.accessibilityHint, "Sends the money as a link anyone can claim")
+    }
+
+    /// With Link chosen, the recipient reads as a payment link and ✕ says what it removes.
+    func testSendLinkTokenReadsAsTheRecipient() {
+        let elements = addressStep(isLinkMode: true)
+        XCTAssertTrue(elements.contains { $0.accessibilityLabel == "Recipient, payment link. Anyone with the link can claim it" })
+        XCTAssertTrue(elements.contains { $0.accessibilityLabel == "Remove payment link" })
+        // Only the "Recipient" caption is left: the address field is gone.
+        XCTAssertEqual(elements.filter { $0.accessibilityLabel == "Recipient" }.count, 1)
+        XCTAssertEqual(addressStep(isLinkMode: false).filter { $0.accessibilityLabel == "Recipient" }.count, 2)
+    }
+
     // MARK: - Helpers
 
     private func wallet(_ name: String, emoji: String = "💰", source: WalletSource, address: String) -> WalletInfo {

@@ -28,6 +28,11 @@ extension Color {
     /// Decorative only: never use them as action colors.
     static let brandHighlight = Color(red: 1, green: 0x85 / 255, blue: 0x33 / 255) // #FF8533
     static let brandShade = Color(red: 0xD9 / 255, green: 0x57 / 255, blue: 0)     // #D95700
+    /// `color.brand` and `color.brandPressed` as the tokens give them, in
+    /// sRGB. Only for pictures that leave the app and must look the same in
+    /// light and dark (the payment link card); UI uses `brand`.
+    static let brandToken = Color(red: 1, green: 0x66 / 255, blue: 0)            // #FF6600
+    static let brandPressed = Color(red: 0xE6 / 255, green: 0x5C / 255, blue: 0) // #E65C00
 }
 
 extension ShapeStyle where Self == Color {

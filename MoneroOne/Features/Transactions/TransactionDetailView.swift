@@ -10,6 +10,8 @@ struct TransactionDetailView: View {
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     @AppStorage("isTestnet") private var isTestnet = false
+    /// A payment link transaction takes the link's title.
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
 
     init(transaction: MoneroTransaction) {
         openedTransaction = transaction
@@ -115,6 +117,8 @@ struct TransactionDetailView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Status: \(transaction.displayStatusText)")
+
+                PaymentLinkTransactionRow(transaction: transaction)
 
                 HStack {
                     Text("Date")
@@ -270,7 +274,8 @@ struct TransactionDetailView: View {
         .refreshable {
             await walletManager.refresh()
         }
-        .navigationTitle(transaction.type == .incoming ? "Received" : "Sent")
+        .navigationTitle(PaymentLinkActivity.match(transaction, store: paymentLinks).map { Text($0.title) }
+            ?? Text(transaction.type == .incoming ? "Received" : "Sent"))
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
         .task {

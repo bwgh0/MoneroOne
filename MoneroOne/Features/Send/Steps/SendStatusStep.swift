@@ -7,6 +7,7 @@ struct SendStatusStep: View {
     let onDone: () -> Void
     let onRetry: () -> Void
     let onClose: () -> Void
+    var canRetry = true
 
     @State private var showContent = false
     @State private var copiedHash = false
@@ -130,18 +131,20 @@ struct SendStatusStep: View {
                     .accessibilityLabel("Done")
 
                 case .error:
-                    Button(action: onRetry) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "arrow.clockwise")
-                            Text("Retry")
+                    if canRetry {
+                        Button(action: onRetry) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Retry")
+                            }
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.brand)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
                         }
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.brand)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                        .glassButtonStyle()
+                        .accessibilityLabel("Retry transaction")
                     }
-                    .glassButtonStyle()
-                    .accessibilityLabel("Retry transaction")
 
                     Button(action: onClose) {
                         Text("Close")

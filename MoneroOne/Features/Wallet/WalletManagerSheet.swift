@@ -317,6 +317,10 @@ struct WalletRow: View {
     let onMoveDown: (() -> Void)?
     /// True while this row is the one being dragged.
     let isLifted: Bool
+    /// The wallet's keys are not on this iPhone (device backup, Quick
+    /// Start). The row says "Needs restore" in place of the balance, and a
+    /// tap restores it.
+    var needsRestore: Bool = false
 
     @State private var showDeleteZone = false
     /// True from the moment a horizontal swipe is recognised until just after
@@ -386,7 +390,7 @@ struct WalletRow: View {
         .accessibilityLabel(spokenLabel)
         .accessibilityCustomContent(AccessibilityCustomContentKey("Address"), address.flatMap { $0.isEmpty ? nil : Text($0) })
         .accessibilityCustomContent("Icon", wallet.emoji)
-        .accessibilityHint(isActive ? "Double tap to close the wallet list" : "Double tap to switch to this wallet")
+        .accessibilityHint(needsRestore ? "Double tap to restore this wallet" : isActive ? "Double tap to close the wallet list" : "Double tap to switch to this wallet")
         .accessibilityAddTraits(isActive ? .isSelected : [])
         // VoiceOver cannot swipe, long-press, drag, or tap the pencil; all
         // of it is a rotor action on the row itself. SwiftUI hands actions
@@ -419,7 +423,9 @@ struct WalletRow: View {
     /// The Selected trait marks the active wallet.
     private var spokenLabel: String {
         let amount: String
-        if let balance {
+        if needsRestore {
+            amount = String(localized: "Needs restore", comment: "Wallet switcher: the wallet's keys are not on this iPhone")
+        } else if let balance {
             amount = isActive
                 ? "\(XMRFormatter.format(balance)) XMR"
                 : String(localized: "last known balance \(XMRFormatter.format(balance)) XMR", comment: "VoiceOver: inactive wallet balance from its last sync")
@@ -476,16 +482,26 @@ struct WalletRow: View {
                 Text(wallet.name)
                     .font(.subheadline.weight(.semibold))
 
-                HStack(spacing: 0) {
-                    Text(balance.map(XMRFormatter.format) ?? "—")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .layoutPriority(0)
-                    Text(" XMR")
-                        .layoutPriority(1)
+                if needsRestore {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                        Text("Needs restore", comment: "Wallet switcher: the wallet's keys are not on this iPhone")
+                    }
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Color.brand)
+                    .accessibilityIdentifier("wallet.row.needsRestore")
+                } else {
+                    HStack(spacing: 0) {
+                        Text(balance.map(XMRFormatter.format) ?? "—")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .layoutPriority(0)
+                        Text(" XMR")
+                            .layoutPriority(1)
+                    }
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(balance == nil ? Color.secondary : Color.brand)
                 }
-                .font(.callout.weight(.medium))
-                .foregroundStyle(balance == nil ? Color.secondary : Color.brand)
 
                 // The 8…8 short form, as in the Receive rows and on Android.
                 if let address, !address.isEmpty {
@@ -567,6 +583,12 @@ struct WalletManagerRows: View {
     @State private var renameText = ""
     @State private var renameEmoji = ""
     @State private var deleteWalletId: UUID?
+    /// "Needs restore" seed wallet: the phrase restore cover.
+    @State private var showRestoreCover = false
+    @State private var restoreWalletId: UUID?
+    /// "Needs restore" view-only or hardware wallet: no phrase can restore
+    /// it, so the alert offers Delete and adding it again.
+    @State private var readdWalletId: UUID?
     @State private var isSwitching = false
     /// Guards the destructive Delete button on the confirmation alert —
     /// rapid double-taps would invoke `deleteWallet(id:)` twice and race
@@ -694,12 +716,34 @@ struct WalletManagerRows: View {
         } message: {
             Text("This removes the wallet from this device. You can recover it with the seed phrase.")
         }
+        .fullScreenCover(isPresented: $showRestoreCover) {
+            if let id = restoreWalletId {
+                NeedsRestoreCover(walletId: id)
+            }
+        }
+        .alert("Needs restore", isPresented: Binding(
+            get: { readdWalletId != nil },
+            set: { if !$0 { readdWalletId = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                readdWalletId = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let id = readdWalletId {
+                    walletManager.deleteWallet(id: id)
+                }
+                readdWalletId = nil
+            }
+        } message: {
+            Text("This wallet's keys are not on this iPhone. Delete it, then add it again with Add Wallet.")
+        }
     }
 
     /// One row. The closures read the live list through the manager when
     /// they fire, never an index captured when the row was built.
     private func row(for wallet: WalletInfo) -> some View {
         let isActive = wallet.id == walletManager.activeWallet?.id
+        let needsRestore = walletManager.needsRestore(wallet.id)
         return WalletRow(
             wallet: wallet,
             isActive: isActive,
@@ -707,7 +751,14 @@ struct WalletManagerRows: View {
             address: isActive ? walletManager.primaryAddress : wallet.cachedPrimaryAddress,
             onTap: {
                 guard dragId == nil, Date() > suppressTapsUntil else { return }
-                if isActive {
+                if needsRestore {
+                    if wallet.isViewOnly {
+                        readdWalletId = wallet.id
+                    } else {
+                        restoreWalletId = wallet.id
+                        showRestoreCover = true
+                    }
+                } else if isActive {
                     withAnimation(.snappy(duration: 0.35)) { isExpanded = false }
                 } else {
                     switchTo(wallet)
@@ -721,7 +772,8 @@ struct WalletManagerRows: View {
             onDelete: isActive ? nil : { deleteWalletId = wallet.id },
             onMoveUp: wallets.first?.id == wallet.id ? nil : { nudge(wallet.id, by: -1) },
             onMoveDown: wallets.last?.id == wallet.id ? nil : { nudge(wallet.id, by: 1) },
-            isLifted: dragId == wallet.id
+            isLifted: dragId == wallet.id,
+            needsRestore: needsRestore
         )
     }
 

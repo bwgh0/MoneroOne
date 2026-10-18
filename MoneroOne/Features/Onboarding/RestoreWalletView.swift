@@ -1,6 +1,15 @@
 import SwiftUI
 import LocalAuthentication
 
+/// Which wallets a phrase may restore when their keys are missing on this
+/// iPhone (device backup, Quick Start).
+enum NeedsRestoreTarget: Hashable {
+    /// The restore screen: any wallet that needs restore.
+    case any
+    /// A switcher row: only this wallet.
+    case wallet(UUID)
+}
+
 struct RestoreWalletView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) var dismiss
@@ -9,6 +18,13 @@ struct RestoreWalletView: View {
     // Multi-wallet parameters
     var isAddingWallet: Bool = false
     var existingPin: String? = nil
+    /// Set: the phrase restores the keys of an existing wallet that needs
+    /// restore. The wallet keeps its name, icon and restore height, so the
+    /// creation date step is skipped.
+    var needsRestoreTarget: NeedsRestoreTarget? = nil
+    @State private var needsRestoreMatch: WalletManager.NeedsRestoreMatch?
+    /// The phrase is being checked against the wallets that need restore.
+    @State private var isMatching = false
 
     @State private var walletName: String = ""
     @State private var walletEmoji: String = "\u{1F4B0}"
@@ -27,7 +43,9 @@ struct RestoreWalletView: View {
     @State private var useCreationDate = true
     @State private var showRecentDateConfirm = false
 
-    @State private var selectedPINLength = 6
+    /// New PINs are 6 digits. Existing 4-digit PINs still unlock: UnlockView
+    /// reads the stored length.
+    private let selectedPINLength = 6
     @FocusState private var focusedField: PINField?
 
     // Biometrics
@@ -136,17 +154,22 @@ struct RestoreWalletView: View {
                 validateAndProceed()
             } label: {
                 HStack(spacing: 8) {
-                    Text("Continue")
-                        .font(.callout.weight(.semibold))
-                    Image(systemName: "arrow.right")
-                        .font(.callout.weight(.semibold))
+                    if isMatching {
+                        ProgressView()
+                            .tint(Color.brand)
+                    } else {
+                        Text("Continue")
+                            .font(.callout.weight(.semibold))
+                        Image(systemName: "arrow.right")
+                            .font(.callout.weight(.semibold))
+                    }
                 }
                 .foregroundStyle(isValidSeedCount ? Color.brand : Color.gray)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             }
             .glassButtonStyle()
-            .disabled(!isValidSeedCount)
+            .disabled(!isValidSeedCount || isMatching)
             .accessibilityLabel("Continue")
             .accessibilityHint(isValidSeedCount ? "Double tap to proceed with your seed phrase" : "Enter a valid seed phrase to continue")
             .accessibilityIdentifier("restore.continueButton")
@@ -163,71 +186,6 @@ struct RestoreWalletView: View {
                 // Longer languages need two lines; with the keyboard up the
                 // column is short and the prompt was cut to one ("…schüt…").
                 .fixedSize(horizontal: false, vertical: true)
-
-            // PIN Length Selection
-            VStack(spacing: 8) {
-                Text("PIN Length")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                HStack(spacing: 12) {
-                    // 4 digits option
-                    Button {
-                        selectedPINLength = 4
-                        pin = ""
-                        confirmPin = ""
-                        focusedField = .pin
-                    } label: {
-                        Text("4 Digits")
-                            .font(.subheadline.weight(.medium))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(selectedPINLength == 4 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
-                            .foregroundColor(selectedPINLength == 4 ? .brand : .primary)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(selectedPINLength == 4 ? Color.brand : Color.clear, lineWidth: 1.5)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("4 digit PIN. \(selectedPINLength == 4 ? String(localized: "Selected") : String(localized: "Not selected"))")
-                    .accessibilityHint("Double tap to use a 4 digit PIN")
-
-                    // 6 digits option (recommended)
-                    Button {
-                        selectedPINLength = 6
-                        pin = ""
-                        confirmPin = ""
-                        focusedField = .pin
-                    } label: {
-                        VStack(spacing: 4) {
-                            Text("6 Digits")
-                                .font(.subheadline.weight(.medium))
-                            Text("Recommended")
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.brand.opacity(0.15))
-                                .foregroundColor(.brand)
-                                .clipShape(Capsule())
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(selectedPINLength == 6 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
-                        .foregroundColor(selectedPINLength == 6 ? .brand : .primary)
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(selectedPINLength == 6 ? Color.brand : Color.clear, lineWidth: 1.5)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("6 digit PIN, recommended. \(selectedPINLength == 6 ? String(localized: "Selected") : String(localized: "Not selected"))")
-                    .accessibilityHint("Double tap to use a 6 digit PIN")
-                }
-                .padding(.horizontal, 20)
-            }
 
             // PIN Entry
             PINEntryFieldView(
@@ -291,7 +249,6 @@ struct RestoreWalletView: View {
             Spacer()
         }
         .onAppear {
-            // Always default to 6 digits (recommended) for new wallets
             focusedField = .pin
         }
     }
@@ -497,6 +454,11 @@ struct RestoreWalletView: View {
             return
         }
 
+        if let target = needsRestoreTarget {
+            matchWalletNeedingRestore(target)
+            return
+        }
+
         // Check for duplicate wallet (only when PIN is available, i.e. adding to existing wallets)
         if isAddingWallet, let pin = existingPin {
             do {
@@ -519,6 +481,36 @@ struct RestoreWalletView: View {
             }
         } else {
             step = .creationDate
+        }
+    }
+
+    /// Checks that the phrase belongs to a wallet that needs restore, then
+    /// prefills that wallet's name and icon. Its restore height carries
+    /// over, so the creation date step is skipped.
+    private func matchWalletNeedingRestore(_ target: NeedsRestoreTarget) {
+        isMatching = true
+        errorMessage = nil
+        let words = seedWords
+        var walletId: UUID?
+        if case .wallet(let id) = target { walletId = id }
+        Task {
+            do {
+                let match = try await walletManager.matchWalletNeedingRestore(mnemonic: words, walletId: walletId)
+                if let wallet = walletManager.wallets.first(where: { $0.id == match.walletId }) {
+                    walletName = wallet.name
+                    walletEmoji = wallet.emoji
+                }
+                needsRestoreMatch = match
+                if isAddingWallet, let existingPin {
+                    pin = existingPin
+                    step = .nameWallet
+                } else {
+                    step = .setPIN
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isMatching = false
         }
     }
 
@@ -634,7 +626,11 @@ struct RestoreWalletView: View {
 
                 let name = walletName.trimmingCharacters(in: .whitespaces).isEmpty ? WalletStore().nextWalletName(existing: walletManager.wallets) : walletName.trimmingCharacters(in: .whitespaces)
                 let emoji = walletEmoji
-                try walletManager.restoreWallet(name: name, emoji: emoji, mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
+                if let match = needsRestoreMatch {
+                    try walletManager.restoreWalletNeedingRestore(match, mnemonic: seedWords, pin: pin, name: name, emoji: emoji)
+                } else {
+                    try walletManager.restoreWallet(name: name, emoji: emoji, mnemonic: seedWords, pin: pin, restoreDate: restoreDate)
+                }
 
                 if !isAddingWallet {
                     KeychainStorage().savePinLength(selectedPINLength)

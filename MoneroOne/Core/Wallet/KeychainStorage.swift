@@ -515,11 +515,15 @@ class KeychainStorage {
 
     /// Retrieve seed for a specific wallet
     func getSeed(pin: String, walletId: UUID) throws -> String? {
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+
+        // A missing verifier or salt is a missing key, not a wrong PIN: it
+        // must never count toward the lockout.
+        try throwIfVerifierMissing(prefix: prefix)
+
         if isLockedOut {
             throw KeychainError.lockedOut(remainingSeconds: lockoutRemainingSeconds)
         }
-
-        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
 
         // Verify PIN against this wallet's stored hash
         guard verifyPin(pin, pinHashAccount: "\(prefix).pinhash", saltAccount: "\(prefix).salt") else {
@@ -530,7 +534,10 @@ class KeychainStorage {
         resetFailedAttempts()
 
         guard let salt = getKeychainData(account: "\(prefix).salt") else { return nil }
-        guard let encryptedData = getKeychainData(account: "\(prefix).seed") else { return nil }
+        guard let encryptedData = getKeychainData(account: "\(prefix).seed") else {
+            if itemIsMissing(account: "\(prefix).seed") { throw KeychainError.keysMissing }
+            return nil
+        }
         return decrypt(encryptedData, with: pin, salt: salt)
     }
 
@@ -588,11 +595,15 @@ class KeychainStorage {
     }
 
     func getViewOnly(pin: String, walletId: UUID) throws -> (address: String, viewKey: String)? {
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+
+        // Same rule as `getSeed(pin:walletId:)`: missing keys never count
+        // as a wrong PIN.
+        try throwIfVerifierMissing(prefix: prefix)
+
         if isLockedOut {
             throw KeychainError.lockedOut(remainingSeconds: lockoutRemainingSeconds)
         }
-
-        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
 
         guard verifyPin(pin, pinHashAccount: "\(prefix).pinhash", saltAccount: "\(prefix).salt") else {
             recordFailedAttempt()
@@ -600,6 +611,10 @@ class KeychainStorage {
         }
 
         resetFailedAttempts()
+
+        if itemIsMissing(account: "\(prefix).viewonly") {
+            throw KeychainError.keysMissing
+        }
 
         guard
             let salt = getKeychainData(account: "\(prefix).salt"),
@@ -627,6 +642,39 @@ class KeychainStorage {
             kSecReturnData as String: false
         ]
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    // MARK: - Missing keys
+
+    /// True when any keychain item this wallet needs to unlock is gone.
+    /// A device backup or Quick Start brings the wallet list (UserDefaults)
+    /// to a new iPhone but none of these ThisDeviceOnly items, so the wallet
+    /// cannot unlock there until it is restored with its phrase. Reads
+    /// attributes only: no secret data, no biometric prompt.
+    func walletKeysMissing(walletId: UUID, holdsSeed: Bool) -> Bool {
+        let prefix = "one.monero.MoneroOne.wallet.\(walletId.uuidString)"
+        let secret = holdsSeed ? "seed" : "viewonly"
+        return [secret, "pinhash", "salt"].contains { itemIsMissing(account: "\(prefix).\($0)") }
+    }
+
+    /// Only `errSecItemNotFound` means missing. Any other failure, such as
+    /// `errSecInteractionNotAllowed` before the first unlock after a reboot,
+    /// counts as present, so a locked keychain never reads as empty.
+    private func itemIsMissing(account: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        return SecItemCopyMatching(query as CFDictionary, &result) == errSecItemNotFound
+    }
+
+    private func throwIfVerifierMissing(prefix: String) throws {
+        if itemIsMissing(account: "\(prefix).pinhash") || itemIsMissing(account: "\(prefix).salt") {
+            throw KeychainError.keysMissing
+        }
     }
 
     /// Copy raw keychain data from one account to another (for migration)
@@ -1015,12 +1063,16 @@ enum KeychainError: LocalizedError {
     case encryptionFailed
     case notFound
     case lockedOut(remainingSeconds: Int)
+    /// The wallet's keys are not in this iPhone's keychain (device backup
+    /// or Quick Start). Never a wrong PIN.
+    case keysMissing
 
     var errorDescription: String? {
         switch self {
         case .saveFailed: return String(localized: "Failed to save to keychain")
         case .encryptionFailed: return String(localized: "Encryption failed")
         case .notFound: return String(localized: "Item not found in keychain")
+        case .keysMissing: return String(localized: "Restore this wallet with its recovery phrase.", comment: "Error: the wallet's keys are not on this iPhone")
         case .lockedOut(let seconds):
             let minutes = seconds / 60
             let secs = seconds % 60

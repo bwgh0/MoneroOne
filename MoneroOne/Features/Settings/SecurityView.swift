@@ -150,7 +150,8 @@ struct ChangePINView: View {
     @State private var confirmPIN = ""
     @State private var errorMessage: String?
     @State private var isChanging = false
-    @State private var selectedPINLength = 6
+    /// New PINs are 6 digits. The current PIN keeps its stored length.
+    private let selectedPINLength = 6
     @FocusState private var focusedField: Field?
 
     enum Field { case current, new, confirm }
@@ -169,56 +170,6 @@ struct ChangePINView: View {
                     focusedField = .new
                 }
             )
-
-            VStack(spacing: 8) {
-                Text("New PIN Length")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                HStack(spacing: 12) {
-                    // 4 digits option
-                    Button {
-                        selectedPINLength = 4
-                        newPIN = ""
-                        confirmPIN = ""
-                    } label: {
-                        Text("4 Digits")
-                            .font(.subheadline.weight(.medium))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(selectedPINLength == 4 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
-                            .foregroundColor(selectedPINLength == 4 ? .brand : .primary)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(selectedPINLength == 4 ? Color.brand : Color.clear, lineWidth: 1.5)
-                            )
-                    }
-                    .buttonStyle(.plain)
-
-                    // 6 digits option
-                    Button {
-                        selectedPINLength = 6
-                        newPIN = ""
-                        confirmPIN = ""
-                    } label: {
-                        Text("6 Digits")
-                            .font(.subheadline.weight(.medium))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(selectedPINLength == 6 ? Color.brand.opacity(0.15) : Color(.secondarySystemBackground))
-                            .foregroundColor(selectedPINLength == 6 ? .brand : .primary)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(selectedPINLength == 6 ? Color.brand : Color.clear, lineWidth: 1.5)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-                .frame(maxWidth: 280)
-            }
-            .padding(.vertical, 8)
 
             PINEntryFieldView(
                 pin: $newPIN,
@@ -278,7 +229,6 @@ struct ChangePINView: View {
         .navigationTitle("Change PIN")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            selectedPINLength = preferredPINLength
             focusedField = .current
         }
     }

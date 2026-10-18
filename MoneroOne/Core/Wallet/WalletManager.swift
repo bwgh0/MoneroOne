@@ -24,6 +24,42 @@ class WalletManager: ObservableObject {
         }
     }
     var hasWallet: Bool { !wallets.isEmpty }
+
+    /// Wallets whose keys are not in this iPhone's keychain. A device backup
+    /// or Quick Start brings the wallet list (UserDefaults) to a new iPhone
+    /// without the ThisDeviceOnly keychain items, so no PIN can unlock these
+    /// wallets until they are restored with their recovery phrase. Read
+    /// before the PIN screen (see `refreshWalletsNeedingRestore`).
+    @Published private(set) var walletsNeedingRestore: Set<UUID> = []
+
+    /// Every wallet needs restore: `ContentView` shows the restore screen in
+    /// place of the PIN screen, which no PIN could pass.
+    var allWalletsNeedRestore: Bool {
+        !wallets.isEmpty && wallets.allSatisfy { walletsNeedingRestore.contains($0.id) }
+    }
+
+    func needsRestore(_ walletId: UUID) -> Bool {
+        walletsNeedingRestore.contains(walletId)
+    }
+
+    /// The wallet2 files of a wallet that needs restore are still on this
+    /// iPhone. The kit keeps them out of device backups (FileHandler), so
+    /// files left here mean the keys went missing on this same iPhone, for
+    /// example after a developer team transfer, not on a new iPhone set up
+    /// from a backup. The restore screen then names no cause.
+    var needsRestoreWalletFilesRemain: Bool {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return false
+        }
+        let moneroKitDir = appSupport.appendingPathComponent("MoneroKit")
+        return wallets.contains { wallet in
+            walletsNeedingRestore.contains(wallet.id)
+                && [wallet.derivedWalletId, wallet.deviceWalletId].compactMap { $0 }.contains {
+                    FileManager.default.fileExists(atPath: moneroKitDir.appendingPathComponent($0).path)
+                }
+        }
+    }
+
     @Published var isUnlocked: Bool = false
     @Published var balance: Decimal = 0
     @Published var unlockedBalance: Decimal = 0
@@ -1153,7 +1189,29 @@ class WalletManager: ObservableObject {
 
     init() {
         checkForExistingWallet()
+        refreshWalletsNeedingRestore()
         cleanOrphanedWalletCaches()
+    }
+
+    // MARK: - Wallets needing restore
+
+    /// Re-reads which wallets lack their keychain items: a few attribute-only
+    /// keychain queries per wallet, no secrets read. While locked, a wallet
+    /// that still has its keys becomes active in place of one that does not,
+    /// so the PIN screen unlocks as usual and the others show "Needs restore".
+    func refreshWalletsNeedingRestore() {
+        let missing = Set(wallets.filter {
+            keychain.walletKeysMissing(walletId: $0.id, holdsSeed: !$0.isViewOnly)
+        }.map(\.id))
+        if missing != walletsNeedingRestore {
+            walletsNeedingRestore = missing
+        }
+        guard !isUnlocked,
+              let active = activeWallet, missing.contains(active.id),
+              let usable = wallets.first(where: { !missing.contains($0.id) })
+        else { return }
+        activeWallet = usable
+        walletStore.setActiveWalletId(usable.id)
     }
 
     /// Sweep wallet2 cache directories that don't match any registered
@@ -1464,6 +1522,140 @@ class WalletManager: ObservableObject {
         try restoreWallet(name: name, mnemonic: mnemonic, pin: pin, restoreDate: restoreDate)
     }
 
+    // MARK: - Restore a wallet that needs restore
+
+    /// A recovery phrase matched to a wallet that needs restore. Made by
+    /// `matchWalletNeedingRestore`, used by `restoreWalletNeedingRestore`.
+    struct NeedsRestoreMatch: Equatable {
+        let walletId: UUID
+        /// The wallet2 cache id `create()` derives from the phrase. It equals
+        /// the wallet's stored `derivedWalletId` unless the phrase is the
+        /// same wallet in another format (for example the 25-word form of a
+        /// Polyseed wallet).
+        let derivedWalletId: String
+    }
+
+    /// Finds the wallet needing restore that `mnemonic` belongs to. With
+    /// `walletId`, only that wallet may match. Only seed wallets can match,
+    /// and the phrase must prove it is the wallet's: it hashes to the
+    /// wallet's stored cache id (the phrase it was created with), or it
+    /// opens to the wallet's last known primary address.
+    func matchWalletNeedingRestore(mnemonic: [String], walletId: UUID? = nil) async throws -> NeedsRestoreMatch {
+        guard validateMnemonic(mnemonic) else { throw WalletError.invalidMnemonic }
+
+        let noMatch: WalletError = walletId
+            .flatMap { id in wallets.first { $0.id == id } }
+            .map { WalletError.phraseMismatch(walletName: $0.name) } ?? .phraseMatchesNoWallet
+        let candidates = wallets.filter {
+            walletsNeedingRestore.contains($0.id) && !$0.isViewOnly && (walletId == nil || $0.id == walletId)
+        }
+        guard !candidates.isEmpty else { throw noMatch }
+
+        let seedPhrase = mnemonic.joined(separator: " ")
+        let cacheId = { (wallet: WalletInfo) in
+            self.derivedWalletId(seedPhrase: seedPhrase, syncResetCount: wallet.syncResetCount)
+        }
+
+        // A wallet that still has its keys already holds this phrase.
+        if let existing = wallets.first(where: { !walletsNeedingRestore.contains($0.id) && $0.derivedWalletId == cacheId($0) }) {
+            throw WalletError.duplicateWallet(existingName: existing.name)
+        }
+
+        // The phrase the wallet was created with: no wallet2 needed.
+        if let exact = candidates.first(where: { $0.derivedWalletId == cacheId($0) }) {
+            return NeedsRestoreMatch(walletId: exact.id, derivedWalletId: cacheId(exact))
+        }
+
+        // The same wallet in another phrase format: compare addresses.
+        let withAddress = candidates.filter { !($0.cachedPrimaryAddress ?? "").isEmpty }
+        guard !withAddress.isEmpty else { throw noMatch }
+        let address = try await primaryAddress(of: mnemonic)
+        guard let match = withAddress.first(where: { $0.cachedPrimaryAddress == address }) else { throw noMatch }
+        return NeedsRestoreMatch(walletId: match.id, derivedWalletId: cacheId(match))
+    }
+
+    /// Saves the phrase's keys for the matched wallet under `pin` and makes
+    /// it active. The wallet keeps its id, place in the list, restore
+    /// height, subaddresses and sync state, and its stored cache id stays
+    /// the one `create()` derives, so wallet2 files still on this iPhone open
+    /// as before. Call `unlock(pin:)` next, as after any restore.
+    func restoreWalletNeedingRestore(_ match: NeedsRestoreMatch, mnemonic: [String], pin: String, name: String, emoji: String) throws {
+        guard let wallet = wallets.first(where: { $0.id == match.walletId }),
+              walletsNeedingRestore.contains(wallet.id), !wallet.isViewOnly else {
+            throw WalletError.saveFailed
+        }
+        let seedPhrase = mnemonic.joined(separator: " ")
+        // walletId lockstep: a stored id that differs from the one `create()`
+        // derives makes the launch sweep delete the live cache.
+        let cacheId = derivedWalletId(seedPhrase: seedPhrase, syncResetCount: wallet.syncResetCount)
+        guard cacheId == match.derivedWalletId else {
+            throw WalletError.phraseMismatch(walletName: wallet.name)
+        }
+
+        // See `addWallet`: keep the running wallet's balance for the switcher.
+        // Only with a live wallet: while locked, the manager's mirrors are
+        // empty and would overwrite the active wallet's cached address.
+        if moneroWallet != nil {
+            cacheActiveWalletData()
+        }
+
+        let restored = WalletInfo(
+            id: wallet.id,
+            name: name,
+            emoji: emoji,
+            // The phrase's own format: the wallet may come back as its
+            // 25-word form.
+            source: .seeded(wordCount: mnemonic.count),
+            createdAt: wallet.createdAt,
+            restoreHeight: wallet.restoreHeight,
+            syncResetCount: wallet.syncResetCount,
+            userCreatedSubaddressIndices: wallet.userCreatedSubaddressIndices,
+            cachedPrimaryAddress: wallet.cachedPrimaryAddress,
+            cachedBalance: wallet.cachedBalance,
+            derivedWalletId: cacheId,
+            deviceWalletId: wallet.deviceWalletId
+        )
+
+        try keychain.saveSeed(seedPhrase, pin: pin, walletId: wallet.id)
+        walletStore.updateWallet(restored)
+        walletStore.setActiveWalletId(wallet.id)
+
+        wallets = walletStore.loadWallets()
+        walletsNeedingRestore.remove(wallet.id)
+        activeWallet = restored
+        currentPin = pin
+    }
+
+    /// The primary address `mnemonic` opens to, read from a throwaway
+    /// wallet2. wallet2 runs one wallet at a time, so a running wallet stops
+    /// for the check and starts again after it.
+    private func primaryAddress(of mnemonic: [String]) async throws -> String {
+        let wasRunning = moneroWallet != nil
+        if wasRunning {
+            await suspendActiveWalletForPairing()
+        }
+        let address: String
+        do {
+            address = try await MoneroWallet().probePrimaryAddress(seed: mnemonic, networkType: networkType)
+        } catch {
+            if wasRunning { await resumeActiveWalletAfterProbe() }
+            throw WalletError.invalidMnemonic
+        }
+        if wasRunning { await resumeActiveWalletAfterProbe() }
+        guard !address.isEmpty else { throw WalletError.invalidMnemonic }
+        return address
+    }
+
+    /// Starts the active wallet again after `primaryAddress(of:)` stopped it,
+    /// without a new session id: the restore flow is still on screen, and a
+    /// new id rebuilds the view tree under it.
+    private func resumeActiveWalletAfterProbe() async {
+        guard let pin = currentPin else { return }
+        sessionBumpedForSwitch = true
+        defer { sessionBumpedForSwitch = false }
+        try? await unlock(pin: pin)
+    }
+
     /// Restore a view-only wallet from an address + private view key pair.
     /// Skips mnemonic validation (no seed) and checks for an address
     /// collision instead of a seed collision. Async so we can run a
@@ -1656,6 +1848,10 @@ class WalletManager: ObservableObject {
     // MARK: - Wallet Unlock
 
     func unlock(pin: String) async throws {
+        try await unlock(pin: pin, retryOnMissingKeys: true)
+    }
+
+    private func unlock(pin: String, retryOnMissingKeys: Bool) async throws {
         // No fallback to the legacy global-keychain seed path: migration
         // runs in `checkForExistingWallet()` and produces a `WalletInfo`;
         // reaching here with `activeWallet == nil` means there is no
@@ -1665,39 +1861,59 @@ class WalletManager: ObservableObject {
             throw WalletError.invalidPin
         }
 
+        // Keys gone (device backup, Quick Start): the restore screen and the
+        // "Needs restore" rows handle these wallets. Never a wrong PIN.
+        if walletsNeedingRestore.contains(active.id) {
+            throw WalletError.keysMissing
+        }
+
         currentPin = pin
 
-        // Dispatch on the wallet's origin type. Hardware wallets share the
-        // view-only startup path on iPhone — the on-device wallet2 instance
-        // is always watch-only; the spend key only comes into play during
-        // a transient device session, handled out-of-band.
-        switch active.source {
-        case .seed:
-            let seedResult = try await Task.detached {
-                try self.keychain.getSeed(pin: pin, walletId: active.id)
-            }.value
-            guard let seedPhrase = seedResult else {
-                throw WalletError.invalidPin
+        do {
+            // Dispatch on the wallet's origin type. Hardware wallets share the
+            // view-only startup path on iPhone — the on-device wallet2 instance
+            // is always watch-only; the spend key only comes into play during
+            // a transient device session, handled out-of-band.
+            switch active.source {
+            case .seed:
+                let seedResult = try await Task.detached {
+                    try self.keychain.getSeed(pin: pin, walletId: active.id)
+                }.value
+                guard let seedPhrase = seedResult else {
+                    throw WalletError.invalidPin
+                }
+                let mnemonic = seedPhrase.split(separator: " ").map(String.init)
+                currentSeed = mnemonic
+                try await startWalletFromSeed(mnemonic)
+
+                // Populate derivedWalletId lazily for wallets created before the
+                // field existed, so future duplicate-seed checks catch them.
+                populateDerivedWalletIdIfMissing(for: active.id, seedPhrase: seedPhrase)
+
+            case .viewOnly, .hardware:
+                let viewKeys = try await Task.detached {
+                    try self.keychain.getViewOnly(pin: pin, walletId: active.id)
+                }.value
+                guard let keys = viewKeys else {
+                    throw WalletError.invalidPin
+                }
+                currentSeed = nil
+                try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
+
+                populateDerivedWalletIdIfMissing(for: active.id, viewOnlyAddress: keys.address, viewKey: keys.viewKey)
             }
-            let mnemonic = seedPhrase.split(separator: " ").map(String.init)
-            currentSeed = mnemonic
-            try await startWalletFromSeed(mnemonic)
-
-            // Populate derivedWalletId lazily for wallets created before the
-            // field existed, so future duplicate-seed checks catch them.
-            populateDerivedWalletIdIfMissing(for: active.id, seedPhrase: seedPhrase)
-
-        case .viewOnly, .hardware:
-            let viewKeys = try await Task.detached {
-                try self.keychain.getViewOnly(pin: pin, walletId: active.id)
-            }.value
-            guard let keys = viewKeys else {
-                throw WalletError.invalidPin
+        } catch KeychainError.keysMissing {
+            // The launch check missed it (for example, the keychain was not
+            // readable yet). Flag the wallet now. While another wallet still
+            // has its keys, it becomes active: unlock it with the same PIN.
+            currentPin = nil
+            refreshWalletsNeedingRestore()
+            if retryOnMissingKeys, let next = activeWallet, next.id != active.id,
+               !walletsNeedingRestore.contains(next.id) {
+                try await unlock(pin: pin, retryOnMissingKeys: false)
+                return
             }
-            currentSeed = nil
-            try await startWalletFromViewKey(address: keys.address, viewKey: keys.viewKey)
-
-            populateDerivedWalletIdIfMissing(for: active.id, viewOnlyAddress: keys.address, viewKey: keys.viewKey)
+            throw WalletError.keysMissing
         }
     }
 
@@ -3173,6 +3389,10 @@ class WalletManager: ObservableObject {
         for id in ids {
             deleteWallet(id: id)
         }
+        // The Face ID item holds the old PIN. Left behind, it would offer
+        // Face ID on the next wallet's PIN screen and fail with that PIN,
+        // which counts toward the lockout.
+        keychain.deleteBiometricPin()
     }
 
     func deleteWallet(id: UUID) {
@@ -3185,6 +3405,7 @@ class WalletManager: ObservableObject {
         receiveSelection.removeAll(for: id)
         walletStore.removeWallet(id: id)
         wallets = walletStore.loadWallets()
+        walletsNeedingRestore.remove(id)
 
         if isDeletingActive {
             // Stop current wallet
@@ -3210,13 +3431,15 @@ class WalletManager: ObservableObject {
             subaddresses = []
             userCreatedSubaddressIndices = []
 
-            if let next = wallets.first {
+            // Prefer a wallet that still has its keys. With only wallets
+            // that need restore left, ContentView shows the restore screen.
+            if let next = wallets.first(where: { !walletsNeedingRestore.contains($0.id) }) ?? wallets.first {
                 // Switch to next wallet
                 activeWallet = next
                 walletStore.setActiveWalletId(next.id)
 
                 // If we have the PIN, auto-switch
-                if let pin = currentPin {
+                if let pin = currentPin, !walletsNeedingRestore.contains(next.id) {
                     Task {
                         try? await switchToWallet(id: next.id, pin: pin)
                     }
@@ -3316,6 +3539,7 @@ class WalletManager: ObservableObject {
         await oldWallet?.stopAsync()
 
         guard let pin = currentPin else { throw WalletError.notUnlocked }
+        if walletsNeedingRestore.contains(target.id) { throw WalletError.keysMissing }
 
         // Route by wallet source. View-only and hardware wallets share the
         // watch-only startup path — neither has a seed on-device, both open
@@ -3415,7 +3639,9 @@ class WalletManager: ObservableObject {
     func reencryptAllWallets(oldPin: String, newPin: String) throws {
         var seeds: [(UUID, String)] = []
         var viewOnlyKeys: [(UUID, String, String)] = []
-        for wallet in wallets {
+        // Wallets that need restore have no keys to re-encrypt. A later
+        // restore saves them under the PIN in use then.
+        for wallet in wallets where !walletsNeedingRestore.contains(wallet.id) {
             switch wallet.source {
             case .seed:
                 guard let seed = try keychain.getSeed(pin: oldPin, walletId: wallet.id) else {
@@ -3538,6 +3764,12 @@ enum WalletError: LocalizedError, Equatable {
     case walletMismatch
     case viewOnlyCannotSend
     case hardwareSessionRequired
+    /// The wallet's keys are not on this iPhone (device backup, Quick Start).
+    case keysMissing
+    /// A recovery phrase for another wallet than the one being restored.
+    case phraseMismatch(walletName: String)
+    /// The restore screen: the phrase belongs to none of its wallets.
+    case phraseMatchesNoWallet
 
     var errorDescription: String? {
         switch self {
@@ -3552,6 +3784,9 @@ enum WalletError: LocalizedError, Equatable {
         case .walletMismatch: return String(localized: "Active wallet changed — please retry")
         case .viewOnlyCannotSend: return String(localized: "View-only wallets cannot send transactions")
         case .hardwareSessionRequired: return String(localized: "Connect your hardware device to sign this transaction.")
+        case .keysMissing: return String(localized: "Restore this wallet with its recovery phrase.", comment: "Error: the wallet's keys are not on this iPhone")
+        case .phraseMismatch(let name): return String(localized: "This recovery phrase is for a different wallet. Enter the phrase for \"\(name)\".", comment: "Wallet name in quotes")
+        case .phraseMatchesNoWallet: return String(localized: "This recovery phrase does not match any of these wallets.")
         }
     }
 }

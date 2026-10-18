@@ -1707,6 +1707,19 @@ final class TransactionScreenLogicTests: XCTestCase {
         XCTAssertEqual(result[7].value, "Not available for transactions sent before this wallet was restored")
     }
 
+    /// MoneroKit stores 0 for a fee that wallet2 cannot compute (a
+    /// pre-RingCT transaction with inputs from another wallet).
+    func testCopyAllShowsUnknownFeeAsNotAvailable() {
+        let unknown = lines(tx("out-v1", .outgoing, amount: 1, fee: 0))
+        XCTAssertEqual(unknown.first { $0.label == "Fee" }?.value, "Not available")
+
+        let known = lines(tx("out-fee", .outgoing, amount: 1, fee: 0.0001))
+        XCTAssertEqual(known.first { $0.label == "Fee" }?.value, "0.0001 XMR")
+
+        // A received transaction (a coinbase too, whose fee is 0) has no fee line.
+        XCTAssertFalse(lines(tx("in-coinbase", .incoming, amount: 0.6, fee: 0)).contains { $0.label == "Fee" })
+    }
+
     func testCopyAllTextIsOneLabelledLinePerField() {
         let text = TransactionDetailLogic.copyAllText([
             TransactionDetailLine(label: "Type", value: "Sent"),

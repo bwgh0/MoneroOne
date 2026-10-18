@@ -175,14 +175,19 @@ struct TransactionDetailView: View {
                 }
 
                 if transaction.type == .outgoing {
+                    let feeIsKnown = TransactionDetailLogic.feeIsKnown(transaction.fee)
                     HStack {
                         Text("Fee")
                         Spacer()
-                        Text("\(XMRFormatter.format(transaction.fee)) XMR")
+                        (feeIsKnown
+                            ? Text("\(XMRFormatter.format(transaction.fee)) XMR")
+                            : Text(TransactionDetailLogic.feeNotAvailable))
                             .foregroundColor(.secondary)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Fee: \(XMRFormatter.format(transaction.fee)) XMR")
+                    .accessibilityLabel(feeIsKnown
+                        ? "Fee: \(XMRFormatter.format(transaction.fee)) XMR"
+                        : "\(String(localized: "Fee")): \(TransactionDetailLogic.feeNotAvailable)")
                 }
 
                 if let memo = transaction.memo, !memo.isEmpty {
@@ -440,6 +445,18 @@ struct TransactionDetailLine: Equatable {
 }
 
 enum TransactionDetailLogic {
+    /// MoneroKit stores 0 for a fee that wallet2 cannot compute (a
+    /// pre-RingCT transaction with inputs from another wallet), so a sent
+    /// transaction with a 0 fee shows "Not available". Only sent
+    /// transactions show a fee: a received one, coinbase included, never.
+    static func feeIsKnown(_ fee: Decimal) -> Bool {
+        fee > 0
+    }
+
+    static var feeNotAvailable: String {
+        String(localized: "Not available", comment: "Transaction detail: the fee value when the wallet cannot compute the fee")
+    }
+
     /// Name of the receiving subaddress. `subaddressIndex` is the
     /// source of truth; the address reverse-match only covers rows
     /// captured before the index existed.
@@ -527,7 +544,7 @@ enum TransactionDetailLogic {
         add(String(localized: "Type"), incoming ? String(localized: "Received") : String(localized: "Sent"))
         add(String(localized: "Amount"), "\(incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount)) XMR")
         if !incoming {
-            add(String(localized: "Fee"), "\(XMRFormatter.format(transaction.fee)) XMR")
+            add(String(localized: "Fee"), feeIsKnown(transaction.fee) ? "\(XMRFormatter.format(transaction.fee)) XMR" : feeNotAvailable)
         }
         add(incoming ? String(localized: "Value when received") : String(localized: "Value when sent"), valueAtTime)
         add(String(localized: "Value today"), valueToday)

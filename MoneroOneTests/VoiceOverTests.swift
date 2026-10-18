@@ -309,12 +309,13 @@ final class VoiceOverTests: XCTestCase {
 
     private func addressStep(isLinkMode: Bool) -> [NSObject] {
         let step = SendAddressStep(
-            recipientAddress: .constant(""),
+            recipientInput: .constant(""),
             showScanner: .constant(false),
             isLinkMode: .constant(isLinkMode),
             isConnected: true,
             isValidAddress: false,
-            onContinue: {}
+            lookup: OpenAliasLookupModel(),
+            onContinue: { _ in }
         )
         return accessibilityElements(in: host(NavigationStack { step }, height: 600))
     }
@@ -332,8 +333,10 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertTrue(elements.contains { $0.accessibilityLabel == "Recipient, payment link. Anyone with the link can claim it" })
         XCTAssertTrue(elements.contains { $0.accessibilityLabel == "Remove payment link" })
         // Only the "Recipient" caption is left: the address field is gone.
+        let field = "Recipient address or OpenAlias name"
         XCTAssertEqual(elements.filter { $0.accessibilityLabel == "Recipient" }.count, 1)
-        XCTAssertEqual(addressStep(isLinkMode: false).filter { $0.accessibilityLabel == "Recipient" }.count, 2)
+        XCTAssertFalse(elements.contains { $0.accessibilityLabel == field })
+        XCTAssertTrue(addressStep(isLinkMode: false).contains { $0.accessibilityLabel == field })
     }
 
     // MARK: - Helpers

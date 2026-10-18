@@ -483,8 +483,8 @@ final class QRCodeRegressionTests: XCTestCase {
 
     // MARK: Scanning the code as the app draws it
 
-    /// The QR as `QRCodeView` draws it, with the flat mark on its white disc
-    /// in the center, still decodes to the full text at every size the app
+    /// The QR as `QRCodeView` draws it, with the flat mark in its cleared
+    /// center, still decodes to the full text at every size the app
     /// uses: Donation 240, Receive 280, focus mode 338 on a 402pt phone,
     /// the share and save image 400, and focus mode on a wide display 448.
     @MainActor

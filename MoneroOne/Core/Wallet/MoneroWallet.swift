@@ -69,17 +69,7 @@ class MoneroWallet: ObservableObject {
             networkType: networkType
         )
 
-        // Detect seed type and create appropriate credentials
-        // 16 words = polyseed, 24 words = bip39, 25 words = legacy
-        let credentials: MoneroKit.MoneroWallet
-        switch seed.count {
-        case 16:
-            credentials = MoneroKit.MoneroWallet.polyseed(seed: seed, passphrase: "")
-        case 25:
-            credentials = MoneroKit.MoneroWallet.legacy(seed: seed, passphrase: "")
-        default:
-            credentials = MoneroKit.MoneroWallet.bip39(seed: seed, passphrase: "")
-        }
+        let credentials = Self.kitCredentials(for: seed)
 
         // Heavy Kit init (SQLite + C++ + crypto) off main thread
         let reachability = reachabilityManager
@@ -668,6 +658,28 @@ class MoneroWallet: ObservableObject {
     /// Generate a stable wallet ID from seed words - ensures sync data persists across app restarts
     nonisolated static func stableWalletId(for seed: [String]) -> String {
         stableWalletId(for: seed.joined(separator: " "))
+    }
+
+    /// The credentials the kit restores `seed` from: 16 words are Polyseed,
+    /// 25 are legacy, anything else is BIP39.
+    ///
+    /// Legacy words go to the kit in their exact list form. wallet2
+    /// lower-cases with `towlower` in the C locale, which maps ASCII only,
+    /// so a stored "ästhetik" (the old free-text restore lower-cased input)
+    /// never meets the German list word "Ästhetik". The stored words stay as
+    /// they are: `walletCacheId` hashes them, so map only here.
+    nonisolated static func kitCredentials(for seed: [String]) -> MoneroKit.MoneroWallet {
+        switch seed.count {
+        case 16:
+            return .polyseed(seed: seed, passphrase: "")
+        case 25:
+            if case .valid(let phrase) = SeedPhraseValidator.validate(seed, format: .legacy) {
+                return .legacy(seed: phrase.words, passphrase: "")
+            }
+            return .legacy(seed: seed, passphrase: "")
+        default:
+            return .bip39(seed: seed, passphrase: "")
+        }
     }
 
     /// The on-disk wallet2 cache id for a seeded wallet. This is the single

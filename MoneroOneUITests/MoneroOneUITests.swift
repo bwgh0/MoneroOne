@@ -85,10 +85,10 @@ final class OnboardingFlowTests: XCTestCase {
         let app = UITestHelpers.launchCleanApp()
         UITestHelpers.navigateToRestoreSeed(app: app)
 
-        let seedInput = app.textViews["restore.seedInput"]
+        let firstWord = app.textFields["restore.seedWord.1"]
         let continueButton = app.buttons["restore.continueButton"]
 
-        XCTAssertTrue(seedInput.waitForExistence(timeout: 5), "Should show seed input field")
+        XCTAssertTrue(firstWord.waitForExistence(timeout: 5), "Should show the first seed word cell")
         XCTAssertTrue(continueButton.exists, "Should show continue button")
         XCTAssertFalse(continueButton.isEnabled, "Continue should be disabled with empty seed")
     }

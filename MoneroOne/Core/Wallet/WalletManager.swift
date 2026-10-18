@@ -198,6 +198,43 @@ class WalletManager: ObservableObject {
     }
     @Published private(set) var lastHardwareSessionOutcome: HardwareSessionOutcome?
 
+    /// A hardware session runs, from its start until the view wallet is
+    /// back. The state can read idle meanwhile (Cancel resets it), so this
+    /// flag, not the state, keeps a second session and the payment-link
+    /// checks out of MoneroKit's one wallet slot.
+    @Published private(set) var hardwareSessionRunning = false
+    /// The sheet's Cancel: the session stops at its next step.
+    private var hardwareSessionCancelled = false
+    private var hardwareSessionRun: Task<Void, Never>?
+
+    /// What a new hardware session does, given the one before it.
+    enum HardwareSessionStart: Equatable {
+        case start
+        /// A cancelled session still winds down: wait for it, then start.
+        case waitForCancelled
+        /// A session runs, or a finished one's result is still on screen
+        /// (a fresh sheet instance asks again after `.complete`).
+        case reject
+    }
+
+    nonisolated static func hardwareSessionStart(running: Bool, cancelled: Bool, state: HardwareSessionState) -> HardwareSessionStart {
+        if running { return cancelled ? .waitForCancelled : .reject }
+        guard case .idle = state else { return .reject }
+        return .start
+    }
+
+    /// The sheet's Cancel. The session stops at its next step: the FULL
+    /// wallet stops (also while it waits for MoneroKit's slot) and the view
+    /// wallet starts again on the screen the user is on. A send the Trezor
+    /// already signed still goes out.
+    func cancelHardwareSession() {
+        if hardwareSessionRunning {
+            TrezorLog.log("[Session] cancel requested (state=%@)", String(describing: hardwareSessionState))
+            hardwareSessionCancelled = true
+        }
+        hardwareSessionState = .idle
+    }
+
     @Published private(set) var hardwareSessionState: HardwareSessionState = .idle {
         didSet {
             #if DEBUG
@@ -339,6 +376,34 @@ class WalletManager: ObservableObject {
         send: HardwareSendIntent? = nil,
         onSent: ((String) -> Void)? = nil
     ) async {
+        // Reject duplicate calls. The HardwareSessionSheet's
+        // `@State sessionStarted` guard turned out to be racy — when
+        // `evaluateBleState()` fires twice in quick succession (e.g.
+        // onAppear + onChange both seeing state == .bridgeRunning),
+        // both calls spawn a Task before the @State write becomes
+        // visible to the second read. Both Tasks then `await
+        // runHardwareSyncSession()` and the second one tears down
+        // the bridge mid-warm-window, ending the just-completed
+        // session with a "Sync failed" and forcing a re-pair.
+        // `hardwareSessionRunning` dedupes at the source: Cancel sets the
+        // state back to idle while the session still winds down.
+        switch Self.hardwareSessionStart(running: hardwareSessionRunning, cancelled: hardwareSessionCancelled, state: hardwareSessionState) {
+        case .start:
+            break
+        case .waitForCancelled:
+            TrezorLog.log("[Session] waiting for the cancelled session to end")
+            await hardwareSessionRun?.value
+            guard !hardwareSessionRunning else {
+                TrezorLog.log("[Session] rejected duplicate runHardwareSession (another session started)")
+                return
+            }
+            // The cancelled session's sheet is gone: nothing reads its result.
+            hardwareSessionState = .idle
+            lastHardwareSessionOutcome = nil
+        case .reject:
+            TrezorLog.log("[Session] rejected duplicate runHardwareSession (state=%@)", String(describing: hardwareSessionState))
+            return
+        }
         guard let active = activeWallet, isHardwareWallet else {
             hardwareSessionState = .failed(message: String(localized: "Active wallet is not hardware-backed."))
             return
@@ -356,20 +421,30 @@ class WalletManager: ObservableObject {
             return
         }
 
-        // Reject duplicate calls. The HardwareSessionSheet's
-        // `@State sessionStarted` guard turned out to be racy — when
-        // `evaluateBleState()` fires twice in quick succession (e.g.
-        // onAppear + onChange both seeing state == .bridgeRunning),
-        // both calls spawn a Task before the @State write becomes
-        // visible to the second read. Both Tasks then `await
-        // runHardwareSyncSession()` and the second one tears down
-        // the bridge mid-warm-window, ending the just-completed
-        // session with a "Sync failed" and forcing a re-pair.
-        // The fix is to dedupe at the source — only run if we're
-        // currently idle.
-        guard case .idle = hardwareSessionState else {
-            TrezorLog.log("[Session] rejected duplicate runHardwareSession (state=%@)", String(describing: hardwareSessionState))
-            return
+        hardwareSessionRunning = true
+        hardwareSessionCancelled = false
+        // Its own task: the sheet's task ending cannot cut a send or the
+        // view wallet's restart short.
+        let run = Task { @MainActor in
+            await self.runHardwareSessionSteps(send: send, onSent: onSent, active: active,
+                                               deviceWalletId: deviceWalletId, viewKeys: viewKeys)
+        }
+        hardwareSessionRun = run
+        await run.value
+    }
+
+    private func runHardwareSessionSteps(
+        send: HardwareSendIntent?,
+        onSent: ((String) -> Void)?,
+        active: WalletInfo,
+        deviceWalletId: String,
+        viewKeys: (address: String, viewKey: String)
+    ) async {
+        defer {
+            hardwareSessionRunning = false
+            hardwareSessionCancelled = false
+            hardwareSessionRun = nil
+            EnvelopeRuntime.shared.endHardwareSession()
         }
         TrezorLog.log("[Session] starting hardware session (send=%@, deviceWalletId=%@)", send == nil ? "no" : "yes", deviceWalletId)
         DiagnosticLog.shared.log("Trezor session started (send=\(send == nil ? "no" : "yes"))")
@@ -393,6 +468,11 @@ class WalletManager: ObservableObject {
         let viewBaselineBalance = balance
         let viewBaselineUnlocked = unlockedBalance
 
+        // 0. A payment-link check stops first: its envelope wallet would
+        //    hold MoneroKit's one slot, and FULL would wait behind it with
+        //    the device never asked.
+        await EnvelopeRuntime.shared.beginHardwareSession()
+
         // 1. Stop VIEW so KitManager has a free slot for FULL.
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
@@ -405,6 +485,10 @@ class WalletManager: ObservableObject {
         syncState = .idle
         transactions = []
         subaddresses = []
+        if hardwareSessionCancelled {
+            await endCancelledSession(viewKeys: viewKeys)
+            return
+        }
 
         // 2/3. Open FULL via createFromDevice (uses openWallet under
         //    the hood when the cache exists) and wait for its refresh,
@@ -441,6 +525,11 @@ class WalletManager: ObservableObject {
                 return
             }
 
+            if hardwareSessionCancelled {
+                await fullWallet.stopAsync()
+                await endCancelledSession(viewKeys: viewKeys)
+                return
+            }
             hardwareSessionState = .syncingFull(progress: 0, blocksRemaining: nil)
             bindFullWalletSyncProgress(fullWallet)
 
@@ -459,6 +548,13 @@ class WalletManager: ObservableObject {
                 try await waitForSyncedOrThrow(fullWallet, timeout: 600)
                 break
             } catch {
+                // Cancel: stop FULL (it may still wait for the kit slot) and
+                // keep its cache. Not a failed refresh.
+                if hardwareSessionCancelled {
+                    await fullWallet.stopAsync()
+                    await endCancelledSession(viewKeys: viewKeys)
+                    return
+                }
                 TrezorLog.log("[Session] FULL refresh FAILED: %@ | wallet2: %@",
                               error.localizedDescription, fullWallet.latestErrorString)
                 await fullWallet.stopAsync()
@@ -490,6 +586,11 @@ class WalletManager: ObservableObject {
         //    on this send, not a correctness problem.
         //    The 300s window matches the BLE warm-window — same
         //    "recent enough to skip the slow path" semantics.
+        if hardwareSessionCancelled {
+            await fullWallet.stopAsync()
+            await endCancelledSession(viewKeys: viewKeys)
+            return
+        }
         let recentKICutoff: TimeInterval = 300
         let lastKISync = loadHardwareBalanceSnapshot(walletId: active.id)?.savedAt
         let skipKI = lastKISync.map { Date().timeIntervalSince($0) < recentKICutoff } ?? false
@@ -499,6 +600,11 @@ class WalletManager: ObservableObject {
         } else {
             hardwareSessionState = .syncingKeyImages
             let kiOK = await fullWallet.coldKeyImageSync()
+            if !kiOK, hardwareSessionCancelled {
+                await fullWallet.stopAsync()
+                await endCancelledSession(viewKeys: viewKeys)
+                return
+            }
             if !kiOK {
                 // wallet2 throws (no status set) when the device doesn't
                 // finish the export — most often the confirmation on the
@@ -512,14 +618,19 @@ class WalletManager: ObservableObject {
             }
         }
 
-        // 5. Optional send.
+        // 5. Optional send. After a Cancel nothing is signed.
+        if send != nil, hardwareSessionCancelled {
+            await fullWallet.stopAsync()
+            await endCancelledSession(viewKeys: viewKeys)
+            return
+        }
         var sentTxId: String?
         switch send {
         case .none: break
         case .single(let to, let amount, let memo):
             hardwareSessionState = .signing
             do {
-                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo, beforeBroadcast: Self.broadcastStep(pendingBroadcastStep, for: to))
+                let txId = try await fullWallet.send(to: to, amount: amount, memo: memo, beforeBroadcast: broadcastingStep(for: to))
                 Self.broadcastDone(pendingBroadcastStep, for: to)?(txId)
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
@@ -537,7 +648,7 @@ class WalletManager: ObservableObject {
         case .all(let to, let memo):
             hardwareSessionState = .signing
             do {
-                let txId = try await fullWallet.sendAll(to: to, memo: memo, beforeBroadcast: Self.broadcastStep(pendingBroadcastStep, for: to))
+                let txId = try await fullWallet.sendAll(to: to, memo: memo, beforeBroadcast: broadcastingStep(for: to))
                 Self.broadcastDone(pendingBroadcastStep, for: to)?(txId)
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
@@ -590,7 +701,7 @@ class WalletManager: ObservableObject {
 
         // 8. Reopen VIEW.
         do {
-            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)
+            try await restartViewWallet(viewKeys)
         } catch {
             TrezorLog.log("[Session] VIEW restore FAILED: %@", error.localizedDescription)
             hardwareSessionState = .failed(message: String(localized: "Couldn't restore view-only wallet — relaunch the app."))
@@ -613,6 +724,9 @@ class WalletManager: ObservableObject {
             lastHardwareSessionOutcome = .syncedOnly
             hardwareSessionState = .complete(message: String(localized: "Sent transactions are up to date."))
         }
+        // Cancelled late (the key images were in, or the Trezor signed):
+        // the sheet is gone, so no result stays on screen.
+        if hardwareSessionCancelled { hardwareSessionState = .idle }
         TrezorLog.log("[Session] session complete (warm window started)")
         DiagnosticLog.shared.log("Trezor session complete")
     }
@@ -647,6 +761,7 @@ class WalletManager: ObservableObject {
         var heightAtError: UInt64 = 0
 
         while Date() < deadline {
+            if hardwareSessionCancelled { throw CancellationError() }
             let walletH = wallet.walletHeight
             let daemonH = wallet.daemonHeight
             let elapsed = Date().timeIntervalSince(startedAt)
@@ -712,12 +827,49 @@ class WalletManager: ObservableObject {
         DiagnosticLog.shared.log("Trezor session failed: \(message)")
         hardwareSessionState = .tearingDown
         do {
-            try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)
+            try await restartViewWallet(viewKeys)
         } catch {
             TrezorLog.log("[Session] could not restore VIEW after failure: %@", error.localizedDescription)
         }
         lastHardwareSessionOutcome = .failed(message: message, mayHaveSent: mayHaveSent)
-        hardwareSessionState = .failed(message: message)
+        hardwareSessionState = hardwareSessionCancelled ? .idle : .failed(message: message)
+    }
+
+    /// The sheet's Cancel took effect and FULL is stopped: the view wallet
+    /// starts again. The state stays idle, since the sheet is gone.
+    private func endCancelledSession(viewKeys: (address: String, viewKey: String)) async {
+        TrezorLog.log("[Session] cancelled, restoring VIEW")
+        DiagnosticLog.shared.log("Trezor session cancelled")
+        hardwareSessionState = .tearingDown
+        do {
+            try await restartViewWallet(viewKeys)
+        } catch {
+            TrezorLog.log("[Session] could not restore VIEW after cancel: %@", error.localizedDescription)
+        }
+        hardwareSessionState = .idle
+    }
+
+    /// Starts the view wallet at the end of a session. After a Cancel the
+    /// user is back on the screen the sheet came from, so the screens are
+    /// not rebuilt (`walletSessionId` stays).
+    private func restartViewWallet(_ viewKeys: (address: String, viewKey: String)) async throws {
+        let keepScreens = hardwareSessionCancelled
+        if keepScreens { sessionBumpedForSwitch = true }
+        defer { if keepScreens { sessionBumpedForSwitch = false } }
+        try await startWalletFromViewKey(address: viewKeys.address, viewKey: viewKeys.viewKey)
+    }
+
+    /// The step a hardware send runs once the Trezor signed, before the
+    /// broadcast: a link funding's step (`pendingBroadcastStep`), then the
+    /// sheet shows Broadcasting while the node takes the transaction.
+    private func broadcastingStep(for address: String) -> MoneroWallet.BeforeBroadcast {
+        let linkStep = Self.broadcastStep(pendingBroadcastStep, for: address)
+        return { [weak self] prepared in
+            // Cancel while the Trezor signed: nothing goes out.
+            if self?.hardwareSessionCancelled == true { throw CancellationError() }
+            try await linkStep?(prepared)
+            self?.hardwareSessionState = .broadcasting
+        }
     }
 
     // MARK: - Hardware tx snapshot
@@ -1680,7 +1832,7 @@ class WalletManager: ObservableObject {
     /// and the widget keep their last values meanwhile. `isUnlocked` stays
     /// true. Returns false when a hardware session holds the wallet.
     func suspendActiveWalletForEnvelope() async -> Bool {
-        guard isUnlocked, case .idle = hardwareSessionState else { return false }
+        guard isUnlocked, !hardwareSessionRunning, case .idle = hardwareSessionState else { return false }
         cancellables.removeAll()
         if let oldWallet = moneroWallet {
             moneroWallet = nil

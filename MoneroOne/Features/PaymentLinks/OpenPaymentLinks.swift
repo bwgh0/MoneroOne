@@ -496,7 +496,8 @@ struct OpenPaymentLinksChecks: ViewModifier {
         return now.timeIntervalSince(lastLook) >= lookInterval
     }
 
-    private var canCheck: Bool { isActive && coordinator.presentation == nil }
+    /// Never while a Trezor session runs: it holds MoneroKit's one wallet.
+    private var canCheck: Bool { isActive && coordinator.presentation == nil && !walletManager.hardwareSessionRunning }
 
     func body(content: Content) -> some View {
         content

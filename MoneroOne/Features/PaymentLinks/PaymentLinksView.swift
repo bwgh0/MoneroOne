@@ -217,6 +217,8 @@ final class PaymentLinksStatusChecker: ObservableObject {
                 return
             }
             for candidate in candidates {
+                // A Trezor session takes the wallet slot: the rest waits.
+                if EnvelopeRuntime.shared.hardwareSessionHolds { break }
                 guard !Task.isCancelled, let link = candidate.link,
                       var record = store.record(id: candidate.id, role: candidate.role) else { continue }
                 let observation: EnvelopeObservation
@@ -228,6 +230,10 @@ final class PaymentLinksStatusChecker: ObservableObject {
                         number: record.number
                     )
                 } catch {
+                    if EnvelopeRuntime.shared.hardwareSessionHolds {
+                        DiagnosticLog.shared.log("Payment link check stopped for a Trezor session: \(EnvelopeRuntime.logName(record.number))")
+                        break
+                    }
                     DiagnosticLog.shared.log("Payment link check failed: \(EnvelopeRuntime.logName(record.number)): \(error.localizedDescription)")
                     if !Task.isCancelled { self?.lastFailedLook[candidate.id] = Date() }
                     continue
@@ -382,6 +388,29 @@ final class PaymentLinksStatusChecker: ObservableObject {
         )
         for record in updates {
             try? store.save(record)
+        }
+        for record in settleUpdates(records: store.sent + store.received, transactions: walletManager.transactions) {
+            try? store.save(record)
+        }
+    }
+
+    /// Our claims and reclaims that the active wallet's history shows in a
+    /// block: mined, so no look needs to ask whether they dropped
+    /// (``EnvelopeStatusRules/needsSettleLook(_:transactions:)``). The
+    /// wallet that settled never looks (its history shows the sweep), so
+    /// without this the first other wallet the user switched to looked at
+    /// each such link once, with the active wallet stopped meanwhile. A
+    /// settle that left money locked keeps its looks (`settleLeftLocked`).
+    nonisolated static func settleUpdates(records: [EnvelopeRecord], transactions: [MoneroTransaction]) -> [EnvelopeRecord] {
+        let mined = Set(transactions.filter { $0.status == .confirmed }.map(\.id))
+        guard !mined.isEmpty else { return [] }
+        return records.compactMap { original in
+            let ours = original.settleTxids
+            guard original.status.isSettled, original.settleSeenMined != true,
+                  !ours.isEmpty, mined.isSuperset(of: ours) else { return nil }
+            var record = original
+            record.settleSeenMined = true
+            return record
         }
     }
 

@@ -505,7 +505,9 @@ struct HardwareSessionSheet: View {
     }
 
     private func cancelAndDismiss() {
-        walletManager.resetHardwareSessionState()
+        // Stops the session itself, not only the sheet: FULL stops and the
+        // view wallet starts again.
+        walletManager.cancelHardwareSession()
         walletManager.disconnectHardwareDevice()
         dismiss()
     }

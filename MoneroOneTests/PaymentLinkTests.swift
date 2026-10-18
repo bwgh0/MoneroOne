@@ -1605,6 +1605,94 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertThrowsError(try PaymentLinkFunder.beginFunding(record, walletId: "trezor", store: store, networkType: .mainnet))
     }
 
+    /// A claim or reclaim the active wallet's history shows mined needs no
+    /// look from any wallet after it: a switch to another wallet does not
+    /// stop the active wallet to look at long-settled links. A sweep still
+    /// waiting, a split one not all mined, or one that left money locked
+    /// keeps its looks.
+    func testAMinedSettleInTheHistoryEndsItsLooks() {
+        let now = Date()
+        var claim = storeRecord(vector.id, .received)
+        claim.settle(txids: ["c1"], amount: 5, walletName: "Main", height: 1_000, leftLocked: false, at: now)
+        // The other wallet's history has no trace of it: a look.
+        XCTAssertTrue(EnvelopeStatusRules.needsSettleLook(claim, transactions: []))
+
+        let checker = PaymentLinksStatusChecker.self
+        XCTAssertTrue(checker.settleUpdates(records: [claim], transactions: [history("c1", .pending)]).isEmpty)
+        XCTAssertTrue(checker.settleUpdates(records: [claim], transactions: [history("c1", .failed)]).isEmpty)
+        let marked = checker.settleUpdates(records: [claim], transactions: [history("c1", .confirmed)])
+        XCTAssertEqual(marked.count, 1)
+        XCTAssertEqual(marked.first?.settleSeenMined, true)
+        // Then, from any wallet: no look.
+        XCTAssertFalse(EnvelopeStatusRules.needsSettleLook(marked[0], transactions: []))
+        // Marked once only.
+        XCTAssertTrue(checker.settleUpdates(records: marked, transactions: [history("c1", .confirmed)]).isEmpty)
+
+        // A split reclaim: every transaction of it in a block.
+        var sent = storeRecord(vector.id, .sent)
+        sent.settle(txids: ["r1", "r2"], amount: 9, walletName: "Main", height: 1_000, leftLocked: false, at: now)
+        XCTAssertTrue(checker.settleUpdates(records: [sent], transactions: [history("r1", .confirmed)]).isEmpty)
+        XCTAssertEqual(checker.settleUpdates(records: [sent], transactions: [history("r1", .confirmed), history("r2", .confirmed)]).count, 1)
+
+        // Money left locked at the sweep (a second funding): looks go on.
+        var locked = storeRecord(vector.id, .received)
+        locked.settle(txids: ["c2"], amount: 5, walletName: "Main", height: 1_000, leftLocked: true, at: now)
+        let lockedMarked = checker.settleUpdates(records: [locked], transactions: [history("c2", .confirmed)])
+        XCTAssertTrue(EnvelopeStatusRules.needsSettleLook(lockedMarked.first ?? locked, transactions: []))
+
+        // An open link is not touched.
+        var open = storeRecord(vector.id, .sent)
+        XCTAssertTrue(checker.settleUpdates(records: [open], transactions: [history("c1", .confirmed)]).isEmpty)
+    }
+
+    /// A Trezor session and the payment-link checks never share MoneroKit's
+    /// one wallet slot: while the session holds the runtime, no lease or
+    /// check starts, and the active wallet is never stopped for one.
+    @MainActor
+    func testATrezorSessionKeepsLinkChecksOut() async {
+        let runtime = EnvelopeRuntime.shared
+        // Locked, so a lease outside a session fails with noDestination.
+        let walletManager = WalletManager()
+        await runtime.beginHardwareSession()
+        XCTAssertTrue(runtime.hardwareSessionHolds)
+        do {
+            try await runtime.acquire(walletManager)
+            XCTFail("a lease started during a Trezor session")
+        } catch {
+            XCTAssertEqual(error as? EnvelopeRuntime.RuntimeError, .walletBusy)
+        }
+        do {
+            _ = try await runtime.check(link: vector, address: vectorAddress)
+            XCTFail("a check ran during a Trezor session")
+        } catch {
+            XCTAssertEqual(error as? EnvelopeRuntime.RuntimeError, .walletBusy)
+        }
+        runtime.endHardwareSession()
+        XCTAssertFalse(runtime.hardwareSessionHolds)
+    }
+
+    /// Cancel ends a Trezor session for real: a new session waits for the
+    /// cancelled one to wind down instead of running beside it, a running
+    /// one rejects a duplicate, and a finished one's result on screen
+    /// rejects the fresh sheet instance that asks again.
+    @MainActor
+    func testACancelledTrezorSessionIsWaitedFor() {
+        typealias Manager = WalletManager
+        XCTAssertEqual(Manager.hardwareSessionStart(running: false, cancelled: false, state: .idle), .start)
+        XCTAssertEqual(Manager.hardwareSessionStart(running: true, cancelled: false, state: .syncingFull(progress: 0, blocksRemaining: nil)), .reject)
+        // Cancel set the state to idle while the session still runs.
+        XCTAssertEqual(Manager.hardwareSessionStart(running: true, cancelled: false, state: .idle), .reject)
+        XCTAssertEqual(Manager.hardwareSessionStart(running: true, cancelled: true, state: .idle), .waitForCancelled)
+        XCTAssertEqual(Manager.hardwareSessionStart(running: false, cancelled: false, state: .complete(message: "")), .reject)
+        XCTAssertEqual(Manager.hardwareSessionStart(running: false, cancelled: false, state: .failed(message: "")), .reject)
+
+        // Cancel with no session running only clears the state.
+        let walletManager = WalletManager()
+        walletManager.cancelHardwareSession()
+        XCTAssertEqual(walletManager.hardwareSessionState, .idle)
+        XCTAssertFalse(walletManager.hardwareSessionRunning)
+    }
+
     /// A hardware link funding reads as the link's in Activity as soon as
     /// the node takes it. The session marks the link funded itself: the
     /// view wallet's restart rebuilds the screens, so the Send flow's

@@ -93,6 +93,9 @@ final class EnvelopeRuntime: ObservableObject {
     /// "Link 7", for the diagnostic log.
     private var openName: String?
     private var lockObserver: AnyCancellable?
+    /// A Trezor session holds MoneroKit's one wallet slot: no lease, check
+    /// or envelope starts until it ends.
+    private(set) var hardwareSessionHolds = false
 
     private init() {
         NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
@@ -108,6 +111,7 @@ final class EnvelopeRuntime: ObservableObject {
     /// A payment-link screen needs envelope wallets. The first lease stops
     /// the active wallet; it reads the claim destination before it does.
     func acquire(_ walletManager: WalletManager) async throws {
+        guard !hardwareSessionHolds else { throw RuntimeError.walletBusy }
         leases += 1
         resumeTask?.cancel()
         resumeTask = nil
@@ -144,6 +148,30 @@ final class EnvelopeRuntime: ObservableObject {
             await resume.value
             self.resumeInFlight = nil
         }
+    }
+
+    /// A Trezor session is about to take MoneroKit's one wallet slot. Stops
+    /// a running envelope scan at once, waits for the runtime's current
+    /// operation, and closes the envelope. The stopped active wallet goes
+    /// to the session, which starts it again when it ends. Until
+    /// `endHardwareSession()`, no lease or check starts.
+    func beginHardwareSession() async {
+        hardwareSessionHolds = true
+        generation += 1
+        resumeTask?.cancel()
+        resumeTask = nil
+        await resumeInFlight?.value
+        await closeEnvelope()
+        if mainSuspended {
+            DiagnosticLog.shared.log("Envelope: a Trezor session stopped the link checks")
+            mainSuspended = false
+            destination = nil
+        }
+    }
+
+    /// The Trezor session ended and started the active wallet again.
+    func endHardwareSession() {
+        hardwareSessionHolds = false
     }
 
     /// Waits while the last payment-link screen lets go of the active
@@ -209,7 +237,7 @@ final class EnvelopeRuntime: ObservableObject {
     ///   - number: the link's number ("Link 7"), for the diagnostic log.
     func check(link: EnvelopeLink, address: String, estimateSweepFee: Bool = false, fundingHeight: UInt64? = nil, number: Int? = nil) async throws -> EnvelopeObservation {
         try await serial { [self] in
-            guard let walletManager, mainSuspended else { throw RuntimeError.walletBusy }
+            guard let walletManager, mainSuspended, !hardwareSessionHolds else { throw RuntimeError.walletBusy }
             let name = Self.logName(number)
             let floor = EnvelopeStatusRules.scanFloor(restoreHeight: link.restoreHeight, fundingHeight: fundingHeight)
             if openEnvelopeId != link.id {
@@ -478,7 +506,7 @@ final class EnvelopeRuntime: ObservableObject {
         let started = generation
         while true {
             try Task.checkCancellation()
-            if generation != started { throw CancellationError() }
+            if generation != started || hardwareSessionHolds { throw CancellationError() }
             // Before the synced check: a short scan can report its first
             // height and synced in one update.
             noteRefresh(of: wallet)

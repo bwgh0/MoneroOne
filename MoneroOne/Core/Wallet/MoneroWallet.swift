@@ -625,16 +625,39 @@ class MoneroWallet: ObservableObject {
         return try await send(to: address, amount: .all, priority: priority, memo: memo, beforeBroadcast: beforeBroadcast)
     }
 
-    /// Signs a transfer of `amount` XMR to `address` and keeps it, not
-    /// sent: its fee is the one it pays for the inputs it really spends
-    /// (wallet2's estimate counts one). `send(_:beforeBroadcast:)`
-    /// broadcasts this same transaction.
-    func prepareSend(to address: String, amount: Decimal, priority: SendPriority = .default, memo: String? = nil) async throws -> PreparedTransaction {
+    /// Signs a transfer of `amount` XMR to `address` (a sweep of the
+    /// unlocked balance when `amount` is nil) and keeps it, not sent: its
+    /// fee is the one it pays for the inputs it really spends (wallet2's
+    /// estimate counts one). `send(_:beforeBroadcast:)` broadcasts this
+    /// same transaction.
+    func prepareSend(to address: String, amount: Decimal?, priority: SendPriority = .default, memo: String? = nil) async throws -> PreparedTransaction {
         guard let kit = kit else { throw WalletError.notUnlocked }
-        let piconero = Int((amount * coinRate) as NSDecimalNumber)
-        return try await Task.detached {
-            try kit.prepareSend(to: address, amount: .value(piconero), priority: priority, memo: memo)
+
+        // Same gate as estimateFee: building needs a daemon connection.
+        switch syncState {
+        case .synced, .syncing:
+            break
+        default:
+            writeDebugLog("prepareSend: wallet not synced (state: \(syncState))")
+            throw MoneroCoreError.transactionEstimationFailed(String(localized: "Wallet is not synced. Please wait for sync to complete."))
+        }
+
+        let sendAmount: SendAmount
+        if let amount {
+            // wallet2 reads an amount of 0 as a sweep of the whole balance.
+            let piconero = Int((amount * coinRate) as NSDecimalNumber)
+            guard piconero > 0 else {
+                throw MoneroCoreError.transactionSendFailed(String(localized: "Invalid amount"))
+            }
+            sendAmount = .value(piconero)
+        } else {
+            sendAmount = .all
+        }
+        let prepared = try await Task.detached {
+            try kit.prepareSend(to: address, amount: sendAmount, priority: priority, memo: memo)
         }.value
+        writeDebugLog("prepareSend: fee=\(prepared.fee), txs=\(prepared.txids.count)")
+        return prepared
     }
 
     /// The transaction from `prepareSend` can still go out: the wallet it
@@ -684,6 +707,11 @@ class MoneroWallet: ObservableObject {
 
         fetchTransactions()
         return txId
+    }
+
+    /// XMR to piconero, as `send(to:amount:)` converts it.
+    nonisolated static func piconero(_ amount: Decimal) -> Int {
+        Int((amount * 1_000_000_000_000) as NSDecimalNumber)
     }
 
     // MARK: - Seed Export

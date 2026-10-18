@@ -2888,10 +2888,12 @@ class WalletManager: ObservableObject {
         return try await wallet.send(to: address, amount: amount, memo: memo, beforeBroadcast: beforeBroadcast)
     }
 
-    /// Signs a transfer and keeps it for `send(_:beforeBroadcast:)`, not
-    /// sent: the fee it pays for the inputs it really spends. Software
-    /// wallets only; a hardware wallet would sign on the device.
-    func prepareSend(to address: String, amount: Decimal, memo: String? = nil) async throws -> PreparedTransaction {
+    /// Signs a transfer (a sweep of the unlocked balance when `amount` is
+    /// nil) and keeps it for `send(_:beforeBroadcast:)`, not sent: the fee
+    /// it pays for the inputs it really spends. Software wallets only; a
+    /// hardware wallet would sign on the device, so its review keeps the
+    /// estimate.
+    func prepareSend(to address: String, amount: Decimal?, memo: String? = nil) async throws -> PreparedTransaction {
         if isHardwareWallet { throw WalletError.hardwareSessionRequired }
         if isViewOnly { throw WalletError.viewOnlyCannotSend }
         // A payment-link check may have just let go of the wallet.

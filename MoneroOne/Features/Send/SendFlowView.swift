@@ -634,7 +634,7 @@ struct SendFlowView: View {
                 return
             }
             walletManager.clearTerminalSessionState()
-            walletManager.pendingBroadcastStep = .init(address: record.address, run: PaymentLinkFunder.broadcastStep(id: record.id))
+            walletManager.pendingBroadcastStep = PaymentLinkFunder.hardwareStep(id: record.id, address: record.address)
             hardwareSheetIntent = .send(
                 to: record.address,
                 amount: EnvelopeRuntime.xmr(record.amount + (record.feeReserve ?? 0)),

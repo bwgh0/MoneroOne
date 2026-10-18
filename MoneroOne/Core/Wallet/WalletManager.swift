@@ -176,6 +176,11 @@ class WalletManager: ObservableObject {
     struct PendingBroadcastStep {
         let address: String
         let run: MoneroWallet.BeforeBroadcast
+        /// Runs in the session as soon as the node took the send, with its
+        /// txid: the link reads funded before the view wallet starts again.
+        /// That start rebuilds the screens (`walletSessionId`), so the Send
+        /// flow's sheet-dismiss handler can come too late or not at all.
+        var didBroadcast: (@MainActor (String) -> Void)? = nil
     }
     var pendingBroadcastStep: PendingBroadcastStep?
 
@@ -184,6 +189,12 @@ class WalletManager: ObservableObject {
     nonisolated static func broadcastStep(_ step: PendingBroadcastStep?, for address: String) -> MoneroWallet.BeforeBroadcast? {
         guard let step, step.address == address else { return nil }
         return step.run
+    }
+
+    /// The pending step's after-broadcast action, for a send to `address`.
+    nonisolated static func broadcastDone(_ step: PendingBroadcastStep?, for address: String) -> (@MainActor (String) -> Void)? {
+        guard let step, step.address == address else { return nil }
+        return step.didBroadcast
     }
     @Published private(set) var lastHardwareSessionOutcome: HardwareSessionOutcome?
 
@@ -509,6 +520,7 @@ class WalletManager: ObservableObject {
             hardwareSessionState = .signing
             do {
                 let txId = try await fullWallet.send(to: to, amount: amount, memo: memo, beforeBroadcast: Self.broadcastStep(pendingBroadcastStep, for: to))
+                Self.broadcastDone(pendingBroadcastStep, for: to)?(txId)
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {
@@ -526,6 +538,7 @@ class WalletManager: ObservableObject {
             hardwareSessionState = .signing
             do {
                 let txId = try await fullWallet.sendAll(to: to, memo: memo, beforeBroadcast: Self.broadcastStep(pendingBroadcastStep, for: to))
+                Self.broadcastDone(pendingBroadcastStep, for: to)?(txId)
                 hardwareSessionState = .broadcasting
                 sentTxId = txId
             } catch {

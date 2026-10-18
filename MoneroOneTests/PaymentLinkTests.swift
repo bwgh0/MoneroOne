@@ -1605,6 +1605,34 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertThrowsError(try PaymentLinkFunder.beginFunding(record, walletId: "trezor", store: store, networkType: .mainnet))
     }
 
+    /// A hardware link funding reads as the link's in Activity as soon as
+    /// the node takes it. The session marks the link funded itself: the
+    /// view wallet's restart rebuilds the screens, so the Send flow's
+    /// sheet-dismiss handler can come late or never run.
+    @MainActor
+    func testAHardwareLinkFundingIsLabeledAtBroadcast() throws {
+        let service = "one.monero.MoneroOne.paymentlinks.tests.\(UUID().uuidString)"
+        let store = EnvelopeStore(service: service)
+        defer { store.removeAll() }
+        var record = storeRecord(vector.id, .sent)
+        record.walletId = "trezor"
+        try PaymentLinkFunder.beginFunding(record, walletId: "trezor", store: store, networkType: .mainnet)
+        let step = PaymentLinkFunder.hardwareStep(id: record.id, address: record.address, store: store)
+        // What `step.run` saves before the broadcast.
+        try PaymentLinkFunder.saveAttempt(id: record.id, txids: ["first"], store: store)
+        // Saved attempts alone do not label the row.
+        XCTAssertNil(PaymentLinkActivity.match(transactionId: "first", isIncoming: false, records: store.records))
+
+        XCTAssertNil(WalletManager.broadcastDone(step, for: "4other"))
+        XCTAssertNil(WalletManager.broadcastDone(nil, for: record.address))
+        let done = try XCTUnwrap(WalletManager.broadcastDone(step, for: record.address))
+        done("first")
+        let funded = try XCTUnwrap(store.record(id: record.id, role: .sent))
+        XCTAssertEqual(funded.fundingTxid, "first")
+        XCTAssertEqual(funded.status, .pending)
+        XCTAssertEqual(PaymentLinkActivity.match(transactionId: "first", isIncoming: false, records: store.records)?.kind, .funding)
+    }
+
     /// Send broadcasts only a funding that pays this link's envelope its
     /// amount plus the claim fee reserve.
     func testOnlyAFundingOfThisLinkGoesOut() {

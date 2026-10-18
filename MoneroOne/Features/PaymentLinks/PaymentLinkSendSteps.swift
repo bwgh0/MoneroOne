@@ -202,6 +202,17 @@ enum PaymentLinkFunder {
         { prepared in try saveAttempt(id: id, txids: prepared.txids, store: store) }
     }
 
+    /// A hardware funding of link `id` (envelope `address`): the session
+    /// saves the txids before the broadcast and marks the link funded right
+    /// after it, so its Activity row reads as the link's at once.
+    static func hardwareStep(id: String, address: String, store: EnvelopeStore = .shared) -> WalletManager.PendingBroadcastStep {
+        WalletManager.PendingBroadcastStep(
+            address: address,
+            run: broadcastStep(id: id, store: store),
+            didBroadcast: { txid in markFunded(id: id, txid: txid, store: store) }
+        )
+    }
+
     /// Broadcasts `funding`, the transaction the review built for
     /// `record`, after the funding lock and the save of its txids. When
     /// that transaction is gone (the wallet closed since), it throws

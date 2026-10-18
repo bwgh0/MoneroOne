@@ -49,6 +49,8 @@ class MoneroWallet: ObservableObject {
 
     // MARK: - Private
     private var kit: MoneroKit.Kit?
+    /// The node the kit connects to, with the login and the proxy it uses.
+    private var node: MoneroKit.Node?
     private let coinRate: Decimal = 1_000_000_000_000 // pow(10, 12) piconero to XMR
     private let reachabilityManager = ReachabilityManager()
 
@@ -108,6 +110,7 @@ class MoneroWallet: ObservableObject {
             return (kit, balance, address, state, subaddrs)
         }.value
 
+        self.node = walletNode
         kit = newKit
         setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
     }
@@ -146,6 +149,7 @@ class MoneroWallet: ObservableObject {
             return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses)
         }.value
 
+        self.node = walletNode
         kit = newKit
         setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
     }
@@ -173,6 +177,7 @@ class MoneroWallet: ObservableObject {
             return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses)
         }.value
 
+        self.node = walletNode
         kit = newKit
         setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
     }
@@ -319,7 +324,9 @@ class MoneroWallet: ObservableObject {
             // the primary diagnostic for hardware-session sync failures.
             TrezorLog.log("[MoneroWallet] notSynced raw error: %@ | wallet2: %@",
                           String(describing: error), latestErrorString)
-            syncState = .error(friendlyErrorMessage(for: error))
+            let message = friendlyErrorMessage(for: error)
+            syncState = .error(message)
+            checkNodeLogin(after: message)
         case .idle:
             syncState = .idle
         }
@@ -362,6 +369,58 @@ class MoneroWallet: ObservableObject {
 
         // Fallback to a cleaner message
         return String(localized: "Sync failed. Tap Retry or try a different node.")
+    }
+
+    // MARK: - Node Login
+
+    /// A node with the login and the proxy the kit uses for it.
+    private struct LoginCheckNode: Equatable {
+        let url: String
+        let credentials: NodeCredentials
+        let proxy: String
+
+        init(_ node: MoneroKit.Node) {
+            url = node.url.absoluteString
+            credentials = NodeCredentials(login: node.login, password: node.password)
+            proxy = node.proxy ?? ""
+        }
+    }
+
+    /// The login check in flight. Every wallet on the same node and login
+    /// shares it, so a burst of sync errors runs one check.
+    private static var runningLoginCheck: (node: LoginCheckNode, task: Task<NodeLoginCheck, Never>)?
+
+    /// A node that turns the login down fails a sync like a node that does
+    /// not answer: wallet2 gets no height and the kit reports a timeout. So
+    /// after a sync error on a custom node, this asks the node. When it turns
+    /// the login down, the error says so, unless another state came first.
+    private func checkNodeLogin(after message: String) {
+        guard let node else { return }
+        let checked = LoginCheckNode(node)
+        // The built-in nodes are public and take no login.
+        let builtIn = NodeManager.defaultNodes + NodeManager.torNodes + NodeManager.defaultTestnetNodes
+        guard !builtIn.contains(where: { $0.url == checked.url }) else { return }
+
+        let check: Task<NodeLoginCheck, Never>
+        if let running = Self.runningLoginCheck, running.node == checked {
+            check = running.task
+        } else {
+            check = Task {
+                await NodeLoginProbe.check(url: checked.url, credentials: checked.credentials, proxy: checked.proxy)
+            }
+            Self.runningLoginCheck = (checked, check)
+        }
+        Task { [weak self] in
+            let result = await check.value
+            if Self.runningLoginCheck?.task == check {
+                Self.runningLoginCheck = nil
+            }
+            // The answer is about the checked node. If the kit moved to
+            // another node, login or proxy during the check, it is stale.
+            guard result == .rejected, let self, self.syncState == .error(message),
+                  self.node.map(LoginCheckNode.init) == checked else { return }
+            self.syncState = .error(String(localized: "Node login failed. Check the username and password."))
+        }
     }
 
     // MARK: - Transactions

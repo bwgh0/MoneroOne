@@ -2478,11 +2478,18 @@ class WalletManager: ObservableObject {
     private func bindToWallet(_ wallet: MoneroWallet) {
         pendingRotatedIndex = nil
 
+        // Everything this wallet sends belongs to the wallet that was active
+        // at the bind. A switch makes the next wallet active before it
+        // cancels these bindings, and a balance, address, state, height or
+        // history this wallet sends in that gap must not show under the next
+        // one, or be saved to its WalletInfo.
+        let boundWalletId = activeWallet?.id
+
         // Bind wallet state to manager state with widget updates
         wallet.$balance
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newBalance in
-                guard let self = self else { return }
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
                 self.balance = newBalance
                 self.saveWidgetDataIfEnabled()
             }
@@ -2490,16 +2497,24 @@ class WalletManager: ObservableObject {
 
         wallet.$unlockedBalance
             .receive(on: DispatchQueue.main)
-            .assign(to: &$unlockedBalance)
+            .sink { [weak self] newUnlocked in
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
+                self.unlockedBalance = newUnlocked
+            }
+            .store(in: &cancellables)
 
         wallet.$address
             .receive(on: DispatchQueue.main)
-            .assign(to: &$address)
+            .sink { [weak self] newAddress in
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
+                self.address = newAddress
+            }
+            .store(in: &cancellables)
 
         wallet.$syncState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
-                guard let self = self else { return }
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
 
                 // When sync is blocked, ignore state updates from the engine
                 // (wallet2 may fire trailing callbacks after pauseRefresh)
@@ -2551,7 +2566,7 @@ class WalletManager: ObservableObject {
                     self.errorDebounceTask?.cancel()
                     self.errorDebounceTask = Task { [weak self] in
                         try? await Task.sleep(nanoseconds: 3_000_000_000) // 3s
-                        guard let self = self, !Task.isCancelled else { return }
+                        guard let self = self, !Task.isCancelled, self.activeWallet?.id == boundWalletId else { return }
                         #if DEBUG
                         NSLog("[WalletManager] Error persisted 3s, surfacing: %@", msg)
                         #endif
@@ -2595,7 +2610,7 @@ class WalletManager: ObservableObject {
         wallet.$daemonHeight
             .receive(on: DispatchQueue.main)
             .sink { [weak self] height in
-                guard let self = self else { return }
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
                 let oldHeight = self.daemonHeight
                 self.daemonHeight = height
                 if oldHeight == 0 && height > 0 {
@@ -2611,7 +2626,7 @@ class WalletManager: ObservableObject {
         wallet.$walletHeight
             .receive(on: DispatchQueue.main)
             .sink { [weak self] height in
-                guard let self = self else { return }
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
                 self.walletHeight = height
                 let now = CACurrentMediaTime()
                 guard now - self.lastHeightPublish >= 0.5 else { return }
@@ -2620,10 +2635,6 @@ class WalletManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // The rows belong to the wallet that was active at the bind. A switch
-        // makes the next wallet active before it cancels this binding, and
-        // rows this wallet sends in that gap must not show under the next one.
-        let boundWalletId = activeWallet?.id
         wallet.$transactions
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newTransactions in
@@ -2644,7 +2655,7 @@ class WalletManager: ObservableObject {
         wallet.$subaddresses
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newSubaddresses in
-                guard let self = self else { return }
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
                 self.subaddresses = newSubaddresses
                 let hasValidIdx0 = newSubaddresses.contains { $0.index == 0 && !$0.address.isEmpty }
                 #if DEBUG
@@ -2670,7 +2681,7 @@ class WalletManager: ObservableObject {
         wallet.$syncState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                guard let self = self else { return }
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
                 let addr = wallet.primaryAddress
                 if !addr.isEmpty && self.primaryAddress.isEmpty {
                     self.primaryAddress = addr
@@ -2684,7 +2695,7 @@ class WalletManager: ObservableObject {
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] height in
-                guard let self = self else { return }
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
                 if height > 0 && height != self.restoreHeight {
                     #if DEBUG
                     NSLog("[WalletManager] Persisting C++ restore height: %llu (was %llu)", height, self.restoreHeight)

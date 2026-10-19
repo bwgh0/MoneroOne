@@ -102,6 +102,7 @@ struct SendStatusStep: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                            .padding(.horizontal)
                     }
 
                 case .error(let message):

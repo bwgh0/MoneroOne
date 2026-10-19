@@ -406,16 +406,8 @@ struct RecentTransactionCard: View {
         let amount = amount(row.xmr)
         Button(action: onTap) {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.15))
-                        .frame(width: 40, height: 40)
-
-                    Image(systemName: row.systemImage)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(iconColor)
-                }
-                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge)
+                TransactionDisc(systemImage: row.systemImage, tint: iconColor, ringState: ConfirmationRing.state(of: transaction))
+                    .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.title)

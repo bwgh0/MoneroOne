@@ -931,6 +931,7 @@ struct TransactionRow: View {
             systemImage: row.systemImage,
             isIncoming: transaction.type == .incoming,
             showsLinkBadge: row.showsLinkBadge,
+            ringState: ConfirmationRing.state(of: transaction),
             title: row.title,
             subtitle: row.subtitle
         ) { alignment in
@@ -980,8 +981,10 @@ struct TransactionRow: View {
 struct ActivityRowLayout<Amount: View>: View {
     let systemImage: String
     let isIncoming: Bool
-    /// A payment link's row: the tile gets the link badge.
+    /// A payment link's row: the disc gets the link badge.
     var showsLinkBadge = false
+    /// A transaction's confirmation ring on the disc.
+    var ringState: ConfirmationRing.State = .hidden
     /// "Received", "Sent", or a payment link's name.
     let title: String
     let subtitle: String
@@ -999,9 +1002,9 @@ struct ActivityRowLayout<Amount: View>: View {
                         icon
                         details(stacked: true)
                     }
-                    // Under the title text: 36 icon + 12.
+                    // Under the title text: 40 disc + 12.
                     amount(.leading)
-                        .padding(.leading, 48)
+                        .padding(.leading, TransactionDisc.size + 12)
                 }
             } else {
                 HStack(spacing: 12) {
@@ -1020,13 +1023,9 @@ struct ActivityRowLayout<Amount: View>: View {
 
     private var tint: Color { isIncoming ? .green : .brand }
 
+    /// The 40 pt disc that Home's rows use.
     private var icon: some View {
-        Image(systemName: systemImage)
-            .font(.subheadline.weight(.semibold))
-            .foregroundColor(tint)
-            .frame(width: 36, height: 36)
-            .background(tint.opacity(0.15))
-            .cornerRadius(8)
+        TransactionDisc(systemImage: systemImage, tint: tint, ringState: ringState)
             .paymentLinkBadge(tint, isShown: showsLinkBadge)
     }
 
@@ -1208,8 +1207,19 @@ struct TransactionAmountColumn: View {
         .layoutPriority(1)
     }
 
-    @ViewBuilder
+    /// The status word cross-fades when it changes (crossFade 0.35 s):
+    /// "Pending" to "Locked" at the first block, to "Confirmed" at 10.
     private var status: some View {
+        statusLabel
+            .animation(.easeInOut(duration: 0.35), value: statusText)
+    }
+
+    private var statusText: String {
+        linkStatus?.text ?? transaction?.displayStatusText ?? ""
+    }
+
+    @ViewBuilder
+    private var statusLabel: some View {
         if let linkStatus {
             PaymentLinkStatusLabel(status: linkStatus)
         } else if let transaction {
@@ -1232,6 +1242,7 @@ struct TransactionAmountColumn: View {
                     .foregroundColor(transaction.displayStatusColor)
                     .lineLimit(1)
                     .fixedSize()
+                    .contentTransition(.opacity)
             }
         }
     }

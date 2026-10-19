@@ -20,6 +20,16 @@ struct WalletView: View {
     /// fill the leftover height on short screens (iPhone Duo cover).
     @State private var viewportHeight: CGFloat = 0
     @State private var aboveRecentHeight: CGFloat = 0
+    /// Money arrives: the moment on the balance card, and the balance when
+    /// the history last changed.
+    @State private var playingArrival: MoneyArrival?
+    @State private var balanceAtHistory: Decimal?
+
+    /// The home at Now with nothing open on it.
+    private var isHomeIdle: Bool {
+        walletManager.isUnlocked && selectedHistoryPoint == nil && !isHistoryExpanded
+            && !showSend && !showReceive && !showWalletManager && !showLinks && hardwareSheetIntent == nil
+    }
 
     /// Height the empty activity card needs to reach the bottom of the
     /// viewport, so short screens don't end in a blank third. Nil when there
@@ -103,7 +113,11 @@ struct WalletView: View {
                                 // session guard.
                                 walletManager.clearTerminalSessionState()
                                 hardwareSheetIntent = .syncSentTransactions
-                            }
+                            },
+                            heroBalance: MoneyArrivalWatch(walletManager: walletManager, links: paymentLinks)
+                                .heroBalance(balanceAtHistory: balanceAtHistory),
+                            arrival: playingArrival,
+                            onArrivalDone: { playingArrival = nil }
                         )
                         .id(walletManager.walletSessionId)
                         .padding(.horizontal)
@@ -159,6 +173,7 @@ struct WalletView: View {
             .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
                                      && !isHistoryExpanded && !showSend && !showReceive
                                      && !showWalletManager && !showLinks && hardwareSheetIntent == nil)
+            .playsMoneyArrivals(isIdle: isHomeIdle, playing: $playingArrival, balanceAtHistory: $balanceAtHistory)
             .onChange(of: walletManager.walletSessionId) { _, _ in
                 selectedHistoryPoint = nil
                 historyModel = BalanceHistoryModel()

@@ -3831,6 +3831,10 @@ class WalletManager: ObservableObject {
             return
         }
 
+        // The rescan's sync sets the Money arrives baseline again, with
+        // no moment.
+        MoneyArrivalStore().forgetBaseline(walletId: info.id, network: MoneyArrivalStore.network(isTestnet: isTestnet))
+
         // Reset displayed state
         syncState = .connecting
         balance = 0

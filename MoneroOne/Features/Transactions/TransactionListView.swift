@@ -8,6 +8,8 @@ struct TransactionListView: View {
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    /// Rows name contacts: a saved, renamed or deleted contact shows at once.
+    @ObservedObject private var contactStore = ContactStore.shared
     /// Looks at sent links' envelopes while the Links filter is on screen.
     @StateObject private var linkChecker = PaymentLinksStatusChecker()
     @State private var isOnScreen = false
@@ -931,6 +933,8 @@ struct TransactionRow: View {
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     /// Payment link transactions show the link's name, amount and state.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    /// Rows name contacts: a saved, renamed or deleted contact shows at once.
+    @ObservedObject private var contactStore = ContactStore.shared
 
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)

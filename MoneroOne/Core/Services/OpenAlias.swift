@@ -459,6 +459,9 @@ struct OpenAliasPinStore {
         let address: String
         /// Unix seconds.
         let pinnedAt: Int64
+        /// The name as it was typed ("ben@monero.one"). Pins from before
+        /// it have none: History shows the lookup name then.
+        var display: String? = nil
     }
 
     private let defaults: UserDefaults
@@ -481,14 +484,24 @@ struct OpenAliasPinStore {
     }
 
     /// Stores the sent address for the name. Above the cap, the oldest go.
-    func record(query: String, address: String, network: NetworkType, at date: Date = Date()) {
+    func record(query: String, address: String, network: NetworkType, display: String? = nil, at date: Date = Date()) {
         var pins = load(network)
-        pins[query] = Pin(address: address, pinnedAt: Int64(date.timeIntervalSince1970))
+        pins[query] = Pin(address: address, pinnedAt: Int64(date.timeIntervalSince1970), display: display)
         while pins.count > Self.cap,
               let oldest = pins.filter({ $0.key != query }).min(by: { $0.value.pinnedAt < $1.value.pinnedAt })?.key {
             pins.removeValue(forKey: oldest)
         }
         save(pins, network)
+    }
+
+    /// The name last paid at each address, for History's "To <name>".
+    func names(network: NetworkType) -> [String: OpenAliasName] {
+        var latest: [String: (name: OpenAliasName, at: Int64)] = [:]
+        for (query, pin) in load(network) {
+            if let kept = latest[pin.address], kept.at >= pin.pinnedAt { continue }
+            latest[pin.address] = (OpenAliasName(display: pin.display ?? query, query: query), pin.pinnedAt)
+        }
+        return latest.mapValues(\.name)
     }
 
     func clearAll() {

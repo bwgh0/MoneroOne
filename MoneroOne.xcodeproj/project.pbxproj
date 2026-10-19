@@ -8,8 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		5E7D70000000000000000B03 /* SendRecordStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F03 /* SendRecordStoreTests.swift */; };
+		5E7D70000000000000000B05 /* ContactStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F05 /* ContactStoreTests.swift */; };
 		5E7D70000000000000000B02 /* TransferWalletList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F02 /* TransferWalletList.swift */; };
 		5E7D70000000000000000B01 /* SendRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F01 /* SendRecordStore.swift */; };
+		5E7D70000000000000000B04 /* ContactStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F04 /* ContactStore.swift */; };
 		5EED00000000000000000026 /* SeedEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000016 /* SeedEntryModel.swift */; };
 		5EED00000000000000000027 /* SeedWordField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000017 /* SeedWordField.swift */; };
 		5EED00000000000000000028 /* SeedPhraseEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000018 /* SeedPhraseEntryView.swift */; };
@@ -239,8 +241,10 @@
 
 /* Begin PBXFileReference section */
 		5E7D70000000000000000F03 /* SendRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendRecordStoreTests.swift; sourceTree = "<group>"; };
+		5E7D70000000000000000F05 /* ContactStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactStoreTests.swift; sourceTree = "<group>"; };
 		5E7D70000000000000000F02 /* TransferWalletList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferWalletList.swift; sourceTree = "<group>"; };
 		5E7D70000000000000000F01 /* SendRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendRecordStore.swift; sourceTree = "<group>"; };
+		5E7D70000000000000000F04 /* ContactStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactStore.swift; sourceTree = "<group>"; };
 		5EED00000000000000000016 /* SeedEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedEntryModel.swift; sourceTree = "<group>"; };
 		5EED00000000000000000017 /* SeedWordField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedWordField.swift; sourceTree = "<group>"; };
 		5EED00000000000000000018 /* SeedPhraseEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseEntryView.swift; sourceTree = "<group>"; };
@@ -508,6 +512,7 @@
 				DEE91100000000000000F002 /* MoneroPaymentURITests.swift */,
 				0A1A50000000000000000F04 /* OpenAliasTests.swift */,
 				5E7D70000000000000000F03 /* SendRecordStoreTests.swift */,
+				5E7D70000000000000000F05 /* ContactStoreTests.swift */,
 			);
 			path = MoneroOneTests;
 			sourceTree = "<group>";
@@ -758,6 +763,7 @@
 				AA0000000000000000000007 /* WalletSource.swift */,
 				AA0000000000000000000003 /* WalletStore.swift */,
 				5E7D70000000000000000F01 /* SendRecordStore.swift */,
+				5E7D70000000000000000F04 /* ContactStore.swift */,
 			);
 			path = Wallet;
 			sourceTree = "<group>";
@@ -1097,6 +1103,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				DEE91100000000000000B002 /* MoneroPaymentURITests.swift in Sources */,
 				0A1A50000000000000000B04 /* OpenAliasTests.swift in Sources */,
 				5E7D70000000000000000B03 /* SendRecordStoreTests.swift in Sources */,
+				5E7D70000000000000000B05 /* ContactStoreTests.swift in Sources */,
 				CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */,
 				9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */,
 				9A7E1C0D00FE00000000B0FE /* PaymentLinkV2Tests.swift in Sources */,
@@ -1263,6 +1270,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				AA0000000000000000000002 /* WalletInfo.swift in Sources */,
 				AA0000000000000000000004 /* WalletStore.swift in Sources */,
 				5E7D70000000000000000B01 /* SendRecordStore.swift in Sources */,
+				5E7D70000000000000000B04 /* ContactStore.swift in Sources */,
 				AA0000000000000000000006 /* AddWalletView.swift in Sources */,
 				AA0000000000000000000008 /* WalletSource.swift in Sources */,
 				AA000000000000000000000A /* RestoreViewKeyView.swift in Sources */,

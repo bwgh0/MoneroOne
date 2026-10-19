@@ -292,7 +292,9 @@ struct ActivityRowText {
         ActivityNamer(
             records: SendRecordStore().allRecords(),
             activeWalletId: walletManager.activeWallet?.id,
-            wallets: walletManager.wallets
+            wallets: walletManager.wallets,
+            contacts: ContactStore.shared.contacts,
+            aliasNames: OpenAliasPinStore().names(network: walletManager.networkType)
         )
     }
 

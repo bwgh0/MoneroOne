@@ -3929,6 +3929,7 @@ class WalletManager: ObservableObject {
         OpenAliasPinStore().clearAll()
         // So do the names of sends between wallets.
         SendRecordStore().clearAll()
+        ContactStore.shared.clearAll()
         // The Face ID item holds the old PIN. Left behind, it would offer
         // Face ID on the next wallet's PIN screen and fail with that PIN,
         // which counts toward the lockout.

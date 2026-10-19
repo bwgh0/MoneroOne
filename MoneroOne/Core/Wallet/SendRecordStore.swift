@@ -135,20 +135,29 @@ enum WalletTransferName: Equatable {
 /// its badge. History search finds a row by this name too.
 struct ActivityName: Equatable {
     let title: String
-    let badgeSymbol: String
+    /// The wallet or the person on the disc. Nil for an OpenAlias name.
+    let badgeSymbol: String?
     /// A send to this wallet: the row shows only the fee.
     let showsFeeOnly: Bool
 }
 
-/// Names the rows of one list from one read of the records: a send between
-/// your wallets ("To Savings", "From Spending", "To This Wallet").
+/// Names the rows of one list from one read of the stores: a send between
+/// your wallets ("To Savings", "From Spending", "To This Wallet"), then a
+/// send to a contact ("To Dana") or to an OpenAlias name ("To
+/// ben@monero.one"). Names are looked up each time, so after a delete or a
+/// rename the rows follow.
 struct ActivityNamer {
     let records: [String: SendRecord]
     let activeWalletId: UUID?
     let wallets: [WalletInfo]
+    var contacts: [Contact] = []
+    /// The OpenAlias name last paid at each address (the pin store).
+    var aliasNames: [String: OpenAliasName] = [:]
 
     /// The badge of a send between your wallets.
     static let walletBadgeSymbol = "wallet.bifold.fill"
+    /// The badge of a send to a contact.
+    static let contactBadgeSymbol = "person.fill"
 
     func name(of transaction: MoneroTransaction) -> ActivityName? {
         let isIncoming = transaction.type == .incoming
@@ -161,6 +170,24 @@ struct ActivityNamer {
             wallets: wallets
         ) {
             return ActivityName(title: transfer.title, badgeSymbol: Self.walletBadgeSymbol, showsFeeOnly: transfer == .toThisWallet)
+        }
+        // wallet2 keeps the destination of each send this wallet built.
+        guard !isIncoming, let address = transaction.destinations.first?.address ?? transaction.address.nilIfEmpty else { return nil }
+        let alias = aliasNames[address]
+        if let contact = ContactMatch.contact(forAddress: address, in: contacts)
+            ?? alias.flatMap({ ContactMatch.contact(forOpenAlias: $0, in: contacts) }) {
+            return ActivityName(
+                title: String(localized: "To \(contact.name)", comment: "Activity row: a send to a saved contact, by its name"),
+                badgeSymbol: Self.contactBadgeSymbol,
+                showsFeeOnly: false
+            )
+        }
+        if let alias {
+            return ActivityName(
+                title: String(localized: "To \(alias.display)", comment: "Activity row: a send to an OpenAlias name that is not a contact"),
+                badgeSymbol: nil,
+                showsFeeOnly: false
+            )
         }
         return nil
     }
@@ -219,4 +246,8 @@ enum TransferDestinationState: Equatable {
         guard let savedAddress, isValidAddress(savedAddress) else { return .needsOpen }
         return .ready(address: savedAddress)
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

@@ -131,6 +131,8 @@ struct TransactionPanelRow: View {
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     /// Payment link transactions show the link's name, amount and state.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    /// Rows name contacts: a saved, renamed or deleted contact shows at once.
+    @ObservedObject private var contactStore = ContactStore.shared
 
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)

@@ -748,4 +748,16 @@ final class NeedsRestoreTests: XCTestCase {
 
         XCTAssertNil(records.record(txid: "send-to-wipe"))
     }
+
+    func testRemoveAllWipesTheContacts() throws {
+        _ = try addSeedWallets(["A"])
+        let manager = WalletManager()
+        ContactStore.shared.add(name: "Dana", destination: "4dana")
+        XCTAssertFalse(ContactStore.shared.contacts.isEmpty)
+
+        manager.deleteAllWallets()
+
+        XCTAssertTrue(ContactStore.shared.contacts.isEmpty)
+        XCTAssertNil(KeychainContactVault().read(), "The Keychain item is gone too")
+    }
 }

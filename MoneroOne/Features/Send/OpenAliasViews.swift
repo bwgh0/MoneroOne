@@ -157,7 +157,7 @@ final class OpenAliasLookupModel: ObservableObject {
     @discardableResult
     func recordPinIfSent(phase flowPhase: SendFlowPhase, summary: OpenAliasSummary?, sentAddress: String) -> Bool {
         guard case .success = flowPhase, let summary, summary.address == sentAddress else { return false }
-        pins.record(query: summary.name.query, address: sentAddress, network: network)
+        pins.record(query: summary.name.query, address: sentAddress, network: network, display: summary.name.display)
         return true
     }
 

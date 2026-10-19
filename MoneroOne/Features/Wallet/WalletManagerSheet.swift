@@ -303,6 +303,7 @@ struct WalletRowContent<Trailing: View>: View {
     /// A line in the address's place (Transfer: why a wallet is dimmed).
     let note: String?
     let trailing: Trailing
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(
         wallet: WalletInfo,
@@ -339,8 +340,11 @@ struct WalletRowContent<Trailing: View>: View {
                 }
 
             VStack(alignment: .leading, spacing: 3) {
+                // One line with "…"; the accessibility sizes wrap it.
                 Text(wallet.name)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .multilineTextAlignment(.leading)
 
                 if needsRestore {
                     HStack(spacing: 4) {

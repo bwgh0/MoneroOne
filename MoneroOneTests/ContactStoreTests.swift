@@ -186,4 +186,31 @@ final class ContactStoreTests: XCTestCase {
         XCTAssertEqual(pins.names(network: .mainnet)[address], OpenAliasName(display: "ben@example.org", query: "ben.example.org"))
         XCTAssertTrue(pins.names(network: .testnet).isEmpty)
     }
+
+    // MARK: - Add to Contacts
+
+    func testAddToContactsFillsTheAddressOrTheNameTheSendUsed() {
+        let row = [SentToRow(label: "Sent to", amountLabel: nil, address: address)]
+        let ben = OpenAliasName(display: "ben@example.org", query: "ben.example.org")
+        let never: (String) -> Bool = { _ in false }
+
+        XCTAssertEqual(TransactionDetailLogic.addToContactsDestination(sentTo: row, aliasNames: [:], contacts: [], isYourWallet: never), address)
+        XCTAssertEqual(TransactionDetailLogic.addToContactsDestination(sentTo: row, aliasNames: [address: ben], contacts: [], isYourWallet: never),
+                       "ben@example.org")
+    }
+
+    func testAddToContactsHidesForAContactAWalletOrAnUnknownDestination() {
+        let row = [SentToRow(label: "Sent to", amountLabel: nil, address: address)]
+        let ben = OpenAliasName(display: "ben@example.org", query: "ben.example.org")
+        let never: (String) -> Bool = { _ in false }
+
+        XCTAssertNil(TransactionDetailLogic.addToContactsDestination(
+            sentTo: row, aliasNames: [:], contacts: [Contact(name: "Dana", destination: address)], isYourWallet: never))
+        XCTAssertNil(TransactionDetailLogic.addToContactsDestination(
+            sentTo: row, aliasNames: [address: ben], contacts: [Contact(name: "Ben", destination: "ben@example.org")], isYourWallet: never))
+        XCTAssertNil(TransactionDetailLogic.addToContactsDestination(sentTo: row, aliasNames: [:], contacts: [], isYourWallet: { _ in true }))
+        XCTAssertNil(TransactionDetailLogic.addToContactsDestination(sentTo: [], aliasNames: [:], contacts: [], isYourWallet: never))
+        let two = row + [SentToRow(label: "Sent to", amountLabel: nil, address: otherAddress)]
+        XCTAssertNil(TransactionDetailLogic.addToContactsDestination(sentTo: two, aliasNames: [:], contacts: [], isYourWallet: never))
+    }
 }

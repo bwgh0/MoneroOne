@@ -29,6 +29,9 @@ struct TransactionDetailView: View {
     @State private var txKeyLookedUp = false
     @State private var copiedField: CopyField?
     @State private var explorerURL: URL?
+    /// "Add to Contacts": the address or OpenAlias name to save.
+    @State private var newContactDestination: String?
+    @ObservedObject private var contactStore = ContactStore.shared
 
     private enum CopyField: Hashable {
         case txId
@@ -77,6 +80,24 @@ struct TransactionDetailView: View {
             fee: transaction.fee,
             activeWalletId: walletManager.activeWallet?.id,
             wallets: walletManager.wallets
+        )
+    }
+
+    /// The address, or the OpenAlias name the send used. Nil when the
+    /// destination is unknown, a contact already, or one of your wallets.
+    private var addToContactsDestination: String? {
+        TransactionDetailLogic.addToContactsDestination(
+            sentTo: sentToRows,
+            aliasNames: OpenAliasPinStore().names(network: walletManager.networkType),
+            contacts: contactStore.contacts,
+            isYourWallet: { address in
+                WalletAddressMatch.wallet(
+                    for: address,
+                    wallets: walletManager.wallets,
+                    activeWalletId: walletManager.activeWallet?.id,
+                    activePrimaryAddress: walletManager.primaryAddress
+                ) != nil
+            }
         )
     }
 
@@ -193,6 +214,19 @@ struct TransactionDetailView: View {
                             )
                         }
                     }
+
+                    if let destination = addToContactsDestination {
+                        Button {
+                            newContactDestination = destination
+                        } label: {
+                            Text("Add to Contacts")
+                                .foregroundStyle(.brand)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("transaction.addToContacts")
+                    }
                 }
 
                 if transaction.type == .outgoing {
@@ -302,6 +336,13 @@ struct TransactionDetailView: View {
             guard transaction.type == .outgoing, !txKeyLookedUp else { return }
             txKey = walletManager.getTxKey(txId: transaction.id)
             txKeyLookedUp = true
+        }
+        .sheet(isPresented: Binding(
+            get: { newContactDestination != nil },
+            set: { if !$0 { newContactDestination = nil } }
+        )) {
+            ContactEditor(mode: .new(destination: newContactDestination ?? ""))
+                .environmentObject(walletManager)
         }
         .sheet(item: $explorerURL) { url in
             SafariView(url: url)
@@ -479,6 +520,23 @@ enum TransactionDetailLogic {
     /// pending and once confirmed.
     static func shownAmount(_ transaction: MoneroTransaction, transfer: WalletTransferName?) -> Decimal {
         transfer == .toThisWallet ? transaction.fee : transaction.amount
+    }
+
+    /// What "Add to Contacts" fills in: the OpenAlias name the send used,
+    /// else the address. Only for a send to one destination that is not a
+    /// contact and not one of your wallets.
+    static func addToContactsDestination(
+        sentTo: [SentToRow],
+        aliasNames: [String: OpenAliasName],
+        contacts: [Contact],
+        isYourWallet: (String) -> Bool
+    ) -> String? {
+        guard sentTo.count == 1, let address = sentTo.first?.address, !address.isEmpty else { return nil }
+        guard !isYourWallet(address), ContactMatch.contact(forAddress: address, in: contacts) == nil else { return nil }
+        if let alias = aliasNames[address] {
+            return ContactMatch.contact(forOpenAlias: alias, in: contacts) == nil ? alias.display : nil
+        }
+        return address
     }
 
     /// The payment link's name, "To This Wallet", or "Received" / "Sent".

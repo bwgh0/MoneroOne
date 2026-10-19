@@ -291,15 +291,6 @@ struct SettingsView: View {
                     }
                     .accessibilityHint("Opens monero.one in your browser")
 
-                    Link(destination: URL(string: "https://apps.apple.com/app/id6757898541?action=write-review")!) {
-                        SettingsRow(
-                            icon: "star.fill",
-                            title: "Rate Monero One",
-                            color: .brand
-                        )
-                    }
-                    .accessibilityHint("Opens the App Store to write a review")
-
                     Link(destination: URL(string: "https://monero.one/privacy")!) {
                         SettingsRow(
                             icon: "hand.raised.fill",
@@ -346,6 +337,15 @@ struct SettingsView: View {
                         .accessibilityLabel("Donate XMR")
                         .accessibilityHint("Support the developer with a Monero donation")
                     }
+
+                    Link(destination: URL(string: "https://apps.apple.com/app/id6757898541?action=write-review")!) {
+                        SettingsRow(
+                            icon: "star.fill",
+                            title: "Rate Monero One",
+                            color: .brand
+                        )
+                    }
+                    .accessibilityHint("Opens the App Store to write a review")
                 }
 
                 // Danger Zone

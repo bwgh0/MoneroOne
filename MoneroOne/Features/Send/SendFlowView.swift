@@ -13,6 +13,8 @@ struct SendFlowView: View {
     /// Transfer: the wallet picked under To. Its saved primary address is
     /// `recipientAddress`.
     @State private var transferTarget: WalletInfo?
+    @ObservedObject private var contactStore = ContactStore.shared
+    @State private var showContacts = false
 
     /// Transfer: Done on Sent also closes the wallet switcher.
     private let onTransferDone: (() -> Void)?
@@ -347,6 +349,10 @@ struct SendFlowView: View {
                 isConnected: networkMonitor.isConnected,
                 isValidAddress: walletManager.isValidAddress(recipientInput),
                 matchedWallet: matchedWallet,
+                matchedContact: matchedContact,
+                contactMatches: contactMatches,
+                onShowContacts: { showContacts = true },
+                onPickContact: pickContact,
                 lookup: aliasLookup,
                 onContinue: { summary in
                     HapticFeedback.shared.buttonPress()
@@ -359,6 +365,10 @@ struct SendFlowView: View {
                     goForward(to: .amount)
                 }
             )
+            .sheet(isPresented: $showContacts) {
+                ContactsSheet(selectedId: matchedContact?.id, onPick: pickContact)
+                    .environmentObject(walletManager)
+            }
 
         case .amount:
             SendAmountStep(
@@ -366,7 +376,7 @@ struct SendFlowView: View {
                 memo: isLinkMode ? $linkNote : $memo,
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
-                recipientDisplayName: walletRecipient?.name ?? aliasSummary?.name.display,
+                recipientDisplayName: walletRecipient?.name ?? matchedContact?.name ?? aliasSummary?.name.display,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
@@ -628,6 +638,28 @@ struct SendFlowView: View {
             activeWalletId: walletManager.activeWallet?.id,
             activePrimaryAddress: walletManager.primaryAddress
         )
+    }
+
+    /// The contact whose address or OpenAlias name is in Send's field. A
+    /// wallet match wins.
+    private var matchedContact: Contact? {
+        guard !isTransfer, !isLinkMode, matchedWallet == nil else { return nil }
+        return ContactMatch.contact(forInput: recipientInput, in: contactStore.contacts)
+    }
+
+    /// Contacts under the field while it has text and no card.
+    private var contactMatches: [Contact] {
+        guard !isTransfer, !isLinkMode, matchedWallet == nil, matchedContact == nil else { return [] }
+        return ContactMatch.matches(recipientInput, in: contactStore.contacts)
+    }
+
+    /// A contact from the Contacts sheet or under the field: its address or
+    /// OpenAlias name fills the field, which shows the contact's card. A
+    /// name is looked up at once, as Paste does.
+    private func pickContact(_ contact: Contact) {
+        isLinkMode = false
+        recipientInput = contact.destination
+        aliasLookup.submit(contact.destination)
     }
 
     /// The wallet the amount title and Review name: Transfer's pick, or

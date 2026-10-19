@@ -11,6 +11,15 @@ struct SendAddressStep: View {
     let isValidAddress: Bool
     /// One of your wallets, when the field holds its saved primary address.
     var matchedWallet: WalletInfo? = nil
+    /// The contact whose address or OpenAlias name is in the field. A
+    /// wallet match wins.
+    var matchedContact: Contact? = nil
+    /// Contacts whose name or destination holds the typed text.
+    var contactMatches: [Contact] = []
+    /// The Contacts button at the end of the empty field.
+    var onShowContacts: () -> Void = {}
+    /// A tap on a contact under the field.
+    var onPickContact: (Contact) -> Void = { _ in }
     @ObservedObject var lookup: OpenAliasLookupModel
     /// Called with the summary when the field holds a resolved name, else nil.
     let onContinue: (OpenAliasSummary?) -> Void
@@ -42,7 +51,17 @@ struct SendAddressStep: View {
 
                     recipient
 
-                    actionButtons
+                    // While the field has text, Scan QR, Paste and Link step
+                    // aside, and the matching contacts show.
+                    if showsActionButtons {
+                        actionButtons
+                    } else if !contactMatches.isEmpty {
+                        VStack(spacing: 10) {
+                            ForEach(contactMatches) { contact in
+                                ContactRowButton(contact: contact) { onPickContact(contact) }
+                            }
+                        }
+                    }
                 }
                 // Only the recipient changes: the field and the token
                 // cross-fade in place.
@@ -115,7 +134,7 @@ struct SendAddressStep: View {
             // Typed text goes to the lookup from the binding: when
             // two keystrokes land in one frame, SwiftUI drops an
             // onChange call, and the lookup kept a part of the name.
-            TextField("Enter XMR address or OpenAlias", text: Binding(
+            TextField("Name, address or OpenAlias", text: Binding(
                 get: { recipientInput },
                 set: { newValue in
                     recipientInput = newValue
@@ -128,7 +147,7 @@ struct SendAddressStep: View {
                 .focused($fieldFocused)
                 .onSubmit { lookup.submit(recipientInput) }
                 .accessibilityIdentifier("send.addressField")
-                .accessibilityLabel("Recipient address or OpenAlias name")
+                .accessibilityLabel("Recipient name, address or OpenAlias")
 
             if isLookingUpName {
                 ProgressView()
@@ -149,6 +168,19 @@ struct SendAddressStep: View {
                 // takes its place: the tint made it a pale orange.
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear address")
+            } else {
+                // The clear button takes its place while the field has text.
+                Button(action: onShowContacts) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.title2)
+                        .foregroundStyle(.brand)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(-8)
+                .accessibilityLabel("Contacts")
+                .accessibilityIdentifier("send.contactsButton")
             }
         }
         .onAppear {
@@ -222,12 +254,7 @@ struct SendAddressStep: View {
     private var addressField: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                if let resolvedSummary {
-                    OpenAliasRecipientCard(summary: resolvedSummary, onClear: clearRecipient)
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                        .transition(.opacity)
-                } else if let matchedWallet {
+                if let matchedWallet {
                     WalletRecipientCard(
                         wallet: matchedWallet,
                         address: recipientInput.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -236,6 +263,16 @@ struct SendAddressStep: View {
                     .padding(.horizontal)
                     .padding(.vertical, 12)
                     .transition(.opacity)
+                } else if let matchedContact {
+                    ContactRecipientCard(contact: matchedContact, onClear: clearRecipient)
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                        .transition(.opacity)
+                } else if let resolvedSummary {
+                    OpenAliasRecipientCard(summary: resolvedSummary, onClear: clearRecipient)
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                        .transition(.opacity)
                 } else {
                     fieldRow
                         .padding(.horizontal)
@@ -249,8 +286,9 @@ struct SendAddressStep: View {
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
 
             // Validation indicator. On the name path the lookup
-            // row takes its place, in a slot of the same height.
-            if !recipientInput.isEmpty {
+            // row takes its place, in a slot of the same height. The
+            // matching contacts take its place while they show.
+            if !recipientInput.isEmpty, showsActionButtons || contactMatches.isEmpty {
                 ZStack(alignment: .leading) {
                     validationRow(isValid: false)
                         .hidden()
@@ -325,6 +363,11 @@ struct SendAddressStep: View {
         .foregroundStyle(isOn ? .brand : .gray)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
+    }
+
+    /// Scan QR, Paste and Link: with an empty field, a link, or a card.
+    private var showsActionButtons: Bool {
+        isLinkMode || recipientInput.isEmpty || matchedWallet != nil || matchedContact != nil || resolvedSummary != nil
     }
 
     /// A link needs no address: it can go on as soon as Send can.

@@ -10,6 +10,7 @@
 		5E7D70000000000000000B03 /* SendRecordStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F03 /* SendRecordStoreTests.swift */; };
 		5E7D70000000000000000B05 /* ContactStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F05 /* ContactStoreTests.swift */; };
 		5E7D70000000000000000B02 /* TransferWalletList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F02 /* TransferWalletList.swift */; };
+		5E7D70000000000000000B06 /* ContactsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F06 /* ContactsSheet.swift */; };
 		5E7D70000000000000000B01 /* SendRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F01 /* SendRecordStore.swift */; };
 		5E7D70000000000000000B04 /* ContactStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F04 /* ContactStore.swift */; };
 		5EED00000000000000000026 /* SeedEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000016 /* SeedEntryModel.swift */; };
@@ -243,6 +244,7 @@
 		5E7D70000000000000000F03 /* SendRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendRecordStoreTests.swift; sourceTree = "<group>"; };
 		5E7D70000000000000000F05 /* ContactStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactStoreTests.swift; sourceTree = "<group>"; };
 		5E7D70000000000000000F02 /* TransferWalletList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferWalletList.swift; sourceTree = "<group>"; };
+		5E7D70000000000000000F06 /* ContactsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsSheet.swift; sourceTree = "<group>"; };
 		5E7D70000000000000000F01 /* SendRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendRecordStore.swift; sourceTree = "<group>"; };
 		5E7D70000000000000000F04 /* ContactStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactStore.swift; sourceTree = "<group>"; };
 		5EED00000000000000000016 /* SeedEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedEntryModel.swift; sourceTree = "<group>"; };
@@ -775,6 +777,7 @@
 				A1B2C3D400000002A0000006 /* SendFlowView.swift */,
 				0A1A50000000000000000F03 /* OpenAliasViews.swift */,
 				5E7D70000000000000000F02 /* TransferWalletList.swift */,
+				5E7D70000000000000000F06 /* ContactsSheet.swift */,
 				A1B2C3D400000003A0000001 /* Steps */,
 			);
 			path = Send;
@@ -1237,6 +1240,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				A1B2C3D400000001A0000006 /* SendFlowView.swift in Sources */,
 				0A1A50000000000000000B03 /* OpenAliasViews.swift in Sources */,
 				5E7D70000000000000000B02 /* TransferWalletList.swift in Sources */,
+				5E7D70000000000000000B06 /* ContactsSheet.swift in Sources */,
 				A1B2C3D400000001A0000007 /* SendAddressStep.swift in Sources */,
 				A1B2C3D400000001A0000008 /* SendAmountStep.swift in Sources */,
 				A1B2C3D400000001A0000009 /* SendReviewStep.swift in Sources */,

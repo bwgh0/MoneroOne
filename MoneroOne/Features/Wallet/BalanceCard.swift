@@ -532,13 +532,28 @@ struct BalanceCard: View {
         case risen
     }
 
-    /// "+1.2845 XMR", or "+$440.22" in Fiat Mode.
-    private var arrivalPlusText: String? {
+    /// "1.2845 XMR", or "$440.22" in Fiat Mode.
+    private var arrivalAmountText: String? {
         guard let arrival else { return nil }
         if isFiatFirst, let fiat = priceService.formatFiatValue(arrival.amount) {
-            return "+\(fiat)"
+            return fiat
         }
-        return "+\(XMRFormatter.format(arrival.amount)) XMR"
+        return "\(XMRFormatter.format(arrival.amount)) XMR"
+    }
+
+    /// "+1.2845 XMR", or "+$440.22" in Fiat Mode.
+    private var arrivalPlusText: String? {
+        arrivalAmountText.map { "+\($0)" }
+    }
+
+    /// VoiceOver says each moment once: "Received 1.2845 XMR".
+    private func announceArrival() {
+        guard let amount = arrivalAmountText else { return }
+        let text = String(
+            localized: "Received \(amount)",
+            comment: "VoiceOver: a payment arrived on the balance card. The amount is in XMR, or in the fiat currency in Fiat Mode"
+        )
+        UIAccessibility.post(notification: .announcement, argument: text)
     }
 
     @ViewBuilder
@@ -600,6 +615,7 @@ struct BalanceCard: View {
         let rise = isFirst ? 0.65 : 0.55
         let captionBack = reduceMotion ? 0.8 : rise + 0.25
         var clock = 0.0
+        var isAnnounced = false
         func wait(until time: Double) async throws {
             if time > clock { try await Task.sleep(for: .seconds(time - clock)) }
             clock = max(clock, time)
@@ -619,6 +635,8 @@ struct BalanceCard: View {
             withAnimation(reduceMotion ? .easeInOut(duration: 0.35) : .spring(response: 0.3, dampingFraction: 0.8)) {
                 risenArrivalId = arrival.id
             }
+            announceArrival()
+            isAnnounced = true
             if isFirst {
                 withAnimation(.easeInOut(duration: 0.35)) { isHeroGreen = true }
             } else {
@@ -645,6 +663,7 @@ struct BalanceCard: View {
         } catch {
             // Off screen meanwhile: land on the end state.
         }
+        if !isAnnounced { announceArrival() }
         risenArrivalId = arrival.id
         arrivalStep = .idle
         hidesCaption = false

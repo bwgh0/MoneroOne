@@ -264,7 +264,7 @@ struct SendAddressStep: View {
                     .padding(.vertical, 12)
                     .transition(.opacity)
                 } else if let matchedContact {
-                    ContactRecipientCard(contact: matchedContact, onClear: clearRecipient)
+                    ContactRecipientCard(contact: matchedContact, onClear: clearRecipient, onOpenContacts: onShowContacts)
                         .padding(.horizontal)
                         .padding(.vertical, 12)
                         .transition(.opacity)

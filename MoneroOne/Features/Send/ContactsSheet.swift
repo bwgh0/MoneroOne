@@ -133,6 +133,9 @@ struct ContactsSheet: View {
                 }
             }
         }
+        // Search added to a stack that is already up went to the bottom
+        // bar: the first contact builds the stack again, with Search on top.
+        .id(store.contacts.isEmpty)
         .sheet(isPresented: $showNew) {
             ContactEditor(mode: .new(destination: ""))
                 .environmentObject(walletManager)
@@ -535,19 +538,25 @@ struct ContactNamePicker: UIViewControllerRepresentable {
 struct ContactRecipientCard: View {
     let contact: Contact
     let onClear: () -> Void
+    /// A tap on the card opens the Contacts sheet, where its row shows the check.
+    var onOpenContacts: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 12) {
-            RecipientMonogram(initials: contact.initials)
+            HStack(spacing: 12) {
+                RecipientMonogram(initials: contact.initials)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: contact.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                ContactDestinationText(contact: contact)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: contact.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                    ContactDestinationText(contact: contact)
+                }
+
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: 0)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onOpenContacts)
 
             Button(action: onClear) {
                 Image(systemName: "xmark.circle.fill")
@@ -562,6 +571,9 @@ struct ContactRecipientCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: contact.spokenLabel))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Shows your contacts")
+        .accessibilityAction(.default) { onOpenContacts() }
         .accessibilityAction(named: Text("Clear recipient"), onClear)
         .accessibilityIdentifier("send.contactCard")
     }

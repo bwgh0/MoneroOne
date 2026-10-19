@@ -235,6 +235,15 @@ struct SendFlowView: View {
     ///     amount/address and retry without restarting from
     ///     address-entry. Snap back to `.review` so the inputs are
     ///     editable instead of stuck on the dead `.sending` step.
+    /// The success haptic and the send chime for a link's Ready step, at
+    /// once. Every other send shows the Sent mark, which plays them when
+    /// its circle closes.
+    private func playLinkReadyFeedback() {
+        guard isLinkMode, linkRecordId != nil else { return }
+        HapticFeedback.shared.transactionSuccess()
+        SoundFeedback.shared.playSendComplete()
+    }
+
     private func handleHardwareSheetDismiss() {
         let outcome = walletManager.lastHardwareSessionOutcome
         walletManager.pendingBroadcastStep = nil
@@ -259,8 +268,7 @@ struct SendFlowView: View {
                     Task {
                         try? await Task.sleep(nanoseconds: 900_000_000)
                         await MainActor.run {
-                            HapticFeedback.shared.transactionSuccess()
-                            SoundFeedback.shared.playSendComplete()
+                            playLinkReadyFeedback()
                             withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                                 phase = .success(txHash: txId)
                             }
@@ -690,8 +698,7 @@ struct SendFlowView: View {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     phase = .success(txHash: txHash)
                 }
-                HapticFeedback.shared.transactionSuccess()
-                SoundFeedback.shared.playSendComplete()
+                playLinkReadyFeedback()
             } catch {
                 sendInProgress = false
                 let msg = friendlyErrorMessage(for: error)
@@ -736,8 +743,7 @@ struct SendFlowView: View {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     phase = .success(txHash: txHash)
                 }
-                HapticFeedback.shared.transactionSuccess()
-                SoundFeedback.shared.playSendComplete()
+                playLinkReadyFeedback()
             } catch {
                 sendInProgress = false
                 // A failed broadcast may still have reached the network.

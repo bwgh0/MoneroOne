@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4D07100000000000000000A2 /* SendSuccessMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000A1 /* SendSuccessMark.swift */; };
 		5EED00000000000000000026 /* SeedEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000016 /* SeedEntryModel.swift */; };
 		5EED00000000000000000027 /* SeedWordField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000017 /* SeedWordField.swift */; };
 		5EED00000000000000000028 /* SeedPhraseEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000018 /* SeedPhraseEntryView.swift */; };
@@ -235,6 +236,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		4D07100000000000000000A1 /* SendSuccessMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendSuccessMark.swift; sourceTree = "<group>"; };
 		5EED00000000000000000016 /* SeedEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedEntryModel.swift; sourceTree = "<group>"; };
 		5EED00000000000000000017 /* SeedWordField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedWordField.swift; sourceTree = "<group>"; };
 		5EED00000000000000000018 /* SeedPhraseEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseEntryView.swift; sourceTree = "<group>"; };
@@ -659,6 +661,7 @@
 				029F663A58F5CE2B18C3B33C /* ScrambledText.swift */,
 				AA000000000000000000000D /* SelectableOptionCard.swift */,
 				A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */,
+				4D07100000000000000000A1 /* SendSuccessMark.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -1235,6 +1238,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				7E71E0000000000000000002 /* ReviewPrompt.swift in Sources */,
 				A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */,
 				A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */,
+				4D07100000000000000000A2 /* SendSuccessMark.swift in Sources */,
 				A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */,
 				A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */,
 				8BFA73260FA46CA7935C386F /* UnlockView.swift in Sources */,

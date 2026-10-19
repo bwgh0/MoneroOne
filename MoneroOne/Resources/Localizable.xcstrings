@@ -26827,6 +26827,101 @@
         }
       }
     },
+    "Contact Support" : {
+      "comment" : "Settings row: opens a mail to support",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Support kontaktieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contactar con soporte"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contacter l’assistance"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contatta l’assistenza"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サポートに連絡"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지원팀에 문의"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contact opnemen met ondersteuning"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skontaktuj się z pomocą techniczną"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contatar o suporte"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contactează asistența"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Связаться с поддержкой"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destek ile iletişime geç"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зв’язатися з підтримкою"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "联系支持"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聯絡支援"
+          }
+        }
+      }
+    },
     "Continue" : {
       "localizations" : {
         "de" : {
@@ -57305,6 +57400,101 @@
         }
       }
     },
+    "No Mail App" : {
+      "comment" : "Contact Support dialog title: no app on this iPhone opens mail",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Mail-App"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay app de correo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune app de messagerie"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna app di posta"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メールAppがありません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메일 앱 없음"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen mail-app"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak aplikacji poczty"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum app de e-mail"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicio aplicație de e-mail"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет почтового приложения"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posta uygulaması yok"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Немає поштової програми"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有邮件 App"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有郵件 App"
+          }
+        }
+      }
+    },
     "No Monero address for this name" : {
       "localizations" : {
         "de" : {
@@ -63265,6 +63455,101 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在開啟裝置錢包⋯"
+          }
+        }
+      }
+    },
+    "Opens a mail to support with the app version and iPhone model" : {
+      "comment" : "VoiceOver hint for the Contact Support row",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet eine E-Mail an den Support mit App-Version und iPhone-Modell"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre un correo al soporte con la versión de la app y el modelo de iPhone"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre un e-mail à l’assistance avec la version de l’app et le modèle d’iPhone"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apre un’e-mail all’assistenza con la versione dell’app e il modello di iPhone"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AppのバージョンとiPhoneのモデルを記載したサポート宛てのメールを開きます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "앱 버전과 iPhone 모델이 담긴 지원팀 메일을 엽니다"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opent een mail aan support met de appversie en het iPhone-model"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otwiera wiadomość do pomocy technicznej z wersją aplikacji i modelem iPhone’a"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre um e-mail para o suporte com a versão do app e o modelo do iPhone"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deschide un e-mail către asistență cu versiunea aplicației și modelul iPhone-ului"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открывает письмо в поддержку с версией приложения и моделью iPhone"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uygulama sürümü ve iPhone modeliyle desteğe bir e-posta açar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відкриває лист до підтримки з версією програми та моделлю iPhone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开一封发给支持团队的邮件，附带 App 版本和 iPhone 型号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟一封寄給支援團隊的郵件，附上 App 版本與 iPhone 型號"
           }
         }
       }
@@ -108688,6 +108973,101 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請將它寫下來，切勿與任何人分享。"
+          }
+        }
+      }
+    },
+    "Write to support@monero.one with version %@." : {
+      "comment" : "Contact Support dialog message. %@ is the app version and build, e.g. 1.1.0 (11). Keep support@monero.one as is.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schreib an support@monero.one und nenne die Version %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe a support@monero.one e indica la versión %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écrivez à support@monero.one en indiquant la version %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scrivi a support@monero.one indicando la versione %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バージョン %@ を添えて support@monero.one にご連絡ください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "버전 %@ 정보와 함께 support@monero.one으로 메일을 보내세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schrijf naar support@monero.one en vermeld versie %@."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Napisz na support@monero.one i podaj wersję %@."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escreva para support@monero.one informando a versão %@."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scrie la support@monero.one și menționează versiunea %@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Напишите на support@monero.one и укажите версию %@."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "support@monero.one adresine %@ sürümünü belirterek yazın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Напишіть на support@monero.one і вкажіть версію %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请写信至 support@monero.one，并注明版本 %@。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請寫信至 support@monero.one，並註明版本 %@。"
           }
         }
       }

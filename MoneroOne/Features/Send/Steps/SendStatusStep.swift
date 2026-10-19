@@ -8,6 +8,9 @@ struct SendStatusStep: View {
     let onRetry: () -> Void
     let onClose: () -> Void
     var canRetry = true
+    /// A line under the transaction ID on success (Transfer: where the
+    /// money shows).
+    var successNote: String? = nil
 
     @State private var showContent = false
     @State private var copiedHash = false
@@ -93,6 +96,13 @@ struct SendStatusStep: View {
                     }
                     .accessibilityLabel(copiedHash ? "Transaction ID copied" : "Copy transaction ID")
                     .accessibilityHint("Copies the full transaction ID to clipboard")
+
+                    if let successNote {
+                        Text(successNote)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
 
                 case .error(let message):
                     Text("Transaction Failed")

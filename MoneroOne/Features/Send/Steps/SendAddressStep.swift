@@ -9,6 +9,8 @@ struct SendAddressStep: View {
     @Binding var isLinkMode: Bool
     let isConnected: Bool
     let isValidAddress: Bool
+    /// One of your wallets, when the field holds its saved primary address.
+    var matchedWallet: WalletInfo? = nil
     @ObservedObject var lookup: OpenAliasLookupModel
     /// Called with the summary when the field holds a resolved name, else nil.
     let onContinue: (OpenAliasSummary?) -> Void
@@ -225,6 +227,15 @@ struct SendAddressStep: View {
                         .padding(.horizontal)
                         .padding(.vertical, 12)
                         .transition(.opacity)
+                } else if let matchedWallet {
+                    WalletRecipientCard(
+                        wallet: matchedWallet,
+                        address: recipientInput.trimmingCharacters(in: .whitespacesAndNewlines),
+                        onClear: clearRecipient
+                    )
+                    .padding(.horizontal)
+                    .padding(.vertical, 12)
+                    .transition(.opacity)
                 } else {
                     fieldRow
                         .padding(.horizontal)
@@ -409,5 +420,52 @@ private struct RecipientButtonsLayout: Layout {
                 y += height + spacing
             }
         }
+    }
+}
+
+/// One of your wallets in the recipient field: its emoji, name and 8…8
+/// address, as the wallet switcher shows it, with the clear button.
+struct WalletRecipientCard: View {
+    let wallet: WalletInfo
+    let address: String
+    let onClear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(wallet.emoji)
+                .font(.system(size: 24))
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(.ultraThinMaterial))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(wallet.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(verbatim: ReceiveAddressLogic.shortAddress(address))
+                    .font(.caption)
+                    .monospaced()
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: onClear) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    // A 44 pt target around the glyph, which keeps its place.
+                    .padding(12)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(-12)
+            .accessibilityLabel("Clear address")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "\(wallet.name), \(ReceiveAddressLogic.shortAddress(address))"))
+        .accessibilityAction(named: Text("Clear address"), onClear)
+        .accessibilityIdentifier("send.walletCard")
     }
 }

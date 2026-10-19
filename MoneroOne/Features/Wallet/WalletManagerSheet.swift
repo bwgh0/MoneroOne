@@ -300,6 +300,8 @@ struct WalletRowContent<Trailing: View>: View {
     /// Inactive wallets may not have a cached balance yet. Unknown is not zero.
     let balance: Decimal?
     let address: String?
+    /// A line in the address's place (Transfer: why a wallet is dimmed).
+    let note: String?
     let trailing: Trailing
 
     init(
@@ -308,6 +310,7 @@ struct WalletRowContent<Trailing: View>: View {
         needsRestore: Bool = false,
         balance: Decimal?,
         address: String?,
+        note: String? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.wallet = wallet
@@ -315,6 +318,7 @@ struct WalletRowContent<Trailing: View>: View {
         self.needsRestore = needsRestore
         self.balance = balance
         self.address = address
+        self.note = note
         self.trailing = trailing()
     }
 
@@ -359,8 +363,12 @@ struct WalletRowContent<Trailing: View>: View {
                     .foregroundStyle(balance == nil ? Color.secondary : Color.brand)
                 }
 
-                // The 8…8 short form, as in the Receive rows and on Android.
-                if let address, !address.isEmpty {
+                if let note {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if let address, !address.isEmpty {
+                    // The 8…8 short form, as in the Receive rows and on Android.
                     Text(verbatim: ReceiveAddressLogic.shortAddress(address))
                         .font(.caption2)
                         .lineLimit(1)
@@ -632,7 +640,9 @@ struct WalletRow: View {
 struct WalletManagerRows: View {
     @Binding var isExpanded: Bool
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var priceService: PriceService
     @State private var showAddWallet = false
+    @State private var showTransfer = false
     @State private var renameWalletId: UUID?
     @State private var renameText = ""
     @State private var renameEmoji = ""
@@ -681,7 +691,15 @@ struct WalletManagerRows: View {
                     .animation(.snappy(duration: 0.2), value: dragId)
             }
 
-            addWalletButton
+            // Transfer needs a second wallet. With one, Add Wallet fills
+            // the row, as before.
+            HStack(spacing: 12) {
+                if wallets.count >= 2 {
+                    transferButton
+                }
+                addWalletButton
+            }
+            .padding(.horizontal)
         }
         .background {
             ReorderPressHost(
@@ -711,11 +729,37 @@ struct WalletManagerRows: View {
             .padding(.vertical, 14)
         }
         .glassButtonStyle()
-        .padding(.horizontal)
+    }
+
+    /// Opens Transfer: Send's steps, from this wallet to another of yours.
+    private var transferButton: some View {
+        Button {
+            showTransfer = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.left.arrow.right.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.brand)
+                Text("Transfer")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.brand)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+        }
+        .glassButtonStyle()
+        .accessibilityHint("Moves XMR to another of your wallets")
+        .accessibilityIdentifier("wallet.switcher.transfer")
     }
 
     var body: some View {
         rowsStack
+        .sheet(isPresented: $showTransfer) {
+            SendFlowView(isTransfer: true)
+                .environmentObject(walletManager)
+                .environmentObject(priceService)
+        }
         .fullScreenCover(isPresented: $showAddWallet, onDismiss: {
             walletManager.addWalletPath = []
         }) {

@@ -5,6 +5,9 @@ struct SendReviewStep: View {
     let recipientAddress: String
     /// Set when the recipient came from an OpenAlias name.
     var aliasSummary: OpenAliasSummary? = nil
+    /// A transfer between your wallets: From over To in place of the
+    /// recipient.
+    var transfer: TransferParties? = nil
     let amountString: String
     let memo: String
     let isSendingAll: Bool
@@ -46,6 +49,11 @@ struct SendReviewStep: View {
 
                     // Transaction card
                     VStack(spacing: 0) {
+                        if let transfer {
+                            walletRow(transfer.from, address: transfer.fromAddress, label: String(localized: "From", comment: "Transfer review: the wallet that sends"))
+                            Divider().padding(.horizontal)
+                            walletRow(transfer.to, address: recipientAddress, label: String(localized: "To", comment: "Transfer review: the wallet that receives"))
+                        } else {
                         // Recipient. A name shows its picture, the name,
                         // the OpenAlias name and every character of the address.
                         HStack(alignment: aliasSummary == nil ? .center : .top, spacing: 12) {
@@ -95,6 +103,7 @@ struct SendReviewStep: View {
                                 .padding(.trailing)
                                 .padding(.top, 8)
                                 .padding(.bottom)
+                        }
                         }
 
                         Divider().padding(.horizontal)
@@ -316,6 +325,41 @@ struct SendReviewStep: View {
     private func formatAddress(_ addr: String) -> String {
         ReceiveAddressLogic.shortAddress(addr)
     }
+
+    /// One of your wallets on a transfer's review: its emoji, "From" or
+    /// "To", its name and its 8…8 address.
+    private func walletRow(_ wallet: WalletInfo, address: String, label: String) -> some View {
+        HStack(spacing: 12) {
+            Text(wallet.emoji)
+                .font(.system(size: 22))
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.ultraThinMaterial))
+                .clipShape(Circle())
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(wallet.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                CodeText(formatAddress(address), color: .label)
+            }
+
+            Spacer()
+        }
+        .padding()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "\(label): \(wallet.name), \(formatAddress(address))"))
+    }
+}
+
+/// The two wallets of a transfer, for its review.
+struct TransferParties {
+    let from: WalletInfo
+    let fromAddress: String
+    let to: WalletInfo
 }
 
 /// The review's fee rules, apart from the view so tests can pin them.

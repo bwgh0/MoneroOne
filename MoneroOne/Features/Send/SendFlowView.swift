@@ -254,6 +254,10 @@ struct SendFlowView: View {
     private func handleHardwareSheetDismiss() {
         let outcome = walletManager.lastHardwareSessionOutcome
         walletManager.pendingBroadcastStep = nil
+        // Before the refresh, so the new row shows with its name.
+        if case .sentTransaction(let txId) = outcome, !isLinkMode {
+            recordWalletSend(txid: txId)
+        }
         Task {
             await walletManager.refresh()
             await MainActor.run {
@@ -261,8 +265,6 @@ struct SendFlowView: View {
                 case .sentTransaction(let txId):
                     if isLinkMode, let linkRecordId {
                         PaymentLinkFunder.markFunded(id: linkRecordId, txid: txId)
-                    } else {
-                        recordWalletSend(txid: txId)
                     }
                     // Show the same confetti / success animation
                     // software-wallet sends get. Phase was set to

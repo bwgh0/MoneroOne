@@ -481,10 +481,13 @@ struct ContactNamePicker: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ host: UIViewController, context: Context) {
-        context.coordinator.parent = self
-        guard isPresented, host.presentedViewController == nil else { return }
+        let coordinator = context.coordinator
+        coordinator.parent = self
+        // One picker: updates can repeat before the presentation starts.
+        guard isPresented, !coordinator.isShowing, host.presentedViewController == nil else { return }
+        coordinator.isShowing = true
         let picker = CNContactPickerViewController()
-        picker.delegate = context.coordinator
+        picker.delegate = coordinator
         DispatchQueue.main.async {
             host.present(picker, animated: true)
         }
@@ -496,6 +499,7 @@ struct ContactNamePicker: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, CNContactPickerDelegate {
         var parent: ContactNamePicker
+        var isShowing = false
 
         init(parent: ContactNamePicker) {
             self.parent = parent
@@ -503,10 +507,12 @@ struct ContactNamePicker: UIViewControllerRepresentable {
 
         func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
             if let name = Self.name(of: contact) { parent.onPick(name) }
+            isShowing = false
             parent.isPresented = false
         }
 
         func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
+            isShowing = false
             parent.isPresented = false
         }
 

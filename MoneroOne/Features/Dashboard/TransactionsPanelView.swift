@@ -147,7 +147,7 @@ struct TransactionPanelRow: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(iconColor)
                 }
-                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge)
+                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge, symbol: row.badgeSymbol ?? "link")
 
                 // Details
                 VStack(alignment: .leading, spacing: 2) {

@@ -931,6 +931,7 @@ struct TransactionRow: View {
             systemImage: row.systemImage,
             isIncoming: transaction.type == .incoming,
             showsLinkBadge: row.showsLinkBadge,
+            badgeSymbol: row.badgeSymbol ?? "link",
             title: row.title,
             subtitle: row.subtitle
         ) { alignment in
@@ -982,6 +983,9 @@ struct ActivityRowLayout<Amount: View>: View {
     let isIncoming: Bool
     /// A payment link's row: the tile gets the link badge.
     var showsLinkBadge = false
+    /// The badge's glyph: the link, or the wallet on a send between your
+    /// wallets.
+    var badgeSymbol = "link"
     /// "Received", "Sent", or a payment link's name.
     let title: String
     let subtitle: String
@@ -1027,7 +1031,7 @@ struct ActivityRowLayout<Amount: View>: View {
             .frame(width: 36, height: 36)
             .background(tint.opacity(0.15))
             .cornerRadius(8)
-            .paymentLinkBadge(tint, isShown: showsLinkBadge)
+            .paymentLinkBadge(tint, isShown: showsLinkBadge, symbol: badgeSymbol)
     }
 
     private func details(stacked: Bool) -> some View {

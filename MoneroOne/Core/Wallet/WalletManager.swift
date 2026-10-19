@@ -3927,6 +3927,8 @@ class WalletManager: ObservableObject {
         Task { await EnvelopeRuntime.shared.wipeAll() }
         // OpenAlias pins belong to this device's payment history.
         OpenAliasPinStore().clearAll()
+        // So do the names of sends between wallets.
+        SendRecordStore().clearAll()
         // The Face ID item holds the old PIN. Left behind, it would offer
         // Face ID on the next wallet's PIN screen and fail with that PIN,
         // which counts toward the lockout.
@@ -3941,6 +3943,8 @@ class WalletManager: ObservableObject {
         keychain.deleteViewOnly(walletId: id)
         keychain.deleteSeed(walletId: id)
         receiveSelection.removeAll(for: id)
+        // Rows that named this wallet go back to "Sent" and "Received".
+        SendRecordStore().removeRecords(naming: id)
         walletStore.removeWallet(id: id)
         wallets = walletStore.loadWallets()
         walletsNeedingRestore.remove(id)

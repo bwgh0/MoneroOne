@@ -4,6 +4,7 @@ import CoreImage.CIFilterBuiltins
 import AVFoundation
 import UIKit
 import MoneroKit
+import ObjectiveC
 @testable import MoneroOne
 
 // MARK: - Wallet Lifecycle Regression Tests
@@ -2179,4 +2180,98 @@ final class SendReviewFeeTests: XCTestCase {
         XCTAssertEqual(MoneroWallet.piconero(Decimal(string: "0.000000000001")!), 1)
         XCTAssertEqual(MoneroWallet.piconero(Decimal(string: "12.345678901234")!), 12_345_678_901_234)
     }
+}
+
+// MARK: - Restore Height Locale Regression Tests
+
+/// Android crash data: devices on a Buddhist, Persian or Islamic calendar, or
+/// with non-Latin digits, could not turn a date into a restore height. On
+/// iOS the kit's lookup wrote its table keys in the device locale
+/// ("2569-03-01", "۱۴۰۴-۱۲-۱۰"), matched no key and gave height 0 for every
+/// date: a restore and a new wallet both scanned from block 0. Each test
+/// sets the locale that `DateFormatter()` reads and expects the en_US heights.
+@MainActor
+final class RestoreHeightLocaleRegressionTests: XCTestCase {
+
+    private static let locales = [
+        "en_US", "th_TH", "fa_IR", "ar_EG", "ar_SA", "ja_JP@calendar=japanese", "he_IL", "my_MM",
+    ]
+
+    /// A picked day at noon UTC, as the restore date pickers hand it over.
+    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: 12))!
+    }
+
+    private var restoreDates: [Date] {
+        [date(2016, 7, 4), date(2020, 2, 29), date(2023, 5, 15), date(2024, 12, 31), date(2025, 9, 15), date(2026, 3, 1)]
+    }
+
+    /// Guards the tests below: without the override they would pass on an
+    /// en_US simulator whatever the kit does.
+    func testOverrideReachesDateFormatter() {
+        let expected: [String: Calendar.Identifier] = [
+            "th_TH": .buddhist, "fa_IR": .persian, "ar_SA": .islamicUmmAlQura,
+            "ja_JP@calendar=japanese": .japanese, "en_US": .gregorian,
+        ]
+        for (identifier, calendar) in expected {
+            DeviceLocale.with(identifier) {
+                let formatter = DateFormatter()
+                XCTAssertEqual(formatter.locale.identifier, identifier)
+                XCTAssertEqual(formatter.calendar.identifier, calendar, identifier)
+            }
+        }
+    }
+
+    func testRestoreHeightsMatchAcrossLocales() {
+        let baseline = DeviceLocale.with("en_US") { restoreDates.map { RestoreHeight.getHeight(date: $0) } }
+        XCTAssertTrue(baseline.allSatisfy { $0 > 3 * 720 * 365 }, "en_US heights: \(baseline)")
+
+        for identifier in Self.locales {
+            let heights = DeviceLocale.with(identifier) { restoreDates.map { RestoreHeight.getHeight(date: $0) } }
+            XCTAssertEqual(heights, baseline, identifier)
+        }
+    }
+
+    /// Create Wallet and the sync-height estimate read the height for now.
+    /// Height 0 there made a brand-new wallet scan the whole chain.
+    func testNewWalletHeightMatchesAcrossLocales() {
+        let now = Date()
+        let baseline = DeviceLocale.with("en_US") { RestoreHeight.getHeight(date: now) }
+        let maximum = DeviceLocale.with("en_US") { RestoreHeight.maximumEstimatedHeight() }
+        XCTAssertGreaterThan(baseline, 3_490_175, "Past the last table entry (2025-09-01)")
+
+        for identifier in Self.locales {
+            DeviceLocale.with(identifier) {
+                XCTAssertEqual(RestoreHeight.getHeight(date: now), baseline, identifier)
+                XCTAssertEqual(MoneroWallet.restoreHeight(for: now), UInt64(baseline), identifier)
+                XCTAssertEqual(RestoreHeight.maximumEstimatedHeight(), maximum, identifier)
+            }
+        }
+    }
+}
+
+/// Makes `+[NSLocale currentLocale]` and `+[NSLocale autoupdatingCurrentLocale]`
+/// return another locale while a closure runs. `DateFormatter()` takes its
+/// locale and calendar from there, so this stands in for a device set to that
+/// region. Swift's `Locale.current` keeps its own cache and does not change.
+private enum DeviceLocale {
+    static var override = Locale(identifier: "en_US")
+
+    static func with<T>(_ identifier: String, _ body: () throws -> T) rethrows -> T {
+        override = Locale(identifier: identifier)
+        let replacement = method_getImplementation(
+            class_getClassMethod(DeviceLocaleHook.self, #selector(DeviceLocaleHook.overriddenLocale))!
+        )
+        let methods = [#selector(getter: NSLocale.current), #selector(getter: NSLocale.autoupdatingCurrent)]
+            .compactMap { class_getClassMethod(NSLocale.self, $0) }
+        let originals = methods.map { method_setImplementation($0, replacement) }
+        defer { zip(methods, originals).forEach { method_setImplementation($0, $1) } }
+        return try body()
+    }
+}
+
+private final class DeviceLocaleHook: NSObject {
+    @objc class func overriddenLocale() -> Locale { DeviceLocale.override }
 }

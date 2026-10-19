@@ -17,6 +17,7 @@ struct CommandCenterView: View {
     /// choreography as WalletView on iPhone).
     @State private var showWalletManager = false
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
+    @State private var whatsNewEntry: WhatsNewEntry?
 
     @State private var isHistoryExpanded = false
     @State private var selectedHistoryPoint: PortfolioDataPoint?
@@ -215,9 +216,11 @@ struct CommandCenterView: View {
                     await walletManager.refresh()
                 }
             }
+            WhatsNewBannerSlot(presented: $whatsNewEntry)
         }
         .padding(.horizontal)
         .animation(.easeInOut, value: walletManager.syncState)
+        .whatsNewHome(presented: $whatsNewEntry)
     }
 }
 

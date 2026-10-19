@@ -20,10 +20,11 @@ struct WalletView: View {
     /// fill the leftover height on short screens (iPhone Duo cover).
     @State private var viewportHeight: CGFloat = 0
     @State private var aboveRecentHeight: CGFloat = 0
-    /// Money arrives: the moment on the balance card, and the balance when
-    /// the history last changed.
+    /// Money arrives: the moment on the balance card, the balance when the
+    /// history last changed, and the hero's hold during a catch-up.
     @State private var playingArrival: MoneyArrival?
     @State private var balanceAtHistory: Decimal?
+    @State private var arrivalHold = MoneyArrivalHold()
 
     /// The home at Now with nothing open on it.
     private var isHomeIdle: Bool {
@@ -114,7 +115,7 @@ struct WalletView: View {
                                 walletManager.clearTerminalSessionState()
                                 hardwareSheetIntent = .syncSentTransactions
                             },
-                            heroBalance: MoneyArrivalWatch(walletManager: walletManager, links: paymentLinks)
+                            heroBalance: arrivalHold.held ?? MoneyArrivalWatch(walletManager: walletManager, links: paymentLinks)
                                 .heroBalance(balanceAtHistory: balanceAtHistory),
                             arrival: playingArrival,
                             onArrivalDone: { playingArrival = nil }
@@ -173,7 +174,7 @@ struct WalletView: View {
             .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
                                      && !isHistoryExpanded && !showSend && !showReceive
                                      && !showWalletManager && !showLinks && hardwareSheetIntent == nil)
-            .playsMoneyArrivals(isIdle: isHomeIdle, playing: $playingArrival, balanceAtHistory: $balanceAtHistory)
+            .playsMoneyArrivals(isIdle: isHomeIdle, playing: $playingArrival, balanceAtHistory: $balanceAtHistory, hold: $arrivalHold)
             .onChange(of: walletManager.walletSessionId) { _, _ in
                 selectedHistoryPoint = nil
                 historyModel = BalanceHistoryModel()

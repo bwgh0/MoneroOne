@@ -113,6 +113,86 @@ final class MotionMomentsTests: XCTestCase {
         XCTAssertEqual(MoneyArrivalRules.heroBalance(balance: 1, pendingTotal: 2, balanceAtHistory: nil, hasPoolPayment: false), 0)
     }
 
+    /// A launch after a payment came while the app was closed. The hero
+    /// keeps the old balance through the catch-up, and through the last
+    /// balance and history that come after Synced. It never ticks up and
+    /// back before the moment.
+    func testColdLaunchCatchUpHoldsTheHeroUntilTheMoment() {
+        let baseline: UInt64 = 100
+        let old = tx("old", amount: "2", confirmations: 30, height: 70)
+        var hold = MoneyArrivalHold()
+        var balance: Decimal = 2
+        var history: [MoneroTransaction] = []
+        var balanceAtHistory: Decimal? = balance
+        var shown: [Decimal] = []
+
+        func hero() -> Decimal {
+            let pending = MoneyArrivalRules.arrivals(in: history, baseline: baseline)
+            return hold.held ?? MoneyArrivalRules.heroBalance(
+                balance: balance,
+                pendingTotal: MoneyArrivalRules.total(of: pending),
+                balanceAtHistory: balanceAtHistory,
+                hasPoolPayment: MoneyArrivalRules.hasPoolPayment(in: history)
+            )
+        }
+        // The kit publishes a balance before the history of the same scan.
+        func scanned(balance newBalance: Decimal, history newHistory: [MoneroTransaction]) {
+            balance = newBalance
+            shown.append(hero())
+            history = newHistory
+            balanceAtHistory = balance
+            hold.historyChanged()
+            shown.append(hero())
+        }
+
+        // Launch: the stored balance, while the wallet connects.
+        shown.append(hero())
+        hold.syncMoved(from: .waiting, to: .syncing, shown: hero(), canHold: true)
+        XCTAssertEqual(hold.held, 2)
+        // A chunk of blocks finds the payment.
+        scanned(balance: Decimal(string: "3.5")!, history: [tx("new", amount: "1.5", confirmations: 2, height: 103), old])
+        XCTAssertEqual(hold.held, 2, "A history while the wallet syncs keeps the hold")
+        // Synced comes before the last balance and history.
+        hold.syncMoved(from: .syncing, to: .synced, shown: hero(), canHold: true)
+        XCTAssertTrue(hold.awaitsHistory)
+        shown.append(hero())
+        scanned(balance: Decimal(string: "3.5")!, history: [tx("new", amount: "1.5", confirmations: 3, height: 103), old])
+
+        XCTAssertNil(hold.held, "The history after Synced ends the hold")
+        XCTAssertEqual(Set(shown), [2], "The hero showed only the old balance")
+        // The moment: +1.5 from the balance on screen.
+        let arrivals = MoneyArrivalRules.arrivals(in: history, baseline: baseline)
+        XCTAssertEqual(MoneyArrivalRules.total(of: arrivals), Decimal(string: "1.5"))
+        XCTAssertEqual(hero(), 2)
+    }
+
+    /// A short catch-up (Connecting, then Synced) holds from Synced. A
+    /// wallet with no baseline (its first sync) never holds. A moment, a
+    /// new session or the 3 s timeout ends a hold.
+    func testCatchUpHoldRules() {
+        var hold = MoneyArrivalHold()
+        hold.syncMoved(from: .waiting, to: .synced, shown: 2, canHold: true)
+        XCTAssertEqual(hold.held, 2)
+        XCTAssertTrue(hold.awaitsHistory)
+        // Synced again at a new block: no new hold.
+        hold.end()
+        hold.syncMoved(from: .synced, to: .synced, shown: 5, canHold: true)
+        XCTAssertNil(hold.held)
+        // No baseline, or a moment plays.
+        hold.syncMoved(from: .waiting, to: .syncing, shown: 2, canHold: false)
+        XCTAssertNil(hold.held)
+        // Connecting or a failure keeps a hold; a history before Synced too.
+        hold.syncMoved(from: .waiting, to: .syncing, shown: 2, canHold: true)
+        hold.syncMoved(from: .syncing, to: .waiting, shown: 9, canHold: true)
+        hold.historyChanged()
+        XCTAssertEqual(hold.held, 2)
+        XCTAssertFalse(hold.awaitsHistory)
+        // Nothing scans while the wallet connects: no hold yet.
+        var connecting = MoneyArrivalHold()
+        connecting.syncMoved(from: .waiting, to: .waiting, shown: 0, canHold: true)
+        XCTAssertNil(connecting.held)
+    }
+
     func testPoolPaymentIsAnIncomingPaymentWithNoBlock() {
         XCTAssertTrue(MoneyArrivalRules.hasPoolPayment(in: [tx("p", confirmations: 0, height: nil, status: .pending)]))
         XCTAssertFalse(MoneyArrivalRules.hasPoolPayment(in: [tx("p", confirmations: 0, height: nil, status: .pending)], excluding: ["p"]))

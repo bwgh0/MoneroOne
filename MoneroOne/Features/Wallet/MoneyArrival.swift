@@ -119,6 +119,59 @@ enum MoneyArrivalRules {
     }
 }
 
+/// Money arrives: the hero's hold while the wallet catches up (a launch, a
+/// return to the app, a wallet switch). A payment that the catch-up finds
+/// stays out of the hero until its moment: the hero does not tick up and
+/// back. The kit reports Synced before the last balance and history of a
+/// catch-up, so the hold ends at the first history after Synced. Pure, for
+/// the tests.
+struct MoneyArrivalHold: Equatable {
+    /// The wallet's sync, as the hold sees it.
+    enum Phase {
+        /// Idle, connecting or failed. Nothing scans, so the balance is
+        /// the one the wallet stored.
+        case waiting
+        case syncing
+        case synced
+    }
+
+    /// The hero's value while the hold lasts. Nil: no hold.
+    private(set) var held: Decimal?
+    /// Synced: the next history ends the hold.
+    private(set) var awaitsHistory = false
+
+    /// The sync moved from `old` to `new`. A scan (syncing, or Synced from
+    /// another phase) holds the hero at `shown`, the value it shows now.
+    /// `canHold`: the wallet has a baseline and no moment plays.
+    mutating func syncMoved(from old: Phase, to new: Phase, shown: Decimal, canHold: Bool) {
+        switch new {
+        case .waiting:
+            break
+        case .syncing:
+            if held == nil, canHold { held = shown }
+            awaitsHistory = false
+        case .synced:
+            guard old != .synced else { return }
+            if held == nil, canHold { held = shown }
+            awaitsHistory = held != nil
+        }
+    }
+
+    /// A new history. At Synced it ends the hold: the history now shows
+    /// the payments that the balance holds.
+    mutating func historyChanged() {
+        guard awaitsHistory else { return }
+        end()
+    }
+
+    /// A moment plays, a wallet session starts, or Synced brought no new
+    /// history in time.
+    mutating func end() {
+        held = nil
+        awaitsHistory = false
+    }
+}
+
 /// Per wallet: the baseline (per network) and the first-payment flag, in
 /// UserDefaults. Neither is secret: a block height and a flag.
 struct MoneyArrivalStore {
@@ -244,6 +297,7 @@ private struct MoneyArrivalTrigger: ViewModifier {
     let isIdle: Bool
     @Binding var playing: MoneyArrival?
     @Binding var balanceAtHistory: Decimal?
+    @Binding var hold: MoneyArrivalHold
     @EnvironmentObject private var walletManager: WalletManager
     @ObservedObject private var links = EnvelopeStore.shared
     @Environment(\.scenePhase) private var scenePhase
@@ -259,6 +313,24 @@ private struct MoneyArrivalTrigger: ViewModifier {
     }
 
     private var watch: MoneyArrivalWatch { MoneyArrivalWatch(walletManager: walletManager, links: links) }
+
+    private var syncPhase: MoneyArrivalHold.Phase {
+        switch walletManager.syncState {
+        case .syncing: return .syncing
+        case .synced: return .synced
+        case .idle, .connecting, .error: return .waiting
+        }
+    }
+
+    /// What the hero shows with no hold.
+    private var shownHero: Decimal {
+        watch.heroBalance(balanceAtHistory: balanceAtHistory) ?? walletManager.displayBalance
+    }
+
+    private func syncMoved(from old: MoneyArrivalHold.Phase, to new: MoneyArrivalHold.Phase) {
+        let canHold: Bool = watch.baseline != nil && playing == nil
+        hold.syncMoved(from: old, to: new, shown: shownHero, canHold: canHold)
+    }
 
     private var check: Check {
         let watch = watch
@@ -277,14 +349,29 @@ private struct MoneyArrivalTrigger: ViewModifier {
     func body(content: Content) -> some View {
         content
             .task(id: check) { await run() }
-            .onAppear { balanceAtHistory = walletManager.displayBalance }
+            .task(id: hold.awaitsHistory) { await endHoldWithNoHistory() }
+            .onAppear {
+                balanceAtHistory = walletManager.displayBalance
+                // Shown during a scan (a wallet switch): hold from here.
+                if syncPhase == .syncing { syncMoved(from: .waiting, to: .syncing) }
+            }
+            .onChange(of: syncPhase) { old, new in syncMoved(from: old, to: new) }
             .onChange(of: walletManager.transactions) { _, _ in
                 balanceAtHistory = walletManager.displayBalance
+                hold.historyChanged()
             }
             .onChange(of: walletManager.walletSessionId) { _, _ in
                 playing = nil
                 balanceAtHistory = nil
+                hold.end()
             }
+    }
+
+    /// Synced, and no new history in 3 s: the hold ends.
+    private func endHoldWithNoHistory() async {
+        guard hold.awaitsHistory else { return }
+        do { try await Task.sleep(for: .seconds(3)) } catch { return }
+        hold.end()
     }
 
     private func run() async {
@@ -316,7 +403,7 @@ private struct MoneyArrivalTrigger: ViewModifier {
 
         let arrivals = watch.pending
         guard !arrivals.isEmpty, watch.walletId == walletId else { return }
-        let from = watch.heroBalance(balanceAtHistory: balanceAtHistory) ?? walletManager.displayBalance
+        let from = hold.held ?? shownHero
         let isFirst = MoneyArrivalRules.isFirstPayment(
             isEligible: watch.store.isFirstPaymentEligible(walletId: walletId),
             transactions: walletManager.transactions,
@@ -330,6 +417,7 @@ private struct MoneyArrivalTrigger: ViewModifier {
         )
         watch.store.firstPaymentUsed(walletId: walletId)
         revision += 1
+        hold.end()
         playing = MoneyArrival(
             amount: MoneyArrivalRules.total(of: arrivals),
             fromBalance: from,
@@ -340,7 +428,12 @@ private struct MoneyArrivalTrigger: ViewModifier {
 
 extension View {
     /// For the wallet home: plays Money arrives on the balance card.
-    func playsMoneyArrivals(isIdle: Bool, playing: Binding<MoneyArrival?>, balanceAtHistory: Binding<Decimal?>) -> some View {
-        modifier(MoneyArrivalTrigger(isIdle: isIdle, playing: playing, balanceAtHistory: balanceAtHistory))
+    func playsMoneyArrivals(
+        isIdle: Bool,
+        playing: Binding<MoneyArrival?>,
+        balanceAtHistory: Binding<Decimal?>,
+        hold: Binding<MoneyArrivalHold>
+    ) -> some View {
+        modifier(MoneyArrivalTrigger(isIdle: isIdle, playing: playing, balanceAtHistory: balanceAtHistory, hold: hold))
     }
 }

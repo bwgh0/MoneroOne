@@ -756,7 +756,9 @@ struct WalletManagerRows: View {
     var body: some View {
         rowsStack
         .sheet(isPresented: $showTransfer) {
-            SendFlowView(isTransfer: true)
+            SendFlowView(isTransfer: true, onTransferDone: {
+                withAnimation(.snappy(duration: 0.35)) { isExpanded = false }
+            })
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
         }

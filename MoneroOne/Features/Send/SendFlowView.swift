@@ -14,8 +14,12 @@ struct SendFlowView: View {
     /// `recipientAddress`.
     @State private var transferTarget: WalletInfo?
 
-    init(isTransfer: Bool = false) {
+    /// Transfer: Done on Sent also closes the wallet switcher.
+    private let onTransferDone: (() -> Void)?
+
+    init(isTransfer: Bool = false, onTransferDone: (() -> Void)? = nil) {
         self.isTransfer = isTransfer
+        self.onTransferDone = onTransferDone
     }
 
     @State private var phase: SendFlowPhase = .address
@@ -35,6 +39,9 @@ struct SendFlowView: View {
     /// The transaction the review built and signed, not sent (software
     /// wallets). Send broadcasts it, so the fee shown is the fee paid.
     @State private var preparedSend: PreparedTransaction?
+    /// What the broadcast transaction paid the recipient. Sent shows it
+    /// after Max, where the field held the balance.
+    @State private var sentAmount: Decimal?
     /// Bumped when that transaction is gone at Send: the review builds it
     /// again and shows its fee; nothing is sent.
     @State private var reviewRebuild = 0
@@ -359,7 +366,7 @@ struct SendFlowView: View {
                 memo: isLinkMode ? $linkNote : $memo,
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
-                recipientDisplayName: transferTarget?.name ?? aliasSummary?.name.display,
+                recipientDisplayName: walletRecipient?.name ?? aliasSummary?.name.display,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
@@ -439,9 +446,12 @@ struct SendFlowView: View {
         case .sending, .success, .error:
             SendStatusStep(
                 phase: shown,
-                amountString: amountString,
+                amountString: SentAmount.text(typed: amountString, isSendingAll: isSendingAll, sent: sentAmount),
                 priceService: priceService,
-                onDone: { dismiss() },
+                onDone: {
+                    if isTransfer { onTransferDone?() }
+                    dismiss()
+                },
                 onRetry: {
                     guard !isLinkMode, !sendInProgress else { return }
                     // A software send broadcasts only a transaction a review
@@ -620,9 +630,15 @@ struct SendFlowView: View {
         )
     }
 
-    /// From and To on a transfer's review.
+    /// The wallet the amount title and Review name: Transfer's pick, or
+    /// the wallet whose address is in Send's field.
+    private var walletRecipient: WalletInfo? {
+        SendWalletRecipient.wallet(transferTarget: transferTarget, matched: matchedWallet, isTransfer: isTransfer, isLinkMode: isLinkMode)
+    }
+
+    /// From and To on the review of a send to one of your wallets.
     private var transferParties: TransferParties? {
-        guard isTransfer, let to = transferTarget, let from = walletManager.activeWallet else { return nil }
+        guard let to = walletRecipient, let from = walletManager.activeWallet else { return nil }
         return TransferParties(from: from, fromAddress: walletManager.primaryAddress, to: to)
     }
 
@@ -757,6 +773,7 @@ struct SendFlowView: View {
             do {
                 let txHash = try await walletManager.send(prepared)
                 recordWalletSend(txid: txHash)
+                sentAmount = SendReviewFee.xmr(prepared.amount)
                 preparedSend = nil
                 transactionHash = txHash
                 await walletManager.refresh()

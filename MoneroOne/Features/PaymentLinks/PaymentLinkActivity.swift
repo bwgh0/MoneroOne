@@ -269,18 +269,11 @@ struct ActivityRowText {
             badgeSymbol = "link"
             xmr = link.rowAmount(transactionAmount: transaction.amount)
             linkStatus = link.rowStatus(transactionFailed: transaction.status == .failed, walletManager: walletManager)
-        } else if let transfer = WalletTransferName.resolve(
-            record: SendRecordStore().record(txid: transaction.id),
-            isIncoming: isIncoming,
-            amount: transaction.amount,
-            fee: transaction.fee,
-            activeWalletId: walletManager.activeWallet?.id,
-            wallets: walletManager.wallets
-        ) {
-            title = transfer.title
-            badgeSymbol = Self.walletBadgeSymbol
+        } else if let name = Self.namer(walletManager).name(of: transaction) {
+            title = name.title
+            badgeSymbol = name.badgeSymbol
             // A send to this wallet moved nothing: only the fee left it.
-            xmr = transfer == .toThisWallet ? transaction.fee : transaction.amount
+            xmr = name.showsFeeOnly ? transaction.fee : transaction.amount
             linkStatus = nil
         } else {
             title = isIncoming ? String(localized: "Received") : String(localized: "Sent")
@@ -291,7 +284,26 @@ struct ActivityRowText {
     }
 
     /// The badge of a send between your wallets.
-    static let walletBadgeSymbol = "wallet.bifold.fill"
+    static let walletBadgeSymbol = ActivityNamer.walletBadgeSymbol
+
+    /// The names of the current wallet's rows, from one read of the stores.
+    @MainActor
+    static func namer(_ walletManager: WalletManager) -> ActivityNamer {
+        ActivityNamer(
+            records: SendRecordStore().allRecords(),
+            activeWalletId: walletManager.activeWallet?.id,
+            wallets: walletManager.wallets
+        )
+    }
+
+    /// The name a row shows in place of "Sent" or "Received": the link's,
+    /// or a wallet's. Nil for a plain row.
+    static func searchName(of transaction: MoneroTransaction, namer: ActivityNamer, linkRecords: [EnvelopeRecord]) -> String? {
+        if let link = PaymentLinkActivity.match(transactionId: transaction.id, isIncoming: transaction.type == .incoming, records: linkRecords) {
+            return link.record.displayName
+        }
+        return namer.name(of: transaction)?.title
+    }
 
     /// Link rows keep the words VoiceOver said before the names: "Sent by
     /// Link, Dinner, minus 0.02 XMR, Waiting, Oct 16, 2026 at 9:41 AM".

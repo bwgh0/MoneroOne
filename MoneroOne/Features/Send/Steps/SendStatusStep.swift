@@ -192,3 +192,12 @@ struct SendStatusStep: View {
         ReceiveAddressLogic.shortAddress(hash)
     }
 }
+
+/// The amount Sent shows. After Max the field holds the balance, and the
+/// transaction paid the balance minus the fee: Sent shows what it paid.
+enum SentAmount {
+    static func text(typed: String, isSendingAll: Bool, sent: Decimal?) -> String {
+        guard isSendingAll, let sent else { return typed }
+        return "\(sent)"
+    }
+}

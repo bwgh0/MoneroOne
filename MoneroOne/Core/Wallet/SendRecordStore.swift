@@ -52,6 +52,11 @@ struct SendRecordStore {
         load()[txid.lowercased()]
     }
 
+    /// Every record, keyed by lowercase txid: one read for a whole list.
+    func allRecords() -> [String: SendRecord] {
+        load()
+    }
+
     /// A removed wallet takes its records with it: its rows, and the other
     /// wallet's rows, go back to "Sent" and "Received".
     func removeRecords(naming walletId: UUID) {
@@ -123,6 +128,51 @@ enum WalletTransferName: Equatable {
         }
         if !isIncoming, amount == 0, fee > 0 { return .toThisWallet }
         return nil
+    }
+}
+
+/// The name an Activity row shows in place of "Sent" or "Received", and
+/// its badge. History search finds a row by this name too.
+struct ActivityName: Equatable {
+    let title: String
+    let badgeSymbol: String
+    /// A send to this wallet: the row shows only the fee.
+    let showsFeeOnly: Bool
+}
+
+/// Names the rows of one list from one read of the records: a send between
+/// your wallets ("To Savings", "From Spending", "To This Wallet").
+struct ActivityNamer {
+    let records: [String: SendRecord]
+    let activeWalletId: UUID?
+    let wallets: [WalletInfo]
+
+    /// The badge of a send between your wallets.
+    static let walletBadgeSymbol = "wallet.bifold.fill"
+
+    func name(of transaction: MoneroTransaction) -> ActivityName? {
+        let isIncoming = transaction.type == .incoming
+        if let transfer = WalletTransferName.resolve(
+            record: records[transaction.id.lowercased()],
+            isIncoming: isIncoming,
+            amount: transaction.amount,
+            fee: transaction.fee,
+            activeWalletId: activeWalletId,
+            wallets: wallets
+        ) {
+            return ActivityName(title: transfer.title, badgeSymbol: Self.walletBadgeSymbol, showsFeeOnly: transfer == .toThisWallet)
+        }
+        return nil
+    }
+}
+
+/// The wallet that Send's amount title and Review name: Transfer's pick,
+/// or the wallet whose address is in Send's field. A payment link has none.
+enum SendWalletRecipient {
+    static func wallet(transferTarget: WalletInfo?, matched: WalletInfo?, isTransfer: Bool, isLinkMode: Bool) -> WalletInfo? {
+        if let transferTarget { return transferTarget }
+        guard !isTransfer, !isLinkMode else { return nil }
+        return matched
     }
 }
 

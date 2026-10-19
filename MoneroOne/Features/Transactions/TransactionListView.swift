@@ -109,13 +109,17 @@ struct TransactionListView: View {
     }
 
     private var filteredTransactions: [MoneroTransaction] {
-        TransactionListLogic.filter(
+        // Search also finds a row by the name it shows ("To Savings").
+        let namer = searchText.isEmpty ? nil : ActivityRowText.namer(walletManager)
+        let linkRecords = paymentLinks.records
+        return TransactionListLogic.filter(
             sourceTransactions,
             type: filterType,
             receivingIndex: receivingIndex,
             search: searchText,
             asOf: asOf,
-            linkRecords: paymentLinks.records
+            linkRecords: linkRecords,
+            name: { tx in namer.flatMap { ActivityRowText.searchName(of: tx, namer: $0, linkRecords: linkRecords) } }
         )
     }
 
@@ -623,7 +627,8 @@ enum TransactionListLogic {
         type: TransactionListView.FilterType,
         receivingIndex: Int?,
         search: String,
-        linkRecords: [EnvelopeRecord] = []
+        linkRecords: [EnvelopeRecord] = [],
+        name: String? = nil
     ) -> Bool {
         switch type {
         case .all:
@@ -646,6 +651,7 @@ enum TransactionListLogic {
             let hit = tx.id.localizedCaseInsensitiveContains(search)
                 || tx.address.localizedCaseInsensitiveContains(search)
                 || (tx.memo?.localizedCaseInsensitiveContains(search) ?? false)
+                || (name?.localizedCaseInsensitiveContains(search) ?? false)
             guard hit else { return false }
         }
 
@@ -658,10 +664,12 @@ enum TransactionListLogic {
         receivingIndex: Int?,
         search: String,
         asOf: Date? = nil,
-        linkRecords: [EnvelopeRecord] = []
+        linkRecords: [EnvelopeRecord] = [],
+        name: (MoneroTransaction) -> String? = { _ in nil }
     ) -> [MoneroTransaction] {
         let rows = through(asOf, transactions: transactions).filter {
-            matches($0, type: type, receivingIndex: receivingIndex, search: search, linkRecords: linkRecords)
+            matches($0, type: type, receivingIndex: receivingIndex, search: search, linkRecords: linkRecords,
+                    name: search.isEmpty ? nil : name($0))
         }
         return type == .links ? oneFundingRowPerLink(rows, records: linkRecords) : rows
     }

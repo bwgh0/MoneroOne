@@ -21,6 +21,7 @@
 		5EED00000000000000000063 /* SeedPhraseValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000053 /* SeedPhraseValidatorTests.swift */; };
 		5EED00000000000000000064 /* LegacyLanguageRestoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */; };
 		5EED00000000000000000066 /* SeedEntryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000056 /* SeedEntryModelTests.swift */; };
+		7E71E0000000000000000004 /* ReviewPromptGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E71E0000000000000000003 /* ReviewPromptGateTests.swift */; };
 		5EED00000000000000000065 /* legacy-vectors.json in Resources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000055 /* legacy-vectors.json */; };
 		10CA11E0D780EDC7298FD2E7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E0B762CCA121C33098 /* Localizable.xcstrings */; };
 		10CA11E013C9FC8238B72689 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */; };
@@ -72,6 +73,7 @@
 		9C1A9456A46E24396039B0E2 /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8C8A112B161D2A874330F /* TransactionListView.swift */; };
 		A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000001 /* HapticFeedback.swift */; };
 		A1B2C3D400000001A000000B /* SoundFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A000000B /* SoundFeedback.swift */; };
+		7E71E0000000000000000002 /* ReviewPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E71E0000000000000000001 /* ReviewPrompt.swift */; };
 		CAC4E1D0000000000000C10P /* SecureClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000C20P /* SecureClipboard.swift */; };
 		A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000002 /* NumericKeypad.swift */; };
 		A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */; };
@@ -247,6 +249,7 @@
 		5EED00000000000000000053 /* SeedPhraseValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseValidatorTests.swift; sourceTree = "<group>"; };
 		5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyLanguageRestoreTests.swift; sourceTree = "<group>"; };
 		5EED00000000000000000056 /* SeedEntryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedEntryModelTests.swift; sourceTree = "<group>"; };
+		7E71E0000000000000000003 /* ReviewPromptGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewPromptGateTests.swift; sourceTree = "<group>"; };
 		5EED00000000000000000055 /* legacy-vectors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "legacy-vectors.json"; sourceTree = "<group>"; };
 		10CA11E0B762CCA121C33098 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
@@ -262,6 +265,7 @@
 		CAC4E1D0000000000000A12Y /* VoiceOverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceOverTests.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000001 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A000000B /* SoundFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundFeedback.swift; sourceTree = "<group>"; };
+		7E71E0000000000000000001 /* ReviewPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewPrompt.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000C20P /* SecureClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureClipboard.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000002 /* NumericKeypad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericKeypad.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessCheckmarkView.swift; sourceTree = "<group>"; };
@@ -472,6 +476,7 @@
 				5EED00000000000000000053 /* SeedPhraseValidatorTests.swift */,
 				5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */,
 				5EED00000000000000000056 /* SeedEntryModelTests.swift */,
+				7E71E0000000000000000003 /* ReviewPromptGateTests.swift */,
 				5EED00000000000000000055 /* legacy-vectors.json */,
 				5EED00000000000000000052 /* PolyseedCodecTests.swift */,
 				5EED00000000000000000051 /* LegacySeedCodecTests.swift */,
@@ -881,6 +886,7 @@
 			children = (
 				A1B2C3D400000002A0000001 /* HapticFeedback.swift */,
 				CAC4E1D0000000000000C20P /* SecureClipboard.swift */,
+				7E71E0000000000000000001 /* ReviewPrompt.swift */,
 				A1B2C3D400000002A000000B /* SoundFeedback.swift */,
 			);
 			path = Services;
@@ -1075,6 +1081,7 @@
 				5EED00000000000000000063 /* SeedPhraseValidatorTests.swift in Sources */,
 				5EED00000000000000000064 /* LegacyLanguageRestoreTests.swift in Sources */,
 				5EED00000000000000000066 /* SeedEntryModelTests.swift in Sources */,
+				7E71E0000000000000000004 /* ReviewPromptGateTests.swift in Sources */,
 				5EED00000000000000000062 /* PolyseedCodecTests.swift in Sources */,
 				5EED00000000000000000061 /* LegacySeedCodecTests.swift in Sources */,
 D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
@@ -1225,6 +1232,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				A1B2C3D400000001A0000001 /* HapticFeedback.swift in Sources */,
 				CAC4E1D0000000000000C10P /* SecureClipboard.swift in Sources */,
 				A1B2C3D400000001A000000B /* SoundFeedback.swift in Sources */,
+				7E71E0000000000000000002 /* ReviewPrompt.swift in Sources */,
 				A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */,
 				A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */,
 				A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */,

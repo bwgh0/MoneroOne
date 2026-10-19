@@ -156,6 +156,9 @@ struct WalletView: View {
             // the balance card's line. Never during History or a sheet.
             .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil && !isHistoryExpanded
                                     && !showSend && !showReceive && !showWalletManager)
+            .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
+                                     && !isHistoryExpanded && !showSend && !showReceive
+                                     && !showWalletManager && !showLinks && hardwareSheetIntent == nil)
             .onChange(of: walletManager.walletSessionId) { _, _ in
                 selectedHistoryPoint = nil
                 historyModel = BalanceHistoryModel()

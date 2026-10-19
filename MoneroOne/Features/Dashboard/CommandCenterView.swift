@@ -47,6 +47,9 @@ struct CommandCenterView: View {
             // the balance card's line. Never during History or a sheet.
             .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil && !isHistoryExpanded
                                     && !showSend && !showReceive && !showAllTransactions && !showWalletManager)
+            .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
+                                     && !isHistoryExpanded && !showSend && !showReceive
+                                     && !showAllTransactions && !showWalletManager && hardwareSheetIntent == nil)
         }
         .onChange(of: walletManager.walletSessionId) { _, _ in
             selectedHistoryPoint = nil

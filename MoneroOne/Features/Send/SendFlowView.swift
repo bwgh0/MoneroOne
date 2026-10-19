@@ -170,6 +170,11 @@ struct SendFlowView: View {
             }
         }
         .onChange(of: phase) { _, newPhase in
+            // A send that went out (every path ends in `.success`): the
+            // wallet home asks for Apple's review prompt once it shows.
+            ReviewPromptGate().sendPhaseChanged(to: newPhase)
+        }
+        .onChange(of: phase) { _, newPhase in
             aliasLookup.recordPinIfSent(phase: newPhase, summary: aliasSummary, sentAddress: recipientAddress)
             // Confirmed: this link must never open Send again.
             guard newPhase.isSendingState, let shownPaymentRequest else { return }
@@ -835,7 +840,7 @@ struct SendRequestPresenter: ViewModifier {
 
     /// True while anything is presented over the app's root screen.
     @MainActor
-    private static var isSheetShowing: Bool {
+    static var isSheetShowing: Bool {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)

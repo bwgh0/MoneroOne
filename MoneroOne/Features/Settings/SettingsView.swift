@@ -346,6 +346,12 @@ struct SettingsView: View {
                         )
                     }
                     .accessibilityHint("Opens the App Store to write a review")
+                    // The person rated here: the app never asks for Apple's
+                    // review prompt after a send.
+                    .environment(\.openURL, OpenURLAction { _ in
+                        ReviewPromptGate().ratedFromSettings()
+                        return .systemAction
+                    })
                 }
 
                 // Danger Zone

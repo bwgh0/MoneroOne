@@ -724,3 +724,161 @@ final class NeedsRestoreTests: XCTestCase {
         XCTAssertEqual(manager.activeWallet?.id, made[1].id, "Skip A: it needs restore")
     }
 }
+
+/// GitHub #7: turning on Face ID with a Trezor wallet said "Invalid PIN".
+/// The PIN check read the wallet's seed, and view-only and hardware wallets
+/// keep no seed. `verifyPin` must accept the right PIN for every wallet
+/// source, reject a wrong one, and count each wrong one toward the lockout.
+@MainActor
+final class PinVerificationTests: XCTestCase {
+
+    private let pin = "123456"
+    private let wrongPin = "000000"
+    private let newPin = "654321"
+    private let keychain = KeychainStorage()
+    private let store = WalletStore()
+    private let address = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
+    private let viewKey = String(repeating: "ab", count: 32)
+    private let trezor = WalletSource.hardware(.trezor(TrezorBinding(model: "Trezor Safe 7", deviceId: "test-device", peripheralUUID: nil)))
+
+    override func setUp() async throws {
+        UserDefaults.standard.set(false, forKey: "isTestnet")
+        WalletManager().deleteAllWallets()
+        keychain.resetFailedAttempts()
+    }
+
+    override func tearDown() async throws {
+        WalletManager().deleteAllWallets()
+        keychain.resetFailedAttempts()
+        UserDefaults.standard.removeObject(forKey: "isTestnet")
+    }
+
+    /// Saves a seed wallet the way Create Wallet does. It becomes active.
+    private func addSeedWallet() throws -> UUID {
+        let manager = WalletManager()
+        try manager.addWallet(name: "Seed", mnemonic: manager.generatePolyseed(), pin: pin)
+        return try XCTUnwrap(manager.activeWallet?.id)
+    }
+
+    /// Saves a wallet the way Pair Trezor and Restore View-Only do: the
+    /// address and view key under the PIN, no seed. It becomes active.
+    private func addKeyOnlyWallet(source: WalletSource) throws -> UUID {
+        let id = UUID()
+        try keychain.saveViewOnly(address: address, viewKey: viewKey, pin: pin, walletId: id)
+        store.addWallet(WalletInfo(
+            id: id, name: "Key only", source: source, createdAt: Date(), restoreHeight: 3_500_000,
+            syncResetCount: 0, userCreatedSubaddressIndices: [], cachedPrimaryAddress: address,
+            cachedBalance: nil, derivedWalletId: String(repeating: "2", count: 32)
+        ))
+        store.setActiveWalletId(id)
+        return id
+    }
+
+    private func assertLockedOut(_ expression: @autoclosure () throws -> Bool, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertThrowsError(try expression(), file: file, line: line) { error in
+            guard let keychainError = error as? KeychainError, case .lockedOut = keychainError else {
+                return XCTFail("Expected lockedOut, got \(error)", file: file, line: line)
+            }
+        }
+    }
+
+    // MARK: Right PIN
+
+    func testSeedWalletAcceptsItsPin() throws {
+        let id = try addSeedWallet()
+        let manager = WalletManager()
+        XCTAssertEqual(manager.activeWallet?.id, id)
+
+        XCTAssertTrue(try manager.verifyPin(pin))
+    }
+
+    func testHardwareWalletAcceptsItsPin() throws {
+        let id = try addKeyOnlyWallet(source: trezor)
+        let manager = WalletManager()
+        XCTAssertEqual(manager.activeWallet?.id, id)
+
+        XCTAssertTrue(try manager.verifyPin(pin))
+
+        // The cause of #7: a seed read can never pass for this wallet.
+        XCTAssertThrowsError(try manager.getSeedPhrase(pin: pin)) { error in
+            guard let keychainError = error as? KeychainError, case .keysMissing = keychainError else {
+                return XCTFail("Expected keysMissing, got \(error)")
+            }
+        }
+    }
+
+    func testViewOnlyWalletAcceptsItsPin() throws {
+        _ = try addKeyOnlyWallet(source: .viewOnly)
+
+        XCTAssertTrue(try WalletManager().verifyPin(pin))
+    }
+
+    // MARK: Wrong PIN
+
+    func testWrongPinFailsForEveryWalletSource() throws {
+        _ = try addSeedWallet()
+        XCTAssertFalse(try WalletManager().verifyPin(wrongPin), "Seed wallet")
+
+        _ = try addKeyOnlyWallet(source: trezor)
+        XCTAssertFalse(try WalletManager().verifyPin(wrongPin), "Hardware wallet")
+
+        _ = try addKeyOnlyWallet(source: .viewOnly)
+        XCTAssertFalse(try WalletManager().verifyPin(wrongPin), "View-only wallet")
+    }
+
+    func testWrongPinsOnAHardwareWalletLockOut() throws {
+        _ = try addKeyOnlyWallet(source: trezor)
+        let manager = WalletManager()
+
+        for _ in 0..<5 {
+            XCTAssertFalse(try manager.verifyPin(wrongPin))
+        }
+        XCTAssertTrue(keychain.isLockedOut, "Five wrong PINs start the lockout")
+        assertLockedOut(try manager.verifyPin(pin))
+    }
+
+    func testWrongPinsOnASeedWalletLockOut() throws {
+        _ = try addSeedWallet()
+        let manager = WalletManager()
+
+        for _ in 0..<5 {
+            XCTAssertFalse(try manager.verifyPin(wrongPin))
+        }
+        XCTAssertTrue(keychain.isLockedOut, "Five wrong PINs start the lockout")
+        assertLockedOut(try manager.verifyPin(pin))
+    }
+
+    // MARK: Change PIN
+
+    func testChangePinReencryptsSeedAndHardwareWallets() throws {
+        let seedId = try addSeedWallet()
+        let hardwareId = try addKeyOnlyWallet(source: trezor)
+        let manager = WalletManager()
+
+        try manager.reencryptAllWallets(oldPin: pin, newPin: newPin)
+
+        XCTAssertNotNil(try keychain.getSeed(pin: newPin, walletId: seedId))
+        let keys = try XCTUnwrap(try keychain.getViewOnly(pin: newPin, walletId: hardwareId))
+        XCTAssertEqual(keys.address, address)
+        XCTAssertEqual(keys.viewKey, viewKey)
+        XCTAssertTrue(try manager.verifyPin(newPin))
+        XCTAssertFalse(try manager.verifyPin(pin), "The old PIN no longer opens the wallet")
+    }
+
+    func testChangePinWithWrongCurrentPinChangesNothingAndCounts() throws {
+        let hardwareId = try addKeyOnlyWallet(source: trezor)
+        let manager = WalletManager()
+
+        for _ in 0..<5 {
+            XCTAssertThrowsError(try manager.reencryptAllWallets(oldPin: wrongPin, newPin: newPin)) { error in
+                guard let walletError = error as? WalletError, case .invalidPin = walletError else {
+                    return XCTFail("Expected invalidPin, got \(error)")
+                }
+            }
+        }
+        XCTAssertTrue(keychain.isLockedOut, "Wrong current PINs count toward the lockout")
+
+        keychain.resetFailedAttempts()
+        XCTAssertNotNil(try keychain.getViewOnly(pin: pin, walletId: hardwareId), "The keys still open with the old PIN")
+    }
+}

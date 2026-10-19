@@ -3800,6 +3800,23 @@ class WalletManager: ObservableObject {
 
     // MARK: - Biometric Unlock
 
+    /// True when `pin` is the PIN of the active wallet. Runs the keychain
+    /// check that `unlock` runs for each wallet source: a seed wallet
+    /// decrypts its seed, a view-only or hardware wallet its view-key pair.
+    /// Those wallets keep no seed, so a seed read can never pass for them
+    /// (GitHub #7: "Invalid PIN" on a Trezor wallet when turning on Face ID).
+    /// A wrong PIN counts toward the lockout, and a lockout throws
+    /// `KeychainError.lockedOut`. The decrypted material is not kept.
+    func verifyPin(_ pin: String) throws -> Bool {
+        guard let active = activeWallet else { return false }
+        switch active.source {
+        case .seed:
+            return try keychain.getSeed(pin: pin, walletId: active.id) != nil
+        case .viewOnly, .hardware:
+            return try keychain.getViewOnly(pin: pin, walletId: active.id) != nil
+        }
+    }
+
     /// Enable biometric unlock by storing PIN securely
     func enableBiometricUnlock(pin: String) throws {
         try keychain.savePinForBiometrics(pin)

@@ -124,7 +124,7 @@ struct SecurityView: View {
 
     private func enableBiometrics() {
         do {
-            guard let _ = try walletManager.getSeedPhrase(pin: pinForBiometrics) else {
+            guard try walletManager.verifyPin(pinForBiometrics) else {
                 pinError = String(localized: "Invalid PIN")
                 pinForBiometrics = ""
                 return

@@ -1371,20 +1371,21 @@ class WalletManager: ObservableObject {
     /// URLSession that accepts all certificates (matches NodeManager behavior)
     /// Nodes with self-signed certs pass the settings latency test, so the wallet
     /// reachability test must also accept them to avoid a stuck "Reaching node..." state.
-    private lazy var reachabilitySession: URLSession = {
+    /// Both sessions follow the Tor setting.
+    private let reachabilitySession = TorURLSession(configuration: {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 10
-        return URLSession(configuration: config, delegate: AllCertsTrustDelegate.shared, delegateQueue: nil)
-    }()
+        return config
+    }, delegate: AllCertsTrustDelegate.shared)
 
     /// URLSession with standard TLS validation — used for diagnostic comparison.
     /// If this fails but reachabilitySession succeeds, the node has a cert issue
     /// that wallet2 C++ will also fail on.
-    private lazy var strictTLSSession: URLSession = {
+    private let strictTLSSession = TorURLSession(configuration: {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 10
-        return URLSession(configuration: config)
-    }()
+        return config
+    })
 
     enum SyncState: Equatable {
         case idle
@@ -2947,7 +2948,6 @@ class WalletManager: ObservableObject {
             }
         }
         currentReachabilityTask = task
-        task.resume()
     }
 
     /// Diagnostic-only: test the node with standard TLS validation (no cert bypass).
@@ -2970,7 +2970,7 @@ class WalletManager: ObservableObject {
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
                 DiagnosticLog.shared.log("TLS strict: HTTP \(code) (\(nodeURLString))")
             }
-        }.resume()
+        }
     }
 
     /// Retry reachability test with exponential backoff (5s, 10s, 20s)

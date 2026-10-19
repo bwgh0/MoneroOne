@@ -221,14 +221,15 @@ class MoneroWallet: ObservableObject {
             ? (Self.testnetNodes.first?.url ?? "http://testnet.xmr-tw.org:28081")
             : "https://node.monero.one:443"
         let savedURL = UserDefaults.standard.string(forKey: urlKey) ?? defaultURL
+        // The Tor setting goes on every node, the fallback too.
+        let proxy = UserDefaults.standard.string(forKey: TorNetwork.proxyKey)
         guard let url = URL(string: savedURL) ?? URL(string: defaultURL) else {
-            return MoneroKit.Node(url: URL(string: "https://node.monero.one:443")!, isTrusted: false)
+            return MoneroKit.Node(url: URL(string: "https://node.monero.one:443")!, isTrusted: false, proxy: proxy)
         }
 
         let creds = NodeCredentialStore.load(isTestnet: isTestnet)
         let login = creds.login
         let password = creds.password
-        let proxy = UserDefaults.standard.string(forKey: "proxyAddress")
 
         return MoneroKit.Node(
             url: url,

@@ -884,7 +884,7 @@ class NodeManager: ObservableObject {
         guard let url = URL(string: Self.uptimeAPIURL) else { return }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await TorURLSession.shared.data(from: url)
             let entries = try JSONDecoder().decode([UptimeSummaryEntry].self, from: data)
             uptimeStatsCache = entries
             uptimeCacheTime = Date()
@@ -1009,28 +1009,43 @@ class NodeManager: ObservableObject {
         let port = url.port ?? 18081
         let usesTLS = url.scheme == "https"
 
+        // With Tor on, the probe goes through the proxy, so the number is the
+        // Tor path latency. No probe when the proxy setting fails to parse,
+        // or to a local address, which would skip the proxy.
+        let route = TorNetwork.currentRoute()
+        guard route != .blocked, !TorNetwork.blocksTarget(host: host, on: route) else { return nil }
+
+        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(integerLiteral: UInt16(port)))
+
+        let parameters: NWParameters
+        if usesTLS {
+            // Accept self-signed certificates — many community Monero nodes use them
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, _, complete in
+                complete(true)
+            }, DispatchQueue.global())
+            parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
+        } else {
+            parameters = NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
+        }
+        // Cannot throw: the blocked route returned above.
+        try? TorNetwork.apply(route, to: parameters, description: "one.monero.latency")
+
+        let connection = NWConnection(to: endpoint, using: parameters)
+
+        // Use a serial queue so stateUpdateHandler and timeout
+        // never race on hasResumed.
+        let queue = DispatchQueue(label: "one.monero.latency")
+
+        // A Tor switch ends a probe of the old route at once.
+        let routeWatch = TorNetwork.onRouteChange(from: route) {
+            queue.async { connection.cancel() }
+        }
+        defer { NotificationCenter.default.removeObserver(routeWatch) }
+
         return await withCheckedContinuation { continuation in
-            let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(integerLiteral: UInt16(port)))
-
-            let parameters: NWParameters
-            if usesTLS {
-                // Accept self-signed certificates — many community Monero nodes use them
-                let tlsOptions = NWProtocolTLS.Options()
-                sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { _, _, complete in
-                    complete(true)
-                }, DispatchQueue.global())
-                parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
-            } else {
-                parameters = NWParameters.tcp
-            }
-
-            let connection = NWConnection(to: endpoint, using: parameters)
             let startTime = CFAbsoluteTimeGetCurrent()
             var hasResumed = false
-
-            // Use a serial queue so stateUpdateHandler and timeout
-            // never race on hasResumed.
-            let queue = DispatchQueue(label: "one.monero.latency")
 
             connection.stateUpdateHandler = { state in
                 guard !hasResumed else { return }
@@ -1177,19 +1192,12 @@ enum NodeLoginProbe {
             // past the proxy, even with failover off. So with a proxy the
             // check never connects to such an address, and has no answer.
             if isNonPublicAddress(host) { return .inconclusive }
-            let parts = proxy.split(separator: ":")
-            guard parts.count == 2, let proxyPortNumber = UInt16(parts[1]), proxyPortNumber > 0,
-                  let proxyPort = NWEndpoint.Port(rawValue: proxyPortNumber) else {
+            // No direct connection when the proxy is down or fails to parse.
+            do {
+                try TorNetwork.apply(TorNetwork.route(for: proxy), to: parameters, description: "one.monero.nodeLogin")
+            } catch {
                 return .inconclusive
             }
-            var configuration = ProxyConfiguration(
-                socksv5Proxy: .hostPort(host: NWEndpoint.Host(String(parts[0])), port: proxyPort)
-            )
-            // No direct connection when the proxy is down.
-            configuration.allowFailover = false
-            let context = NWParameters.PrivacyContext(description: "one.monero.nodeLogin")
-            context.proxyConfigurations = [configuration]
-            parameters.setPrivacyContext(context)
         }
 
         let hostHeader = host.contains(":") ? "[\(host)]:\(portNumber)" : "\(host):\(portNumber)"

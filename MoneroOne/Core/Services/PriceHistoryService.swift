@@ -44,7 +44,7 @@ final class PriceHistoryService: ObservableObject {
 
     private let priceService: PriceService
     private let cacheDirectory: URL?
-    private let session: URLSession
+    private let session: TorURLSession
     private var started = false
     private var refreshTimer: Timer?
     private var fetchTask: Task<Void, Never>?
@@ -53,7 +53,7 @@ final class PriceHistoryService: ObservableObject {
     init(
         priceService: PriceService,
         cacheDirectory: URL? = PriceHistoryService.defaultCacheDirectory,
-        session: URLSession = .shared
+        session: TorURLSession = .shared
     ) {
         self.priceService = priceService
         self.cacheDirectory = cacheDirectory

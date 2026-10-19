@@ -89,13 +89,13 @@ class PriceService: ObservableObject {
     private let initialRetryDelay: TimeInterval = 2
     private let requestTimeout: TimeInterval = 15
 
-    // URLSession with cert pinning for monero.one
-    private lazy var priceSession: URLSession = {
+    // URLSession with cert pinning for monero.one. It follows the Tor setting.
+    private let priceSession = TorURLSession(configuration: {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 30
-        return URLSession(configuration: config, delegate: PriceCertPinningDelegate(), delegateQueue: nil)
-    }()
+        return config
+    }, delegate: PriceCertPinningDelegate())
 
     // Optional alert service for triggering price alerts
     weak var priceAlertService: PriceAlertService?
@@ -411,7 +411,7 @@ class PriceService: ObservableObject {
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await TorURLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else { return }
             let result = try JSONDecoder().decode(CMCChartResponse.self, from: data)

@@ -1504,6 +1504,95 @@ final class LockDuringOpenTests: XCTestCase {
     }
 }
 
+// MARK: - History on a wallet switch
+
+/// A wallet switch shows only the next wallet's history, at no moment the
+/// previous wallet's rows. No wallet2 runs.
+@MainActor
+final class SwitchHistoryTests: XCTestCase {
+
+    private let pin = "123456"
+    private let activeIdKey = "one.monero.walletStore.activeWalletId"
+    private let keychain = KeychainStorage()
+    private var savedSettings: SavedNodeSettings!
+    private var savedActiveId: String?
+    private var keychainWalletIds: [UUID] = []
+
+    override func setUp() async throws {
+        savedSettings = SavedNodeSettings()
+        savedActiveId = UserDefaults.standard.string(forKey: activeIdKey)
+        ["selectedNodeURL", "customNodes", "isTestnet"].forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        UserDefaults.standard.set("http://localhost:1", forKey: "selectedNodeURL")
+    }
+
+    override func tearDown() async throws {
+        for id in keychainWalletIds {
+            keychain.deleteSeed(walletId: id)
+        }
+        UserDefaults.standard.set(savedActiveId, forKey: activeIdKey)
+        savedSettings.restore()
+    }
+
+    private func wallet(_ source: WalletSource, name: String) -> WalletInfo {
+        WalletInfo(id: UUID(), name: name, source: source, createdAt: Date(), restoreHeight: 0, syncResetCount: 0,
+                   userCreatedSubaddressIndices: [], cachedPrimaryAddress: nil, cachedBalance: nil)
+    }
+
+    private func row(_ id: String) -> MoneroTransaction {
+        MoneroTransaction(id: id, type: .incoming, amount: 1, fee: 0, address: "", timestamp: Date(),
+                          confirmations: 20, status: .confirmed, memo: nil, blockHeight: 3_000_000)
+    }
+
+    /// Lets the main queue run what it holds, as `receive(on:)` sends there.
+    private func mainQueueDrained() async {
+        await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } }
+    }
+
+    func testASwitchShowsOnlyTheNextWalletsRows() async throws {
+        let from = wallet(.viewOnly, name: "From")
+        let target = wallet(.seed(.polyseed), name: "Target")
+        keychainWalletIds.append(target.id)
+        try keychain.saveSeed("target seed words", pin: pin, walletId: target.id)
+
+        let manager = WalletManager()
+        manager.wallets = [from, target]
+        manager.activeWallet = from
+        manager.isUnlocked = true
+        manager.setCurrentPinForTesting(pin)
+        let running = SpyWallet()
+        running.transactions = [row("from-1")]
+        manager.openRestartedWalletForTesting = { _ in running }
+        XCTAssertTrue(manager.restartActiveWallet(with: .viewKeys(walletId: from.id, pin: pin)))
+        await manager.restartTask?.value
+        await mainQueueDrained()
+        XCTAssertEqual(manager.transactions.map(\.id), ["from-1"])
+
+        // The next wallet opens with its stored rows.
+        let opened = SpyWallet()
+        opened.transactions = [row("target-1")]
+        manager.openWalletForTesting = { id in
+            XCTAssertEqual(id, target.id)
+            return opened
+        }
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: target.id))
+        let shown = EventLog()
+        let watch = manager.$transactions.sink { rows in shown.add(rows.map(\.id).joined(separator: ",")) }
+        // A refresh of the previous wallet lands after the switch began.
+        running.transactions = [row("from-2"), row("from-1")]
+        await mainQueueDrained()
+        XCTAssertEqual(manager.transactions, [], "The previous wallet's rows stay off")
+
+        try await manager.completeSwitchToWallet(target: target)
+        await mainQueueDrained()
+        watch.cancel()
+
+        XCTAssertTrue(manager.moneroWallet === opened)
+        XCTAssertEqual(manager.transactions.map(\.id), ["target-1"], "The list holds only the next wallet's rows")
+        XCTAssertFalse(shown.items.contains { $0.contains("from") }, "No previous wallet row showed: \(shown.items)")
+    }
+}
+
 // MARK: - Digest Auth
 
 final class HTTPDigestTests: XCTestCase {

@@ -77,7 +77,8 @@ class MoneroWallet: ObservableObject {
 
         // Heavy Kit init (SQLite + C++ + crypto) off main thread
         let reachability = reachabilityManager
-        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs) = try await Task.detached {
+        let rate = coinRate
+        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs, initialTransactions) = try await Task.detached {
             let kit = try MoneroKit.Kit(
                 wallet: credentials,
                 account: 0,
@@ -99,12 +100,13 @@ class MoneroWallet: ObservableObject {
             let address = kit.receiveAddress
             let state = kit.walletState
             let subaddrs = kit.usedAddresses
-            return (kit, balance, address, state, subaddrs)
+            let transactions = MoneroWallet.storedTransactions(of: kit, coinRate: rate)
+            return (kit, balance, address, state, subaddrs, transactions)
         }.value
 
         self.node = walletNode
         kit = newKit
-        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
+        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs, initialTransactions: initialTransactions)
     }
 
     /// Open (or create on first connect) a wallet bound to a hardware
@@ -126,7 +128,8 @@ class MoneroWallet: ObservableObject {
         // Heavy Kit init off main thread — wallet2 contacts the device
         // during restore_from_device which can take seconds.
         let reachability = reachabilityManager
-        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs) = try await Task.detached {
+        let rate = coinRate
+        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs, initialTransactions) = try await Task.detached {
             let kit = try MoneroKit.Kit(
                 wallet: .trezor(deviceName: deviceName),
                 account: 0,
@@ -138,12 +141,13 @@ class MoneroWallet: ObservableObject {
                 logger: nil,
                 moneroCoreLogLevel: 0
             )
-            return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses)
+            return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses,
+                    MoneroWallet.storedTransactions(of: kit, coinRate: rate))
         }.value
 
         self.node = walletNode
         kit = newKit
-        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
+        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs, initialTransactions: initialTransactions)
     }
 
     /// Create watch-only wallet
@@ -153,7 +157,8 @@ class MoneroWallet: ObservableObject {
 
         // Heavy Kit init (SQLite + C++ + crypto) off main thread
         let reachability = reachabilityManager
-        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs) = try await Task.detached {
+        let rate = coinRate
+        let (newKit, initialBalance, initialAddress, initialState, initialSubaddrs, initialTransactions) = try await Task.detached {
             let kit = try MoneroKit.Kit(
                 wallet: .watch(address: address, viewKey: viewKey),
                 account: 0,
@@ -166,12 +171,13 @@ class MoneroWallet: ObservableObject {
                 // See `create` — silence wallet2's unlocked logger writes.
                 moneroCoreLogLevel: 0
             )
-            return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses)
+            return (kit, kit.balanceInfo, kit.receiveAddress, kit.walletState, kit.usedAddresses,
+                    MoneroWallet.storedTransactions(of: kit, coinRate: rate))
         }.value
 
         self.node = walletNode
         kit = newKit
-        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs)
+        setupKit(initialBalance: initialBalance, initialAddress: initialAddress, initialState: initialState, initialSubaddrs: initialSubaddrs, initialTransactions: initialTransactions)
     }
 
     /// Detect seed type and create appropriate credentials.
@@ -250,7 +256,7 @@ class MoneroWallet: ObservableObject {
     static let testnetNodes: [(name: String, url: String)] = []
     #endif
 
-    private func setupKit(initialBalance: MoneroKit.BalanceInfo, initialAddress: String, initialState: MoneroKit.WalletState, initialSubaddrs: [MoneroKit.SubAddress]) {
+    private func setupKit(initialBalance: MoneroKit.BalanceInfo, initialAddress: String, initialState: MoneroKit.WalletState, initialSubaddrs: [MoneroKit.SubAddress], initialTransactions: [MoneroTransaction]) {
         guard let kit = kit else { return }
 
         // Set delegate
@@ -261,6 +267,11 @@ class MoneroWallet: ObservableObject {
         address = initialAddress
         updateSyncState(initialState)
         subaddresses = initialSubaddrs
+        // The stored history shows with the stored balance. The kit sends
+        // its list only after a refresh, and a slow or stuck node can hold
+        // that off for minutes: the history said "no transactions" while
+        // the balance showed.
+        transactions = initialTransactions
 
         // Start syncing
         kit.start()
@@ -459,6 +470,15 @@ class MoneroWallet: ObservableObject {
 
     /// How many of the newest transactions `transactions` holds.
     nonisolated static let recentTransactionLimit = 100
+
+    /// The newest transactions in the kit's database, as the last run of
+    /// this wallet stored them. Reads no wallet2 state, so it works before
+    /// `kit.start()`. The database is per wallet, so the rows are always
+    /// this wallet's own.
+    nonisolated static func storedTransactions(of kit: MoneroKit.Kit, coinRate: Decimal) -> [MoneroTransaction] {
+        kit.transactions(fromHash: nil, descending: true, type: nil, limit: recentTransactionLimit)
+            .map { mapTransaction($0, coinRate: coinRate, kit: kit) }
+    }
 
     func fetchTransactions() {
         guard let kit = kit else { return }

@@ -4,7 +4,9 @@ import CoreImage.CIFilterBuiltins
 import AVFoundation
 import UIKit
 import MoneroKit
+import HsToolKit
 import ObjectiveC
+import SQLite3
 @testable import MoneroOne
 
 // MARK: - Wallet Lifecycle Regression Tests
@@ -2249,6 +2251,77 @@ final class RestoreHeightLocaleRegressionTests: XCTestCase {
                 XCTAssertEqual(RestoreHeight.maximumEstimatedHeight(), maximum, identifier)
             }
         }
+    }
+}
+
+// MARK: - Stored History At Open Regression Tests
+
+/// Support mail 10-19: the history said there were no transactions while the
+/// balance showed. A wallet open loaded the stored balance but not the stored
+/// history, and the kit sends its list only after a refresh, which a slow or
+/// stuck node holds off. Here the node is a closed local port, so no refresh
+/// ever runs.
+@MainActor
+final class StoredHistoryAtOpenRegressionTests: XCTestCase {
+
+    private let closedNode = MoneroKit.Node(url: URL(string: "http://localhost:1")!, isTrusted: false)
+    private var walletIds: [String] = []
+
+    override func tearDown() async throws {
+        guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        for id in walletIds {
+            try? FileManager.default.removeItem(at: support.appendingPathComponent("MoneroKit/\(id)"))
+        }
+    }
+
+    func testStoredHistoryShowsAtOpenBeforeAnyRefresh() async throws {
+        let seed = WalletManager().generateNewWallet()
+        XCTAssertEqual(seed.count, 16)
+        let walletId = "stored-history-test-\(UUID().uuidString)"
+        walletIds.append(walletId)
+        try storeAnEarlierRun(walletId: walletId, seed: seed)
+
+        let wallet = MoneroWallet()
+        try await wallet.create(seed: seed, node: closedNode, cacheIdOverride: walletId)
+
+        XCTAssertEqual(wallet.balance, Decimal(string: "1.5"), "The stored balance shows")
+        XCTAssertEqual(wallet.transactions.map(\.id), ["newer", "older"], "The stored history shows with it, newest first")
+        XCTAssertEqual(wallet.transactions.map(\.type), [.outgoing, .incoming])
+        XCTAssertEqual(wallet.transactions.last?.amount, 2)
+        XCTAssertNotEqual(wallet.syncState, .synced, "No refresh ran")
+
+        await wallet.stopAsync()
+    }
+
+    /// The kit database of `walletId` as an earlier run left it: a balance of
+    /// 1.5 XMR and two transactions. A kit that never starts makes the
+    /// database with the kit's own schema; the rows go in with SQLite.
+    private func storeAnEarlierRun(walletId: String, seed: [String]) throws {
+        _ = try MoneroKit.Kit(
+            wallet: MoneroWallet.kitCredentials(for: seed),
+            account: 0,
+            walletId: walletId,
+            node: closedNode,
+            networkType: .mainnet,
+            reachabilityManager: ReachabilityManager(),
+            logger: nil,
+            moneroCoreLogLevel: 0
+        )
+        let support = try XCTUnwrap(FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first)
+        let path = support
+            .appendingPathComponent("MoneroKit/\(walletId)/network_\(MoneroKit.NetworkType.mainnet.rawValue)/storage").path
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(path, &db), SQLITE_OK)
+        defer { sqlite3_close(db) }
+        let sql = """
+            INSERT INTO transactions (uid, hash, type, blockHeight, amount, fee, isPending, isFailed, timestamp)
+            VALUES ('u1', 'older', 1, 3000000, 2000000000000, 0, 0, 0, 1700000000),
+                   ('u2', 'newer', 2, 3100000, 500000000000, 30000000, 0, 0, 1750000000);
+            INSERT INTO Balance (id, "all", unlocked) VALUES ('single-row-id', 1500000000000, 1500000000000);
+            """
+        XCTAssertEqual(sqlite3_exec(db, sql, nil, nil, nil), SQLITE_OK, String(cString: sqlite3_errmsg(db)))
     }
 }
 

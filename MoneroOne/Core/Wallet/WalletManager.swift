@@ -2620,10 +2620,14 @@ class WalletManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // The rows belong to the wallet that was active at the bind. A switch
+        // makes the next wallet active before it cancels this binding, and
+        // rows this wallet sends in that gap must not show under the next one.
+        let boundWalletId = activeWallet?.id
         wallet.$transactions
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newTransactions in
-                guard let self = self else { return }
+                guard let self = self, self.activeWallet?.id == boundWalletId else { return }
                 // The same wallet starting again after a payment-link check
                 // publishes an empty history before it loads its own; keep
                 // the one on screen.

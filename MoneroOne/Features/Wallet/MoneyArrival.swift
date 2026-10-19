@@ -290,9 +290,10 @@ struct MoneyArrivalWatch {
 
 /// Plays Money arrives on the wallet home: while the Wallet tab shows the
 /// balance at Now (`isIdle`: unlocked, no sheet, History, chart point or
-/// wallet list) and the wallet is Synced. Payments that came meanwhile
-/// wait for the next visit. A wallet with no baseline gets one, with no
-/// moment, when its sync reaches the top.
+/// wallet list) and the wallet is Synced. A catch-up plays once its last
+/// history is in, so its payments make one +amount. Payments that came
+/// meanwhile wait for the next visit. A wallet with no baseline gets one,
+/// with no moment, when its sync reaches the top.
 private struct MoneyArrivalTrigger: ViewModifier {
     let isIdle: Bool
     @Binding var playing: MoneyArrival?
@@ -335,7 +336,7 @@ private struct MoneyArrivalTrigger: ViewModifier {
     private var check: Check {
         let watch = watch
         let isActive: Bool = scenePhase == .active
-        let isSteady: Bool = watch.isSynced && !walletManager.isSwitchingWallet
+        let isSteady: Bool = watch.isSynced && !walletManager.isSwitchingWallet && !hold.awaitsHistory
         let hasNoBaseline: Bool = watch.baseline == nil
         return Check(
             walletId: watch.walletId,

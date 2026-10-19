@@ -166,6 +166,71 @@ final class MotionMomentsTests: XCTestCase {
         XCTAssertEqual(hero(), 2)
     }
 
+    /// The hero's value, as the wallet home computes it.
+    private func hero(
+        _ hold: MoneyArrivalHold,
+        balance: Decimal,
+        history: [MoneroTransaction],
+        baseline: UInt64,
+        balanceAtHistory: Decimal?
+    ) -> Decimal {
+        let pending = MoneyArrivalRules.arrivals(in: history, baseline: baseline)
+        return hold.held ?? MoneyArrivalRules.heroBalance(
+            balance: balance,
+            pendingTotal: MoneyArrivalRules.total(of: pending),
+            balanceAtHistory: balanceAtHistory,
+            hasPoolPayment: MoneyArrivalRules.hasPoolPayment(in: history)
+        )
+    }
+
+    /// A payment that the pool never showed, in a new block while Synced.
+    /// The new height comes first, then the balance, then the history. The
+    /// hero holds until the history, and the moment plays from the old
+    /// balance.
+    func testNewBlockWhileSyncedHoldsTheHeroUntilItsHistory() {
+        let baseline: UInt64 = 200
+        let old = tx("old", amount: "2", confirmations: 30, height: 170)
+        var hold = MoneyArrivalHold()
+        var balance: Decimal = 2
+        var history = [old]
+        var balanceAtHistory: Decimal? = balance
+        var shown: [Decimal] = []
+        func shownNow() -> Decimal {
+            hero(hold, balance: balance, history: history, baseline: baseline, balanceAtHistory: balanceAtHistory)
+        }
+
+        shown.append(shownNow())
+        // The height goes up.
+        hold.blockAdded(shown: shownNow(), canHold: true)
+        XCTAssertEqual(hold.held, 2)
+        let firstWait = hold.historyWait
+        XCTAssertNotNil(firstWait)
+        // The balance comes before the history.
+        balance = Decimal(string: "2.75")!
+        shown.append(shownNow())
+        // A second block before the history: the same hold, a new 3 s wait.
+        hold.blockAdded(shown: shownNow(), canHold: true)
+        XCTAssertEqual(hold.held, 2)
+        XCTAssertNotEqual(hold.historyWait, firstWait)
+        // The history ends the hold.
+        history = [tx("new", amount: "0.75", confirmations: 1, height: 201), old]
+        balanceAtHistory = balance
+        hold.historyChanged()
+        shown.append(shownNow())
+
+        XCTAssertNil(hold.held)
+        XCTAssertNil(hold.historyWait)
+        XCTAssertEqual(Set(shown), [2], "The hero showed only the old balance")
+        let arrivals = MoneyArrivalRules.arrivals(in: history, baseline: baseline)
+        XCTAssertEqual(MoneyArrivalRules.total(of: arrivals), Decimal(string: "0.75"))
+
+        // No baseline, or a moment plays: no hold.
+        var none = MoneyArrivalHold()
+        none.blockAdded(shown: 2, canHold: false)
+        XCTAssertNil(none.held)
+        XCTAssertNil(none.historyWait)
+    }
+
     /// A short catch-up (Connecting, then Synced) holds from Synced. A
     /// wallet with no baseline (its first sync) never holds. A moment, a
     /// new session or the 3 s timeout ends a hold.

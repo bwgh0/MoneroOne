@@ -120,11 +120,11 @@ enum MoneyArrivalRules {
 }
 
 /// Money arrives: the hero's hold while the wallet catches up (a launch, a
-/// return to the app, a wallet switch). A payment that the catch-up finds
-/// stays out of the hero until its moment: the hero does not tick up and
-/// back. The kit reports Synced before the last balance and history of a
-/// catch-up, so the hold ends at the first history after Synced. Pure, for
-/// the tests.
+/// return to the app, a wallet switch) and at each new block while Synced.
+/// A payment that a scan finds stays out of the hero until its moment: the
+/// hero does not tick up and back. The kit reports Synced, and each new
+/// height, before the balance and history of that scan, so the hold ends
+/// at the first history after it. Pure, for the tests.
 struct MoneyArrivalHold: Equatable {
     /// The wallet's sync, as the hold sees it.
     enum Phase {
@@ -139,6 +139,12 @@ struct MoneyArrivalHold: Equatable {
     private(set) var held: Decimal?
     /// Synced: the next history ends the hold.
     private(set) var awaitsHistory = false
+    /// Counts the scans that the hold waits for, so each one gets its own
+    /// 3 s fallback.
+    private(set) var scans = 0
+
+    /// Changes at each scan that the hold waits for. Nil: no wait.
+    var historyWait: Int? { awaitsHistory ? scans : nil }
 
     /// The sync moved from `old` to `new`. A scan (syncing, or Synced from
     /// another phase) holds the hero at `shown`, the value it shows now.
@@ -154,7 +160,21 @@ struct MoneyArrivalHold: Equatable {
             guard old != .synced else { return }
             if held == nil, canHold { held = shown }
             awaitsHistory = held != nil
+            scans += 1
         }
+    }
+
+    /// The wallet's height went up while Synced: a new block. Its balance
+    /// can come before its history (a payment that the pool never showed),
+    /// so the hero holds at `shown` until that history. A hold that runs
+    /// keeps its value.
+    mutating func blockAdded(shown: Decimal, canHold: Bool) {
+        if held == nil {
+            guard canHold else { return }
+            held = shown
+        }
+        awaitsHistory = true
+        scans += 1
     }
 
     /// A new history. At Synced it ends the hold: the history now shows
@@ -350,13 +370,18 @@ private struct MoneyArrivalTrigger: ViewModifier {
     func body(content: Content) -> some View {
         content
             .task(id: check) { await run() }
-            .task(id: hold.awaitsHistory) { await endHoldWithNoHistory() }
+            .task(id: hold.historyWait) { await endHoldWithNoHistory() }
             .onAppear {
                 balanceAtHistory = walletManager.displayBalance
                 // Shown during a scan (a wallet switch): hold from here.
                 if syncPhase == .syncing { syncMoved(from: .waiting, to: .syncing) }
             }
             .onChange(of: syncPhase) { old, new in syncMoved(from: old, to: new) }
+            .onChange(of: walletManager.walletHeight) { old, new in
+                guard new > old, syncPhase == .synced else { return }
+                let canHold: Bool = watch.baseline != nil && playing == nil
+                hold.blockAdded(shown: shownHero, canHold: canHold)
+            }
             .onChange(of: walletManager.transactions) { _, _ in
                 balanceAtHistory = walletManager.displayBalance
                 hold.historyChanged()
@@ -368,7 +393,7 @@ private struct MoneyArrivalTrigger: ViewModifier {
             }
     }
 
-    /// Synced, and no new history in 3 s: the hold ends.
+    /// Synced, and no new history 3 s after the scan: the hold ends.
     private func endHoldWithNoHistory() async {
         guard hold.awaitsHistory else { return }
         do { try await Task.sleep(for: .seconds(3)) } catch { return }

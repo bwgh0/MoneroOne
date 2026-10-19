@@ -431,6 +431,10 @@ struct RecentTransactionCard: View {
                     Text(row.subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        // One line, as the title: "13m ago" broke in two
+                        // next to a wide amount column.
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 Spacer()

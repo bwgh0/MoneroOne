@@ -112,9 +112,12 @@ final class PaymentLinkV2Tests: XCTestCase {
 
     func testBadShortLinksAreIncomplete() {
         let body = String(vectorLink.dropFirst("https://monero.one/c#2".count))
-        let cases = [
+        let secret = String(body.prefix(22))
+        // [String] with String parts only: Xcode 26 (CI) times out type
+        // checking this literal when it mixes String and Substring.
+        let cases: [String] = [
             // No height after the 22 secret characters.
-            "https://monero.one/c#2" + body.prefix(22),
+            "https://monero.one/c#2" + secret,
             // A character outside the alphabet (0, O, I, l).
             vectorLink.replacingOccurrences(of: "112d", with: "102d"),
             vectorLink.replacingOccurrences(of: "rXX", with: "rOX"),
@@ -122,8 +125,8 @@ final class PaymentLinkV2Tests: XCTestCase {
             // A secret of 2^128 or more.
             "https://monero.one/c#2" + String(repeating: "z", count: 22) + "1",
             // A height longer than 11 characters, or past UInt64.max.
-            "https://monero.one/c#2" + body.prefix(22) + String(repeating: "2", count: 12),
-            "https://monero.one/c#2" + body.prefix(22) + "zzzzzzzzzzz",
+            "https://monero.one/c#2" + secret + String(repeating: "2", count: 12),
+            "https://monero.one/c#2" + secret + "zzzzzzzzzzz",
             "https://monero.one/c#2",
             "https://monero.one/c#-",
             "https://monero.one/c#",

@@ -641,6 +641,7 @@ struct WalletManagerRows: View {
     @Binding var isExpanded: Bool
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showAddWallet = false
     @State private var showTransfer = false
     @State private var renameWalletId: UUID?
@@ -693,7 +694,11 @@ struct WalletManagerRows: View {
 
             // Transfer needs a second wallet. With one, Add Wallet fills
             // the row, as before.
-            HStack(spacing: 12) {
+            // At the accessibility text sizes the two buttons stack, so
+            // neither label is cut.
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
+            layout {
                 if wallets.count >= 2 {
                     transferButton
                 }

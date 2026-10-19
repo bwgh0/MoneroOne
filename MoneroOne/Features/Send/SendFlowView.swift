@@ -408,6 +408,7 @@ struct SendFlowView: View {
                 recipientAddress: recipientAddress,
                 aliasSummary: aliasSummary,
                 transfer: transferParties,
+                contact: matchedContact,
                 amountString: amountString,
                 memo: memo,
                 isSendingAll: isSendingAll,

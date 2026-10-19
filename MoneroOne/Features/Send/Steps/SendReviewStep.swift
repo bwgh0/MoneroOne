@@ -8,6 +8,8 @@ struct SendReviewStep: View {
     /// A transfer between your wallets: From over To in place of the
     /// recipient.
     var transfer: TransferParties? = nil
+    /// The saved contact this send goes to: its name heads the recipient.
+    var contact: Contact? = nil
     let amountString: String
     let memo: String
     let isSendingAll: Bool
@@ -53,6 +55,8 @@ struct SendReviewStep: View {
                             walletRow(transfer.from, address: transfer.fromAddress, label: String(localized: "From", comment: "Transfer review: the wallet that sends"))
                             Divider().padding(.horizontal)
                             walletRow(transfer.to, address: recipientAddress, label: String(localized: "To", comment: "Transfer review: the wallet that receives"))
+                        } else if let contact, aliasSummary == nil {
+                            contactRow(contact)
                         } else {
                         // Recipient. A name shows its picture, the name,
                         // the OpenAlias name and every character of the address.
@@ -75,7 +79,7 @@ struct SendReviewStep: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 if let aliasSummary {
-                                    if let recipientName = aliasSummary.recipientName {
+                                    if let recipientName = contact?.name ?? aliasSummary.recipientName {
                                         Text(verbatim: recipientName)
                                             .font(.headline)
                                         OpenAliasNameText(name: aliasSummary.name.display)
@@ -317,6 +321,9 @@ struct SendReviewStep: View {
 
     private var recipientLabel: Text {
         if let aliasSummary {
+            if let contact {
+                return Text("Recipient: \(contact.name), \(aliasSummary.spokenName), address \(recipientAddress)")
+            }
             return Text("Recipient: \(aliasSummary.spokenName), address \(recipientAddress)")
         }
         return Text("Recipient: \(recipientAddress)")
@@ -324,6 +331,31 @@ struct SendReviewStep: View {
 
     private func formatAddress(_ addr: String) -> String {
         ReceiveAddressLogic.shortAddress(addr)
+    }
+
+    /// A saved contact, in the wallet row's form: its monogram,
+    /// "Recipient", its name and its 8…8 address.
+    private func contactRow(_ contact: Contact) -> some View {
+        HStack(spacing: 12) {
+            RecipientMonogram(initials: contact.initials, diameter: 40)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Recipient")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(verbatim: contact.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                CodeText(formatAddress(recipientAddress), color: .label)
+            }
+
+            Spacer()
+        }
+        .padding()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Recipient: \(contact.name), \(formatAddress(recipientAddress))"))
+        .accessibilityIdentifier("send.review.contact")
     }
 
     /// One of your wallets on a transfer's review: its emoji, "From" or

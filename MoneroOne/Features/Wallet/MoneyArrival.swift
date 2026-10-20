@@ -384,7 +384,7 @@ private struct MoneyArrivalTrigger: ViewModifier {
             }
             // Each new history, also one that only confirms a payment that
             // was in the pool: the transactions' == compares ids only.
-            .onChange(of: walletManager.transactions.map(\.rowState)) { _, _ in
+            .onChange(of: walletManager.transactions.map(\.arrivalState)) { _, _ in
                 balanceAtHistory = walletManager.displayBalance
                 hold.historyChanged()
             }
@@ -463,5 +463,21 @@ extension View {
         hold: Binding<MoneyArrivalHold>
     ) -> some View {
         modifier(MoneyArrivalTrigger(isIdle: isIdle, playing: playing, balanceAtHistory: balanceAtHistory, hold: hold))
+    }
+}
+
+/// What a new history changes for Money arrives: the transactions, their
+/// status and their first block. A new block that only counts the rings
+/// again (`MoneroTransaction.counted(at:)`) leaves it as it is, so the
+/// count does not end the hold before the block's own history.
+struct ArrivalHistoryState: Equatable {
+    let id: String
+    let status: MoneroTransaction.TransactionStatus
+    let isMined: Bool
+}
+
+extension MoneroTransaction {
+    var arrivalState: ArrivalHistoryState {
+        ArrivalHistoryState(id: id, status: status, isMined: (confirmations ?? 0) > 0)
     }
 }

@@ -40,6 +40,30 @@ final class MotionMomentsTests: XCTestCase {
         XCTAssertEqual(ConfirmationRing.state(of: ten), .confirmed)
     }
 
+    /// The kit reports the history only at a transaction's first block and
+    /// at its unlock. Each new block counts the rings again, so a ring fills
+    /// one tenth per block while the list stays open. The count is no new
+    /// history for Money arrives, so it does not end a block's hold.
+    func testNewBlockCountsTheRingsAgain() {
+        let ring = tx("r", confirmations: 1, height: 100)
+        XCTAssertEqual(ring.counted(at: 105).confirmations, 5)
+        XCTAssertNotEqual(ring.counted(at: 105).rowState, ring.rowState)
+        XCTAssertEqual(ConfirmationRing.state(of: ring.counted(at: 109)), .filling(0.9))
+        XCTAssertEqual(ConfirmationRing.state(of: ring.counted(at: 110)), .confirmed)
+        XCTAssertEqual(ring.counted(at: 105).arrivalState, ring.arrivalState)
+
+        // No ring: no change.
+        let pool = tx("p", confirmations: 0, height: nil, status: .pending)
+        let spendable = tx("s", confirmations: 30, height: 70)
+        let failed = tx("f", confirmations: 3, height: 100, status: .failed)
+        for other in [pool, spendable, failed] {
+            XCTAssertEqual(other.counted(at: 105).rowState, other.rowState)
+        }
+
+        // A pool payment's first block is a new history.
+        XCTAssertNotEqual(pool.arrivalState, tx("p", confirmations: 1, height: 104).arrivalState)
+    }
+
     // MARK: - Money arrives
 
     /// Only incoming payments in a block above the baseline count. Pool
@@ -271,10 +295,10 @@ final class MotionMomentsTests: XCTestCase {
         // The balance lands first.
         let balance = Decimal(string: "2.5")!
         XCTAssertEqual(hero(hold, balance: balance, history: [pool, old], baseline: baseline, balanceAtHistory: 2), 2)
-        // Then the history: the same ids, so == sees no change; the row
-        // states do.
+        // Then the history: the same ids, so == sees no change; the arrival
+        // states that the trigger watches do.
         XCTAssertEqual([pool, old], [mined, old])
-        XCTAssertNotEqual([pool, old].map(\.rowState), [mined, old].map(\.rowState))
+        XCTAssertNotEqual([pool, old].map(\.arrivalState), [mined, old].map(\.arrivalState))
         hold.historyChanged()
 
         XCTAssertNil(hold.held)

@@ -21,6 +21,24 @@ extension MoneroTransaction {
     /// What the transaction's row shows that new blocks change.
     var rowState: TransactionRowState { TransactionRowState(self) }
 
+    /// The transaction with its confirmations counted at `daemonHeight`, as
+    /// `MoneroWallet.mapTransaction` counts them. The kit reports the
+    /// history only when a transaction changes (its first block, its
+    /// unlock), so each new block counts the rings again: a mined
+    /// transaction with 1 to 9 confirmations. Others stay as they are.
+    func counted(at daemonHeight: UInt64) -> MoneroTransaction {
+        guard status == .confirmed,
+              let confirmations, (1..<ConfirmationRing.target).contains(confirmations),
+              let blockHeight, daemonHeight > blockHeight else { return self }
+        let count = Int(daemonHeight - blockHeight)
+        guard count != confirmations else { return self }
+        return MoneroTransaction(
+            id: id, type: type, amount: amount, fee: fee, address: address, timestamp: timestamp,
+            confirmations: count, status: status, memo: memo, blockHeight: blockHeight,
+            destinations: destinations, subaddressIndex: subaddressIndex
+        )
+    }
+
     /// Whether confirmation data is still loading
     var isStatusLoading: Bool {
         confirmations == nil && status != .failed && status != .pending

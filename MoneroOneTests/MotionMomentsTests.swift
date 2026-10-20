@@ -283,6 +283,32 @@ final class MotionMomentsTests: XCTestCase {
         XCTAssertEqual(MoneyArrivalRules.arrivals(in: [mined, old], baseline: baseline).map(\.id), ["p"])
     }
 
+    /// A reopen: the kit has no height yet, and its first history holds no
+    /// mined payment (only a pool payment, so no chain top). The stored
+    /// baseline stays, no new one is written before the sync is done, and
+    /// the old payments do not play again as one moment.
+    func testReopenKeepsTheBaselineWhenTheFirstHistoryHasNoMinedPayment() {
+        let baseline: UInt64 = 200
+        let old = [tx("a", amount: "1", confirmations: 60, height: 150), tx("b", amount: "2", confirmations: 20, height: 190)]
+        let pool = tx("p", amount: "0.5", confirmations: 0, height: nil, status: .pending)
+
+        // No height yet, and a history with no mined payment.
+        XCTAssertTrue(MoneyArrivalRules.isBaselineValid(baseline, walletHeight: 0))
+        XCTAssertTrue(MoneyArrivalRules.arrivals(in: [pool], baseline: baseline).isEmpty)
+        // The trigger writes a baseline only when none is valid and the sync
+        // is done. With no height, the sync is never done.
+        XCTAssertFalse(MoneyArrivalRules.isSyncDone(isSynced: false, walletHeight: 0, daemonHeight: 0))
+        XCTAssertFalse(MoneyArrivalRules.isSyncDone(isSynced: true, walletHeight: 0, daemonHeight: 210))
+        // A written baseline is the chain top, not 0, also with no mined payment.
+        XCTAssertEqual(MoneyArrivalRules.baseline(transactions: [pool], walletHeight: 211), 210)
+        // The stored height comes back, then the whole history: no moment.
+        XCTAssertTrue(MoneyArrivalRules.isBaselineValid(baseline, walletHeight: 201))
+        XCTAssertTrue(MoneyArrivalRules.arrivals(in: old + [pool], baseline: baseline).isEmpty)
+        // A block mines the pool payment: one moment, for it alone.
+        let mined = tx("p", amount: "0.5", confirmations: 1, height: 205)
+        XCTAssertEqual(MoneyArrivalRules.arrivals(in: old + [mined], baseline: baseline).map(\.id), ["p"])
+    }
+
     /// A short catch-up (Connecting, then Synced) holds from Synced. A
     /// wallet with no baseline (its first sync) never holds. A moment, a
     /// new session or the 3 s timeout ends a hold.

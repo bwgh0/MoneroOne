@@ -631,8 +631,12 @@ struct BalanceCard: View {
 
             try await wait(until: rise)
             withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .easeIn(duration: 0.25)) { arrivalStep = .risen }
-            // disclose: the Available line and the card's growth.
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.35) : .spring(response: 0.3, dampingFraction: 0.8)) {
+            // disclose: the Available line and the card's growth. The
+            // activity list under the card drops other animations; this one
+            // moves it with the card.
+            var disclose = Transaction(animation: reduceMotion ? .easeInOut(duration: 0.35) : .spring(response: 0.3, dampingFraction: 0.8))
+            disclose.isHistoryDisclosure = true
+            withTransaction(disclose) {
                 risenArrivalId = arrival.id
             }
             announceArrival()

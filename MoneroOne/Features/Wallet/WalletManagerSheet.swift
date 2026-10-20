@@ -415,12 +415,13 @@ struct WalletRowCheck: View {
 /// list when it is the active one. The pencil renames.
 ///
 /// Reorder is driven by `WalletManagerRows`: one UIKit long-press recognizer
-/// on the enclosing scroll view lifts a row (see `ReorderPressHost`), and the
-/// rows draw the lift and slide aside in SwiftUI. This row only needs to know
-/// whether it is the lifted one, so its delete swipe stays quiet meanwhile.
+/// on the enclosing scroll view lifts a row (see `RowGestureHost`), and the
+/// rows draw the lift and slide aside in SwiftUI.
 ///
-/// The 20pt horizontal delete swipe reveals the custom Delete zone on
-/// inactive rows. VoiceOver stops once per wallet: the row reads the name
+/// A horizontal swipe, recognised by the list (`RowGestureHost`), moves an
+/// inactive row with the finger and reveals the custom Delete zone; the row
+/// draws it from `isDeleteOpen` and `swipeTranslation`. VoiceOver stops once
+/// per wallet: the row reads the name
 /// and balance, and Rename / Delete / Move up / Move down are rotor actions
 /// on it.
 struct WalletRow: View {
@@ -442,19 +443,24 @@ struct WalletRow: View {
     /// Start). The row says "Needs restore" in place of the balance, and a
     /// tap restores it.
     var needsRestore: Bool = false
+    /// The Delete zone is open on this row. The list owns it, so one row is
+    /// open at a time.
+    var isDeleteOpen: Bool = false
+    /// The finger's horizontal travel while a swipe on this row is live.
+    var swipeTranslation: CGFloat = 0
+    /// A tap on an open row closes it.
+    var onCloseDelete: () -> Void = {}
 
-    @State private var showDeleteZone = false
-    /// True from the moment a horizontal swipe is recognised until just after
-    /// it ends, so the release does not fire the row's tap.
-    @State private var didSwipe = false
+    /// How far an open row moves left to show Delete.
+    static let deleteWidth: CGFloat = 88
+    /// A flick faster than this (pt/s) opens or closes Delete at any distance.
+    static let flickSpeed: CGFloat = 300
+    static let settle = Animation.snappy(duration: 0.25)
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            if showDeleteZone, let onDelete {
+            if rowOffset < 0, let onDelete {
                 Button {
-                    withAnimation(.snappy(duration: 0.25)) {
-                        showDeleteZone = false
-                    }
                     onDelete()
                 } label: {
                     VStack(spacing: 6) {
@@ -470,27 +476,35 @@ struct WalletRow: View {
                     }
                 }
                 .padding(.trailing, 12)
+                .opacity(min(1, -rowOffset / Self.deleteWidth))
                 .transition(.opacity)
             }
 
             rowButton
-                // Normal priority, so the scroll view keeps every vertical
-                // drag (a high-priority drag here took them all and the list
-                // could not scroll); horizontal drags fall through to it,
-                // and `didSwipe` keeps that release from tapping.
-                .gesture(deleteSwipe)
-                .offset(x: showDeleteZone ? -88 : 0)
+                .offset(x: rowOffset)
         }
         .padding(.horizontal)
     }
 
-    /// The tappable row, shared by both paths.
+    /// Where the row sits: at rest, open by the Delete width, or under the
+    /// finger. Past the Delete width it moves at a third of the finger's
+    /// pace (no full-swipe delete); it never moves right of rest. The
+    /// active wallet does not move: it is deleted from Settings.
+    private var rowOffset: CGFloat {
+        guard onDelete != nil else { return 0 }
+        let raw = (isDeleteOpen ? -Self.deleteWidth : 0) + swipeTranslation
+        if raw < -Self.deleteWidth {
+            return -Self.deleteWidth + (raw + Self.deleteWidth) / 3
+        }
+        return min(0, raw)
+    }
+
+    /// The tappable row, shared by both paths. The list swallows the
+    /// release that ends a swipe or a drag before it reaches these.
     private var rowButton: some View {
         Button {
-            // The release that ends a delete swipe is not a tap.
-            guard !didSwipe else { return }
-            if showDeleteZone {
-                withAnimation(.snappy(duration: 0.25)) { showDeleteZone = false }
+            if isDeleteOpen {
+                onCloseDelete()
             } else {
                 onTap()
             }
@@ -600,36 +614,6 @@ struct WalletRow: View {
             WalletRowCheck(isSelected: isActive)
         }
     }
-
-    // MARK: - Delete swipe (before iOS 27)
-
-    /// A clear horizontal swipe reveals Delete on inactive rows. Vertical
-    /// movement belongs to the scroll view, which cancels this drag when it
-    /// starts to pan.
-    private var deleteSwipe: some Gesture {
-        DragGesture(minimumDistance: 20)
-            .onChanged { value in
-                guard onDelete != nil, !isLifted else { return }
-                if abs(value.translation.width) > abs(value.translation.height) {
-                    didSwipe = true
-                }
-            }
-            .onEnded { value in
-                defer {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { didSwipe = false }
-                }
-                guard onDelete != nil, !isLifted else { return }
-                let dx = value.translation.width
-                guard abs(dx) > abs(value.translation.height) else { return }
-                withAnimation(.snappy(duration: 0.25)) {
-                    if dx < -40 {
-                        showDeleteZone = true
-                    } else if dx > 20 {
-                        showDeleteZone = false
-                    }
-                }
-            }
-    }
 }
 
 /// Expanded wallet manager: EVERY wallet in store order (insertion order until
@@ -668,7 +652,7 @@ struct WalletManagerRows: View {
     /// The snappy spring a nudged row settles on.
     private static let slide = Animation.snappy(duration: 0.3)
 
-    // Drag to reorder. UIKit recognises the press (`ReorderPressHost`),
+    // Drag to reorder. UIKit recognises the press (`RowGestureHost`),
     // SwiftUI draws it: the lifted row follows the finger through
     // `dragTranslation`, the others slide aside as `dropIndex` changes.
     @State private var dragId: UUID?
@@ -681,6 +665,13 @@ struct WalletManagerRows: View {
     @State private var liftPoint: CGPoint = .zero
     /// The release that ends a drag reaches the row's Button; swallow it.
     @State private var suppressTapsUntil = Date.distantPast
+
+    // Swipe to delete. UIKit recognises the pan (`RowGestureHost`), SwiftUI
+    // draws it: the swiped row follows `swipeTranslation`.
+    @State private var swipeId: UUID?
+    @State private var swipeTranslation: CGFloat = 0
+    /// The row whose Delete zone is open; one at a time.
+    @State private var openDeleteId: UUID?
 
     private var wallets: [WalletInfo] { walletManager.wallets }
 
@@ -711,13 +702,15 @@ struct WalletManagerRows: View {
             .padding(.horizontal)
         }
         .background {
-            ReorderPressHost(
+            RowGestureHost(
                 isEnabled: isExpanded && !isSwitching && !walletManager.isSwitchingWallet,
                 shouldBegin: { point in rowId(at: point) != nil },
                 onBegan: lift,
                 onChanged: move,
                 onEnded: drop,
-                onCancelled: cancelDrag
+                onCancelled: cancelDrag,
+                shouldBeginSwipe: { point in dragId == nil && rowId(at: point) != nil },
+                onSwipe: swipe
             )
         }
     }
@@ -866,16 +859,72 @@ struct WalletManagerRows: View {
                 }
             },
             onRename: {
+                // A swipe or drag that ends on the pencil is not a tap.
+                guard dragId == nil, Date() > suppressTapsUntil else { return }
                 renameText = wallet.name
                 renameEmoji = wallet.emoji
                 renameWalletId = wallet.id
             },
-            onDelete: isActive ? nil : { deleteWalletId = wallet.id },
+            onDelete: isActive ? nil : {
+                withAnimation(WalletRow.settle) { openDeleteId = nil }
+                deleteWalletId = wallet.id
+            },
             onMoveUp: wallets.first?.id == wallet.id ? nil : { nudge(wallet.id, by: -1) },
             onMoveDown: wallets.last?.id == wallet.id ? nil : { nudge(wallet.id, by: 1) },
             isLifted: dragId == wallet.id,
-            needsRestore: needsRestore
+            needsRestore: needsRestore,
+            isDeleteOpen: openDeleteId == wallet.id,
+            swipeTranslation: swipeId == wallet.id ? swipeTranslation : 0,
+            onCloseDelete: {
+                guard Date() > suppressTapsUntil else { return }
+                withAnimation(WalletRow.settle) { openDeleteId = nil }
+            }
         )
+    }
+
+    // MARK: - Swipe to delete
+
+    /// A horizontal swipe on a row. The row follows the finger; on release
+    /// Delete stays open past half its width or after a leftward flick, and
+    /// otherwise the row springs back. The swipe's release never taps the
+    /// row, so it never switches the wallet.
+    private func swipe(_ phase: RowGestureHost.SwipePhase) {
+        switch phase {
+        case .began(let point):
+            let id = rowId(at: point)
+            swipeId = id
+            swipeTranslation = 0
+            suppressTapsUntil = .distantFuture
+            if openDeleteId != nil, openDeleteId != id {
+                withAnimation(WalletRow.settle) { openDeleteId = nil }
+            }
+        case .changed(let dx):
+            swipeTranslation = dx
+        case .ended(let dx, let velocity):
+            suppressTapsUntil = Date().addingTimeInterval(0.3)
+            guard let id = swipeId else { return }
+            let canDelete = id != walletManager.activeWallet?.id
+            let end = (openDeleteId == id ? -WalletRow.deleteWidth : 0) + dx
+            let open: Bool
+            if velocity < -WalletRow.flickSpeed {
+                open = true
+            } else if velocity > WalletRow.flickSpeed {
+                open = false
+            } else {
+                open = end < -WalletRow.deleteWidth / 2
+            }
+            withAnimation(WalletRow.settle) {
+                openDeleteId = open && canDelete ? id : nil
+                swipeId = nil
+                swipeTranslation = 0
+            }
+        case .cancelled:
+            suppressTapsUntil = Date().addingTimeInterval(0.3)
+            withAnimation(WalletRow.settle) {
+                swipeId = nil
+                swipeTranslation = 0
+            }
+        }
     }
 
     // MARK: - Drag to reorder
@@ -995,13 +1044,32 @@ struct WalletManagerRows: View {
 /// drags), the iOS 27 reorder container asserted on every lift, and system
 /// drag and drop showed a copy badge. Locations are in window space, which
 /// is what the rows report through `frame(in: .global)`.
-private struct ReorderPressHost: UIViewRepresentable {
+///
+/// The delete swipe is a UIKit pan on the same scroll view, the way
+/// UITableView swipes rows. A SwiftUI drag on the row lost to the glass
+/// Button's press: a swipe that started anywhere but the pencil tapped the
+/// row and switched the wallet. The pan begins only when its first movement
+/// is horizontal and starts on a row, so vertical drags still scroll.
+private struct RowGestureHost: UIViewRepresentable {
     var isEnabled: Bool
     var shouldBegin: (CGPoint) -> Bool
     var onBegan: (CGPoint) -> Void
     var onChanged: (CGPoint) -> Void
     var onEnded: (CGPoint) -> Void
     var onCancelled: () -> Void
+    /// Gets the point where the swipe's touch went down.
+    var shouldBeginSwipe: (CGPoint) -> Bool
+    var onSwipe: (SwipePhase) -> Void
+
+    enum SwipePhase {
+        /// The point where the touch went down, in window space.
+        case began(CGPoint)
+        /// Horizontal travel since the touch went down.
+        case changed(CGFloat)
+        /// Horizontal travel and velocity (pt/s) at the release.
+        case ended(CGFloat, velocity: CGFloat)
+        case cancelled
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -1015,6 +1083,7 @@ private struct ReorderPressHost: UIViewRepresentable {
     func updateUIView(_ view: AttachView, context: Context) {
         context.coordinator.parent = self
         context.coordinator.recognizer.isEnabled = isEnabled
+        context.coordinator.pan.isEnabled = isEnabled
     }
 
     static func dismantleUIView(_ view: AttachView, coordinator: Coordinator) {
@@ -1040,17 +1109,20 @@ private struct ReorderPressHost: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var parent: ReorderPressHost
+        var parent: RowGestureHost
         let recognizer = UILongPressGestureRecognizer()
+        let pan = UIPanGestureRecognizer()
         private weak var scrollView: UIScrollView?
 
-        init(_ parent: ReorderPressHost) {
+        init(_ parent: RowGestureHost) {
             self.parent = parent
             super.init()
             recognizer.minimumPressDuration = 0.4
             recognizer.allowableMovement = 10
             recognizer.delegate = self
             recognizer.addTarget(self, action: #selector(handle(_:)))
+            pan.delegate = self
+            pan.addTarget(self, action: #selector(handlePan(_:)))
         }
 
         /// Attach to the nearest enclosing UIScrollView so the recognizer sees
@@ -1064,8 +1136,9 @@ private struct ReorderPressHost: UIViewRepresentable {
             }
             guard let scroll = candidate as? UIScrollView else { return }
             scroll.addGestureRecognizer(recognizer)
+            scroll.addGestureRecognizer(pan)
             scrollView = scroll
-            Self.yieldGlassDrags(to: scroll)
+            Self.yieldGlassDrags(to: scroll, swipe: pan)
         }
 
         /// Liquid Glass buttons stretch toward a dragging finger through one
@@ -1075,16 +1148,20 @@ private struct ReorderPressHost: UIViewRepresentable {
         /// Pro Max, iOS 27.0). Make it wait for the scroll view's pan to
         /// fail, as content does in any scroll view; a still press never
         /// starts it, so the press feedback stays. The recognizer is private
-        /// and matched by name: if it is renamed this does nothing.
-        private static func yieldGlassDrags(to scroll: UIScrollView) {
+        /// and matched by name: if it is renamed this does nothing. It waits
+        /// for the delete swipe too, so a swiped row slides and does not
+        /// stretch.
+        private static func yieldGlassDrags(to scroll: UIScrollView, swipe: UIPanGestureRecognizer) {
             for recognizer in scroll.window?.gestureRecognizers ?? []
             where String(describing: type(of: recognizer)).contains("FlexInteraction") {
                 recognizer.require(toFail: scroll.panGestureRecognizer)
+                recognizer.require(toFail: swipe)
             }
         }
 
         func detach() {
             recognizer.view?.removeGestureRecognizer(recognizer)
+            pan.view?.removeGestureRecognizer(pan)
             scrollView?.isScrollEnabled = true
         }
 
@@ -1097,7 +1174,46 @@ private struct ReorderPressHost: UIViewRepresentable {
         }
 
         func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
-            parent.isEnabled && parent.shouldBegin(gesture.location(in: nil))
+            guard parent.isEnabled else { return false }
+            guard gesture === pan else {
+                return parent.shouldBegin(gesture.location(in: nil))
+            }
+            // A lifted row is being reordered; no swipe on top of it.
+            guard recognizer.state != .began, recognizer.state != .changed else { return false }
+            let travel = pan.translation(in: nil)
+            let velocity = pan.velocity(in: nil)
+            let isHorizontal = travel == .zero
+                ? abs(velocity.x) > abs(velocity.y)
+                : abs(travel.x) > abs(travel.y)
+            return isHorizontal && parent.shouldBeginSwipe(touchDownPoint)
+        }
+
+        /// Where the pan's touch went down: its location less its travel.
+        private var touchDownPoint: CGPoint {
+            let location = pan.location(in: nil)
+            let travel = pan.translation(in: nil)
+            return CGPoint(x: location.x - travel.x, y: location.y - travel.y)
+        }
+
+        @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
+            let dx = gesture.translation(in: nil).x
+            switch gesture.state {
+            case .began:
+                // Hold the list still for the rest of this touch.
+                scrollView?.isScrollEnabled = false
+                parent.onSwipe(.began(touchDownPoint))
+                parent.onSwipe(.changed(dx))
+            case .changed:
+                parent.onSwipe(.changed(dx))
+            case .ended:
+                scrollView?.isScrollEnabled = true
+                parent.onSwipe(.ended(dx, velocity: gesture.velocity(in: nil).x))
+            case .cancelled, .failed:
+                scrollView?.isScrollEnabled = true
+                parent.onSwipe(.cancelled)
+            default:
+                break
+            }
         }
 
         @objc private func handle(_ gesture: UILongPressGestureRecognizer) {

@@ -125,7 +125,7 @@ struct MoneroOneApp: App {
                     guard let url = activity.webpageURL else { return }
                     PaymentLinksCoordinator.shared.handle(url: url, networkType: walletManager.networkType, activeAddress: walletManager.primaryAddress)
                 }
-                .presentsPaymentLinkClaims(walletManager: walletManager)
+                .presentsPaymentLinkClaims(walletManager: walletManager, priceService: priceService)
                 .alert(
                     "Can't Open Payment Link",
                     isPresented: Binding(

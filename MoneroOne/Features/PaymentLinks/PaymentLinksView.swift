@@ -528,7 +528,7 @@ struct PaymentLinkDetailView: View {
             if reached, isOnScreen { checkLink() }
         }
         .sheet(item: $claimPresentation) { presentation in
-            PaymentLinkClaimSheet(presentation: presentation)
+            PaymentLinkClaimSheet(presentation: presentation, priceService: priceService)
                 .environmentObject(walletManager)
         }
         .alert("Name this link", isPresented: $showRename) {

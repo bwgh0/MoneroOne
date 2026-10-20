@@ -1,24 +1,25 @@
 import SwiftUI
 import UIKit
 
-/// The picture a shared payment link carries, the "orange pass": one square
-/// card, LPLinkMetadata.imageProvider, for the Messages bubble and the share
-/// sheet header. Drawn on the sender's phone once per share; nothing loads
-/// the link. Fixed colors, so the picture looks the same in light and dark.
-/// Sizes are the spec's pixels (MoneroOne-Link-Card-v3.html, option 1).
+/// The picture a shared payment link carries: the sealed envelope with the
+/// amount in orange foil, one square for LPLinkMetadata.imageProvider (the
+/// Messages bubble and the share sheet header). Drawn on the sender's phone
+/// once per share; nothing loads the link. Fixed colors, so the picture
+/// looks the same in light and dark. Always XMR, also in Fiat Mode. Sizes
+/// are the mockup's pixels (link-card, final-share.html).
 enum PaymentLinkCard {
     /// Drawn at scale 1: 1200 x 1200 px.
     static let side: CGFloat = 1200
-    static let inset: CGFloat = 96
-    static let markSide: CGFloat = 176
-    static let labelSize: CGFloat = 64
-    static let amountBottom: CGFloat = 84
-    /// 1200 - 2 x 96.
-    static let amountWidth: CGFloat = 1008
-    static let numberSize: CGFloat = 340
-    static let numberTracking: CGFloat = -4
-    static let unitSize: CGFloat = 144
-    static let unitGap: CGFloat = 32
+    /// The envelope's place on the picture.
+    static let envelopeOrigin = CGPoint(x: 100, y: 260)
+    /// The foil line's top, on the envelope.
+    static let foilTop: CGFloat = 452
+    /// The widest the foil line may be, on the envelope's 1000.
+    static let amountWidth: CGFloat = 820
+    static let numberSize: CGFloat = 104
+    static let numberTracking: CGFloat = 0
+    static let unitSize: CGFloat = 104 * 0.46
+    static let unitGap: CGFloat = 104 * 0.46 * 0.14
     /// Smaller than this the amount is too small to read: round it.
     static let minimumScale: CGFloat = 0.4
 
@@ -63,7 +64,7 @@ enum PaymentLinkCard {
 
     /// The amount line at full size: the number, the gap and "XMR".
     static func lineWidth(_ text: String) -> CGFloat {
-        textWidth(text, font: numberFont(size: numberSize), tracking: numberTracking)
+        textWidth(text, font: numberFont(size: numberSize, weight: .semibold), tracking: numberTracking)
             + unitGap
             + textWidth("XMR", font: roundedFont(size: unitSize, weight: .semibold), tracking: 0)
     }
@@ -104,9 +105,9 @@ enum PaymentLinkCard {
         return UIFont(descriptor: rounded, size: size)
     }
 
-    /// The amount's font: rounded bold with tabular digits (`monospacedDigit()`).
-    static func numberFont(size: CGFloat) -> UIFont {
-        let font = roundedFont(size: size, weight: .bold)
+    /// The amount's font: rounded, with tabular digits (`monospacedDigit()`).
+    static func numberFont(size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let font = roundedFont(size: size, weight: weight)
         let descriptor = font.fontDescriptor.addingAttributes([
             .featureSettings: [[
                 UIFontDescriptor.FeatureKey.type: kNumberSpacingType,
@@ -141,65 +142,69 @@ enum PaymentLinkCard {
 
 // MARK: - Views
 
-/// 1200 x 1200: the coin top left, "Payment link" top right, the amount
-/// bottom left.
+/// 1200 x 1200: the sealed envelope on warm paper gray, the amount in
+/// orange foil under the seal.
 struct PaymentLinkCardView: View {
     let amount: PaymentLinkCard.Amount
 
     var body: some View {
-        let numberSize = PaymentLinkCard.numberSize * amount.scale
         ZStack(alignment: .topLeading) {
-            PaymentLinkCardBackground()
-            PaymentLinkCardMark(side: PaymentLinkCard.markSide)
-                .padding(PaymentLinkCard.inset)
-            Text("Payment link")
-                .font(.system(size: PaymentLinkCard.labelSize, weight: .medium))
-                .lineLimit(1)
-                .frame(height: PaymentLinkCard.markSide)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding([.top, .trailing], PaymentLinkCard.inset)
-            HStack(alignment: .firstTextBaseline, spacing: PaymentLinkCard.unitGap * amount.scale) {
-                Text(verbatim: amount.text)
-                    .font(.system(size: numberSize, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .tracking(PaymentLinkCard.numberTracking * amount.scale)
-                Text(verbatim: "XMR")
-                    .font(.system(size: PaymentLinkCard.unitSize * amount.scale, weight: .semibold, design: .rounded))
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            .padding(.leading, PaymentLinkCard.inset)
-            .padding(.bottom, PaymentLinkCard.amountBottom - PaymentLinkCard.boxOverhang(size: numberSize, weight: .bold))
-        }
-        .foregroundStyle(.white)
-        .frame(width: PaymentLinkCard.side, height: PaymentLinkCard.side)
-    }
-}
-
-/// Brand to brandPressed on the diagonal, with a faint white highlight at
-/// the top.
-private struct PaymentLinkCardBackground: View {
-    var body: some View {
-        LinearGradient(colors: [.brandToken, .brandPressed], startPoint: .topLeading, endPoint: .bottomTrailing)
-            .overlay(
-                LinearGradient(
-                    colors: [.white.opacity(0.12), .white.opacity(0)],
-                    startPoint: .top,
-                    endPoint: UnitPoint(x: 0.5, y: 0.4)
-                )
+            EllipticalGradient(
+                stops: [
+                    .init(color: EnvelopeArt.backdropLight, location: 0),
+                    .init(color: EnvelopeArt.backdropMiddle, location: 0.62),
+                    .init(color: EnvelopeArt.backdropDeep, location: 1),
+                ],
+                center: UnitPoint(x: 0.5, y: 0.4),
+                startRadiusFraction: 0,
+                endRadiusFraction: 0.78
             )
+            ZStack(alignment: .topLeading) {
+                EnvelopeShadow()
+                EnvelopeFront { PaymentLinkCardFoil(amount: amount) }
+            }
+            .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
+            .offset(x: PaymentLinkCard.envelopeOrigin.x, y: PaymentLinkCard.envelopeOrigin.y)
+        }
+        .frame(width: PaymentLinkCard.side, height: PaymentLinkCard.side, alignment: .topLeading)
     }
 }
 
-private struct PaymentLinkCardMark: View {
-    let side: CGFloat
+/// The amount pressed into the pocket in orange foil, centered on the
+/// envelope's 1000 units, its line's top at 452.
+private struct PaymentLinkCardFoil: View {
+    let amount: PaymentLinkCard.Amount
 
     var body: some View {
-        // Founder-approved exception to the logo rule (mark off orange): the one-color white coin on the orange card.
-        Image("MoneroMarkWhite")
-            .resizable()
-            .frame(width: side, height: side)
-            .accessibilityHidden(true)
+        let size = PaymentLinkCard.numberSize * amount.scale
+        LinearGradient(
+            stops: [
+                .init(color: EnvelopeArt.foilDeep, location: 0),
+                .init(color: EnvelopeArt.waxLight, location: 0.36),
+                .init(color: .brandToken, location: 0.66),
+                .init(color: EnvelopeArt.foilEnd, location: 0.98),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(width: Envelope.width, height: size * 1.4)
+        .mask(line(size: size))
+        .shadow(color: .black.opacity(0.75), radius: 0, x: 0, y: -1.4)
+        .shadow(color: .white.opacity(0.09), radius: 0, x: 0, y: 1.1)
+        .offset(y: PaymentLinkCard.foilTop - PaymentLinkCard.boxOverhang(size: size, weight: .semibold))
+        .accessibilityHidden(true)
+    }
+
+    private func line(size: CGFloat) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: PaymentLinkCard.unitGap * amount.scale) {
+            Text(verbatim: amount.text)
+                .font(.system(size: size, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+            Text(verbatim: "XMR")
+                .font(.system(size: PaymentLinkCard.unitSize * amount.scale, weight: .semibold, design: .rounded))
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .frame(width: Envelope.width, height: size * 1.4, alignment: .top)
     }
 }

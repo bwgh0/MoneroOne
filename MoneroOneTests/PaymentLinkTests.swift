@@ -1147,20 +1147,21 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(PaymentLinkCard.amount(1_000_000_000_000), .init(text: "1", scale: 1))
         XCTAssertEqual(PaymentLinkCard.amount(50_000_000_000).text, "0.05")
         XCTAssertEqual(PaymentLinkCard.amount(25_404_800_000).text, "0.0254048")
-        XCTAssertEqual(PaymentLinkCard.amount(12_345_678_901_200).text, "~12.35")
+        // The long amount fits on one line of the envelope's foil.
+        XCTAssertEqual(PaymentLinkCard.amount(12_345_678_901_200).text, "12.3456789012")
     }
 
     /// The card shrinks the amount first, then rounds it with "~", and
     /// never shows "XMR" alone.
     func testLinkCardShrinksThenRounds() {
-        // 210 per character: 1008 fits 4.8 characters, 40% fits 12.
-        let width: (String) -> CGFloat = { CGFloat($0.count) * 210 }
+        // 170 per character: 820 fits 4.8 characters, 40% fits 12.
+        let width: (String) -> CGFloat = { CGFloat($0.count) * 170 }
         func card(_ piconero: UInt64) -> PaymentLinkCard.Amount {
             PaymentLinkCard.amount(piconero, width: width)
         }
         XCTAssertEqual(card(50_000_000_000), .init(text: "0.05", scale: 1))
         XCTAssertEqual(card(25_404_800_000).text, "0.0254048")
-        XCTAssertEqual(card(25_404_800_000).scale, 1008 / 1890, accuracy: 0.0001)
+        XCTAssertEqual(card(25_404_800_000).scale, 820 / 1530, accuracy: 0.0001)
         XCTAssertEqual(card(12_345_678_901_200).text, "~12.35")
         XCTAssertEqual(card(123_456_789).text, "~0.00012")
         XCTAssertEqual(card(1_234_567_891_234_000_000).text, "~1,234,568")

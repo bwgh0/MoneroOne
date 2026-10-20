@@ -382,7 +382,9 @@ private struct MoneyArrivalTrigger: ViewModifier {
                 let canHold: Bool = watch.baseline != nil && playing == nil
                 hold.blockAdded(shown: shownHero, canHold: canHold)
             }
-            .onChange(of: walletManager.transactions) { _, _ in
+            // Each new history, also one that only confirms a payment that
+            // was in the pool: the transactions' == compares ids only.
+            .onChange(of: walletManager.transactions.map(\.rowState)) { _, _ in
                 balanceAtHistory = walletManager.displayBalance
                 hold.historyChanged()
             }

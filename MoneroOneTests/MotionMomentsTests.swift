@@ -255,6 +255,34 @@ final class MotionMomentsTests: XCTestCase {
         XCTAssertNil(none.historyWait)
     }
 
+    /// A block mines a payment that was in the pool. The balance lands
+    /// about 100 ms before the history, which keeps the same ids and only
+    /// confirms the payment. The trigger sees that history (its row states
+    /// change), so the hold ends there and not at the 3 s fallback.
+    func testHoldEndsAtAHistoryThatOnlyConfirmsAPoolPayment() {
+        let baseline: UInt64 = 200
+        let old = tx("old", amount: "2", confirmations: 30, height: 170)
+        let pool = tx("p", amount: "0.5", confirmations: 0, height: nil, status: .pending)
+        let mined = tx("p", amount: "0.5", confirmations: 1, height: 201)
+        var hold = MoneyArrivalHold()
+
+        // The height goes up: hold at the shown 2.
+        hold.blockAdded(shown: 2, canHold: true)
+        // The balance lands first.
+        let balance = Decimal(string: "2.5")!
+        XCTAssertEqual(hero(hold, balance: balance, history: [pool, old], baseline: baseline, balanceAtHistory: 2), 2)
+        // Then the history: the same ids, so == sees no change; the row
+        // states do.
+        XCTAssertEqual([pool, old], [mined, old])
+        XCTAssertNotEqual([pool, old].map(\.rowState), [mined, old].map(\.rowState))
+        hold.historyChanged()
+
+        XCTAssertNil(hold.held)
+        XCTAssertNil(hold.historyWait, "No 3 s fallback waits")
+        XCTAssertEqual(hero(hold, balance: balance, history: [mined, old], baseline: baseline, balanceAtHistory: balance), 2)
+        XCTAssertEqual(MoneyArrivalRules.arrivals(in: [mined, old], baseline: baseline).map(\.id), ["p"])
+    }
+
     /// A short catch-up (Connecting, then Synced) holds from Synced. A
     /// wallet with no baseline (its first sync) never holds. A moment, a
     /// new session or the 3 s timeout ends a hold.

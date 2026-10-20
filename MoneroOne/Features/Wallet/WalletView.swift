@@ -411,11 +411,19 @@ struct ActivityAsOfText: View {
 struct RecentTransactionCard: View {
     let transaction: MoneroTransaction
     let onTap: () -> Void
+    /// Draws the row again at each new confirmation (see `TransactionRowState`).
+    private let state: TransactionRowState
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     /// Payment link transactions show the link's name, amount and state.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+
+    init(transaction: MoneroTransaction, onTap: @escaping () -> Void) {
+        self.transaction = transaction
+        self.onTap = onTap
+        self.state = transaction.rowState
+    }
 
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)

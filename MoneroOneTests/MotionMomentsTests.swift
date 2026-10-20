@@ -16,6 +16,30 @@ final class MotionMomentsTests: XCTestCase {
                           confirmations: confirmations, status: status, memo: nil, blockHeight: height)
     }
 
+    // MARK: - Rows at new blocks
+
+    /// `MoneroTransaction`'s `==` compares ids only, so SwiftUI kept a row
+    /// whose input was only the transaction. The row state and the list row
+    /// change at each confirmation, so the row draws again; the row keeps
+    /// its identity, so its ring animates.
+    func testRowStateChangesAtEachConfirmation() {
+        let nine = tx("a", confirmations: 9, height: 100)
+        let ten = tx("a", confirmations: 10, height: 100)
+        XCTAssertEqual(nine, ten, "MoneroTransaction == compares ids only")
+        XCTAssertNotEqual(nine.rowState, ten.rowState)
+        XCTAssertNotEqual(ActivityListRow(.transaction(nine)), ActivityListRow(.transaction(ten)))
+        XCTAssertEqual(ActivityListRow(.transaction(nine)).id, ActivityListRow(.transaction(ten)).id)
+
+        // A send leaves the pool: "Pending" with no ring fill, then 1 of 10.
+        let pool = tx("s", .outgoing, confirmations: 0, height: nil, status: .pending)
+        let mined = tx("s", .outgoing, confirmations: 1, height: 101)
+        XCTAssertEqual(pool, mined)
+        XCTAssertNotEqual(pool.rowState, mined.rowState)
+        XCTAssertEqual(ConfirmationRing.state(of: pool), .filling(0))
+        XCTAssertEqual(ConfirmationRing.state(of: mined), .filling(0.1))
+        XCTAssertEqual(ConfirmationRing.state(of: ten), .confirmed)
+    }
+
     // MARK: - Money arrives
 
     /// Only incoming payments in a block above the baseline count. Pool

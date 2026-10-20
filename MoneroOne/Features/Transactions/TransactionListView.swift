@@ -324,8 +324,8 @@ struct TransactionListView: View {
 
     @ViewBuilder
     private func rows(_ items: [ActivityListItem]) -> some View {
-        ForEach(items) { item in
-            switch item {
+        ForEach(items.map(ActivityListRow.init)) { row in
+            switch row.item {
             case .transaction(let transaction):
                 NavigationLink {
                     ActivityDetailView(transaction: transaction)
@@ -890,6 +890,25 @@ enum TransactionListLogic {
 
 /// One Activity row: a transaction, or a link sent to us that waits to be
 /// claimed (no transaction yet).
+/// A list item with the state its row shows. `ActivityListItem`'s `==`
+/// uses `MoneroTransaction`'s, which compares ids only, so a list of items
+/// alone looked unchanged after a new block.
+struct ActivityListRow: Identifiable, Equatable {
+    let item: ActivityListItem
+    let state: TransactionRowState?
+
+    init(_ item: ActivityListItem) {
+        self.item = item
+        if case .transaction(let transaction) = item {
+            state = transaction.rowState
+        } else {
+            state = nil
+        }
+    }
+
+    var id: String { item.id }
+}
+
 enum ActivityListItem: Identifiable, Equatable {
     case transaction(MoneroTransaction)
     case linkToClaim(EnvelopeRecord)
@@ -918,11 +937,18 @@ enum ActivityListItem: Identifiable, Equatable {
 
 struct TransactionRow: View {
     let transaction: MoneroTransaction
+    /// Draws the row again at each new confirmation (see `TransactionRowState`).
+    private let state: TransactionRowState
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     /// Payment link transactions show the link's name, amount and state.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+
+    init(transaction: MoneroTransaction) {
+        self.transaction = transaction
+        self.state = transaction.rowState
+    }
 
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
@@ -1142,6 +1168,8 @@ struct TransactionAmountColumn: View {
     let isIncoming: Bool
     /// The transaction whose status shows under the amount.
     let transaction: MoneroTransaction?
+    /// Draws the status again at each new confirmation (see `TransactionRowState`).
+    private let state: TransactionRowState?
     /// A payment link's state, shown in place of the transaction's status.
     let linkStatus: PaymentLinkRowStatus?
     /// Leading when the column sits under the title (accessibility sizes).
@@ -1156,6 +1184,7 @@ struct TransactionAmountColumn: View {
         self.amount = amount
         self.isIncoming = transaction.type == .incoming
         self.transaction = transaction
+        self.state = transaction.rowState
         self.linkStatus = linkStatus
         self.alignment = alignment
     }
@@ -1166,6 +1195,7 @@ struct TransactionAmountColumn: View {
         self.amount = amount
         self.isIncoming = isIncoming
         self.transaction = nil
+        self.state = nil
         self.linkStatus = linkStatus
         self.alignment = alignment
     }

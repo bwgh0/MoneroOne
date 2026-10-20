@@ -1,6 +1,26 @@
 import SwiftUI
 
+/// The part of a transaction that its row shows and that new blocks change.
+/// `MoneroTransaction`'s `==` compares ids only, so SwiftUI kept a row view
+/// whose input was only the transaction: its status and ring stayed at the
+/// first draw until the list opened again. Row views and lists also take
+/// this value, so each new confirmation draws them again.
+struct TransactionRowState: Equatable {
+    let id: String
+    let confirmations: Int?
+    let status: MoneroTransaction.TransactionStatus
+
+    init(_ transaction: MoneroTransaction) {
+        id = transaction.id
+        confirmations = transaction.confirmations
+        status = transaction.status
+    }
+}
+
 extension MoneroTransaction {
+    /// What the transaction's row shows that new blocks change.
+    var rowState: TransactionRowState { TransactionRowState(self) }
+
     /// Whether confirmation data is still loading
     var isStatusLoading: Bool {
         confirmations == nil && status != .failed && status != .pending

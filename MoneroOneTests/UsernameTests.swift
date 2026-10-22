@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 @testable import MoneroOne
@@ -308,6 +309,22 @@ final class UsernameTests: XCTestCase {
     XCTAssertEqual(accepted.genesisHash, f["hash"])
     XCTAssertNil(store.state.pending)
     XCTAssertEqual(store.binding(walletKey: "wallet-A", network: "mainnet")?.handle, "alice")
+  }
+  func testLongestHomeNameFitsOneLineAtTheLargestStripSize() {
+    // 375 pt iPhone: 16 pt screen margins, 24 pt strip padding, a 10 pt gap
+    // and the chevron leave this width for the name.
+    let chevron = UIImage(
+      systemName: "chevron.right",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .medium))!.size.width
+    let available = 375 - 2 * 16 - 2 * 24 - 10 - chevron
+    let name = NSAttributedString(
+      string: "@mmmmmmmmmmmmmmm",
+      attributes: [
+        .font: UIFont.systemFont(ofSize: BalanceCard.usernameMaxSize, weight: .medium),
+        .kern: -0.35,
+      ])
+    XCTAssertLessThanOrEqual(name.size().width, available)
+    XCTAssertGreaterThan(BalanceCard.usernameMaxSize, 18)
   }
   func testDeletingAWalletClearsOnlyItsSavedClaim() throws {
     let store = UsernameStore(persistence: UsernameMemory())

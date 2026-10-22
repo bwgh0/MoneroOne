@@ -36,6 +36,11 @@ struct BalanceCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var balanceSize: CGFloat = 32
+    /// The username strip follows the text size up to `usernameMaxSize`.
+    @ScaledMetric(relativeTo: .body) private var usernameSize: CGFloat = 18
+    /// The largest size where a 15-character name still fits one line on
+    /// a 375 pt wide iPhone. Every name length uses the same size.
+    static let usernameMaxSize: CGFloat = 20
     /// The history chart is built on first open and then kept, closed, so
     /// reopening and switching ranges never rebuild it.
     @State private var isHistoryMounted = false
@@ -139,7 +144,7 @@ struct BalanceCard: View {
                 Button(action: onUsernameTap) {
                     HStack(spacing: 10) {
                         (Text(verbatim: "@").foregroundColor(.brand) + Text(verbatim: username.displayHandle).foregroundColor(.primary))
-                            .font(.system(size: 18, weight: .medium)).tracking(-0.35).lineLimit(1)
+                            .font(.system(size: min(usernameSize, Self.usernameMaxSize), weight: .medium)).tracking(-0.35).lineLimit(1)
                         Spacer(minLength: 0)
                         Image(systemName: "chevron.right").font(.system(size: 11, weight: .medium)).foregroundStyle(.tertiary)
                     }.padding(.horizontal, 24).frame(height: 48)

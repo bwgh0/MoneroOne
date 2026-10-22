@@ -363,7 +363,7 @@ struct WalletRowContent<Trailing: View>: View {
 
                 // The 8…8 short form, as in the Receive rows and on Android.
                 if let username = usernames.binding(walletKey: wallet.cachedPrimaryAddress ?? "", network: isTestnet ? "testnet" : "mainnet") {
-                    Text(verbatim: username.shortName)
+                    (Text(verbatim: "@").foregroundColor(.brand) + Text(verbatim: username.displayHandle))
                         .font(.caption2).lineLimit(1).foregroundStyle(.secondary)
                 } else if let address, !address.isEmpty {
                     Text(verbatim: ReceiveAddressLogic.shortAddress(address))

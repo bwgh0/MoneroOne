@@ -22,6 +22,7 @@
 		5EED00000000000000000064 /* LegacyLanguageRestoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */; };
 		5EED00000000000000000066 /* SeedEntryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000056 /* SeedEntryModelTests.swift */; };
 		7E71E0000000000000000004 /* ReviewPromptGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E71E0000000000000000003 /* ReviewPromptGateTests.swift */; };
+		5C0A1A000000000000000002 /* SupportMailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C0A1A000000000000000001 /* SupportMailTests.swift */; };
 		5EED00000000000000000065 /* legacy-vectors.json in Resources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000055 /* legacy-vectors.json */; };
 		10CA11E0D780EDC7298FD2E7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E0B762CCA121C33098 /* Localizable.xcstrings */; };
 		10CA11E013C9FC8238B72689 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */; };
@@ -250,6 +251,7 @@
 		5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyLanguageRestoreTests.swift; sourceTree = "<group>"; };
 		5EED00000000000000000056 /* SeedEntryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedEntryModelTests.swift; sourceTree = "<group>"; };
 		7E71E0000000000000000003 /* ReviewPromptGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewPromptGateTests.swift; sourceTree = "<group>"; };
+		5C0A1A000000000000000001 /* SupportMailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportMailTests.swift; sourceTree = "<group>"; };
 		5EED00000000000000000055 /* legacy-vectors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "legacy-vectors.json"; sourceTree = "<group>"; };
 		10CA11E0B762CCA121C33098 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		10CA11E0C9F28D61AAF976B6 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
@@ -477,6 +479,7 @@
 				5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */,
 				5EED00000000000000000056 /* SeedEntryModelTests.swift */,
 				7E71E0000000000000000003 /* ReviewPromptGateTests.swift */,
+				5C0A1A000000000000000001 /* SupportMailTests.swift */,
 				5EED00000000000000000055 /* legacy-vectors.json */,
 				5EED00000000000000000052 /* PolyseedCodecTests.swift */,
 				5EED00000000000000000051 /* LegacySeedCodecTests.swift */,
@@ -1082,6 +1085,7 @@
 				5EED00000000000000000064 /* LegacyLanguageRestoreTests.swift in Sources */,
 				5EED00000000000000000066 /* SeedEntryModelTests.swift in Sources */,
 				7E71E0000000000000000004 /* ReviewPromptGateTests.swift in Sources */,
+				5C0A1A000000000000000002 /* SupportMailTests.swift in Sources */,
 				5EED00000000000000000062 /* PolyseedCodecTests.swift in Sources */,
 				5EED00000000000000000061 /* LegacySeedCodecTests.swift in Sources */,
 D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,

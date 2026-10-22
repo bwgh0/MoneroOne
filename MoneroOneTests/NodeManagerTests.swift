@@ -1504,6 +1504,147 @@ final class LockDuringOpenTests: XCTestCase {
     }
 }
 
+// MARK: - State on a wallet switch
+
+/// A wallet switch shows only the next wallet's history, balance and receive
+/// address, at no moment the previous wallet's. No wallet2 runs.
+@MainActor
+final class SwitchHistoryTests: XCTestCase {
+
+    private let pin = "123456"
+    private let activeIdKey = "one.monero.walletStore.activeWalletId"
+    private let keychain = KeychainStorage()
+    private var savedSettings: SavedNodeSettings!
+    private var savedActiveId: String?
+    private var keychainWalletIds: [UUID] = []
+
+    override func setUp() async throws {
+        savedSettings = SavedNodeSettings()
+        savedActiveId = UserDefaults.standard.string(forKey: activeIdKey)
+        ["selectedNodeURL", "customNodes", "isTestnet"].forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        UserDefaults.standard.set("http://localhost:1", forKey: "selectedNodeURL")
+    }
+
+    override func tearDown() async throws {
+        for id in keychainWalletIds {
+            keychain.deleteSeed(walletId: id)
+        }
+        UserDefaults.standard.set(savedActiveId, forKey: activeIdKey)
+        savedSettings.restore()
+    }
+
+    private func wallet(_ source: WalletSource, name: String) -> WalletInfo {
+        WalletInfo(id: UUID(), name: name, source: source, createdAt: Date(), restoreHeight: 0, syncResetCount: 0,
+                   userCreatedSubaddressIndices: [], cachedPrimaryAddress: nil, cachedBalance: nil)
+    }
+
+    private func row(_ id: String) -> MoneroTransaction {
+        MoneroTransaction(id: id, type: .incoming, amount: 1, fee: 0, address: "", timestamp: Date(),
+                          confirmations: 20, status: .confirmed, memo: nil, blockHeight: 3_000_000)
+    }
+
+    /// Lets the main queue run what it holds, as `receive(on:)` sends there.
+    private func mainQueueDrained() async {
+        await withCheckedContinuation { done in DispatchQueue.main.async { done.resume() } }
+    }
+
+    /// An unlocked manager with `running` open on the wallet "From", and a
+    /// target wallet whose seed is in the Keychain under the test PIN.
+    private func managerRunning(_ running: SpyWallet) async throws -> (WalletManager, WalletInfo) {
+        let from = wallet(.viewOnly, name: "From")
+        let target = wallet(.seed(.polyseed), name: "Target")
+        keychainWalletIds.append(target.id)
+        try keychain.saveSeed("target seed words", pin: pin, walletId: target.id)
+
+        let manager = WalletManager()
+        manager.wallets = [from, target]
+        manager.activeWallet = from
+        manager.isUnlocked = true
+        manager.setCurrentPinForTesting(pin)
+        manager.openRestartedWalletForTesting = { _ in running }
+        XCTAssertTrue(manager.restartActiveWallet(with: .viewKeys(walletId: from.id, pin: pin)))
+        await manager.restartTask?.value
+        await mainQueueDrained()
+        return (manager, target)
+    }
+
+    func testASwitchShowsOnlyTheNextWalletsRows() async throws {
+        let running = SpyWallet()
+        running.transactions = [row("from-1")]
+        let (manager, target) = try await managerRunning(running)
+        XCTAssertEqual(manager.transactions.map(\.id), ["from-1"])
+
+        // The next wallet opens with its stored rows.
+        let opened = SpyWallet()
+        opened.transactions = [row("target-1")]
+        manager.openWalletForTesting = { id in
+            XCTAssertEqual(id, target.id)
+            return opened
+        }
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: target.id))
+        let shown = EventLog()
+        let watch = manager.$transactions.sink { rows in shown.add(rows.map(\.id).joined(separator: ",")) }
+        // A refresh of the previous wallet lands after the switch began.
+        running.transactions = [row("from-2"), row("from-1")]
+        await mainQueueDrained()
+        XCTAssertEqual(manager.transactions, [], "The previous wallet's rows stay off")
+
+        try await manager.completeSwitchToWallet(target: target)
+        await mainQueueDrained()
+        watch.cancel()
+
+        XCTAssertTrue(manager.moneroWallet === opened)
+        XCTAssertEqual(manager.transactions.map(\.id), ["target-1"], "The list holds only the next wallet's rows")
+        XCTAssertFalse(shown.items.contains { $0.contains("from") }, "No previous wallet row showed: \(shown.items)")
+    }
+
+    func testASwitchShowsOnlyTheNextWalletsBalanceAndAddress() async throws {
+        let running = SpyWallet()
+        running.balance = 5
+        running.unlockedBalance = 5
+        running.address = "from-address-1"
+        let (manager, target) = try await managerRunning(running)
+        XCTAssertEqual(manager.balance, 5)
+        XCTAssertEqual(manager.address, "from-address-1")
+
+        // The next wallet opens with its stored balance and receive address.
+        let opened = SpyWallet()
+        opened.balance = 3
+        opened.unlockedBalance = 2
+        opened.address = "target-address"
+        manager.openWalletForTesting = { _ in opened }
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: target.id))
+        let shown = EventLog()
+        let watches = [
+            manager.$balance.sink { shown.add("balance \($0)") },
+            manager.$unlockedBalance.sink { shown.add("unlocked \($0)") },
+            manager.$address.sink { shown.add("address \($0)") },
+        ]
+        // A refresh of the previous wallet lands after the switch began.
+        running.balance = 7
+        running.unlockedBalance = 7
+        running.address = "from-address-2"
+        await mainQueueDrained()
+        XCTAssertEqual(manager.balance, 0, "The next wallet has no cached balance yet")
+        XCTAssertEqual(manager.address, "")
+
+        try await manager.completeSwitchToWallet(target: target)
+        await mainQueueDrained()
+        watches.forEach { $0.cancel() }
+
+        XCTAssertTrue(manager.moneroWallet === opened)
+        XCTAssertEqual(manager.balance, 3)
+        XCTAssertEqual(manager.unlockedBalance, 2)
+        XCTAssertEqual(manager.address, "target-address")
+        // The switch leaves the unlocked balance as it was until the next
+        // wallet binds, so only the late value counts there.
+        let previous = shown.items.filter { ["balance 5", "balance 7", "unlocked 7"].contains($0) || $0.contains("from") }
+        XCTAssertEqual(previous, [], "No previous wallet value showed: \(shown.items)")
+    }
+}
+
 // MARK: - Digest Auth
 
 final class HTTPDigestTests: XCTestCase {

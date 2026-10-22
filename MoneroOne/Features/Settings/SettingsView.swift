@@ -1,3 +1,4 @@
+import MessageUI
 import SwiftUI
 
 enum AppearanceMode: Int, CaseIterable {
@@ -33,8 +34,33 @@ struct SettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var showResetSyncConfirmation = false
     @State private var showDiagnosticShare = false
+    @State private var showMailComposer = false
+    @State private var showNoMailApp = false
     /// The Language row's value; nil for System.
     @State private var languageChoice = AppLanguageSetting.standard.choice
+
+    @Environment(\.openURL) private var openURL
+
+    /// Apple Mail's composer when it has an account, else the default
+    /// mail app, else one dialog with the address.
+    private func contactSupport() {
+        let mailto = SupportMail.mailtoURL(body: SupportMail.currentBody)
+        let canOpenMailto = mailto.map { UIApplication.shared.canOpenURL($0) } ?? false
+        switch SupportMail.route(
+            canSendMail: MFMailComposeViewController.canSendMail(),
+            canOpenMailto: canOpenMailto
+        ) {
+        case .composer:
+            showMailComposer = true
+        case .mailApp:
+            guard let mailto else { return }
+            openURL(mailto) { opened in
+                if !opened { showNoMailApp = true }
+            }
+        case .noMailApp:
+            showNoMailApp = true
+        }
+    }
 
     private var syncStatusText: String {
         switch walletManager.syncState {
@@ -250,6 +276,30 @@ struct SettingsView: View {
                 // Troubleshooting
                 Section("Troubleshooting") {
                     Button {
+                        contactSupport()
+                    } label: {
+                        SettingsRow(
+                            icon: "envelope.fill",
+                            title: "Contact Support",
+                            color: .blue
+                        )
+                    }
+                    .accessibilityHint("Opens a mail to support with the app version and iPhone model")
+                    .accessibilityIdentifier("settings.contactSupportRow")
+                    .sheet(isPresented: $showMailComposer) {
+                        MailComposeView(body: SupportMail.currentBody)
+                            .ignoresSafeArea()
+                    }
+                    .confirmationDialog("No Mail App", isPresented: $showNoMailApp, titleVisibility: .visible) {
+                        Button("Copy Address") {
+                            UIPasteboard.general.string = SupportMail.address
+                            HapticFeedback.shared.softTick()
+                        }
+                    } message: {
+                        Text("Write to support@monero.one with version \(SupportMail.appVersion).")
+                    }
+
+                    Button {
                         showDiagnosticShare = true
                     } label: {
                         SettingsRow(
@@ -422,6 +472,130 @@ struct SettingsRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(title))
+    }
+}
+
+/// The mail behind Contact Support. The body names the app version, the
+/// iOS version and the model code, so support knows the build and the
+/// phone. It holds no wallet, node or address data.
+enum SupportMail {
+    static let address = "support@monero.one"
+    /// English in every language, so support can filter on it.
+    static let subject = "Monero One iOS - Feedback"
+
+    enum Route: Equatable {
+        /// Apple Mail has an account: the system composer.
+        case composer
+        /// The default mail app, through a mailto: link.
+        case mailApp
+        /// No app opens mailto: one dialog with the address.
+        case noMailApp
+    }
+
+    static func route(canSendMail: Bool, canOpenMailto: Bool) -> Route {
+        if canSendMail { return .composer }
+        return canOpenMailto ? .mailApp : .noMailApp
+    }
+
+    /// Two empty lines to write in, then the facts (as on Android).
+    static func body(
+        version: String, build: String, systemName: String, systemVersion: String, model: String
+    ) -> String {
+        [
+            "", "", "----------",
+            "Monero One \(version) (\(build))",
+            "\(systemName) \(systemVersion)",
+            model
+        ].joined(separator: "\n")
+    }
+
+    static func mailtoURL(body: String) -> URL? {
+        // urlQueryAllowed keeps & = + ? #, which would end a value early.
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=+?#")
+        func encode(_ value: String) -> String {
+            value.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        }
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = address
+        components.percentEncodedQueryItems = [
+            URLQueryItem(name: "subject", value: encode(subject)),
+            URLQueryItem(name: "body", value: encode(body))
+        ]
+        return components.url
+    }
+
+    private static var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    private static var build: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+    }
+
+    /// "1.1.0 (11)"
+    static var appVersion: String { "\(version) (\(build))" }
+
+    /// The model code ("iPhone18,1"), as in the diagnostic log.
+    static var modelCode: String {
+        #if targetEnvironment(simulator)
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] {
+            return simulated
+        }
+        #endif
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        return withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) }
+        }
+    }
+
+    @MainActor static var currentBody: String {
+        body(
+            version: version,
+            build: build,
+            systemName: UIDevice.current.systemName,
+            systemVersion: UIDevice.current.systemVersion,
+            model: modelCode
+        )
+    }
+}
+
+/// The system mail composer, filled in with the support mail.
+struct MailComposeView: UIViewControllerRepresentable {
+    let body: String
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onFinish: { dismiss() })
+    }
+
+    func makeUIViewController(context: Context) -> MFMailComposeViewController {
+        let composer = MFMailComposeViewController()
+        composer.mailComposeDelegate = context.coordinator
+        composer.setToRecipients([SupportMail.address])
+        composer.setSubject(SupportMail.subject)
+        composer.setMessageBody(body, isHTML: false)
+        return composer
+    }
+
+    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
+
+    final class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
+        let onFinish: () -> Void
+
+        init(onFinish: @escaping () -> Void) {
+            self.onFinish = onFinish
+        }
+
+        func mailComposeController(
+            _ controller: MFMailComposeViewController,
+            didFinishWith result: MFMailComposeResult,
+            error: Error?
+        ) {
+            onFinish()
+        }
     }
 }
 

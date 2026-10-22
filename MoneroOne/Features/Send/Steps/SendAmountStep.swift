@@ -7,7 +7,9 @@ struct SendAmountStep: View {
     let recipientAddress: String
     /// The OpenAlias name, when the recipient came from one.
     var recipientDisplayName: String? = nil
-    var usernameAmountLimit: Decimal? = nil
+    /// A username recipient's trust level; all but published limit the amount.
+    var usernameTrust: UsernameTrust? = nil
+    private var usernameAmountLimit: Decimal? { usernameTrust?.amountLimit }
     let unlockedBalance: Decimal
     let priceService: PriceService
     /// Where a filled-in amount came from; the step says so above the amount.
@@ -36,8 +38,8 @@ struct SendAmountStep: View {
                 VStack(spacing: 16) {
                     Spacer(minLength: 12)
 
-                    if let limit = usernameAmountLimit {
-                        Text("Username records are out of date. Payments are limited to \(XMRFormatter.format(limit)) XMR until they refresh.")
+                    if let message = usernameTrust?.limitMessage {
+                        Text(message)
                             .font(.caption).foregroundStyle(.secondary)
                     }
 
@@ -170,10 +172,11 @@ struct SendAmountStep: View {
                             HapticFeedback.shared.softTick()
                         }
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.brand)
+                        // Off while a username limit applies: gray, as a disabled label.
+                        .foregroundStyle(usernameAmountLimit == nil ? Color.brand : Color.gray)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.brand.opacity(0.15))
+                        .background((usernameAmountLimit == nil ? Color.brand : Color.gray).opacity(0.15))
                         .clipShape(Capsule())
                         .accessibilityLabel("Send maximum amount")
                         .disabled(usernameAmountLimit != nil)

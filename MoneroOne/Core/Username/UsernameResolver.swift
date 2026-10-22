@@ -6,7 +6,20 @@ import Security
 
 enum UsernameTrust: String, Codable {
   case published, pending, stale, expired
-  var amountLimit: Decimal? { self == .stale || self == .expired ? Decimal(string: "0.1") : nil }
+  /// Every record that is not checked against a fresh public log gets the
+  /// same limit: stale (6 to 48 h), expired (over 48 h) and pending.
+  var amountLimit: Decimal? { self == .published ? nil : Decimal(string: "0.1") }
+  /// Why the limit applies. Amount and Send show it.
+  var limitMessage: String? {
+    switch self {
+    case .published: return nil
+    case .pending:
+      return String(
+        localized: "This username is not in the public log yet. The payment limit is 0.1 XMR.")
+    case .stale, .expired:
+      return String(localized: "Username records are out of date. The payment limit is 0.1 XMR.")
+    }
+  }
   var text: String {
     switch self {
     case .published: return "Signature checked"
@@ -33,10 +46,10 @@ enum UsernameSendRecheck {
         return String(
           localized: "The username changed since your review. Look it up again before sending.")
       }
-      if let limit = checked.usernameTrust?.amountLimit,
+      if let trust = checked.usernameTrust, let limit = trust.amountLimit,
         isSendingAll || (amount ?? .greatestFiniteMagnitude) > limit
       {
-        return String(localized: "Username records are out of date. The payment limit is 0.1 XMR.")
+        return trust.limitMessage
       }
       return nil
     }

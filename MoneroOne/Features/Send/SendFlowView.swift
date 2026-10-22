@@ -347,7 +347,7 @@ struct SendFlowView: View {
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
                 recipientDisplayName: aliasSummary?.name.display,
-                usernameAmountLimit: aliasSummary?.usernameTrust?.amountLimit,
+                usernameTrust: aliasSummary?.usernameTrust,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,

@@ -143,6 +143,22 @@ final class UsernameResolutionTests: XCTestCase {
     XCTAssertNil(recheck(.published, amount: "5"))
     XCTAssertNil(recheck(.published, amount: "5", all: true))
   }
+  func testPendingGetsTheLimitWithItsOwnMessage() {
+    let pending = "This username is not in the public log yet. The payment limit is 0.1 XMR."
+    let stale = "Username records are out of date. The payment limit is 0.1 XMR."
+    XCTAssertNil(UsernameTrust.published.amountLimit)
+    XCTAssertNil(UsernameTrust.published.limitMessage)
+    for trust in [UsernameTrust.pending, .stale, .expired] {
+      XCTAssertEqual(trust.amountLimit, Decimal(string: "0.1"), "\(trust)")
+    }
+    XCTAssertEqual(UsernameTrust.pending.limitMessage, pending)
+    XCTAssertEqual(UsernameTrust.stale.limitMessage, stale)
+    XCTAssertEqual(UsernameTrust.expired.limitMessage, stale)
+    // Published at review, pending at broadcast: the pending limit applies.
+    XCTAssertEqual(recheck(.pending, amount: "0.5"), pending)
+    XCTAssertEqual(recheck(.pending, amount: "0.01", all: true), pending)
+    XCTAssertNil(recheck(.pending, amount: "0.1"))
+  }
 }
 
 private final class ReceiptMemory: UsernameResolutionPersistence {

@@ -15,6 +15,8 @@ struct OpenAliasSummary: Equatable {
     var recipientName: String? = nil
     /// The sanitized `tx_description` of the record.
     var txDescription: String? = nil
+    var usernameTrust: UsernameTrust? = nil
+    var verificationText: String { usernameTrust?.text ?? dnssec.text }
 }
 
 extension OpenAliasSummary {
@@ -47,7 +49,7 @@ extension OpenAliasSummary {
 
     /// VoiceOver value of the recipient card: the DNSSEC word and the pin.
     var spokenStatus: String {
-        [dnssec.text, pinText].compactMap { $0 }.joined(separator: ", ")
+        [verificationText, pinText].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -118,7 +120,7 @@ final class OpenAliasLookupModel: ObservableObject {
     var summary: OpenAliasSummary? {
         guard let name, case .resolved(let result, let pin) = phase else { return nil }
         return OpenAliasSummary(name: name, address: result.address, dnssec: result.dnssec, pin: pin,
-                                recipientName: result.recipientName, txDescription: result.txDescription)
+                                recipientName: result.recipientName, txDescription: result.txDescription, usernameTrust: result.usernameTrust)
     }
 
     var isLooking: Bool { phase == .looking }
@@ -270,7 +272,7 @@ final class OpenAliasLookupModel: ObservableObject {
         let resolver = self.resolver
         let network = self.network
         work = Task { [weak self] in
-            let result = await resolver.resolve(lookupName) { address in
+            let result = await resolver.resolve(lookupName, network: network) { address in
                 OpenAliasLookupModel.check(address, network: network)
             }
             guard !Task.isCancelled, let self, self.generation == expected else { return }
@@ -288,7 +290,7 @@ final class OpenAliasLookupModel: ObservableObject {
             // spring: short, with no visible bounce.
             setPhase(.resolved(found, pin), animation: .spring(response: 0.3, dampingFraction: 0.85))
             resolvedFeedback()
-            announce(String(localized: "Address found for \(name.display)") + ". " + found.dnssec.text)
+            announce(String(localized: "Address found for \(name.display)") + ". " + found.verificationText)
         case .failure(let failure):
             setPhase(.failed(failure))
             announce(failure.message)
@@ -309,6 +311,10 @@ final class OpenAliasLookupModel: ObservableObject {
 extension OpenAliasFailure {
     var message: String {
         switch self {
+        case .usernameUnavailable: return String(localized: "This username is unavailable")
+        case .usernameVerification: return String(localized: "Username signature check failed. Do not send to this address.")
+        case .usernameStale: return String(localized: "The public username records are too old for a first payment. Try again later.")
+        case .usernameNotConfigured: return String(localized: "Username payments aren't available yet")
         case .noRecord: return String(localized: "No Monero address for this name")
         case .severalAddresses: return String(localized: "This name lists more than one Monero address")
         case .paymentID: return String(localized: "This name uses a payment ID, which Monero no longer supports. Ask the recipient for a subaddress or an integrated address.")
@@ -355,14 +361,15 @@ extension DnssecStatus {
 /// open lock, with the text in the label color.
 struct DnssecLine: View {
     let status: DnssecStatus
+    var usernameTrust: UsernameTrust? = nil
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: status == .valid ? "lock.fill" : "lock.open.fill")
-                .foregroundStyle(status == .valid ? Color.secondary : Color.yellow)
+            Image(systemName: usernameTrust != nil ? (usernameTrust == .published ? "checkmark.shield" : "clock") : status == .valid ? "lock.fill" : "lock.open.fill")
+                .foregroundStyle(usernameTrust == .published || (usernameTrust == nil && status == .valid) ? Color.secondary : Color.yellow)
                 .accessibilityHidden(true)
-            Text(status.text)
-                .foregroundStyle(status == .valid ? Color.secondary : Color.primary)
+            Text(usernameTrust?.text ?? status.text)
+                .foregroundStyle(usernameTrust == .published || (usernameTrust == nil && status == .valid) ? Color.secondary : Color.primary)
         }
         .font(.caption)
         .accessibilityElement(children: .combine)
@@ -599,18 +606,18 @@ struct OpenAliasResolvedLines: View {
             if summary.recipientName != nil {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 6) {
-                        DnssecLine(status: summary.dnssec)
+                        DnssecLine(status: summary.dnssec, usernameTrust: summary.usernameTrust)
                         Text(verbatim: "·")
                             .foregroundStyle(.tertiary)
                         address
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        DnssecLine(status: summary.dnssec)
+                        DnssecLine(status: summary.dnssec, usernameTrust: summary.usernameTrust)
                         address
                     }
                 }
             } else {
-                DnssecLine(status: summary.dnssec)
+                DnssecLine(status: summary.dnssec, usernameTrust: summary.usernameTrust)
             }
             pinLine
         }
@@ -651,7 +658,7 @@ struct OpenAliasReviewNotes: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            DnssecLine(status: summary.dnssec)
+            DnssecLine(status: summary.dnssec, usernameTrust: summary.usernameTrust)
             if summary.pin == .none {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Image(systemName: "info.circle")

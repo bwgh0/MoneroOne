@@ -3180,6 +3180,17 @@ class WalletManager: ObservableObject {
 
     // MARK: - Subaddresses
 
+    /// Local ownership key only; never sent to the registry. The primary
+    /// address survives rescans, which deliberately replace the cache ID.
+    var usernameWalletKey: String { activeWallet?.cachedPrimaryAddress ?? "" }
+    var usernameNetwork: String { isTestnet ? "testnet" : "mainnet" }
+
+    func signUsername(_ message: String, subaddress: String, expectedSession: UUID) throws -> String {
+        guard isUnlocked, walletSessionId == expectedSession, !isHardwareWallet, !isViewOnly,
+              let wallet = moneroWallet else { throw UsernameFailure.walletChanged }
+        return try wallet.signUsername(message, subaddress: subaddress)
+    }
+
     /// Create a new subaddress for receiving payments
     /// - Returns: The newly created SubAddress, or nil if creation failed
     func createSubaddress() async -> MoneroKit.SubAddress? {

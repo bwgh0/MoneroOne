@@ -776,6 +776,11 @@ class MoneroWallet: ObservableObject {
 
     // MARK: - Subaddresses
 
+    func signUsername(_ message: String, subaddress: String) throws -> String {
+        guard let kit else { throw UsernameFailure.walletChanged }
+        return try kit.signMessage(message, subaddress: subaddress)
+    }
+
     /// Create a new subaddress for receiving payments
     /// - Returns: The newly created SubAddress, or nil if creation failed
     func createSubaddress() -> MoneroKit.SubAddress? {

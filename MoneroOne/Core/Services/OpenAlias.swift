@@ -22,6 +22,9 @@ enum RecipientInput: Equatable {
 struct OpenAliasName: Equatable {
     let display: String
     let query: String
+    var isUsername: Bool {
+        query.hasSuffix(".monero.one") && !OpenAlias.isOperatorName(display)
+    }
 }
 
 enum AddressCheck {
@@ -38,6 +41,7 @@ enum DnssecStatus: Equatable {
 }
 
 enum OpenAliasFailure: Error, Equatable {
+    case usernameUnavailable, usernameVerification, usernameStale, usernameNotConfigured
     case noRecord
     case severalAddresses
     case paymentID
@@ -58,6 +62,8 @@ struct OpenAliasResult: Equatable {
     /// The sanitized `tx_description`: a row on the review step.
     var txDescription: String? = nil
     let dnssec: DnssecStatus
+    var usernameTrust: UsernameTrust? = nil
+    var verificationText: String { usernameTrust?.text ?? dnssec.text }
 }
 
 enum PinState: Equatable {
@@ -83,8 +89,13 @@ enum OpenAlias {
         let hasDot = text.contains(".")
         let hasAt = text.contains("@")
         if !hasDot && !hasAt { return .address(text) }
-        if text.hasPrefix("@") && !hasDot { return .reserved }
         guard text.unicodeScalars.allSatisfy({ (0x21...0x7E).contains($0.value) }) else { return .invalidName }
+
+        if !isOperatorName(text.lowercased()), let local = UsernameRecipient.localPart(text) {
+            if isOperatorName(local + "@monero.one") { return .reserved }
+            return .name(OpenAliasName(display: "@" + local, query: local + ".monero.one"))
+        }
+        if text.hasPrefix("@") { return .invalidName }
 
         var display = text.lowercased()
         if display.hasSuffix(".") { display.removeLast() }

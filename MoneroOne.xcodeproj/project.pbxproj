@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CAFE04000000000000000002 /* username-resolution.json in Resources */ = {isa = PBXBuildFile; fileRef = CAFE04000000000000000001 /* username-resolution.json */; };
+		CAFE03000000000000000002 /* UsernameResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE03000000000000000001 /* UsernameResolutionTests.swift */; };
+		CAFE02000000000000000002 /* UsernameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE02000000000000000001 /* UsernameResolver.swift */; };
+		CAFE01000000000000000002 /* UsernameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE01000000000000000001 /* UsernameTests.swift */; };
 		4D07100000000000000000D2 /* MotionMomentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000D1 /* MotionMomentsTests.swift */; };
 		4D07100000000000000000C2 /* MoneyArrival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000C1 /* MoneyArrival.swift */; };
 		4D07100000000000000000B2 /* ConfirmationRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000B1 /* ConfirmationRing.swift */; };
@@ -199,6 +203,8 @@
 		9A7E1C0D000C00000000B00C /* EnvelopeLinkV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */; };
 		9A7E1C0D000D00000000B00D /* PaymentLinkActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000D00000000F00D /* PaymentLinkActivity.swift */; };
 		9A7E1C0D000E00000000B00E /* OpenPaymentLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000E00000000F00E /* OpenPaymentLinks.swift */; };
+		CF030EEFC593E8E7B61A3B67 /* UsernameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D7CD8D011014EFE4EDBD3A /* UsernameStore.swift */; };
+		C34C226794D657B24E5C7D17 /* UsernameRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8547681C25FE51B41D63FE3 /* UsernameRegistry.swift */; };
 		C07CB92CB0CBFFB79D8779D3 /* OAHCore in Frameworks */ = {isa = PBXBuildFile; productRef = DCC89ED4C7035690F7058744 /* OAHCore */; };
 /* End PBXBuildFile section */
 
@@ -241,6 +247,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		CAFE04000000000000000001 /* username-resolution.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "MoneroOneTests/Fixtures/username-resolution.json"; sourceTree = SOURCE_ROOT; };
+		CAFE03000000000000000001 /* UsernameResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOneTests/UsernameResolutionTests.swift"; sourceTree = SOURCE_ROOT; };
+		CAFE02000000000000000001 /* UsernameResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Core/Username/UsernameResolver.swift"; sourceTree = SOURCE_ROOT; };
+		CAFE01000000000000000001 /* UsernameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameTests.swift; sourceTree = "<group>"; };
 		4D07100000000000000000D1 /* MotionMomentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionMomentsTests.swift; sourceTree = "<group>"; };
 		4D07100000000000000000C1 /* MoneyArrival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyArrival.swift; sourceTree = "<group>"; };
 		4D07100000000000000000B1 /* ConfirmationRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationRing.swift; sourceTree = "<group>"; };
@@ -436,6 +446,8 @@
 		9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvelopeLinkV2.swift; sourceTree = "<group>"; };
 		9A7E1C0D000D00000000F00D /* PaymentLinkActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkActivity.swift; sourceTree = "<group>"; };
 		9A7E1C0D000E00000000F00E /* OpenPaymentLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenPaymentLinks.swift; sourceTree = "<group>"; };
+		72D7CD8D011014EFE4EDBD3A /* UsernameStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Core/Username/UsernameStore.swift"; sourceTree = SOURCE_ROOT; };
+		E8547681C25FE51B41D63FE3 /* UsernameRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Core/Username/UsernameRegistry.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -489,6 +501,9 @@
 				5EED00000000000000000054 /* LegacyLanguageRestoreTests.swift */,
 				5EED00000000000000000056 /* SeedEntryModelTests.swift */,
 				7E71E0000000000000000003 /* ReviewPromptGateTests.swift */,
+				CAFE01000000000000000001 /* UsernameTests.swift */,
+				CAFE04000000000000000001 /* username-resolution.json */,
+				CAFE03000000000000000001 /* UsernameResolutionTests.swift */,
 				4D07100000000000000000D1 /* MotionMomentsTests.swift */,
 				5EED00000000000000000055 /* legacy-vectors.json */,
 				5EED00000000000000000052 /* PolyseedCodecTests.swift */,
@@ -681,6 +696,9 @@
 		453FE5EA1C7EBE179675DED5 = {
 			isa = PBXGroup;
 			children = (
+				E8547681C25FE51B41D63FE3 /* UsernameRegistry.swift */,
+				CAFE02000000000000000001 /* UsernameResolver.swift */,
+				72D7CD8D011014EFE4EDBD3A /* UsernameStore.swift */,
 				DA37D8A22F64D8D5D63F9F81 /* MoneroOne */,
 				02EFD0FFD04912A60D8FC21D /* MoneroOneTests */,
 				3C26A5AEC460F471A97E7944 /* MoneroOneUITests */,
@@ -1077,6 +1095,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5EED00000000000000000065 /* legacy-vectors.json in Resources */,
+				CAFE04000000000000000002 /* username-resolution.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1101,6 +1120,8 @@
 				5EED00000000000000000064 /* LegacyLanguageRestoreTests.swift in Sources */,
 				5EED00000000000000000066 /* SeedEntryModelTests.swift in Sources */,
 				7E71E0000000000000000004 /* ReviewPromptGateTests.swift in Sources */,
+				CAFE01000000000000000002 /* UsernameTests.swift in Sources */,
+				CAFE03000000000000000002 /* UsernameResolutionTests.swift in Sources */,
 				4D07100000000000000000D2 /* MotionMomentsTests.swift in Sources */,
 				5EED00000000000000000062 /* PolyseedCodecTests.swift in Sources */,
 				5EED00000000000000000061 /* LegacySeedCodecTests.swift in Sources */,
@@ -1159,6 +1180,9 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C34C226794D657B24E5C7D17 /* UsernameRegistry.swift in Sources */,
+				CAFE02000000000000000002 /* UsernameResolver.swift in Sources */,
+				CF030EEFC593E8E7B61A3B67 /* UsernameStore.swift in Sources */,
 				5EED00000000000000000028 /* SeedPhraseEntryView.swift in Sources */,
 				5EED00000000000000000027 /* SeedWordField.swift in Sources */,
 				5EED00000000000000000026 /* SeedEntryModel.swift in Sources */,

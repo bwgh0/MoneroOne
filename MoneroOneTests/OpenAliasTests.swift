@@ -263,8 +263,20 @@ final class OpenAliasTests: XCTestCase {
     }
 
     func testClassifyReserved() {
-        for input in ["@joe", "joe@monero.one", "monero.one", "a.b.monero.one", "MONERO.ONE"] {
+        for input in ["monero.one", "a.b.monero.one", "MONERO.ONE"] {
             XCTAssertEqual(OpenAlias.classify(input), .reserved, input)
+        }
+    }
+
+    func testUsernameFormsRouteToTheSignatureVerifier() {
+        for input in ["@Joe", "joe@monero.one", "joe.monero.one"] {
+            assertName(input, query: "joe.monero.one", display: "@joe")
+            if case .name(let name) = OpenAlias.classify(input) { XCTAssertTrue(name.isUsername) }
+        }
+        assertName("@work.Joe", query: "work.joe.monero.one", display: "@work.joe")
+        assertName("@xmr_garden_club", query: "xmr_garden_club.monero.one", display: "@xmr_garden_club")
+        for invalid in ["@jo", "@abcdefghijklmnop", "@joe__smith", "@jóe", "@@joe", "@joe/path"] {
+            XCTAssertEqual(OpenAlias.classify(invalid), .invalidName)
         }
     }
 
@@ -273,9 +285,8 @@ final class OpenAliasTests: XCTestCase {
         assertName("donate@monero.one", query: "donate.monero.one", display: "donate@monero.one")
         assertName(" DONATE@Monero.One ", query: "donate.monero.one", display: "donate@monero.one")
         assertName("donate@monero.one.", query: "donate.monero.one", display: "donate@monero.one")
-        // Every other monero.one name stays reserved, the dotted form too.
-        for input in ["joe@monero.one", "donate.monero.one", "donate@pay.monero.one", "xdonate@monero.one",
-                      "donatex@monero.one", "@donate"] {
+        // Operator names still require the explicit external form.
+        for input in ["donate.monero.one", "donate@pay.monero.one", "@donate"] {
             XCTAssertEqual(OpenAlias.classify(input), .reserved, input)
         }
     }
@@ -313,7 +324,7 @@ final class OpenAliasTests: XCTestCase {
 
     func testClassifyInvalidNames() {
         let inputs = [
-            "@getmonero.org", "joe@", "a@b@c.com",
+            "@ab.org", "joe@", "a@b@c.com",
             "d\u{043E}nate@getmonero.org",  // Cyrillic "о"
             "-pay.example.com", "a..b.com", "pay.example.123",
             "pay.onion", "joe@localhost",
@@ -788,16 +799,16 @@ final class OpenAliasTests: XCTestCase {
     func testModelRejections() async {
         let stub = KitStub(json: Fixture.answer(records: Fixture.getmoneroRecords))
         let (model, _) = makeModel(stub)
-        model.textChanged("joe@monero.one")
+        model.textChanged("monero.one")
         XCTAssertEqual(model.phase, .pendingRejection(.reserved))
         await waitUntil { model.phase == .rejected(.reserved) }
         XCTAssertEqual(model.phase, .rejected(.reserved))
-        model.submit("@joe")
+        model.submit("a.b.monero.one")
         XCTAssertEqual(model.phase, .rejected(.reserved))
         model.submit("joe@")
         XCTAssertEqual(model.phase, .rejected(.invalidName))
         // A red row on screen changes in place.
-        model.textChanged("@joe")
+        model.textChanged("a.b.monero.one")
         XCTAssertEqual(model.phase, .rejected(.reserved))
         XCTAssertEqual(stub.calls, 0)
     }

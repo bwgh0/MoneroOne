@@ -1,0 +1,259 @@
+import Foundation
+import OAHCore
+
+enum UsernameFailure: Error, LocalizedError {
+  case storage, walletChanged, unavailable, noFreeClaim, notConfigured, verification, pendingClaim
+  case server(String)
+  var errorDescription: String? {
+    switch self {
+    case .storage: return "Your username could not be saved securely. Unlock the app and try again."
+    case .walletChanged:
+      return "The wallet changed. Open this flow from the wallet you want to use."
+    case .unavailable: return "This username is unavailable."
+    case .noFreeClaim: return "A free username isn't available on this phone."
+    case .notConfigured: return "Username registration isn't available yet."
+    case .verification: return "The username response could not be verified. Please try again."
+    case .pendingClaim:
+      return "Finish checking the previous claim before choosing another username."
+    case .server(let message): return message
+    }
+  }
+}
+
+struct UsernameConfiguration {
+  let url: URL
+  let registrarKey: String
+  let rulesHash: String
+  /// The registry has no real device verifier yet. This explicit local
+  /// development configuration cannot enable public claims in a release.
+  static var current: UsernameConfiguration? {
+    #if DEBUG
+      let env = ProcessInfo.processInfo.environment
+      guard let raw = env["USERNAME_REGISTRY_URL"], let url = URL(string: raw),
+        url.host == "localhost", ["http", "https"].contains(url.scheme ?? ""),
+        url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+        let key = env["USERNAME_REGISTRAR_KEY"], key.count == 64,
+        let rules = env["USERNAME_RULES_HASH"], rules.count == 64
+      else { return nil }
+      return UsernameConfiguration(url: url, registrarKey: key, rulesHash: rules)
+    #else
+      return nil
+    #endif
+  }
+}
+
+enum UsernameRules {
+  static func normalize(_ input: String) throws -> String {
+    let value = try OAHCore.call(["op": "validate", "handle": input])
+    guard let handle = value["handle"] as? String else { throw UsernameFailure.verification }
+    return handle
+  }
+  static func message(for error: Error) -> String {
+    guard let code = (error as? OAHError)?.code else { return error.localizedDescription }
+    switch code {
+    case "handle.too_short": return "Use at least 3 characters."
+    case "handle.too_long": return "Use no more than 15 characters."
+    case "handle.first_not_letter": return "Start with a letter."
+    case "handle.double_underscore": return "Use only one _ in a row."
+    case "handle.blocked": return "This username is reserved to protect users from scams."
+    default: return "Use only a–z, 0–9 and _."
+    }
+  }
+}
+
+final class UsernameSessionDelegate: NSObject, URLSessionTaskDelegate {
+  func urlSession(
+    _ session: URLSession, task: URLSessionTask,
+    willPerformHTTPRedirection response: HTTPURLResponse,
+    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void
+  ) {
+    completionHandler(nil)
+  }
+}
+
+@MainActor
+final class UsernameRegistry {
+  private let configuration: UsernameConfiguration
+  private let session: URLSession
+  init(configuration: UsernameConfiguration, session: URLSession? = nil) {
+    self.configuration = configuration
+    let options = URLSessionConfiguration.ephemeral
+    options.timeoutIntervalForRequest = 20
+    options.timeoutIntervalForResource = 25
+    options.urlCache = nil
+    self.session =
+      session
+      ?? URLSession(configuration: options, delegate: UsernameSessionDelegate(), delegateQueue: nil)
+  }
+
+  private func request(_ path: String, body: [String: Any]? = nil) async throws -> Data {
+    let url = configuration.url.appendingPathComponent("v1").appendingPathComponent(path)
+    var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+    if let body {
+      request.httpMethod = "POST"
+      request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+      request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    }
+    let (data, response) = try await session.data(for: request)
+    guard let response = response as? HTTPURLResponse, data.count <= 1_048_576 else {
+      throw UsernameFailure.verification
+    }
+    guard (200..<300).contains(response.statusCode) else {
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+      let code = (object?["error"] as? [String: Any])?["code"] as? String ?? ""
+      if code == "handle.not_found" { throw RegistryNotFound() }
+      if code == "device.slot_used" { throw UsernameFailure.noFreeClaim }
+      if code == "name.unavailable" { throw UsernameFailure.unavailable }
+      if code == "handle.reserved" || code == "handle.blocked" {
+        throw UsernameFailure.server("This username is reserved to protect users from scams.")
+      }
+      if code == "nonce.invalid" { throw ExpiredClaim() }
+      throw UsernameFailure.server(
+        "The username service couldn't complete the request. Please try again.")
+    }
+    return data
+  }
+  private struct RegistryNotFound: Error {}
+  private struct ExpiredClaim: Error {}
+  private func object(_ data: Data) throws -> [String: Any] {
+    guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      throw UsernameFailure.verification
+    }
+    return value
+  }
+
+  /// Called only after the user agrees to claim. No preflight runs on Home
+  /// or Welcome, and no spend key leaves the wallet's existing signer.
+  func claim(
+    displayHandle: String, walletKey: String, network: String, store: UsernameStore,
+    makeSubaddress: () async throws -> String,
+    sign: (String, String) throws -> String,
+    isCurrentWallet: () -> Bool
+  ) async throws -> UsernameBinding {
+    guard isCurrentWallet(), !walletKey.isEmpty else { throw UsernameFailure.walletChanged }
+    guard !store.storageError else { throw UsernameFailure.storage }
+    try store.beginClaim()
+    defer { store.endClaim() }
+    let handle = try UsernameRules.normalize(displayHandle)
+    if let pending = store.state.pending {
+      guard pending.walletKey == walletKey, pending.network == network, pending.handle == handle
+      else {
+        throw UsernameFailure.pendingClaim
+      }
+      return try await submit(pending, store: store)
+    }
+    guard isCurrentWallet(), !store.storageError else { throw UsernameFailure.walletChanged }
+    let info = try object(await request("info"))
+    guard info["registrar_key"] as? String == configuration.registrarKey,
+      info["rules_hash"] as? String == configuration.rulesHash,
+      info["network"] as? String == network, info["zone"] as? String == "monero.one",
+      info["open"] as? Bool == true
+    else { throw UsernameFailure.verification }
+    let rulesData = try await request("rules")
+    guard let rules = String(data: rulesData, encoding: .utf8), isCurrentWallet() else {
+      throw UsernameFailure.walletChanged
+    }
+    do {
+      _ = try await request("handles/" + handle)
+      throw UsernameFailure.unavailable
+    } catch is RegistryNotFound {}
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
+    let subaddress = try await makeSubaddress()
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
+    let nonceReply = try object(
+      await request("nonce", body: ["handle": handle, "subaddress": subaddress]))
+    guard let nonce = nonceReply["nonce"] as? String, isCurrentWallet() else {
+      throw UsernameFailure.walletChanged
+    }
+    let unsigned = try OAHCore.call([
+      "op": "prepare_claim", "handle": handle, "subaddress": subaddress,
+      "nonce": nonce, "network": network, "rules": rules, "rules_hash": configuration.rulesHash,
+    ])
+    guard let bytes = unsigned["record"] as? String, let hash = unsigned["record_hash"] as? String,
+      let message = unsigned["signing_message"] as? String
+    else { throw UsernameFailure.verification }
+    let signature = try sign(message, subaddress)
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
+    let pending = PendingUsernameClaim(
+      walletKey: walletKey, network: network, handle: handle,
+      displayHandle: displayHandle, subaddress: subaddress, nonce: nonce, unsignedRecord: bytes,
+      recordHash: hash, ownerSignature: signature, registrarKey: configuration.registrarKey,
+      rules: rules, rulesHash: configuration.rulesHash)
+    // Persist before POST: if the reply is lost, check this exact signed
+    // genesis on the next attempt instead of consuming another claim.
+    try store.savePending(pending)
+    return try await submit(pending, store: store)
+  }
+
+  private func submit(_ pending: PendingUsernameClaim, store: UsernameStore) async throws
+    -> UsernameBinding
+  {
+    guard pending.registrarKey == configuration.registrarKey,
+      pending.rulesHash == configuration.rulesHash
+    else {
+      throw UsernameFailure.verification
+    }
+    do {
+      let existing = try object(await request("handles/" + pending.handle))
+      guard let records = existing["records"] as? [[String: Any]], records.count == 1,
+        let record = records.first?["record"] as? String
+      else { throw UsernameFailure.verification }
+      return try accept(record, pending: pending, store: store)
+    } catch is RegistryNotFound {
+      // Nothing was admitted yet; use the same signed request.
+    }
+    #if DEBUG
+      let proof = Data(store.state.deviceID.utf8).base64EncodedString()
+        .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+        .replacingOccurrences(of: "=", with: "")
+      do {
+        let response = try object(
+          await request(
+            "claims",
+            body: [
+              "nonce": pending.nonce,
+              "record": pending.unsignedRecord, "owner_signature": pending.ownerSignature,
+              "device": ["platform": "dev", "proof": proof],
+              "terms_version": "local-development-v1",
+            ]))
+        guard response["handle"] as? String == pending.handle,
+          let record = response["record"] as? String
+        else {
+          throw UsernameFailure.verification
+        }
+        return try accept(record, pending: pending, store: store)
+      } catch is ExpiredClaim {
+        try store.savePending(nil)
+        throw UsernameFailure.server("The request expired. Please claim again.")
+      } catch let error as UsernameFailure {
+        switch error {
+        case .noFreeClaim, .unavailable: try store.savePending(nil)
+        default: break
+        }
+        throw error
+      }
+    #else
+      throw UsernameFailure.notConfigured
+    #endif
+  }
+
+  private func accept(_ record: String, pending: PendingUsernameClaim, store: UsernameStore) throws
+    -> UsernameBinding
+  {
+    do {
+      _ = try OAHCore.call([
+        "op": "verify_claim", "record": record,
+        "expected_record_hash": pending.recordHash, "handle": pending.handle,
+        "subaddress": pending.subaddress,
+        "network": pending.network, "registrar_key": pending.registrarKey, "rules": pending.rules,
+        "rules_hash": pending.rulesHash,
+      ])
+    } catch { throw UsernameFailure.verification }
+    let binding = UsernameBinding(
+      walletKey: pending.walletKey, network: pending.network,
+      handle: pending.handle, displayHandle: pending.displayHandle, subaddress: pending.subaddress,
+      genesisHash: pending.recordHash, record: record, claimedAt: Date())
+    try store.accept(binding)
+    return binding
+  }
+}

@@ -1,6 +1,7 @@
 import Foundation
 import MoneroKit
 import Network
+import OAHCore
 
 // OpenAlias lookups (OpenAlias send spec, section 3). The kit validates
 // DNSSEC with libunbound. All of its DNS traffic goes over TCP to a bridge on
@@ -496,7 +497,7 @@ struct OpenAliasResolver {
     }
     var servers: [URL] = Config.servers
 
-    func resolve(_ name: OpenAliasName,
+    func resolve(_ name: OpenAliasName, network: NetworkType = .mainnet,
                  check: @escaping @MainActor @Sendable (String) -> AddressCheck) async -> Result<OpenAliasResult, OpenAliasFailure> {
         let proxyText = (proxyAddress() ?? "").trimmingCharacters(in: .whitespaces)
         let torOn = !proxyText.isEmpty
@@ -507,6 +508,24 @@ struct OpenAliasResolver {
             // parse gives the Tor error, and nothing is sent.
             guard let parsed = Self.parseProxy(proxyText) else { return .failure(.tor) }
             proxy = parsed
+        }
+
+        if name.isUsername {
+            guard let configuration = UsernameResolutionConfiguration.current else { return .failure(.usernameNotConfigured) }
+            let options = Self.sessionConfiguration(proxy: proxy, timeout: torOn ? 30 : 15)
+            options.timeoutIntervalForResource = 45
+            let session = URLSession(configuration: options, delegate: UsernameSessionDelegate(), delegateQueue: nil)
+            defer { session.invalidateAndCancel() }
+            do {
+                let resolver = await UsernameResolver(configuration: configuration, network: network == .mainnet ? "mainnet" : "testnet", session: session)
+                let result = try await resolver.resolve(name)
+                guard await check(result.address) == .valid else { return .failure(.wrongNetwork) }
+                return .success(result)
+            } catch let failure as OpenAliasFailure { return .failure(failure) }
+              catch let error as OAHError {
+                return .failure(error.code == "mobile.snapshot_expired" ? .usernameStale : .usernameVerification)
+            } catch is UsernameFailure { return .failure(.usernameVerification) }
+              catch { return .failure(netError) }
         }
 
         let started = Date()

@@ -62,6 +62,15 @@ enum PaymentLinkCard {
         return Amount(text: last, scale: fitScale(width: width(last), into: amountWidth))
     }
 
+    /// The foil as the send step shows it: the note's amount (in Fiat Mode
+    /// the fiat amount, without "XMR"), shrunk to fit, never under 40%.
+    static func foil(_ text: String, showsUnit: Bool) -> Amount {
+        let width = showsUnit
+            ? lineWidth(text)
+            : textWidth(text, font: numberFont(size: numberSize, weight: .semibold), tracking: numberTracking)
+        return Amount(text: text, scale: max(minimumScale, fitScale(width: width, into: amountWidth)))
+    }
+
     /// The amount line at full size: the number, the gap and "XMR".
     static func lineWidth(_ text: String) -> CGFloat {
         textWidth(text, font: numberFont(size: numberSize, weight: .semibold), tracking: numberTracking)
@@ -172,8 +181,10 @@ struct PaymentLinkCardView: View {
 
 /// The amount pressed into the pocket in orange foil, centered on the
 /// envelope's 1000 units, its line's top at 452.
-private struct PaymentLinkCardFoil: View {
+struct PaymentLinkCardFoil: View {
     let amount: PaymentLinkCard.Amount
+    /// "XMR" after the number; a fiat amount has none.
+    var showsUnit = true
 
     var body: some View {
         let size = PaymentLinkCard.numberSize * amount.scale
@@ -200,8 +211,10 @@ private struct PaymentLinkCardFoil: View {
             Text(verbatim: amount.text)
                 .font(.system(size: size, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-            Text(verbatim: "XMR")
-                .font(.system(size: PaymentLinkCard.unitSize * amount.scale, weight: .semibold, design: .rounded))
+            if showsUnit {
+                Text(verbatim: "XMR")
+                    .font(.system(size: PaymentLinkCard.unitSize * amount.scale, weight: .semibold, design: .rounded))
+            }
         }
         .lineLimit(1)
         .fixedSize()

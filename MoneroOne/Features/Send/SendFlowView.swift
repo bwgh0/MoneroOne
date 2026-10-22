@@ -371,7 +371,15 @@ struct SendFlowView: View {
             )
 
         case .success where isLinkMode && linkRecordId != nil:
-            PaymentLinkReadyStep(recordId: linkRecordId ?? "", onDone: { dismiss() })
+            // The sending step fades out (0.35 s) as the check comes in; the
+            // ready step brings in its own parts.
+            PaymentLinkReadyStep(
+                recordId: linkRecordId ?? "",
+                amountString: amountString,
+                priceService: priceService,
+                onDone: { dismiss() }
+            )
+            .transition(.identity)
 
         case .review:
             SendReviewStep(
@@ -455,8 +463,10 @@ struct SendFlowView: View {
                     }
                 },
                 onClose: { dismiss() },
-                canRetry: !isLinkMode
+                canRetry: !isLinkMode,
+                reservesLinkReady: isLinkMode
             )
+            .transition(.asymmetric(insertion: .opacity, removal: .opacity.animation(.easeInOut(duration: 0.35))))
         }
     }
 

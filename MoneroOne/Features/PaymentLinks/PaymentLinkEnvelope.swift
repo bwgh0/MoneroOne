@@ -272,6 +272,8 @@ struct WaxSeal: View {
     var sweep: CGFloat = Envelope.sweepStart
     /// How much of the sweep's band shows, 0...1.
     var shine: Double = 1
+    /// 0 on the paper; 1 above it, as it presses on: a softer, lower shadow.
+    var lift: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -293,7 +295,7 @@ struct WaxSeal: View {
         }
         .frame(width: Envelope.sealSide, height: Envelope.sealSide, alignment: .topLeading)
         .compositingGroup()
-        .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 5)
+        .shadow(color: .black.opacity(0.5 - 0.22 * lift), radius: 3 + 5 * lift, x: 0, y: 5 + 17 * lift)
     }
 
     private var ring: some View {
@@ -485,6 +487,11 @@ struct EnvelopeFront<Foil: View>: View {
     var sweep: CGFloat = Envelope.sweepStart
     /// How much of the sweep's band shows on the front and the seal, 0...1.
     var shine: Double = 1
+    /// The whole seal pressing on (the send side): it shows, comes down
+    /// from `sealScale` and its shadow tightens as `sealLift` goes to 0.
+    var sealOpacity: Double = 1
+    var sealScale: CGFloat = 1
+    var sealLift: CGFloat = 0
     /// Drawn on the pocket, under the flap (the shared picture's amount).
     @ViewBuilder var foil: () -> Foil
 
@@ -499,7 +506,9 @@ struct EnvelopeFront<Foil: View>: View {
                 .opacity(sealBroken ? 1 : 0)
             flap
             if !sealBroken {
-                WaxSeal(light: light, sweep: sweep, shine: shine)
+                WaxSeal(light: light, sweep: sweep, shine: shine, lift: sealLift)
+                    .scaleEffect(sealScale)
+                    .opacity(sealOpacity)
                     .offset(x: seal.x, y: seal.y)
                 WaxCrack(end: crackEnd, glintEnd: crackGlintEnd)
                     .offset(x: seal.x, y: seal.y)
@@ -918,5 +927,257 @@ struct PaymentLinkEnvelopeHero: View {
         } catch {
             return false
         }
+    }
+}
+
+// MARK: - The send side's hero
+
+/// The Link ready step's hero, 338 x 280 pt like the claim sheet's. The
+/// green check plays in the spinner's slot (today's `SuccessCheckmarkView`;
+/// the send flow plays the success haptic and the chime with it). Then the
+/// check turns into the ivory note with the amount, the open envelope comes
+/// up around the note, the note drops in, the flap folds down and the wax
+/// seal presses on. One light sweep shows the amount in orange foil.
+///
+/// Times from the check (mockup send-link-moment, Option 2): at 0.55 the
+/// check fades (0.18 s) and rises 110 pt while the note grows out of its
+/// disc and rises with it (stepForward); at 0.85 the envelope fades in
+/// (0.3 s) and comes up 50 pt (stepForward); at 1.05 the note drops in
+/// (settle); at 1.30 the flap folds down and the envelope lifts to the
+/// middle (stepForward); at 1.60 the seal presses on from 1.5x
+/// (selector); at 1.75 it is on: softTick and
+/// `onSealed`; at 1.95 one light sweep (1.2 s). Reduce Motion: no check;
+/// one cross-fade (0.35 s) to the sealed envelope with the foil, and
+/// `onSealed` at once.
+struct PaymentLinkSendHero: View {
+    /// The note's amount, also on the foil.
+    let amount: EnvelopeCardAmount
+    /// The seal is on: the rest of the step comes in.
+    var onSealed: () -> Void = {}
+
+    static let size = CGSize(width: 338, height: 280)
+    /// Points per design unit, as in the claim sheet's hero.
+    private static let unit: CGFloat = 0.8 * 0.338
+    private static let origin = CGPoint(x: 33.8, y: 48.06)
+    /// The open envelope sits this much lower, so its flap stays in the frame.
+    private static let drop: CGFloat = 48.06
+    /// The envelope comes up from this much lower.
+    private static let arrival: CGFloat = 50.02
+    /// The spinner's 160 pt slot, at the bottom of the frame.
+    private static let checkOrigin = CGPoint(x: 89, y: 120)
+    private static let checkRise: CGFloat = 110
+    /// The note starts as the check's disc: its scale there, and how far
+    /// below its place in the pocket it is (design units).
+    private static let seedScale = CGSize(width: 0.324, height: 0.475)
+    private static let seedShift: CGFloat = 43.8
+    private static let stepForward = Animation.spring(response: 0.3, dampingFraction: 0.85)
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hasPlayed = false
+    @State private var checkOpacity: Double = 1
+    @State private var checkOffset: CGFloat = 0
+    @State private var noteShown: Double = 0
+    @State private var noteTint: Double = 1
+    @State private var noteScale = PaymentLinkSendHero.seedScale
+    /// Elliptical corners: an oval, then the card's 12.
+    @State private var noteCorner = CGSize(width: Envelope.cardWidth / 2, height: Envelope.cardHeight / 2)
+    /// The note's place in the envelope (design units), and the place of
+    /// its layer (points).
+    @State private var noteShift: CGFloat = PaymentLinkSendHero.seedShift
+    @State private var noteY: CGFloat = PaymentLinkSendHero.drop
+    @State private var envelopeShown: Double = 0
+    @State private var envelopeY: CGFloat = PaymentLinkSendHero.drop + PaymentLinkSendHero.arrival
+    @State private var flapAngle: Double = 180
+    @State private var flapLifted = true
+    @State private var sealShown: Double = 0
+    @State private var sealScale: CGFloat = 1.5
+    @State private var sealLift: CGFloat = 1
+    @State private var sweep: CGFloat = Envelope.sweepStart
+    /// The whole envelope; it fades only in Reduce Motion.
+    @State private var fade: Double = 0
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            art
+            if !reduceMotion {
+                SuccessCheckmarkView(checkOpacity: checkOpacity, checkOffset: checkOffset)
+                    .frame(width: 160, height: 160)
+                    .offset(x: Self.checkOrigin.x, y: Self.checkOrigin.y)
+            }
+        }
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+        .accessibilityHidden(true)
+        .task { await play() }
+    }
+
+    private var art: some View {
+        ZStack(alignment: .topLeading) {
+            layer(EnvelopeBack(flapAngle: flapAngle, flapLifted: flapLifted), y: envelopeY)
+                .opacity(envelopeShown)
+            layer(note, y: noteY)
+                .opacity(noteShown)
+                .mask(alignment: .topLeading) { pocketMask }
+            layer(front, y: envelopeY)
+                .opacity(envelopeShown)
+        }
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+        // One layer, so the fade never shows the note through the pocket.
+        .compositingGroup()
+        .opacity(fade)
+    }
+
+    /// While the pocket fades in, the note below its edge fades out at the
+    /// same rate, so the note never shows through the pocket.
+    private var pocketMask: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .frame(height: Self.origin.y + envelopeY)
+            Rectangle()
+                .opacity(1 - envelopeShown)
+        }
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .top)
+    }
+
+    private var note: some View {
+        EnvelopePaperCard(amount: amount, sweep: sweep)
+            .overlay(Color.green.opacity(noteTint))
+            .clipShape(RoundedRectangle(cornerSize: noteCorner))
+            .scaleEffect(x: noteScale.width, y: noteScale.height)
+            .offset(x: Envelope.cardOrigin.x, y: Envelope.cardOrigin.y + noteShift)
+    }
+
+    private var front: some View {
+        EnvelopeFront(
+            flapAngle: flapAngle,
+            flapLifted: flapLifted,
+            sweep: sweep,
+            sealOpacity: sealShown,
+            sealScale: sealScale,
+            sealLift: sealLift
+        ) {
+            PaymentLinkCardFoil(amount: PaymentLinkCard.foil(amount.text, showsUnit: amount.showsUnit), showsUnit: amount.showsUnit)
+                .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
+                .mask(alignment: .topLeading) { EnvelopeFoilReveal(sweep: sweep) }
+        }
+    }
+
+    /// One layer of the envelope, drawn in design units, placed in points.
+    private func layer(_ content: some View, y: CGFloat) -> some View {
+        content
+            .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
+            .scaleEffect(Self.unit, anchor: .topLeading)
+            .offset(x: Self.origin.x, y: Self.origin.y + y)
+            .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+    }
+
+    private func play() async {
+        guard !hasPlayed else { return }
+        hasPlayed = true
+        if reduceMotion {
+            crossFade()
+            return
+        }
+        fade = 1
+
+        // 0.55: the check turns into the note.
+        guard await pause(0.55) else { return }
+        withAnimation(.easeIn(duration: 0.18)) { checkOpacity = 0 }
+        withAnimation(.linear(duration: 0.14)) { noteShown = 1 }
+        withAnimation(.easeInOut(duration: 0.3)) { noteTint = 0 }
+        withAnimation(Self.stepForward) {
+            checkOffset = -Self.checkRise
+            noteScale = CGSize(width: 1, height: 1)
+            noteCorner = CGSize(width: Envelope.cornerRadius, height: Envelope.cornerRadius)
+            noteShift = -Envelope.cardRise
+        }
+
+        // 0.85: the open envelope comes up around the note.
+        guard await pause(0.3) else { return }
+        withAnimation(.easeOut(duration: 0.3)) { envelopeShown = 1 }
+        withAnimation(Self.stepForward) { envelopeY = Self.drop }
+
+        // 1.05: the note drops in.
+        guard await pause(0.2) else { return }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { noteShift = 0 }
+
+        // 1.30: the flap folds down; the envelope lifts to the middle.
+        guard await pause(0.25) else { return }
+        withAnimation(Self.stepForward) {
+            flapAngle = 0
+            envelopeY = 0
+            noteY = 0
+        }
+        guard await pause(0.074) else { return }
+        flapLifted = false
+
+        // 1.60: the seal presses on.
+        guard await pause(0.226) else { return }
+        withAnimation(.linear(duration: 0.09)) { sealShown = 1 }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { sealScale = 1 }
+        withAnimation(.easeIn(duration: 0.16)) { sealLift = 0 }
+
+        // 1.75: the seal is on.
+        guard await pause(0.15) else { return }
+        HapticFeedback.shared.softTick()
+        onSealed()
+
+        // 1.95: one light sweep; the foil shows where it has passed.
+        guard await pause(0.2) else { return }
+        withAnimation(.easeInOut(duration: 1.2)) { sweep = Envelope.sweepEnd }
+    }
+
+    /// Everything at its end, unseen, then one fade.
+    private func crossFade() {
+        noteShown = 1
+        noteTint = 0
+        noteScale = CGSize(width: 1, height: 1)
+        noteCorner = CGSize(width: Envelope.cornerRadius, height: Envelope.cornerRadius)
+        noteShift = 0
+        noteY = 0
+        envelopeShown = 1
+        envelopeY = 0
+        flapAngle = 0
+        flapLifted = false
+        sealShown = 1
+        sealScale = 1
+        sealLift = 0
+        sweep = Envelope.sweepEnd
+        onSealed()
+        withAnimation(.easeInOut(duration: 0.35)) { fade = 1 }
+    }
+
+    /// False when the view went away meanwhile.
+    private func pause(_ seconds: Double) async -> Bool {
+        do {
+            try await Task.sleep(for: .seconds(seconds))
+            return true
+        } catch {
+            return false
+        }
+    }
+}
+
+/// Where the light has passed, the foil shows: solid behind the band,
+/// clear ahead of it (8% behind its middle to 10% ahead), tilted like the
+/// band. In the envelope's units.
+struct EnvelopeFoilReveal: View {
+    let sweep: CGFloat
+
+    private static let behind: CGFloat = 80
+    private static let ahead: CGFloat = 100
+    private static let solid: CGFloat = 3000
+    /// The foil line's middle, where the tilt turns.
+    private static let lineMiddle: CGFloat = 504
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Color.black
+                .frame(width: Self.solid)
+            LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
+                .frame(width: Self.behind + Self.ahead)
+        }
+        .frame(height: Self.solid)
+        .rotationEffect(.degrees(8), anchor: UnitPoint(x: Self.solid / (Self.solid + Self.behind + Self.ahead), y: 0.5))
+        .offset(x: sweep * Envelope.width - Self.behind - Self.solid, y: Self.lineMiddle - Self.solid / 2)
     }
 }

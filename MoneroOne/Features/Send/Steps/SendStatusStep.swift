@@ -8,6 +8,9 @@ struct SendStatusStep: View {
     let onRetry: () -> Void
     let onClose: () -> Void
     var canRetry = true
+    /// Link mode: while it sends, the Link ready text and buttons hold
+    /// their places, unseen, so the spinner turns where the check lands.
+    var reservesLinkReady = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showContent = false
@@ -61,49 +64,15 @@ struct SendStatusStep: View {
 
     private var amount: Decimal? { Decimal(string: amountString) }
 
-    private var fiatAmount: String? {
-        amount.flatMap { priceService.formatFiatValue($0) }
+    private var figures: SendAmountFigures? {
+        amount.map { SendAmountFigures(amount: $0, priceService: priceService) }
     }
 
-    /// Fiat Mode puts the fiat amount on top, as the balance card does.
-    private var isFiatFirst: Bool {
-        priceService.showFiatFirst && fiatAmount != nil
-    }
-
-    private var heroAmount: String {
-        if isFiatFirst { return fiatAmount ?? "" }
-        return amount.map { XMRFormatter.format($0) } ?? ""
-    }
-
-    private var secondaryAmount: String? {
-        if isFiatFirst { return amount.map { "\(XMRFormatter.format($0)) XMR" } }
-        return fiatAmount.map { "≈ \($0)" }
-    }
-
+    @ViewBuilder
     private var amountHeader: some View {
-        VStack(spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(heroAmount)
-                    .font(.system(size: 56, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.4)
-
-                if !isFiatFirst {
-                    Text("XMR")
-                        .font(.title2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if let secondaryAmount {
-                Text(secondaryAmount)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
+        if let figures {
+            SendAmountHeader(figures: figures)
         }
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Status visual
@@ -143,9 +112,13 @@ struct SendStatusStep: View {
         ZStack(alignment: .top) {
             switch phase {
             case .sending:
-                sendingText
+                SendingStatusText()
                     .opacity(showContent ? 1 : 0)
                     .transition(.opacity.animation(.easeInOut(duration: 0.35)))
+                if reservesLinkReady {
+                    PaymentLinkReadyText(figures: figures)
+                        .hidden()
+                }
 
             case .success(let txHash):
                 successText(txHash: txHash)
@@ -157,18 +130,6 @@ struct SendStatusStep: View {
             default:
                 EmptyView()
             }
-        }
-    }
-
-    private var sendingText: some View {
-        VStack(spacing: 12) {
-            Text("Sending Transaction...")
-                .font(.title2.weight(.semibold))
-
-            Text("Please wait while your transaction is being broadcast")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
         }
     }
 
@@ -230,7 +191,10 @@ struct SendStatusStep: View {
         VStack(spacing: 12) {
             switch phase {
             case .sending:
-                EmptyView()
+                if reservesLinkReady {
+                    PaymentLinkReadyActions(record: nil)
+                        .hidden()
+                }
 
             case .success:
                 Button(action: onDone) {
@@ -325,5 +289,74 @@ private struct SendArrive: ViewModifier {
         content
             .opacity(isShown ? 1 : 0)
             .offset(y: isShown || reduceMotion ? 0 : 20)
+    }
+}
+
+/// The amount on the sending step. Fiat Mode puts the fiat amount on top,
+/// as the balance card does; the other unit goes under it.
+struct SendAmountFigures: Equatable {
+    let hero: String
+    /// "XMR" follows the hero amount; a fiat amount has none.
+    let showsUnit: Bool
+    let secondary: String?
+
+    @MainActor
+    init(amount: Decimal, priceService: PriceService) {
+        let fiat = priceService.formatFiatValue(amount)
+        if priceService.showFiatFirst, let fiat {
+            hero = fiat
+            showsUnit = false
+            secondary = "\(XMRFormatter.format(amount)) XMR"
+        } else {
+            hero = XMRFormatter.format(amount)
+            showsUnit = true
+            secondary = fiat.map { "≈ \($0)" }
+        }
+    }
+}
+
+/// The 56 pt amount over the spinner, and the other unit under it.
+struct SendAmountHeader: View {
+    let figures: SendAmountFigures
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(figures.hero)
+                    .font(.system(size: 56, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.4)
+
+                if figures.showsUnit {
+                    Text("XMR")
+                        .font(.title2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let secondary = figures.secondary {
+                Text(secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// "Sending Transaction..." and the line under it.
+struct SendingStatusText: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Sending Transaction...")
+                .font(.title2.weight(.semibold))
+
+            Text("Please wait while your transaction is being broadcast")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
     }
 }

@@ -603,77 +603,170 @@ struct PaymentLinkReviewStep: View {
 
 // MARK: - Link ready
 
+/// The link is funded. The check plays where the spinner turned, then it
+/// turns into the note and goes into the envelope (`PaymentLinkSendHero`);
+/// Share and Done come in when the seal is on. The step keeps the sending
+/// step's layout (its amount and text hold their places, unseen), so the
+/// check lands where the spinner turned and "Link ready" where "Sending
+/// Transaction..." was.
 struct PaymentLinkReadyStep: View {
     let recordId: String
+    /// The amount the sending step showed.
+    let amountString: String
+    let priceService: PriceService
     let onDone: () -> Void
 
     @ObservedObject private var store = EnvelopeStore.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showContent = false
+    /// The seal is on: Share and Done come in.
+    @State private var sealed = false
 
     private var record: EnvelopeRecord? { store.record(id: recordId, role: .sent) }
 
+    /// The link's amount: the note shows it as the sending step did (Fiat
+    /// Mode: the fiat amount), the line under "Link ready" the other unit.
+    private var figures: SendAmountFigures? {
+        let amount = record.map { EnvelopeRuntime.xmr($0.amount) } ?? Decimal(string: amountString)
+        return amount.map { SendAmountFigures(amount: $0, priceService: priceService) }
+    }
+
+    private var sendingFigures: SendAmountFigures? {
+        Decimal(string: amountString).map { SendAmountFigures(amount: $0, priceService: priceService) }
+    }
+
     var body: some View {
+        let figures = self.figures
         VStack(spacing: 32) {
             Spacer()
 
-            SuccessCheckmarkView()
-                .frame(height: 160)
-                .accessibilityHidden(true)
-
-            VStack(spacing: 12) {
-                Text("Link ready")
-                    .font(.title.weight(.bold))
-                    .foregroundStyle(.green)
-                if let record {
-                    Text("\(XMRFormatter.format(EnvelopeRuntime.xmr(record.amount))) XMR")
-                        .font(.title3.weight(.semibold))
-                        .monospacedDigit()
-                }
-                Text("Send it to one person in a private chat. Anyone who has this link can claim the money.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+            if let sendingFigures {
+                SendAmountHeader(figures: sendingFigures)
+                    .hidden()
             }
-            .opacity(showContent ? 1 : 0)
+
+            // The spinner's slot: the hero rises from it over the amount's place.
+            Color.clear
+                .frame(height: 160)
+                .overlay(alignment: .bottom) {
+                    PaymentLinkSendHero(amount: EnvelopeCardAmount(text: figures?.hero ?? "", showsUnit: figures?.showsUnit ?? true)) {
+                        sealed = true
+                    }
+                }
+
+            ZStack(alignment: .top) {
+                SendingStatusText()
+                    .hidden()
+                PaymentLinkReadyText(figures: figures)
+                    .opacity(showContent ? 1 : 0)
+            }
 
             Spacer()
 
-            VStack(spacing: 12) {
-                if let record, record.link != nil {
-                    PaymentLinkShareButton(record: record) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "square.and.arrow.up")
-                            Text("Share")
-                        }
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.brand)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                    }
-                    .glassButtonStyle()
-                    .accessibilityLabel("Share the link")
-                    .accessibilityIdentifier("paymentLink.share")
-                }
-
-                Button(action: onDone) {
-                    Text("Done")
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .accessibilityLabel("Done")
-            }
-            .padding(.horizontal)
-            .padding(.bottom)
+            PaymentLinkReadyActions(record: record, isShown: sealed, onDone: onDone)
+                .padding(.horizontal)
+                .padding(.bottom)
         }
         .padding()
         .onAppear {
-            withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
+            // Today's timing; Reduce Motion: with the envelope's cross-fade.
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.35) : .easeOut(duration: 0.4).delay(0.3)) {
                 showContent = true
             }
         }
+    }
+}
+
+/// "Link ready", the other unit, and what to do with the link.
+struct PaymentLinkReadyText: View {
+    let figures: SendAmountFigures?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Link ready")
+                .font(.title.weight(.bold))
+                .foregroundStyle(.green)
+            if let figures, let line = figures.secondary {
+                Text(verbatim: line)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    // The note is hidden from VoiceOver: its amount comes here.
+                    .accessibilityLabel(Text(verbatim: "\(figures.hero)\(figures.showsUnit ? " XMR" : ""), \(line)"))
+            }
+            Text("Send it to one person in a private chat. Anyone who has this link can claim the money.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+    }
+}
+
+/// Share and Done. With no record, the same buttons hold their place (the
+/// sending step keeps it).
+struct PaymentLinkReadyActions: View {
+    let record: EnvelopeRecord?
+    /// Share, then Done, arrive (0.1 s apart) when this turns true.
+    var isShown = true
+    var onDone: () -> Void = {}
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Group {
+                if let record {
+                    if record.link != nil {
+                        PaymentLinkShareButton(record: record) { shareLabel }
+                            .glassButtonStyle()
+                            .accessibilityLabel("Share the link")
+                            .accessibilityIdentifier("paymentLink.share")
+                    }
+                } else {
+                    Button {} label: { shareLabel }
+                        .glassButtonStyle()
+                }
+            }
+            .modifier(ReadyArrive(isShown: isShown, delay: 0.1, reduceMotion: reduceMotion))
+
+            Button(action: onDone) {
+                Text("Done")
+                    .font(.callout.weight(.medium))
+                    // Plain gray: `.secondary` takes on the button's orange tint.
+                    .foregroundStyle(Color(uiColor: .secondaryLabel))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .accessibilityLabel("Done")
+            .modifier(ReadyArrive(isShown: isShown, delay: 0.2, reduceMotion: reduceMotion))
+        }
+    }
+
+    private var shareLabel: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "square.and.arrow.up")
+            Text("Share")
+        }
+        .font(.callout.weight(.semibold))
+        .foregroundStyle(.brand)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+}
+
+/// `arrive`: fade in and rise 20 pt (easeOut 0.4 s after `delay`).
+/// Reduce Motion: a cross-fade (0.35 s), no rise.
+private struct ReadyArrive: ViewModifier {
+    let isShown: Bool
+    let delay: Double
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isShown ? 1 : 0)
+            .offset(y: isShown || reduceMotion ? 0 : 20)
+            .animation(reduceMotion ? .easeInOut(duration: 0.35) : .easeOut(duration: 0.4).delay(delay), value: isShown)
     }
 }
 

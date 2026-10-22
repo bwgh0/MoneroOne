@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct SuccessCheckmarkView: View {
+    /// The check alone (not its ring or confetti) fades and moves with these.
+    var checkOpacity: Double = 1
+    var checkOffset: CGFloat = 0
+
     @State private var showCheck = false
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1
@@ -19,7 +23,8 @@ struct SuccessCheckmarkView: View {
                 .font(.system(size: 80))
                 .foregroundStyle(.green)
                 .scaleEffect(showCheck ? 1 : 0.3)
-                .opacity(showCheck ? 1 : 0)
+                .opacity(showCheck ? checkOpacity : 0)
+                .offset(y: checkOffset)
 
             // Confetti
             if showConfetti {

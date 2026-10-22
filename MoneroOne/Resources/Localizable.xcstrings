@@ -42354,6 +42354,9 @@
         }
       }
     },
+    "Face ID now turns on for Trezor and view-only wallets." : {
+      "comment" : "What's New bullet."
+    },
     "Failed" : {
       "comment" : "Transaction status",
       "localizations" : {
@@ -43764,6 +43767,9 @@
           }
         }
       }
+    },
+    "Fixed a slow first sync for new wallets with some region settings." : {
+      "comment" : "What's New bullet."
     },
     "Fixes for custom node logins." : {
       "comment" : "What's New bullet.",
@@ -54938,6 +54944,9 @@
           }
         }
       }
+    },
+    "Move XMR from one of your wallets to another. Tap the wallet name at the top, then Transfer." : {
+      "comment" : "What's New highlight text. Transfer is the Transfer button in the wallet switcher; use its translation."
     },
     "Move down" : {
       "localizations" : {
@@ -99746,6 +99755,9 @@
         }
       }
     },
+    "Transfer between your wallets" : {
+      "comment" : "What's New highlight title."
+    },
     "Trezor BLE write timed out" : {
       "localizations" : {
         "de" : {
@@ -109925,6 +109937,9 @@
         }
       }
     },
+    "With Tor on, prices, charts and node checks also go through your Tor proxy." : {
+      "comment" : "What's New bullet."
+    },
     "Word %lld" : {
       "localizations" : {
         "de" : {
@@ -111250,6 +111265,9 @@
           }
         }
       }
+    },
+    "Your history shows as soon as a wallet opens, even on a slow node." : {
+      "comment" : "What's New bullet."
     },
     "Your history starts here" : {
       "localizations" : {

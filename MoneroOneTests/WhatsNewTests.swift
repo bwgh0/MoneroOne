@@ -204,7 +204,7 @@ final class WhatsNewTests: XCTestCase {
     func testTheShippedNotesHaveThe11Entry() {
         let notes = WhatsNewNotes.newest(in: WhatsNewNotes.entries, atOrBelow: NotesVersion("1.1.0"))
         XCTAssertEqual(notes?.version, NotesVersion(major: 1, minor: 1))
-        XCTAssertEqual(notes?.highlights.map(\.systemImage), ["link", "at", "key.fill"])
-        XCTAssertEqual(notes?.improvements.count, 4)
+        XCTAssertEqual(notes?.highlights.map(\.systemImage), ["arrow.left.arrow.right", "link", "at", "key.fill"])
+        XCTAssertEqual(notes?.improvements.count, 8)
     }
 }

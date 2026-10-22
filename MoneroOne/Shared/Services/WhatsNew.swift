@@ -56,6 +56,11 @@ enum WhatsNewNotes {
             version: NotesVersion(major: 1, minor: 1),
             highlights: [
                 .init(
+                    systemImage: "arrow.left.arrow.right",
+                    title: "Transfer between your wallets",
+                    detail: "Move XMR from one of your wallets to another. Tap the wallet name at the top, then Transfer."
+                ),
+                .init(
                     systemImage: "link",
                     title: "Send XMR as a link",
                     detail: "Whoever opens it claims the funds in Monero One. In Send, choose Link."
@@ -75,6 +80,10 @@ enum WhatsNewNotes {
                 "Review shows the exact network fee you pay.",
                 "Rounded QR codes.",
                 "Fixes for custom node logins.",
+                "With Tor on, prices, charts and node checks also go through your Tor proxy.",
+                "Face ID now turns on for Trezor and view-only wallets.",
+                "Your history shows as soon as a wallet opens, even on a slow node.",
+                "Fixed a slow first sync for new wallets with some region settings.",
                 "General stability improvements and bug fixes.",
             ]
         ),

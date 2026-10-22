@@ -77,10 +77,13 @@ struct UsernameCard: View {
           Spacer()
           Rectangle().frame(width: 28 * s, height: 4 * s)
         }.foregroundStyle(.brand).frame(width: 824 * s).offset(x: 88 * s, y: 508 * s)
+        // Core's orange underside: a band inside the bottom edge that thins
+        // to nothing around the corners (the card shape minus itself moved up).
+        RoundedRectangle(cornerRadius: 30 * s)
+          .subtracting(RoundedRectangle(cornerRadius: 30 * s).offset(y: -5 * s))
+          .fill(Color.brand)
         RoundedRectangle(cornerRadius: 30 * s).strokeBorder(
           Color.white.opacity(dark ? 0.12 : 0.6), lineWidth: 1.5 * s)
-        RoundedRectangle(cornerRadius: 30 * s).strokeBorder(Color.brand, lineWidth: 5 * s)
-          .mask(alignment: .bottom) { Rectangle().frame(height: 22 * s) }
         if claiming {
           TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { timeline in
             let phase =

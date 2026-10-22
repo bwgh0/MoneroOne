@@ -28,7 +28,10 @@ struct UsernameCard: View {
                 : [
                   Color(hexValue: 0xF0F2F2), Color(hexValue: 0xE4E7E8), Color(hexValue: 0xD5DADD),
                 ],
-              startPoint: .topLeading, endPoint: .bottomTrailing))
+              startPoint: .topLeading, endPoint: .bottomTrailing)
+          )
+          // Only the card body casts the shadow. The flat mark and the text never do.
+          .shadow(color: .black.opacity(dark ? 0.35 : 0.15), radius: 14 * s, y: 12 * s)
         RoundedRectangle(cornerRadius: 18 * s)
           .fill(
             LinearGradient(
@@ -91,7 +94,6 @@ struct UsernameCard: View {
           }
         }
       }
-      .shadow(color: .black.opacity(dark ? 0.35 : 0.15), radius: 14 * s, y: 12 * s)
       .rotation3DEffect(.degrees(light.x * 3), axis: (x: 0, y: 1, z: 0))
       .rotation3DEffect(.degrees(-light.y * 2), axis: (x: 1, y: 0, z: 0))
     }

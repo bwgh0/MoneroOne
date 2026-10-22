@@ -149,7 +149,7 @@ struct EnvelopeSessionContent: View {
             SuccessCheckmarkView()
                 .accessibilityHidden(true)
         } else {
-            PaymentLinkEnvelopeHero(isOpen: envelopeOpens, amount: cardFigures.card) {
+            PaymentLinkEnvelopeHero(isOpen: envelopeOpens, isChecking: envelopeChecks, amount: cardFigures.card) {
                 withAnimation(.easeInOut(duration: 0.35)) { cardLanded = true }
             }
         }
@@ -159,6 +159,14 @@ struct EnvelopeSessionContent: View {
         switch session.phase {
         case .waiting, .sweeping: return true
         case .ready: return !record.isExpired()
+        default: return false
+        }
+    }
+
+    /// The link is being checked: light crosses the sealed envelope.
+    private var envelopeChecks: Bool {
+        switch session.phase {
+        case .idle, .checking: return true
         default: return false
         }
     }
@@ -218,7 +226,11 @@ struct EnvelopeSessionContent: View {
         }
         switch session.phase {
         case .idle, .checking:
-            if !isOwn {
+            if isOwn {
+                Text("Checking the link…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
                 Text("Checking the link…")
                     .font(.title2.weight(.semibold))
             }

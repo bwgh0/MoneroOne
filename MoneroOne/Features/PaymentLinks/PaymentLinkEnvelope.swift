@@ -234,12 +234,15 @@ struct EnvelopeSweepBand: View {
     let center: CGFloat
     let halfWidth: CGFloat
     let color: Color
+    /// How much of the band shows, 0...1.
+    var strength: Double = 1
 
     var body: some View {
         LinearGradient(colors: [color.opacity(0), color, color.opacity(0)], startPoint: .leading, endPoint: .trailing)
             .frame(width: halfWidth * 2, height: 2000)
             .rotationEffect(.degrees(8))
             .offset(x: center - halfWidth, y: -700)
+            .opacity(strength)
             .allowsHitTesting(false)
     }
 }
@@ -267,6 +270,8 @@ struct WaxSeal: View {
     var light: UnitPoint = Envelope.restLight
     /// The sweep's place across the envelope, 0...1.
     var sweep: CGFloat = Envelope.sweepStart
+    /// How much of the sweep's band shows, 0...1.
+    var shine: Double = 1
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -284,7 +289,7 @@ struct WaxSeal: View {
                 ))
             ring
             stamp
-            shine
+            gloss
         }
         .frame(width: Envelope.sealSide, height: Envelope.sealSide, alignment: .topLeading)
         .compositingGroup()
@@ -309,7 +314,7 @@ struct WaxSeal: View {
             .offset(x: 44, y: 44)
     }
 
-    private var shine: some View {
+    private var gloss: some View {
         let side = Envelope.sealSide
         let spot = UnitPoint(x: 0.18 + light.x * 0.64, y: 0.14 + light.y * 0.6)
         return ZStack(alignment: .topLeading) {
@@ -322,7 +327,8 @@ struct WaxSeal: View {
             EnvelopeSweepBand(
                 center: sweep * Envelope.width - Envelope.sealOrigin.x,
                 halfWidth: 90,
-                color: EnvelopeArt.waxShine.opacity(0.42)
+                color: EnvelopeArt.waxShine.opacity(0.42),
+                strength: shine
             )
         }
         .frame(width: side, height: side, alignment: .topLeading)
@@ -372,6 +378,7 @@ struct EnvelopeShadow: View {
 struct EnvelopePocket: View {
     var light: UnitPoint = Envelope.restLight
     var sweep: CGFloat = Envelope.sweepStart
+    var shine: Double = 1
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Envelope.cornerRadius)
@@ -387,7 +394,7 @@ struct EnvelopePocket: View {
             ))
             seams
             EnvelopeSheen(light: light)
-            EnvelopeSweepBand(center: sweep * Envelope.width, halfWidth: 160, color: .white.opacity(0.09))
+            EnvelopeSweepBand(center: sweep * Envelope.width, halfWidth: 160, color: .white.opacity(0.09), strength: shine)
         }
         .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
         .clipShape(shape)
@@ -413,6 +420,7 @@ struct EnvelopePocket: View {
 struct EnvelopeFlapOutside: View {
     var light: UnitPoint = Envelope.restLight
     var sweep: CGFloat = Envelope.sweepStart
+    var shine: Double = 1
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -426,7 +434,7 @@ struct EnvelopeFlapOutside: View {
                 endPoint: .bottom
             ))
             EnvelopeSheen(light: light)
-            EnvelopeSweepBand(center: sweep * Envelope.width, halfWidth: 160, color: .white.opacity(0.09))
+            EnvelopeSweepBand(center: sweep * Envelope.width, halfWidth: 160, color: .white.opacity(0.09), strength: shine)
             EnvelopeFlapEdge().stroke(Color.white.opacity(0.13), lineWidth: 3)
         }
         .frame(width: Envelope.width, height: Envelope.flapHeight, alignment: .topLeading)
@@ -475,21 +483,23 @@ struct EnvelopeFront<Foil: View>: View {
     var crackGlintEnd: CGFloat = 0
     var light: UnitPoint = Envelope.restLight
     var sweep: CGFloat = Envelope.sweepStart
+    /// How much of the sweep's band shows on the front and the seal, 0...1.
+    var shine: Double = 1
     /// Drawn on the pocket, under the flap (the shared picture's amount).
     @ViewBuilder var foil: () -> Foil
 
     var body: some View {
         let seal = Envelope.sealOrigin
         ZStack(alignment: .topLeading) {
-            EnvelopePocket(light: light, sweep: sweep)
+            EnvelopePocket(light: light, sweep: sweep, shine: shine)
             foil()
-            WaxSeal(light: light, sweep: sweep)
+            WaxSeal(light: light, sweep: sweep, shine: shine)
                 .clipShape(SealHalfShape(lower: true))
                 .offset(x: seal.x, y: seal.y)
                 .opacity(sealBroken ? 1 : 0)
             flap
             if !sealBroken {
-                WaxSeal(light: light, sweep: sweep)
+                WaxSeal(light: light, sweep: sweep, shine: shine)
                     .offset(x: seal.x, y: seal.y)
                 WaxCrack(end: crackEnd, glintEnd: crackGlintEnd)
                     .offset(x: seal.x, y: seal.y)
@@ -501,9 +511,9 @@ struct EnvelopeFront<Foil: View>: View {
     private var flap: some View {
         let seal = Envelope.sealOrigin
         return ZStack(alignment: .topLeading) {
-            EnvelopeFlapOutside(light: light, sweep: sweep)
+            EnvelopeFlapOutside(light: light, sweep: sweep, shine: shine)
             if sealBroken {
-                WaxSeal(light: light, sweep: sweep)
+                WaxSeal(light: light, sweep: sweep, shine: shine)
                     .clipShape(SealHalfShape(lower: false))
                     .offset(x: seal.x, y: seal.y)
             }
@@ -522,7 +532,8 @@ extension EnvelopeFront where Foil == EmptyView {
         crackEnd: CGFloat = 0,
         crackGlintEnd: CGFloat = 0,
         light: UnitPoint = Envelope.restLight,
-        sweep: CGFloat = Envelope.sweepStart
+        sweep: CGFloat = Envelope.sweepStart,
+        shine: Double = 1
     ) {
         self.init(
             flapAngle: flapAngle,
@@ -532,6 +543,7 @@ extension EnvelopeFront where Foil == EmptyView {
             crackGlintEnd: crackGlintEnd,
             light: light,
             sweep: sweep,
+            shine: shine,
             foil: { EmptyView() }
         )
     }
@@ -649,18 +661,29 @@ struct EnvelopePaperCard: View {
 // MARK: - The claim sheet's hero
 
 /// The claim sheet's hero, 338 x 280 pt. The envelope comes in sealed.
+/// While `isChecking` (the link's wallet opens and scans), a band of light
+/// crosses the sealed envelope again and again, like the shine on a Wallet
+/// pass: one pass 1.6 s (easeInOut), then 0.8 s of rest, the first 0.8 s
+/// after the entrance (the spring has landed). When the check ends, a band
+/// on the paper keeps moving and fades out (0.3 s, easeOut), and no other
+/// pass starts. Reduce Motion: the same light fades in and out in place
+/// across the seal, 0.8 s each way, then 0.8 s of rest; when the check
+/// ends it fades out the same way.
 /// When `isOpen` turns true (the check found money: Waiting or Ready), the
 /// seal cracks, the flap lifts, the envelope settles lower and the paper
 /// card slides up with the amount. It stays in the open envelope.
 ///
 /// Times from the mockup (final-anim.html), t0 = the crack, 0.42 s after
-/// the entrance at the earliest: the crack 0.12 s and softTick; the flap
-/// at t0 + 0.14 (stepForward); the card at t0 + 0.40 (celebrate); the
-/// success haptic and `onLand` at t0 + 0.68; one light sweep at t0 + 0.88
-/// (1.2 s). Reduce Motion: one cross-fade (0.35 s) to the open envelope,
-/// the success haptic at its middle; no softTick, travel, scale or sweep.
+/// the entrance at the earliest, and after the light's fade-out. The crack
+/// 0.12 s and softTick; the flap at t0 + 0.14 (stepForward); the
+/// card at t0 + 0.40 (celebrate); the success haptic and `onLand` at
+/// t0 + 0.68; one light sweep at t0 + 0.88 (1.2 s). Reduce Motion: one
+/// cross-fade (0.35 s) to the open envelope, the success haptic at its
+/// middle; no softTick, travel, scale or sweep.
 struct PaymentLinkEnvelopeHero: View {
     let isOpen: Bool
+    /// The link is being checked: the light crosses the sealed envelope.
+    var isChecking = false
     let amount: EnvelopeCardAmount
     /// The card reached the top: the rest of the sheet comes in.
     var onLand: () -> Void = {}
@@ -676,6 +699,17 @@ struct PaymentLinkEnvelopeHero: View {
     private static let settle: Double = 0.3
     /// The earliest crack, after the entrance begins.
     private static let crackDelay: Double = 0.42
+    /// The light while the link is checked: one pass, the rest after it,
+    /// and the first pass's wait after the entrance begins.
+    private static let shinePass: Double = 1.6
+    private static let shineRest: Double = 0.8
+    private static let shineDelay: Double = 0.8
+    /// The band is off the envelope by this part of a pass (easeInOut).
+    private static let shineOffPaper: Double = 0.85
+    /// The band's fade-out when the check ends.
+    private static let shineFade: Double = 0.3
+    /// Reduce Motion: the light's place, across the seal.
+    private static let shineInPlace: CGFloat = 0.5
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var entered = false
@@ -688,6 +722,12 @@ struct PaymentLinkEnvelopeHero: View {
     @State private var dropped = false
     @State private var cardOut = false
     @State private var sweep: CGFloat = Envelope.sweepStart
+    /// How much of the light band shows on the envelope's front and seal.
+    @State private var shine: Double = 1
+    /// When the last light pass (while checking) began; nil before any.
+    @State private var shinePassStart: Date?
+    /// When the band, faded out at the check's end, is gone.
+    @State private var shineGoneAt: Date?
     @State private var fade: Double = 1
     @State private var openTask: Task<Void, Never>?
 
@@ -702,6 +742,7 @@ struct PaymentLinkEnvelopeHero: View {
             .opacity(entered ? fade : 0)
             .accessibilityHidden(true)
             .task { await enter() }
+            .task(id: isChecking && !isOpen) { await shineWhileChecking() }
             .onChange(of: isOpen, initial: true) { _, open in
                 if open { scheduleOpen() }
             }
@@ -719,7 +760,8 @@ struct PaymentLinkEnvelopeHero: View {
                 sealBroken: sealBroken,
                 crackEnd: crackEnd,
                 crackGlintEnd: crackGlintEnd,
-                sweep: sweep
+                sweep: sweep,
+                shine: shine
             )
         }
         .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
@@ -734,6 +776,73 @@ struct PaymentLinkEnvelopeHero: View {
         withAnimation(animation) { entered = true }
     }
 
+    // MARK: Light while checking
+
+    /// The light crossing the sealed envelope while the link is checked,
+    /// pass after pass. Its task ends with the check, and a band on the
+    /// paper fades out.
+    private func shineWhileChecking() async {
+        guard isChecking, !isOpen else { return }
+        while enteredAt == nil {
+            guard await pause(0.05) else { return endShine() }
+        }
+        // After the entrance lands, and after a pass from an earlier check.
+        var begin = (enteredAt ?? .now).addingTimeInterval(Self.shineDelay)
+        if let last = shinePassStart {
+            begin = max(begin, last.addingTimeInterval(Self.shinePass))
+        }
+        let wait = begin.timeIntervalSinceNow
+        if wait > 0 {
+            guard await pause(wait) else { return endShine() }
+        }
+        // Out of sight: the band goes to where it starts.
+        if reduceMotion {
+            shine = 0
+            sweep = Self.shineInPlace
+        } else {
+            shine = 1
+            sweep = Envelope.sweepStart
+        }
+        guard await pause(0.05) else { return endShine() }
+
+        while true {
+            shinePassStart = .now
+            if reduceMotion {
+                withAnimation(.easeInOut(duration: Self.shinePass / 2)) { shine = 1 }
+                guard await pause(Self.shinePass / 2) else { return endShine() }
+                withAnimation(.easeInOut(duration: Self.shinePass / 2)) { shine = 0 }
+                guard await pause(Self.shinePass / 2) else { return endShine() }
+            } else {
+                withAnimation(.easeInOut(duration: Self.shinePass)) { sweep = Envelope.sweepEnd }
+                guard await pause(Self.shinePass) else { return endShine() }
+                // Off the paper: back to the start, unseen.
+                sweep = Envelope.sweepStart
+            }
+            guard await pause(Self.shineRest) else { return }
+        }
+    }
+
+    /// The check ended: a band on the paper fades out as it moves (in
+    /// place in Reduce Motion). Once per pass.
+    private func endShine() {
+        guard let start = shinePassStart else { return }
+        let now = Date.now
+        if let gone = shineGoneAt, gone > now { return }
+        let shown = reduceMotion ? Self.shinePass : Self.shinePass * Self.shineOffPaper
+        guard now < start.addingTimeInterval(shown) else { return }
+        shineGoneAt = now.addingTimeInterval(Self.shineFade)
+        withAnimation(.easeOut(duration: Self.shineFade)) { shine = 0 }
+    }
+
+    /// Before the crack, the light fades out. False when the view went away.
+    private func clearShine() async -> Bool {
+        endShine()
+        guard let left = shineGoneAt?.timeIntervalSinceNow, left > 0 else { return true }
+        return await pause(left)
+    }
+
+    // MARK: Opening
+
     private func scheduleOpen() {
         guard openTask == nil else { return }
         openTask = Task { @MainActor in
@@ -747,12 +856,15 @@ struct PaymentLinkEnvelopeHero: View {
             if reduceMotion {
                 await crossFadeOpen()
             } else {
+                guard await clearShine() else { return }
                 await open()
             }
         }
     }
 
     private func open() async {
+        // The light pass is off the paper or faded: back to the start, unseen.
+        sweep = Envelope.sweepStart
         HapticFeedback.shared.softTick()
         withAnimation(.easeOut(duration: 0.12)) { crackEnd = 1 }
         guard await pause(0.02) else { return }
@@ -779,6 +891,7 @@ struct PaymentLinkEnvelopeHero: View {
         guard await pause(0.2) else { return }
 
         // t0 + 0.88: one light sweep.
+        shine = 1
         withAnimation(.easeInOut(duration: 1.2)) { sweep = Envelope.sweepEnd }
     }
 
@@ -791,6 +904,8 @@ struct PaymentLinkEnvelopeHero: View {
         flapLifted = true
         dropped = true
         cardOut = true
+        // The light leaves with the sealed envelope.
+        sweep = Envelope.sweepStart
         HapticFeedback.shared.transactionSuccess()
         withAnimation(.easeInOut(duration: 0.175)) { fade = 1 }
     }

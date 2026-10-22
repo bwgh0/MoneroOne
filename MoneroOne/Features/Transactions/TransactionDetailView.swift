@@ -29,6 +29,9 @@ struct TransactionDetailView: View {
     @State private var txKeyLookedUp = false
     @State private var copiedField: CopyField?
     @State private var explorerURL: URL?
+    /// "Add to Contacts": the address or OpenAlias name to save.
+    @State private var newContactDestination: String?
+    @ObservedObject private var contactStore = ContactStore.shared
 
     private enum CopyField: Hashable {
         case txId
@@ -67,6 +70,41 @@ struct TransactionDetailView: View {
         )
     }
 
+    /// A send to this wallet reads "To This Wallet" and shows only the
+    /// fee, as its Activity row does.
+    private var transferName: WalletTransferName? {
+        WalletTransferName.resolve(
+            record: SendRecordStore().record(txid: transaction.id),
+            isIncoming: transaction.type == .incoming,
+            amount: transaction.amount,
+            fee: transaction.fee,
+            activeWalletId: walletManager.activeWallet?.id,
+            wallets: walletManager.wallets
+        )
+    }
+
+    /// The address, or the OpenAlias name the send used. Nil when the
+    /// destination is unknown, a contact already, or one of your wallets.
+    private var addToContactsDestination: String? {
+        TransactionDetailLogic.addToContactsDestination(
+            sentTo: sentToRows,
+            aliasNames: OpenAliasPinStore().names(network: walletManager.networkType),
+            contacts: contactStore.contacts,
+            isYourWallet: { address in
+                WalletAddressMatch.wallet(
+                    for: address,
+                    wallets: walletManager.wallets,
+                    activeWalletId: walletManager.activeWallet?.id,
+                    activePrimaryAddress: walletManager.primaryAddress
+                ) != nil
+            }
+        )
+    }
+
+    private var shownAmount: Decimal {
+        TransactionDetailLogic.shownAmount(transaction, transfer: transferName)
+    }
+
     private var sentToRows: [SentToRow] {
         guard transaction.type == .outgoing else { return [] }
         return TransactionDetailLogic.sentToRows(
@@ -90,14 +128,14 @@ struct TransactionDetailView: View {
                 HStack {
                     Text("Amount")
                     Spacer()
-                    Text("\(transaction.type == .incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount)) XMR")
+                    Text("\(transaction.type == .incoming ? "+" : "-")\(XMRFormatter.format(shownAmount)) XMR")
                         .fontWeight(.semibold)
                         .foregroundColor(transaction.type == .incoming ? .green : .primary)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(transaction.type == .incoming
-                    ? String(localized: "Amount: plus \(XMRFormatter.format(transaction.amount)) XMR", comment: "VoiceOver: amount received")
-                    : String(localized: "Amount: minus \(XMRFormatter.format(transaction.amount)) XMR", comment: "VoiceOver: amount sent"))
+                    ? String(localized: "Amount: plus \(XMRFormatter.format(shownAmount)) XMR", comment: "VoiceOver: amount received")
+                    : String(localized: "Amount: minus \(XMRFormatter.format(shownAmount)) XMR", comment: "VoiceOver: amount sent"))
 
                 HStack {
                     Text("Status")
@@ -131,7 +169,7 @@ struct TransactionDetailView: View {
 
                 // Fiat value at the time it happened, from price history;
                 // hidden until the history has loaded.
-                if let valueAtTime = priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+                if let valueAtTime = priceHistoryService.fiatValue(xmr: shownAmount, at: transaction.timestamp)
                     .map({ priceService.formatFiat($0) }) {
                     let label = transaction.type == .incoming ? String(localized: "Value when received") : String(localized: "Value when sent")
                     HStack {
@@ -176,6 +214,19 @@ struct TransactionDetailView: View {
                             )
                         }
                     }
+
+                    if let destination = addToContactsDestination {
+                        Button {
+                            newContactDestination = destination
+                        } label: {
+                            Text("Add to Contacts")
+                                .foregroundStyle(.brand)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("transaction.addToContacts")
+                    }
                 }
 
                 if transaction.type == .outgoing {
@@ -205,7 +256,7 @@ struct TransactionDetailView: View {
 
             Section("Details") {
                 // Fiat value at the live price; hidden until one is known.
-                if let valueToday = priceService.formatFiatValue(transaction.amount) {
+                if let valueToday = priceService.formatFiatValue(shownAmount) {
                     HStack {
                         Text("Value today")
                         Spacer()
@@ -274,14 +325,24 @@ struct TransactionDetailView: View {
         .refreshable {
             await walletManager.refresh()
         }
-        .navigationTitle(PaymentLinkActivity.match(transaction, store: paymentLinks).map { Text($0.title) }
-            ?? Text(transaction.type == .incoming ? "Received" : "Sent"))
+        .navigationTitle(TransactionDetailLogic.title(
+            transaction,
+            linkTitle: PaymentLinkActivity.match(transaction, store: paymentLinks)?.title,
+            transfer: transferName
+        ))
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
         .task {
             guard transaction.type == .outgoing, !txKeyLookedUp else { return }
             txKey = walletManager.getTxKey(txId: transaction.id)
             txKeyLookedUp = true
+        }
+        .sheet(isPresented: Binding(
+            get: { newContactDestination != nil },
+            set: { if !$0 { newContactDestination = nil } }
+        )) {
+            ContactEditor(mode: .new(destination: newContactDestination ?? ""))
+                .environmentObject(walletManager)
         }
         .sheet(item: $explorerURL) { url in
             SafariView(url: url)
@@ -389,9 +450,10 @@ struct TransactionDetailView: View {
             sentTo: sentToRows,
             txKey: txKey,
             explorerURL: blockExplorerURL,
-            valueAtTime: priceHistoryService.fiatValue(xmr: transaction.amount, at: transaction.timestamp)
+            valueAtTime: priceHistoryService.fiatValue(xmr: shownAmount, at: transaction.timestamp)
                 .map { priceService.formatFiat($0) },
-            valueToday: priceService.formatFiatValue(transaction.amount)
+            valueToday: priceService.formatFiatValue(shownAmount),
+            transfer: transferName
         )
         copy(
             TransactionDetailLogic.copyAllText(lines),
@@ -454,6 +516,36 @@ enum TransactionDetailLogic {
     /// pre-RingCT transaction with inputs from another wallet), so a sent
     /// transaction with a 0 fee shows "Not available". Only sent
     /// transactions show a fee: a received one, coinbase included, never.
+    /// A send to this wallet moved nothing: only the fee left it, while
+    /// pending and once confirmed.
+    static func shownAmount(_ transaction: MoneroTransaction, transfer: WalletTransferName?) -> Decimal {
+        transfer == .toThisWallet ? transaction.fee : transaction.amount
+    }
+
+    /// What "Add to Contacts" fills in: the OpenAlias name the send used,
+    /// else the address. Only for a send to one destination that is not a
+    /// contact and not one of your wallets.
+    static func addToContactsDestination(
+        sentTo: [SentToRow],
+        aliasNames: [String: OpenAliasName],
+        contacts: [Contact],
+        isYourWallet: (String) -> Bool
+    ) -> String? {
+        guard sentTo.count == 1, let address = sentTo.first?.address, !address.isEmpty else { return nil }
+        guard !isYourWallet(address), ContactMatch.contact(forAddress: address, in: contacts) == nil else { return nil }
+        if let alias = aliasNames[address] {
+            return ContactMatch.contact(forOpenAlias: alias, in: contacts) == nil ? alias.display : nil
+        }
+        return address
+    }
+
+    /// The payment link's name, "To This Wallet", or "Received" / "Sent".
+    static func title(_ transaction: MoneroTransaction, linkTitle: String?, transfer: WalletTransferName?) -> String {
+        if let linkTitle { return linkTitle }
+        if transfer == .toThisWallet, let transfer { return transfer.title }
+        return transaction.type == .incoming ? String(localized: "Received") : String(localized: "Sent")
+    }
+
     static func feeIsKnown(_ fee: Decimal) -> Bool {
         fee > 0
     }
@@ -537,7 +629,8 @@ enum TransactionDetailLogic {
         txKey: String?,
         explorerURL: URL?,
         valueAtTime: String? = nil,
-        valueToday: String? = nil
+        valueToday: String? = nil,
+        transfer: WalletTransferName? = nil
     ) -> [TransactionDetailLine] {
         var lines: [TransactionDetailLine] = []
         func add(_ label: String, _ value: String?, secret: Bool = false) {
@@ -546,8 +639,8 @@ enum TransactionDetailLogic {
         }
 
         let incoming = transaction.type == .incoming
-        add(String(localized: "Type"), incoming ? String(localized: "Received") : String(localized: "Sent"))
-        add(String(localized: "Amount"), "\(incoming ? "+" : "-")\(XMRFormatter.format(transaction.amount)) XMR")
+        add(String(localized: "Type"), transfer == .toThisWallet ? transfer?.title : incoming ? String(localized: "Received") : String(localized: "Sent"))
+        add(String(localized: "Amount"), "\(incoming ? "+" : "-")\(XMRFormatter.format(shownAmount(transaction, transfer: transfer))) XMR")
         if !incoming {
             add(String(localized: "Fee"), feeIsKnown(transaction.fee) ? "\(XMRFormatter.format(transaction.fee)) XMR" : feeNotAvailable)
         }

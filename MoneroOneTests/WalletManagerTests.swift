@@ -723,6 +723,43 @@ final class NeedsRestoreTests: XCTestCase {
 
         XCTAssertEqual(manager.activeWallet?.id, made[1].id, "Skip A: it needs restore")
     }
+
+    func testDeletingAWalletRemovesTheSendRecordsThatNameIt() throws {
+        let made = try addSeedWallets(["A", "B", "C"])
+        let manager = WalletManager()
+        let records = SendRecordStore()
+        records.record(SendRecord(txid: "send-to-a-b", fromWalletId: made[0].id, toWalletId: made[1].id))
+        records.record(SendRecord(txid: "send-to-a-c", fromWalletId: made[0].id, toWalletId: made[2].id))
+        defer { records.clearAll() }
+
+        manager.deleteWallet(id: made[1].id)
+
+        XCTAssertNil(records.record(txid: "send-to-a-b"))
+        XCTAssertNotNil(records.record(txid: "send-to-a-c"))
+    }
+
+    func testRemoveAllWipesTheSendRecords() throws {
+        let made = try addSeedWallets(["A", "B"])
+        let manager = WalletManager()
+        let records = SendRecordStore()
+        records.record(SendRecord(txid: "send-to-wipe", fromWalletId: made[0].id, toWalletId: made[1].id))
+
+        manager.deleteAllWallets()
+
+        XCTAssertNil(records.record(txid: "send-to-wipe"))
+    }
+
+    func testRemoveAllWipesTheContacts() throws {
+        _ = try addSeedWallets(["A"])
+        let manager = WalletManager()
+        ContactStore.shared.add(name: "Dana", destination: "4dana")
+        XCTAssertFalse(ContactStore.shared.contacts.isEmpty)
+
+        manager.deleteAllWallets()
+
+        XCTAssertTrue(ContactStore.shared.contacts.isEmpty)
+        XCTAssertNil(KeychainContactVault().read(), "The Keychain item is gone too")
+    }
 }
 
 /// GitHub #7: turning on Face ID with a Trezor wallet said "Invalid PIN".

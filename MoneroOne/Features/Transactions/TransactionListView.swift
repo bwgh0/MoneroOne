@@ -8,6 +8,8 @@ struct TransactionListView: View {
     @State private var searchText = ""
     @State private var filterType: FilterType = .all
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    /// Rows name contacts: a saved, renamed or deleted contact shows at once.
+    @ObservedObject private var contactStore = ContactStore.shared
     /// Looks at sent links' envelopes while the Links filter is on screen.
     @StateObject private var linkChecker = PaymentLinksStatusChecker()
     @State private var isOnScreen = false
@@ -109,13 +111,17 @@ struct TransactionListView: View {
     }
 
     private var filteredTransactions: [MoneroTransaction] {
-        TransactionListLogic.filter(
+        // Search also finds a row by the name it shows ("To Savings").
+        let namer = searchText.isEmpty ? nil : ActivityRowText.namer(walletManager)
+        let linkRecords = paymentLinks.records
+        return TransactionListLogic.filter(
             sourceTransactions,
             type: filterType,
             receivingIndex: receivingIndex,
             search: searchText,
             asOf: asOf,
-            linkRecords: paymentLinks.records
+            linkRecords: linkRecords,
+            name: { tx in namer.flatMap { ActivityRowText.searchName(of: tx, namer: $0, linkRecords: linkRecords) } }
         )
     }
 
@@ -623,7 +629,8 @@ enum TransactionListLogic {
         type: TransactionListView.FilterType,
         receivingIndex: Int?,
         search: String,
-        linkRecords: [EnvelopeRecord] = []
+        linkRecords: [EnvelopeRecord] = [],
+        name: String? = nil
     ) -> Bool {
         switch type {
         case .all:
@@ -646,6 +653,7 @@ enum TransactionListLogic {
             let hit = tx.id.localizedCaseInsensitiveContains(search)
                 || tx.address.localizedCaseInsensitiveContains(search)
                 || (tx.memo?.localizedCaseInsensitiveContains(search) ?? false)
+                || (name?.localizedCaseInsensitiveContains(search) ?? false)
             guard hit else { return false }
         }
 
@@ -658,10 +666,12 @@ enum TransactionListLogic {
         receivingIndex: Int?,
         search: String,
         asOf: Date? = nil,
-        linkRecords: [EnvelopeRecord] = []
+        linkRecords: [EnvelopeRecord] = [],
+        name: (MoneroTransaction) -> String? = { _ in nil }
     ) -> [MoneroTransaction] {
         let rows = through(asOf, transactions: transactions).filter {
-            matches($0, type: type, receivingIndex: receivingIndex, search: search, linkRecords: linkRecords)
+            matches($0, type: type, receivingIndex: receivingIndex, search: search, linkRecords: linkRecords,
+                    name: search.isEmpty ? nil : name($0))
         }
         return type == .links ? oneFundingRowPerLink(rows, records: linkRecords) : rows
     }
@@ -923,6 +933,8 @@ struct TransactionRow: View {
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     /// Payment link transactions show the link's name, amount and state.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    /// Rows name contacts: a saved, renamed or deleted contact shows at once.
+    @ObservedObject private var contactStore = ContactStore.shared
 
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
@@ -931,6 +943,7 @@ struct TransactionRow: View {
             systemImage: row.systemImage,
             isIncoming: transaction.type == .incoming,
             showsLinkBadge: row.showsLinkBadge,
+            badgeSymbol: row.badgeSymbol ?? "link",
             title: row.title,
             subtitle: row.subtitle
         ) { alignment in
@@ -982,6 +995,9 @@ struct ActivityRowLayout<Amount: View>: View {
     let isIncoming: Bool
     /// A payment link's row: the tile gets the link badge.
     var showsLinkBadge = false
+    /// The badge's glyph: the link, or the wallet on a send between your
+    /// wallets.
+    var badgeSymbol = "link"
     /// "Received", "Sent", or a payment link's name.
     let title: String
     let subtitle: String
@@ -1027,7 +1043,7 @@ struct ActivityRowLayout<Amount: View>: View {
             .frame(width: 36, height: 36)
             .background(tint.opacity(0.15))
             .cornerRadius(8)
-            .paymentLinkBadge(tint, isShown: showsLinkBadge)
+            .paymentLinkBadge(tint, isShown: showsLinkBadge, symbol: badgeSymbol)
     }
 
     private func details(stacked: Bool) -> some View {

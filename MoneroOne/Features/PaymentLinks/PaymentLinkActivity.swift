@@ -187,14 +187,16 @@ extension View {
     /// The link badge on an Activity row's direction disc: a small circle
     /// at the bottom-right, a light tint of `hue` with the link glyph in
     /// it, set in a ring cut out of the disc so the row shows through.
-    func paymentLinkBadge(_ hue: Color, isShown: Bool = true) -> some View {
-        modifier(PaymentLinkBadge(hue: hue, isShown: isShown))
+    /// A send between your wallets gets the wallet glyph in it.
+    func paymentLinkBadge(_ hue: Color, isShown: Bool = true, symbol: String = "link") -> some View {
+        modifier(PaymentLinkBadge(hue: hue, isShown: isShown, symbol: symbol))
     }
 }
 
 private struct PaymentLinkBadge: ViewModifier {
     let hue: Color
     let isShown: Bool
+    let symbol: String
 
     /// From the mockup's 3x frames: a 16 pt badge, a 1.5 pt ring, 5 pt
     /// past the disc's corner.
@@ -216,7 +218,7 @@ private struct PaymentLinkBadge: ViewModifier {
                     .compositingGroup()
                 }
                 .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: "link")
+                    Image(systemName: symbol)
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(hue)
                         .frame(width: size, height: size)
@@ -240,8 +242,10 @@ struct ActivityRowText {
     let title: String
     /// The direction's arrow, for link rows too.
     let systemImage: String
-    /// A link row: the disc gets the link badge.
-    let showsLinkBadge: Bool
+    /// A link row or a send between your wallets: the disc gets a badge.
+    var showsLinkBadge: Bool { badgeSymbol != nil }
+    /// The badge's glyph: the link, or the wallet.
+    let badgeSymbol: String?
     /// The date, on every row.
     let subtitle: String
     /// The amount the row shows (`PaymentLinkActivity.rowAmount`).
@@ -262,15 +266,45 @@ struct ActivityRowText {
         transactionStatus = transaction.displayStatusText
         if let link {
             title = link.record.displayName
-            showsLinkBadge = true
+            badgeSymbol = "link"
             xmr = link.rowAmount(transactionAmount: transaction.amount)
             linkStatus = link.rowStatus(transactionFailed: transaction.status == .failed, walletManager: walletManager)
+        } else if let name = Self.namer(walletManager).name(of: transaction) {
+            title = name.title
+            badgeSymbol = name.badgeSymbol
+            // A send to this wallet moved nothing: only the fee left it.
+            xmr = name.showsFeeOnly ? transaction.fee : transaction.amount
+            linkStatus = nil
         } else {
             title = isIncoming ? String(localized: "Received") : String(localized: "Sent")
-            showsLinkBadge = false
+            badgeSymbol = nil
             xmr = transaction.amount
             linkStatus = nil
         }
+    }
+
+    /// The badge of a send between your wallets.
+    static let walletBadgeSymbol = ActivityNamer.walletBadgeSymbol
+
+    /// The names of the current wallet's rows, from one read of the stores.
+    @MainActor
+    static func namer(_ walletManager: WalletManager) -> ActivityNamer {
+        ActivityNamer(
+            records: SendRecordStore().allRecords(),
+            activeWalletId: walletManager.activeWallet?.id,
+            wallets: walletManager.wallets,
+            contacts: ContactStore.shared.contacts,
+            aliasNames: OpenAliasPinStore().names(network: walletManager.networkType)
+        )
+    }
+
+    /// The name a row shows in place of "Sent" or "Received": the link's,
+    /// or a wallet's. Nil for a plain row.
+    static func searchName(of transaction: MoneroTransaction, namer: ActivityNamer, linkRecords: [EnvelopeRecord]) -> String? {
+        if let link = PaymentLinkActivity.match(transactionId: transaction.id, isIncoming: transaction.type == .incoming, records: linkRecords) {
+            return link.record.displayName
+        }
+        return namer.name(of: transaction)?.title
     }
 
     /// Link rows keep the words VoiceOver said before the names: "Sent by

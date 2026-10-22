@@ -7,6 +7,23 @@ struct SendFlowView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
 
+    /// Transfer (the wallet switcher): the root lists your other wallets in
+    /// place of the address step, and a pick goes on to the amount.
+    private let isTransfer: Bool
+    /// Transfer: the wallet picked under To. Its saved primary address is
+    /// `recipientAddress`.
+    @State private var transferTarget: WalletInfo?
+    @ObservedObject private var contactStore = ContactStore.shared
+    @State private var showContacts = false
+
+    /// Transfer: Done on Sent also closes the wallet switcher.
+    private let onTransferDone: (() -> Void)?
+
+    init(isTransfer: Bool = false, onTransferDone: (() -> Void)? = nil) {
+        self.isTransfer = isTransfer
+        self.onTransferDone = onTransferDone
+    }
+
     @State private var phase: SendFlowPhase = .address
 
     // Send data
@@ -24,6 +41,9 @@ struct SendFlowView: View {
     /// The transaction the review built and signed, not sent (software
     /// wallets). Send broadcasts it, so the fee shown is the fee paid.
     @State private var preparedSend: PreparedTransaction?
+    /// What the broadcast transaction paid the recipient. Sent shows it
+    /// after Max, where the field held the balance.
+    @State private var sentAmount: Decimal?
     /// Bumped when that transaction is gone at Send: the review builds it
     /// again and shows its fee; nothing is sent.
     @State private var reviewRebuild = 0
@@ -92,7 +112,11 @@ struct SendFlowView: View {
         NavigationStack(path: stepPath) {
             ZStack {
                 if canSign {
-                    phaseContent(.address)
+                    if isTransfer {
+                        TransferWalletList(onPick: pickTransferTarget)
+                    } else {
+                        phaseContent(.address)
+                    }
                 } else {
                     viewOnlyBlockedView
                 }
@@ -153,7 +177,8 @@ struct SendFlowView: View {
             // holding it would fill the next Send the user opens on purpose,
             // so it is refused with a message instead.
             guard let request = newRequest, request != shownPaymentRequest else { return }
-            guard phase.acceptsPaymentRequest else {
+            // Transfer pays one of your wallets: a link never changes it.
+            guard !isTransfer, phase.acceptsPaymentRequest else {
                 walletManager.refusePaymentRequest(
                     request,
                     message: String(localized: "Send is still showing another payment. Close it, then open the link again.")
@@ -238,6 +263,10 @@ struct SendFlowView: View {
     private func handleHardwareSheetDismiss() {
         let outcome = walletManager.lastHardwareSessionOutcome
         walletManager.pendingBroadcastStep = nil
+        // Before the refresh, so the new row shows with its name.
+        if case .sentTransaction(let txId) = outcome, !isLinkMode {
+            recordWalletSend(txid: txId)
+        }
         Task {
             await walletManager.refresh()
             await MainActor.run {
@@ -319,6 +348,11 @@ struct SendFlowView: View {
                 isLinkMode: linkModeBinding,
                 isConnected: networkMonitor.isConnected,
                 isValidAddress: walletManager.isValidAddress(recipientInput),
+                matchedWallet: matchedWallet,
+                matchedContact: matchedContact,
+                contactMatches: contactMatches,
+                onShowContacts: { showContacts = true },
+                onPickContact: pickContact,
                 lookup: aliasLookup,
                 onContinue: { summary in
                     HapticFeedback.shared.buttonPress()
@@ -331,6 +365,10 @@ struct SendFlowView: View {
                     goForward(to: .amount)
                 }
             )
+            .sheet(isPresented: $showContacts) {
+                ContactsSheet(selectedId: matchedContact?.id, onPick: pickContact)
+                    .environmentObject(walletManager)
+            }
 
         case .amount:
             SendAmountStep(
@@ -338,7 +376,7 @@ struct SendFlowView: View {
                 memo: isLinkMode ? $linkNote : $memo,
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
-                recipientDisplayName: aliasSummary?.name.display,
+                recipientDisplayName: walletRecipient?.name ?? matchedContact?.name ?? aliasSummary?.name.display,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
@@ -369,6 +407,8 @@ struct SendFlowView: View {
             SendReviewStep(
                 recipientAddress: recipientAddress,
                 aliasSummary: aliasSummary,
+                transfer: transferParties,
+                contact: matchedContact,
                 amountString: amountString,
                 memo: memo,
                 isSendingAll: isSendingAll,
@@ -417,9 +457,12 @@ struct SendFlowView: View {
         case .sending, .success, .error:
             SendStatusStep(
                 phase: shown,
-                amountString: amountString,
+                amountString: SentAmount.text(typed: amountString, isSendingAll: isSendingAll, sent: sentAmount),
                 priceService: priceService,
-                onDone: { dismiss() },
+                onDone: {
+                    if isTransfer { onTransferDone?() }
+                    dismiss()
+                },
                 onRetry: {
                     guard !isLinkMode, !sendInProgress else { return }
                     // A software send broadcasts only a transaction a review
@@ -447,7 +490,10 @@ struct SendFlowView: View {
                     }
                 },
                 onClose: { dismiss() },
-                canRetry: !isLinkMode
+                canRetry: !isLinkMode,
+                successNote: transferTarget.map {
+                    String(localized: "It shows in \($0.name) when you next open that wallet.", comment: "Transfer sent: the wallet that receives it")
+                }
             )
         }
     }
@@ -569,9 +615,84 @@ struct SendFlowView: View {
         withTransaction(transaction) { phase = newPhase }
     }
 
+    // MARK: - Transfer
+
+    /// A To row on Transfer: its wallet's saved address, checked as Send
+    /// checks an address, then the amount.
+    private func pickTransferTarget(_ wallet: WalletInfo, address: String) {
+        guard walletManager.isValidAddress(address) else { return }
+        HapticFeedback.shared.buttonPress()
+        isLinkMode = false
+        aliasSummary = nil
+        transferTarget = wallet
+        recipientAddress = address
+        goForward(to: .amount)
+    }
+
+    /// The wallet whose saved address is in Send's field, this one too.
+    private var matchedWallet: WalletInfo? {
+        guard case .address = OpenAlias.classify(recipientInput),
+              walletManager.isValidAddress(recipientInput) else { return nil }
+        return WalletAddressMatch.wallet(
+            for: recipientInput,
+            wallets: walletManager.wallets,
+            activeWalletId: walletManager.activeWallet?.id,
+            activePrimaryAddress: walletManager.primaryAddress
+        )
+    }
+
+    /// The contact whose address or OpenAlias name is in Send's field. A
+    /// wallet match wins.
+    private var matchedContact: Contact? {
+        guard !isTransfer, !isLinkMode, matchedWallet == nil else { return nil }
+        return ContactMatch.contact(forInput: recipientInput, in: contactStore.contacts)
+    }
+
+    /// Contacts under the field while it has text and no card.
+    private var contactMatches: [Contact] {
+        guard !isTransfer, !isLinkMode, matchedWallet == nil, matchedContact == nil else { return [] }
+        return ContactMatch.matches(recipientInput, in: contactStore.contacts)
+    }
+
+    /// A contact from the Contacts sheet or under the field: its address or
+    /// OpenAlias name fills the field, which shows the contact's card. A
+    /// name is looked up at once, as Paste does.
+    private func pickContact(_ contact: Contact) {
+        isLinkMode = false
+        recipientInput = contact.destination
+        aliasLookup.submit(contact.destination)
+    }
+
+    /// The wallet the amount title and Review name: Transfer's pick, or
+    /// the wallet whose address is in Send's field.
+    private var walletRecipient: WalletInfo? {
+        SendWalletRecipient.wallet(transferTarget: transferTarget, matched: matchedWallet, isTransfer: isTransfer, isLinkMode: isLinkMode)
+    }
+
+    /// From and To on the review of a send to one of your wallets.
+    private var transferParties: TransferParties? {
+        guard let to = walletRecipient, let from = walletManager.activeWallet else { return nil }
+        return TransferParties(from: from, fromAddress: walletManager.primaryAddress, to: to)
+    }
+
+    /// A send that went out to one of this iPhone's wallets, this one too:
+    /// History names it ("To Savings" here, "From Spending" there).
+    private func recordWalletSend(txid: String) {
+        guard let from = walletManager.activeWallet?.id,
+              let to = WalletAddressMatch.wallet(
+                for: recipientAddress,
+                wallets: walletManager.wallets,
+                activeWalletId: from,
+                activePrimaryAddress: walletManager.primaryAddress
+              ) else { return }
+        SendRecordStore().record(SendRecord(txid: txid, fromWalletId: from, toWalletId: to.id))
+    }
+
     // MARK: - Prefill
 
     private func handlePrefill() {
+        // Transfer pays one of your wallets: nothing else fills it.
+        guard !isTransfer else { return }
         if let request = walletManager.currentPaymentRequest() {
             apply(request, animated: false)
             return
@@ -684,6 +805,8 @@ struct SendFlowView: View {
         Task {
             do {
                 let txHash = try await walletManager.send(prepared)
+                recordWalletSend(txid: txHash)
+                sentAmount = SendReviewFee.xmr(prepared.amount)
                 preparedSend = nil
                 transactionHash = txHash
                 await walletManager.refresh()

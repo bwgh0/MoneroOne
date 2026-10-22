@@ -400,6 +400,8 @@ struct RecentTransactionCard: View {
     @EnvironmentObject var priceHistoryService: PriceHistoryService
     /// Payment link transactions show the link's name, amount and state.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    /// Rows name contacts: a saved, renamed or deleted contact shows at once.
+    @ObservedObject private var contactStore = ContactStore.shared
 
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
@@ -415,7 +417,7 @@ struct RecentTransactionCard: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(iconColor)
                 }
-                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge)
+                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge, symbol: row.badgeSymbol ?? "link")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.title)
@@ -431,6 +433,10 @@ struct RecentTransactionCard: View {
                     Text(row.subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        // One line, as the title: "13m ago" broke in two
+                        // next to a wide amount column.
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 Spacer()

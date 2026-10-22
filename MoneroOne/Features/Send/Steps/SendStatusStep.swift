@@ -8,6 +8,9 @@ struct SendStatusStep: View {
     let onRetry: () -> Void
     let onClose: () -> Void
     var canRetry = true
+    /// A line under the transaction ID on success (Transfer: where the
+    /// money shows).
+    var successNote: String? = nil
 
     @State private var showContent = false
     @State private var copiedHash = false
@@ -94,6 +97,14 @@ struct SendStatusStep: View {
                     .accessibilityLabel(copiedHash ? "Transaction ID copied" : "Copy transaction ID")
                     .accessibilityHint("Copies the full transaction ID to clipboard")
 
+                    if let successNote {
+                        Text(successNote)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+
                 case .error(let message):
                     Text("Transaction Failed")
                         .font(.title2.weight(.semibold))
@@ -179,5 +190,14 @@ struct SendStatusStep: View {
 
     private func formatHash(_ hash: String) -> String {
         ReceiveAddressLogic.shortAddress(hash)
+    }
+}
+
+/// The amount Sent shows. After Max the field holds the balance, and the
+/// transaction paid the balance minus the fee: Sent shows what it paid.
+enum SentAmount {
+    static func text(typed: String, isSendingAll: Bool, sent: Decimal?) -> String {
+        guard isSendingAll, let sent else { return typed }
+        return "\(sent)"
     }
 }

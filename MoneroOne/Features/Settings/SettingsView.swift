@@ -36,6 +36,8 @@ struct SettingsView: View {
     @State private var showDiagnosticShare = false
     @State private var showMailComposer = false
     @State private var showNoMailApp = false
+    /// The What's New sheet that the Version row opens.
+    @State private var whatsNewEntry: WhatsNewEntry?
     /// The Language row's value; nil for System.
     @State private var languageChoice = AppLanguageSetting.standard.choice
 
@@ -319,18 +321,37 @@ struct SettingsView: View {
 
                 // About Section
                 Section("About") {
-                    HStack {
-                        SettingsRow(
-                            icon: "info.circle",
-                            title: "Version",
-                            color: .gray
-                        )
-                        Spacer()
-                        Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"))")
-                            .foregroundColor(.secondary)
+                    // Opens this version's What's New notes, like Apple's
+                    // Settings > General > About > iOS Version.
+                    Button {
+                        whatsNewEntry = WhatsNewModel.shared.openFromSettings()
+                    } label: {
+                        HStack {
+                            SettingsRow(
+                                icon: "info.circle",
+                                title: "Version",
+                                color: .gray
+                            )
+                            // Colors, not hierarchical styles: in a List
+                            // button those take the brand tint.
+                            .foregroundStyle(Color.primary)
+                            Spacer()
+                            Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"))")
+                                .foregroundColor(.secondary)
+                            if WhatsNewModel.shared.newestEntry != nil {
+                                Image(systemName: "chevron.right")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(Color(.tertiaryLabel))
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"), build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown")")
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"), build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown")")
+                    .disabled(WhatsNewModel.shared.newestEntry == nil)
+                    .accessibilityIdentifier("settings.versionRow")
+                    .sheet(item: $whatsNewEntry) { entry in
+                        WhatsNewSheet(entry: entry)
+                    }
 
                     Link(destination: URL(string: "https://monero.one")!) {
                         SettingsRow(

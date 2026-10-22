@@ -56,6 +56,12 @@ struct MoneroOneApp: App {
         }
         #endif
 
+        // What's New: at every launch, before onboarding can create a
+        // wallet. With no wallet list on disk (UserDefaults, deleted with the
+        // app, unlike the Keychain) the newest notes count as seen, so a
+        // fresh install, or an update before any wallet, shows no banner.
+        WhatsNewModel.shared.launchCheck(hadWalletFiles: !WalletStore().loadWallets().isEmpty)
+
         // Migrate keychain items (fast no-op after first run — uses UserDefaults flags)
         KeychainStorage().migrateKeychainAccessibilityIfNeeded()
         KeychainStorage().migrateRateLimitIfNeeded()

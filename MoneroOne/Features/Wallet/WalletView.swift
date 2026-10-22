@@ -491,6 +491,7 @@ struct RecentTransactionCard: View {
 private struct WalletHeaderContent: View {
     @Binding var showWalletManager: Bool
     @EnvironmentObject var walletManager: WalletManager
+    @State private var whatsNewEntry: WhatsNewEntry?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -520,8 +521,12 @@ private struct WalletHeaderContent: View {
                 }
             }
             .padding(.horizontal)
+
+            WhatsNewBannerSlot(presented: $whatsNewEntry)
+                .padding(.horizontal)
         }
         .animation(.easeInOut, value: walletManager.syncState)
+        .whatsNewHome(presented: $whatsNewEntry)
     }
 }
 

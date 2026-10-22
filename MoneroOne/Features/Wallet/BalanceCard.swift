@@ -31,6 +31,8 @@ struct BalanceCard: View {
     var arrival: MoneyArrival? = nil
     /// The moment settled.
     var onArrivalDone: () -> Void = {}
+    var username: UsernameBinding? = nil
+    var onUsernameTap: () -> Void = {}
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var balanceSize: CGFloat = 32
@@ -132,6 +134,35 @@ struct BalanceCard: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            if let username {
+                Button(action: onUsernameTap) {
+                    HStack(spacing: 10) {
+                        (Text(verbatim: "@").foregroundColor(.brand) + Text(verbatim: username.displayHandle).foregroundColor(.primary))
+                            .font(.system(size: 18, weight: .medium)).tracking(-0.35).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .medium)).foregroundStyle(.tertiary)
+                    }.padding(.horizontal, 24).frame(height: 48)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Your username, \(username.shortName)")
+                .accessibilityHint("Opens your username card")
+                .accessibilityIdentifier("username.home")
+                Divider()
+            }
+            balanceContent
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .shadow(color: colorScheme == .light ? .black.opacity(0.08) : .clear, radius: 12, x: 0, y: 4)
+        }
+        .overlay(alignment: .top) {
+            if username != nil { UsernameTopEdge().stroke(Color.brand, lineWidth: 2).frame(height: 20).allowsHitTesting(false) }
+        }
+    }
+
+    private var balanceContent: some View {
         VStack(spacing: 16) {
             HStack(alignment: .statusLine) {
                 // The past covers the status and pills without replacing
@@ -280,16 +311,6 @@ struct BalanceCard: View {
         .padding(.top, 24)
         // The lines are 44 tall; their own space closes the card.
         .padding(.bottom, showsOpenLinks ? 12 : 24)
-        .background {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.secondarySystemGroupedBackground))
-                .shadow(
-                    color: colorScheme == .light ? Color.black.opacity(0.08) : Color.clear,
-                    radius: 12,
-                    x: 0,
-                    y: 4
-                )
-        }
         // A tap anywhere on the card opens and closes History, as the
         // History button does. The buttons keep their own taps, the open
         // History keeps its taps and scrub, and a drag still scrolls.

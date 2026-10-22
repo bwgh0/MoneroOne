@@ -15,6 +15,9 @@ struct WalletView: View {
     /// The balance card's open-link lines open Activity's Links filter.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
     @State private var showLinks = false
+    @ObservedObject private var usernames = UsernameStore.shared
+    @State private var showUsernameClaim = false
+    @State private var shownUsername: UsernameBinding?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Viewport and above-activity heights, so the empty activity card can
     /// fill the leftover height on short screens (iPhone Duo cover).
@@ -29,7 +32,16 @@ struct WalletView: View {
     /// The home at Now with nothing open on it.
     private var isHomeIdle: Bool {
         walletManager.isUnlocked && selectedHistoryPoint == nil && !isHistoryExpanded
-            && !showSend && !showReceive && !showWalletManager && !showLinks && hardwareSheetIntent == nil
+            && !showSend && !showReceive && !showWalletManager && !showLinks && !showUsernameClaim && shownUsername == nil && hardwareSheetIntent == nil
+    }
+
+    private var ownUsername: UsernameBinding? {
+        usernames.binding(walletKey: walletManager.usernameWalletKey, network: walletManager.usernameNetwork)
+    }
+    private var canOfferUsername: Bool {
+        UsernameConfiguration.current != nil && walletManager.isUnlocked && !walletManager.isViewOnly && !walletManager.usernameWalletKey.isEmpty
+            && !walletManager.isHardwareWallet && ownUsername == nil && usernames.hasLocalClaimSlot
+            && (usernames.state.pending == nil || (usernames.state.pending?.walletKey == walletManager.usernameWalletKey && usernames.state.pending?.network == walletManager.usernameNetwork))
     }
 
     /// Height the empty activity card needs to reach the bottom of the
@@ -118,7 +130,9 @@ struct WalletView: View {
                             heroBalance: arrivalHold.held ?? MoneyArrivalWatch(walletManager: walletManager, links: paymentLinks)
                                 .heroBalance(balanceAtHistory: balanceAtHistory),
                             arrival: playingArrival,
-                            onArrivalDone: { playingArrival = nil }
+                            onArrivalDone: { playingArrival = nil },
+                            username: ownUsername,
+                            onUsernameTap: { shownUsername = ownUsername }
                         )
                         .id(walletManager.walletSessionId)
                         .padding(.horizontal)
@@ -163,22 +177,36 @@ struct WalletView: View {
             .background {
                 Color.clear.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
             }
-            .walletHeader(showWalletManager: $showWalletManager)
+            .walletHeader(showWalletManager: $showWalletManager, offersUsername: canOfferUsername,
+                          onClaimUsername: { showUsernameClaim = true })
             .navigationDestination(isPresented: $showLinks) {
                 TransactionListView(initialFilter: .links)
             }
             // Looks at sent links on new blocks, so a claimed link leaves
             // the balance card's line. Never during History or a sheet.
             .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil && !isHistoryExpanded
-                                    && !showSend && !showReceive && !showWalletManager)
+                                    && !showSend && !showReceive && !showWalletManager && !showUsernameClaim && shownUsername == nil)
             .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
                                      && !isHistoryExpanded && !showSend && !showReceive
-                                     && !showWalletManager && !showLinks && hardwareSheetIntent == nil)
+                                     && !showWalletManager && !showLinks && hardwareSheetIntent == nil && !showUsernameClaim && shownUsername == nil)
             .playsMoneyArrivals(isIdle: isHomeIdle, playing: $playingArrival, balanceAtHistory: $balanceAtHistory, hold: $arrivalHold)
             .onChange(of: walletManager.walletSessionId) { _, _ in
+                shownUsername = nil
+                showUsernameClaim = false
                 selectedHistoryPoint = nil
                 historyModel = BalanceHistoryModel()
                 isHistoryExpanded = false
+            }
+            .task {
+                #if DEBUG && targetEnvironment(simulator)
+                // Offline visual verification only; no effect on ordinary app launches.
+                let args = CommandLine.arguments
+                if args.contains("--uitesting") && args.contains("--balance-history-fixture") && args.contains("--username-preview") {
+                    if args.contains("--username-details") { shownUsername = ownUsername }
+                    if args.contains("--username-switcher") { showWalletManager = true }
+                    if args.contains("--username-history") { isHistoryExpanded = true }
+                }
+                #endif
             }
             .onChange(of: showSend) { _, isPresented in
                 if isPresented { selectedHistoryPoint = nil }
@@ -192,6 +220,20 @@ struct WalletView: View {
                     .environmentObject(walletManager)
                     .environmentObject(priceService)
                     .closesForPaymentLink()
+            }
+            .sheet(isPresented: $showUsernameClaim) {
+                UsernameFlowView(store: usernames, walletKey: walletManager.usernameWalletKey,
+                    walletSession: walletManager.walletSessionId, walletName: walletManager.activeWallet?.name ?? "",
+                    walletEmoji: walletManager.activeWallet?.emoji ?? "", network: walletManager.usernameNetwork)
+                    .environmentObject(walletManager)
+            }
+            .sheet(item: $shownUsername) { binding in
+                UsernameDetailsView(binding: binding, walletName: walletManager.activeWallet?.name ?? "",
+                                    walletEmoji: walletManager.activeWallet?.emoji ?? "")
+            }
+            .onChange(of: walletManager.isUnlocked) { _, unlocked in
+                if !unlocked { showUsernameClaim = false; shownUsername = nil }
+                else { usernames.reload() }
             }
             .sheet(isPresented: $showSend) {
                 SendFlowView()
@@ -506,6 +548,8 @@ struct RecentTransactionCard: View {
 
 private struct WalletHeaderContent: View {
     @Binding var showWalletManager: Bool
+    var offersUsername = false
+    var onClaimUsername: () -> Void = {}
     @EnvironmentObject var walletManager: WalletManager
 
     var body: some View {
@@ -520,6 +564,12 @@ private struct WalletHeaderContent: View {
                     .environmentObject(walletManager)
             }
             .padding(.horizontal)
+
+            if offersUsername && !showWalletManager {
+                Button("Get Your Username", action: onClaimUsername)
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.brand)
+                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading).padding(.horizontal)
+            }
 
             if walletManager.isTestnet {
                 TestnetBanner()
@@ -543,14 +593,14 @@ private struct WalletHeaderContent: View {
 
 private extension View {
     @ViewBuilder
-    func walletHeader(showWalletManager: Binding<Bool>) -> some View {
+    func walletHeader(showWalletManager: Binding<Bool>, offersUsername: Bool = false, onClaimUsername: @escaping () -> Void = {}) -> some View {
         if #available(iOS 26.0, *) {
             self.safeAreaBar(edge: .top, spacing: 12) {
-                WalletHeaderContent(showWalletManager: showWalletManager)
+                WalletHeaderContent(showWalletManager: showWalletManager, offersUsername: offersUsername, onClaimUsername: onClaimUsername)
             }
         } else {
             self.safeAreaInset(edge: .top, spacing: 12) {
-                WalletHeaderContent(showWalletManager: showWalletManager)
+                WalletHeaderContent(showWalletManager: showWalletManager, offersUsername: offersUsername, onClaimUsername: onClaimUsername)
             }
         }
     }

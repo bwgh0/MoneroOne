@@ -2,11 +2,13 @@ import SwiftUI
 
 struct AnimatedWalletIcon: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
     @State private var shineOffset: CGFloat = -1.5
     @State private var floating = false
 
     var size: CGFloat = 120
+    var symbol: String = "wallet.bifold"
 
     private var cornerRadius: CGFloat { size * 0.24 }
 
@@ -61,7 +63,7 @@ struct AnimatedWalletIcon: View {
                     )
 
                 // Wallet symbol with gradient
-                Image(systemName: "wallet.bifold")
+                Image(systemName: symbol)
                     .font(.system(size: size * 0.45, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(
@@ -115,6 +117,7 @@ struct AnimatedWalletIcon: View {
         .scaleEffect(appeared ? 1.0 : 0.4)
         .opacity(appeared ? 1.0 : 0)
         .onAppear {
+            if reduceMotion { appeared = true; return }
             // Entrance
             withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
                 appeared = true

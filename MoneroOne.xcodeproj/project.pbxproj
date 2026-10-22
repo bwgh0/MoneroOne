@@ -205,6 +205,8 @@
 		9A7E1C0D000E00000000B00E /* OpenPaymentLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000E00000000F00E /* OpenPaymentLinks.swift */; };
 		CF030EEFC593E8E7B61A3B67 /* UsernameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D7CD8D011014EFE4EDBD3A /* UsernameStore.swift */; };
 		C34C226794D657B24E5C7D17 /* UsernameRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8547681C25FE51B41D63FE3 /* UsernameRegistry.swift */; };
+		2E5A07090DE34561A9B74502 /* UsernameCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E35F81CEB4EBE5660169F3DC /* UsernameCard.swift */; };
+		439BC84857DE0B4FDD035282 /* UsernameFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8004E2B3F301CA38A58B7FEF /* UsernameFlowView.swift */; };
 		C07CB92CB0CBFFB79D8779D3 /* OAHCore in Frameworks */ = {isa = PBXBuildFile; productRef = DCC89ED4C7035690F7058744 /* OAHCore */; };
 /* End PBXBuildFile section */
 
@@ -448,6 +450,8 @@
 		9A7E1C0D000E00000000F00E /* OpenPaymentLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenPaymentLinks.swift; sourceTree = "<group>"; };
 		72D7CD8D011014EFE4EDBD3A /* UsernameStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Core/Username/UsernameStore.swift"; sourceTree = SOURCE_ROOT; };
 		E8547681C25FE51B41D63FE3 /* UsernameRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Core/Username/UsernameRegistry.swift"; sourceTree = SOURCE_ROOT; };
+		E35F81CEB4EBE5660169F3DC /* UsernameCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Features/Username/UsernameCard.swift"; sourceTree = SOURCE_ROOT; };
+		8004E2B3F301CA38A58B7FEF /* UsernameFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Features/Username/UsernameFlowView.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -696,6 +700,8 @@
 		453FE5EA1C7EBE179675DED5 = {
 			isa = PBXGroup;
 			children = (
+				8004E2B3F301CA38A58B7FEF /* UsernameFlowView.swift */,
+				E35F81CEB4EBE5660169F3DC /* UsernameCard.swift */,
 				E8547681C25FE51B41D63FE3 /* UsernameRegistry.swift */,
 				CAFE02000000000000000001 /* UsernameResolver.swift */,
 				72D7CD8D011014EFE4EDBD3A /* UsernameStore.swift */,
@@ -1180,6 +1186,8 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				439BC84857DE0B4FDD035282 /* UsernameFlowView.swift in Sources */,
+				2E5A07090DE34561A9B74502 /* UsernameCard.swift in Sources */,
 				C34C226794D657B24E5C7D17 /* UsernameRegistry.swift in Sources */,
 				CAFE02000000000000000002 /* UsernameResolver.swift in Sources */,
 				CF030EEFC593E8E7B61A3B67 /* UsernameStore.swift in Sources */,

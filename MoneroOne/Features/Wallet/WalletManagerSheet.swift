@@ -291,6 +291,8 @@ enum WalletRowSurface {
 /// badge, the name, the orange balance and the 8…8 address, then the
 /// trailing slots. The switcher and the claim sheet's wallet rows use it.
 struct WalletRowContent<Trailing: View>: View {
+    @ObservedObject private var usernames = UsernameStore.shared
+    @AppStorage("isTestnet") private var isTestnet = false
     let wallet: WalletInfo
     /// False leaves the balance line out (the claim sheet's wallet row).
     let showsBalance: Bool
@@ -360,7 +362,10 @@ struct WalletRowContent<Trailing: View>: View {
                 }
 
                 // The 8…8 short form, as in the Receive rows and on Android.
-                if let address, !address.isEmpty {
+                if let username = usernames.binding(walletKey: wallet.cachedPrimaryAddress ?? "", network: isTestnet ? "testnet" : "mainnet") {
+                    Text(verbatim: username.shortName)
+                        .font(.caption2).lineLimit(1).foregroundStyle(.secondary)
+                } else if let address, !address.isEmpty {
                     Text(verbatim: ReceiveAddressLogic.shortAddress(address))
                         .font(.caption2)
                         .lineLimit(1)

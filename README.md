@@ -46,6 +46,37 @@ parent/
 
 Select the `MoneroOne` scheme, pick a simulator or your device, and build.
 
+### Username development branch (2026-10-21)
+
+The native claim flow uses the existing `oah-core` and registry, through the new `oah-mobile` C boundary. This branch is based on `feature/motion-moments` (`0648931`). It needs the signing kit at `89e08a4` (`feature/handles-sign`), alongside this checkout. Neither the kit changes nor this feature have been published.
+
+Build the local verifier before opening Xcode:
+
+```sh
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+OAH_REPO=/path/to/oah bash scripts/build-oah-ios.sh
+```
+
+The generated XCFramework is ignored by Git. The simulator slice is arm64, matching the existing MoneroKit binary. The local OAH repository must contain `crates/oah-mobile` (`feature/mobile-claim`). Do not regenerate the Xcode project; its package and file references are maintained directly.
+
+Debug builds offer registration only with these explicit environment variables:
+
+- `USERNAME_REGISTRY_URL=http://localhost:8787`
+- `USERNAME_REGISTRAR_KEY=<64 lowercase hex, pinned from the local registry setup>`
+- `USERNAME_RULES_HASH=<64 lowercase hex, pinned from the local rules>`
+
+Initialize the local registry using its README, including its development epoch 0. The app checks those pins against `/v1/info` and the canonical rules; fetching an untrusted key is not a substitute for supplying the expected pin. The production build cannot enable this local device-proof implementation. Home and Welcome make no eligibility or username requests; network work begins at the final Claim tap.
+
+Approved design: 27R with one balance-card surface, an orange outer top edge, a straight separator, and only `@username` on Home. The existing glass wallet switcher and inline History behavior remain. The strip opens the Inset + Core card, which shows both `@Joe` and `joe@monero.one`, with `MONERO ONE` at top right. Each size uses fixed type regardless of name length; the shared rules enforce 3–15 characters. Both appearances use the same structure. Copy offers the two formats and the share link; Share includes a native rendering of the card.
+
+Bindings are stored in the device-only Keychain and scoped by network plus the wallet's primary address. Development and production use separate Keychain services. The cache ID is intentionally not used: it changes during a rescan. The primary address is never sent as an identity key; registration uses a designated subaddress. The signed pending request is saved before POST. Recovery verifies the exact signed genesis, wallet address, rules and registrar pin before publishing the binding. A wallet switch or lock dismisses the flow, while an admitted claim still saves against its captured wallet. The local 12-month eligibility date is only a hint; the registry enforces the phone slot.
+
+Verification: `MoneroOneTests/UsernameTests` covers rules, wallet/network scoping, rescan identity, failed writes, concurrency, interrupted-response recovery with a real wallet2 vector, registrar pin failures and forged signatures. Run this unit class on an arm64 simulator, not the UI test target.
+
+Offline native preview (simulator Debug only, no signing or Keychain writes): launch with `--uitesting --balance-history-fixture --username-preview`. Optional flags: `--username-details`, `--username-switcher`, `--username-history`. Set `USERNAME_PREVIEW_HANDLE` to compare `Joe`, `xmr_garden_club` or 15-character names.
+
+This implements the local claim-and-card milestone. Public registration still needs the existing launch gates: real device verification, production pins/epoch 0, hosted registry/DNS, finalized terms and the outstanding wallet-file protection work. First-contact username resolution and Send verification, ownership restoration on a new phone, rotation and owner notices remain separate work. A development card is not a publicly resolvable username.
+
 ### CI
 
 CI runs automatically on every push and pull request to `main` — it builds for the iOS Simulator (no signing required). Tagged releases (`v*`) trigger a TestFlight deploy and publish a sideloadable IPA to [GitHub Releases](https://github.com/bwgh0/MoneroOne/releases).

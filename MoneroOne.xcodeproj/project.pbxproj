@@ -199,6 +199,7 @@
 		9A7E1C0D000C00000000B00C /* EnvelopeLinkV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000C00000000F00C /* EnvelopeLinkV2.swift */; };
 		9A7E1C0D000D00000000B00D /* PaymentLinkActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000D00000000F00D /* PaymentLinkActivity.swift */; };
 		9A7E1C0D000E00000000B00E /* OpenPaymentLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000E00000000F00E /* OpenPaymentLinks.swift */; };
+		C07CB92CB0CBFFB79D8779D3 /* OAHCore in Frameworks */ = {isa = PBXBuildFile; productRef = DCC89ED4C7035690F7058744 /* OAHCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -442,6 +443,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C07CB92CB0CBFFB79D8779D3 /* OAHCore in Frameworks */,
 				2B66E3C39AB91C177152ADCB /* MoneroKit in Frameworks */,
 				42B3FDC8C5DE699F5A9B4ABB /* HdWalletKit in Frameworks */,
 			);
@@ -962,6 +964,7 @@
 			);
 			name = MoneroOne;
 			packageProductDependencies = (
+				DCC89ED4C7035690F7058744 /* OAHCore */,
 				21A9BF46E283EEB36F8735D8 /* MoneroKit */,
 				4BC8724B0D2F0107CA711C57 /* HdWalletKit */,
 			);
@@ -1040,6 +1043,7 @@
 			mainGroup = 453FE5EA1C7EBE179675DED5;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				088D79FFD85856FC956F0279 /* OAHCore */,
 				6B0D518F49CF572F6E5E24CC /* XCRemoteSwiftPackageReference "HdWalletKit.Swift" */,
 				F7F77DA4C9E88ABD6A6E4D9B /* XCLocalSwiftPackageReference "../MoneroKit.Swift" */,
 			);
@@ -1657,6 +1661,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../MoneroKit.Swift;
 		};
+		088D79FFD85856FC956F0279 /* OAHCore */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/OAHCore; };
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1680,6 +1685,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 			package = 6B0D518F49CF572F6E5E24CC /* XCRemoteSwiftPackageReference "HdWalletKit.Swift" */;
 			productName = HdWalletKit;
 		};
+		DCC89ED4C7035690F7058744 /* OAHCore */ = {isa = XCSwiftPackageProductDependency; productName = OAHCore; };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C1A34F0FC74827F8198C8B2A /* Project object */;

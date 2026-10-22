@@ -22,10 +22,10 @@ enum UsernameTrust: String, Codable {
   }
   var text: String {
     switch self {
-    case .published: return "Signature checked"
-    case .pending: return "Not yet in the public log"
-    case .stale: return "Username records are out of date"
-    case .expired: return "Using a previously checked username"
+    case .published: return String(localized: "Signature checked")
+    case .pending: return String(localized: "Not yet in the public log")
+    case .stale: return String(localized: "Username records are out of date")
+    case .expired: return String(localized: "Using a previously checked username")
     }
   }
 }

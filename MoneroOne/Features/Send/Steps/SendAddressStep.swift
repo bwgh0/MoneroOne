@@ -97,7 +97,8 @@ struct SendAddressStep: View {
         } message: { dialog in
             switch dialog {
             case .username(let summary):
-                Text("Confirm with the recipient that \(summary.name.display) is their username before your first payment.\(summary.usernameTrust == .published ? "" : "\n\n" + summary.verificationText)")
+                let confirm = String(localized: "Confirm with the recipient that \(summary.name.display) is their username before your first payment.")
+                Text(summary.usernameTrust == .published ? confirm : confirm + "\n\n" + summary.verificationText)
             case .changed(let summary, let pinnedAt):
                 let paidOn = DateFormatter.localizedString(from: pinnedAt, dateStyle: .medium, timeStyle: .none)
                 if let recipientName = summary.recipientName {

@@ -95,7 +95,7 @@ struct UsernameFlowView: View {
             .opacity(stage == .revealed && !appeared ? 0 : 1)
             walletNote
             if stage == .claiming {
-              Text("Claiming…").foregroundStyle(.secondary).accessibilityAddTraits(
+              Text("username.claiming").foregroundStyle(.secondary).accessibilityAddTraits(
                 .updatesFrequently)
             } else if stage == .revealed, let binding = claimed {
               UsernameActions(binding: binding)
@@ -145,10 +145,10 @@ struct UsernameFlowView: View {
     }
   }
   private var validationMessage: String {
-    guard !input.isEmpty else { return "3–15 characters. Letters, numbers and _." }
+    guard !input.isEmpty else { return String(localized: "3–15 characters. Letters, numbers and _.") }
     do {
       _ = try UsernameRules.normalize(input)
-      return "3–15 characters. Availability is checked when you claim."
+      return String(localized: "3–15 characters. Availability is checked when you claim.")
     } catch { return UsernameRules.message(for: error) }
   }
   private var walletNote: some View {
@@ -158,7 +158,7 @@ struct UsernameFlowView: View {
         .multilineTextAlignment(.center)
     }.padding(.vertical, 12)
   }
-  private func primary(_ title: String, disabled: Bool = false, action: @escaping () -> Void)
+  private func primary(_ title: LocalizedStringKey, disabled: Bool = false, action: @escaping () -> Void)
     -> some View
   {
     Button(action: action) { Text(title).font(.headline).frame(maxWidth: .infinity, minHeight: 54) }

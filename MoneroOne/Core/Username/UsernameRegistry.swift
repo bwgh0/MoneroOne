@@ -6,15 +6,15 @@ enum UsernameFailure: Error, LocalizedError {
   case server(String)
   var errorDescription: String? {
     switch self {
-    case .storage: return "Your username could not be saved securely. Unlock the app and try again."
+    case .storage: return String(localized: "Your username could not be saved securely. Unlock the app and try again.")
     case .walletChanged:
-      return "The wallet changed. Open this flow from the wallet you want to use."
-    case .unavailable: return "This username is unavailable."
-    case .noFreeClaim: return "A free username isn't available on this phone."
-    case .notConfigured: return "Username registration isn't available yet."
-    case .verification: return "The username response could not be verified. Please try again."
+      return String(localized: "The wallet changed. Open this flow from the wallet you want to use.")
+    case .unavailable: return String(localized: "This username is unavailable.")
+    case .noFreeClaim: return String(localized: "A free username isn't available on this phone.")
+    case .notConfigured: return String(localized: "Username registration isn't available yet.")
+    case .verification: return String(localized: "The username response could not be verified. Please try again.")
     case .pendingClaim:
-      return "Finish checking the previous claim before choosing another username."
+      return String(localized: "Finish checking the previous claim before choosing another username.")
     case .server(let message): return message
     }
   }
@@ -51,12 +51,12 @@ enum UsernameRules {
   static func message(for error: Error) -> String {
     guard let code = (error as? OAHError)?.code else { return error.localizedDescription }
     switch code {
-    case "handle.too_short": return "Use at least 3 characters."
-    case "handle.too_long": return "Use no more than 15 characters."
-    case "handle.first_not_letter": return "Start with a letter."
-    case "handle.double_underscore": return "Use only one _ in a row."
-    case "handle.blocked": return "This username is reserved to protect users from scams."
-    default: return "Use only a–z, 0–9 and _."
+    case "handle.too_short": return String(localized: "Use at least 3 characters.")
+    case "handle.too_long": return String(localized: "Use no more than 15 characters.")
+    case "handle.first_not_letter": return String(localized: "Start with a letter.")
+    case "handle.double_underscore": return String(localized: "Use only one _ in a row.")
+    case "handle.blocked": return String(localized: "This username is reserved to protect users from scams.")
+    default: return String(localized: "Use only a–z, 0–9 and _.")
     }
   }
 }
@@ -105,11 +105,11 @@ final class UsernameRegistry {
       if code == "device.slot_used" { throw UsernameFailure.noFreeClaim }
       if code == "name.unavailable" { throw UsernameFailure.unavailable }
       if code == "handle.reserved" || code == "handle.blocked" {
-        throw UsernameFailure.server("This username is reserved to protect users from scams.")
+        throw UsernameFailure.server(String(localized: "This username is reserved to protect users from scams."))
       }
       if code == "nonce.invalid" { throw ExpiredClaim() }
       throw UsernameFailure.server(
-        "The username service couldn't complete the request. Please try again.")
+        String(localized: "The username service couldn't complete the request. Please try again."))
     }
     return data
   }
@@ -296,7 +296,7 @@ final class UsernameRegistry {
         return try accept(record, pending: pending, store: store)
       } catch is ExpiredClaim {
         try store.savePending(nil)
-        throw UsernameFailure.server("The request expired. Please claim again.")
+        throw UsernameFailure.server(String(localized: "The request expired. Please claim again."))
       } catch let error as UsernameFailure {
         switch error {
         case .noFreeClaim, .unavailable: try store.savePending(nil)

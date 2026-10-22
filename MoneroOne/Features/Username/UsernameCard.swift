@@ -32,6 +32,10 @@ struct UsernameCard: View {
           )
           // Only the card body casts the shadow. The flat mark and the text never do.
           .shadow(color: .black.opacity(dark ? 0.35 : 0.15), radius: 14 * s, y: 12 * s)
+        // Core's darker underside: a lip just below the bottom edge.
+        RoundedRectangle(cornerRadius: 30 * s).offset(y: 3 * s)
+          .subtracting(RoundedRectangle(cornerRadius: 30 * s))
+          .fill(Color(hexValue: dark ? 0xA5410B : 0xB74C17))
         RoundedRectangle(cornerRadius: 18 * s)
           .fill(
             LinearGradient(

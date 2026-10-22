@@ -135,6 +135,8 @@ final class UsernameRegistry {
     try store.beginClaim()
     defer { store.endClaim() }
     let handle = try UsernameRules.normalize(displayHandle)
+    // This wallet's claim for this name, cleared because the name was free.
+    var released: PendingUsernameClaim?
     if let pending = store.state.pending {
       let same = pending.walletKey == walletKey && pending.network == network && pending.handle == handle
       let admitted: UsernameBinding?
@@ -153,6 +155,7 @@ final class UsernameRegistry {
       }
       // The name is free or another owner holds it. The saved claim is gone,
       // and a new claim starts here (a taken name stops at the check below).
+      if same { released = pending }
     }
     guard isCurrentWallet(), !store.storageError else { throw UsernameFailure.walletChanged }
     let info = try object(await request("info"))
@@ -166,7 +169,15 @@ final class UsernameRegistry {
       throw UsernameFailure.walletChanged
     }
     do {
-      _ = try await request("handles/" + handle)
+      let existing = try object(await request("handles/" + handle))
+      // The earlier signed request landed after the check above: it is this
+      // wallet's name, with no new signature.
+      if let released, let rows = existing["records"] as? [[String: Any]], rows.count == 1,
+        let record = rows.first?["record"] as? String,
+        let binding = try? accept(record, pending: released, store: store)
+      {
+        return binding
+      }
       throw UsernameFailure.unavailable
     } catch is RegistryNotFound {}
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }

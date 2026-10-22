@@ -3942,6 +3942,8 @@ class WalletManager: ObservableObject {
         Task { await EnvelopeRuntime.shared.wipeAll() }
         // OpenAlias pins belong to this device's payment history.
         OpenAliasPinStore().clearAll()
+        // No wallet is left to finish a saved username claim.
+        try? UsernameStore.shared.savePending(nil)
         // The Face ID item holds the old PIN. Left behind, it would offer
         // Face ID on the next wallet's PIN screen and fail with that PIN,
         // which counts toward the lockout.

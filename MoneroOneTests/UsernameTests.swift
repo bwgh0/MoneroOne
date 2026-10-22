@@ -283,6 +283,32 @@ final class UsernameTests: XCTestCase {
     } catch {}
     XCTAssertNil(store.state.pending)
   }
+  func testEarlierRequestThatLandsDuringTheNewClaimStillBinds() async throws {
+    let store = UsernameStore(persistence: UsernameMemory())
+    try store.savePending(pending())
+    var lookups = 0
+    UsernameURLProtocol.handler = { [info, f] request in
+      XCTAssertEqual(request.httpMethod, "GET")
+      switch request.url?.path ?? "" {
+      case "/v1/handles/alice":
+        lookups += 1
+        // Free at the first check; the earlier request lands before the second.
+        return lookups == 1
+          ? (404, ["error": ["code": "handle.not_found"]])
+          : (200, ["records": [["record": f["record"]!]]])
+      case "/v1/info": return (200, info)
+      case "/v1/rules": return (200, Data(f["rules"]!.utf8))
+      default:
+        XCTFail("Unexpected request \(request.url?.path ?? "")")
+        throw URLError(.badURL)
+      }
+    }
+    let accepted = try await claim(client(), store)
+    XCTAssertEqual(lookups, 2)
+    XCTAssertEqual(accepted.genesisHash, f["hash"])
+    XCTAssertNil(store.state.pending)
+    XCTAssertEqual(store.binding(walletKey: "wallet-A", network: "mainnet")?.handle, "alice")
+  }
   func testDeletingAWalletClearsOnlyItsSavedClaim() throws {
     let store = UsernameStore(persistence: UsernameMemory())
     try store.savePending(pending())

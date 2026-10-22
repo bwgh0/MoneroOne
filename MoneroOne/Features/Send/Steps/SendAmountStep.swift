@@ -7,6 +7,7 @@ struct SendAmountStep: View {
     let recipientAddress: String
     /// The OpenAlias name, when the recipient came from one.
     var recipientDisplayName: String? = nil
+    var usernameAmountLimit: Decimal? = nil
     let unlockedBalance: Decimal
     let priceService: PriceService
     /// Where a filled-in amount came from; the step says so above the amount.
@@ -34,6 +35,11 @@ struct SendAmountStep: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Spacer(minLength: 12)
+
+                    if let limit = usernameAmountLimit {
+                        Text("Username records are out of date. Payments are limited to \(XMRFormatter.format(limit)) XMR until they refresh.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
 
                     if let amountPrefill {
                         HStack(spacing: 4) {
@@ -170,6 +176,7 @@ struct SendAmountStep: View {
                         .background(Color.brand.opacity(0.15))
                         .clipShape(Capsule())
                         .accessibilityLabel("Send maximum amount")
+                        .disabled(usernameAmountLimit != nil)
                         .removedInLinkMode(isLinkMode)
                     }
                     .padding(.horizontal, 4)
@@ -288,6 +295,7 @@ struct SendAmountStep: View {
     private var canContinue: Bool {
         guard let amount = Decimal(string: amountString),
               amount > 0,
+              usernameAmountLimit.map({ !isSendingAll && amount <= $0 }) ?? true,
               amount <= unlockedBalance else {
             return false
         }

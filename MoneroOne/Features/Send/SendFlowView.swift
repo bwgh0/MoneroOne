@@ -347,6 +347,7 @@ struct SendFlowView: View {
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
                 recipientDisplayName: aliasSummary?.name.display,
+                usernameAmountLimit: aliasSummary?.usernameTrust?.amountLimit,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
@@ -654,6 +655,41 @@ struct SendFlowView: View {
     }
 
     private func sendTransaction() {
+        Task {
+            if !isLinkMode, let summary = aliasSummary, summary.name.isUsername {
+                let walletID = walletManager.activeWallet?.id
+                let network = walletManager.networkType
+                let result = await OpenAliasResolver().resolve(summary.name, network: network) { address in
+                    OpenAliasLookupModel.check(address, network: network)
+                }
+                guard walletManager.activeWallet?.id == walletID else {
+                    sendInProgress = false
+                    phase = .error(message: String(localized: "The wallet changed. Review the payment again."))
+                    return
+                }
+                let failure: String?
+                switch result {
+                case .failure(let error): failure = error.message
+                case .success(let checked):
+                    if checked.address != recipientAddress || checked.usernameTrust != summary.usernameTrust {
+                        failure = String(localized: "The username changed since your review. Look it up again before sending.")
+                    } else if let limit = checked.usernameTrust?.amountLimit,
+                              isSendingAll || (Decimal(string: amountString) ?? .greatestFiniteMagnitude) > limit {
+                        failure = String(localized: "Username records are out of date. The payment limit is 0.1 XMR.")
+                    } else { failure = nil }
+                }
+                if let failure {
+                    sendInProgress = false
+                    discardPreparedSend()
+                    phase = .error(message: failure)
+                    return
+                }
+            }
+            sendCheckedTransaction()
+        }
+    }
+
+    private func sendCheckedTransaction() {
         if isLinkMode {
             sendLinkFunding()
             return

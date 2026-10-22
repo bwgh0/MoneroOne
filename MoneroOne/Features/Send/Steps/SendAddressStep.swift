@@ -22,6 +22,7 @@ struct SendAddressStep: View {
 
     /// The dialog that Continue shows on a resolved name (spec 5.2).
     private enum ContinueDialog {
+        case username(OpenAliasSummary)
         case changed(OpenAliasSummary, pinnedAt: Date)
         case unsigned(OpenAliasSummary)
     }
@@ -86,6 +87,8 @@ struct SendAddressStep: View {
         ) { dialog in
             Button("Cancel", role: .cancel) {}
             switch dialog {
+            case .username(let summary):
+                Button("Continue") { onContinue(summary) }
             case .changed(let summary, _):
                 Button("Use New Address") { onContinue(summary) }
             case .unsigned(let summary):
@@ -93,6 +96,8 @@ struct SendAddressStep: View {
             }
         } message: { dialog in
             switch dialog {
+            case .username(let summary):
+                Text("Confirm with the recipient that \(summary.name.display) is their username before your first payment.\(summary.usernameTrust == .published ? "" : "\n\n" + summary.verificationText)")
             case .changed(let summary, let pinnedAt):
                 let paidOn = DateFormatter.localizedString(from: pinnedAt, dateStyle: .medium, timeStyle: .none)
                 if let recipientName = summary.recipientName {
@@ -113,7 +118,7 @@ struct SendAddressStep: View {
             // Typed text goes to the lookup from the binding: when
             // two keystrokes land in one frame, SwiftUI drops an
             // onChange call, and the lookup kept a part of the name.
-            TextField("Enter XMR address or OpenAlias", text: Binding(
+            TextField("Address, @username or OpenAlias", text: Binding(
                 get: { recipientInput },
                 set: { newValue in
                     recipientInput = newValue
@@ -335,6 +340,7 @@ struct SendAddressStep: View {
 
     private var dialogTitle: Text {
         switch dialog {
+        case .username: return Text("Check Username")
         case .changed: return Text("Address Changed")
         case .unsigned: return Text("Name Not Signed")
         case nil: return Text(verbatim: "")
@@ -352,7 +358,9 @@ struct SendAddressStep: View {
         guard let summary = resolvedSummary else { return }
         if case .changed(let pinnedAt) = summary.pin {
             dialog = .changed(summary, pinnedAt: pinnedAt)
-        } else if summary.dnssec == .off {
+        } else if let trust = summary.usernameTrust, summary.pin == .none || trust != .published {
+            dialog = .username(summary)
+        } else if summary.usernameTrust == nil && summary.dnssec == .off {
             dialog = .unsigned(summary)
         } else {
             onContinue(summary)

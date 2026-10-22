@@ -70,11 +70,23 @@ final class UsernameResolutionTests: XCTestCase {
     XCTAssertEqual(result.usernameTrust, .published)
     XCTAssertNotEqual(result.address, "forged API address")
     XCTAssertNotNil(store.receipts["alice"])
-    let sub = try await client.resolve(
-      OpenAliasName(display: "@work.alice", query: "work.alice.monero.one"))
-    XCTAssertNotEqual(result.address, sub.address)
-    XCTAssertEqual(store.receipts.count, 1, "Subhandles share the root identity pin")
-    XCTAssertEqual((store.receipts["alice"]?["recipients"] as? [String])?.count, 2)
+    XCTAssertEqual((store.receipts["alice"]?["recipients"] as? [String])?.count, 1)
+  }
+  func testDottedNameIsNotAUsername() async throws {
+    let store = ReceiptMemory()
+    let client = resolver(store: store)
+    ResolutionURLProtocol.handler = { request in
+      XCTFail("A dotted name must not reach the registry: \(request.url?.path ?? "")")
+      throw URLError(.badURL)
+    }
+    do {
+      _ = try await client.resolve(
+        OpenAliasName(display: "@work.alice", query: "work.alice.monero.one"))
+      XCTFail("A dotted name resolved")
+    } catch {
+      XCTAssertEqual(error as? OpenAliasFailure, .usernameVerification)
+    }
+    XCTAssertTrue(store.receipts.isEmpty)
   }
   func testNoAddressEscapesWhenReceiptCannotBeSaved() async throws {
     let store = ReceiptMemory()

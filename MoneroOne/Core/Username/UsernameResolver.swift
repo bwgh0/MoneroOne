@@ -20,6 +20,8 @@ enum UsernameTrust: String, Codable {
 enum UsernameRecipient {
   /// Classification is local and deliberately checks syntax only. The shared
   /// core checks the frozen rules and signatures when a lookup completes.
+  /// A username is one label (`@joe`, `joe@monero.one`): the `@` form never
+  /// takes a dot, so `@getmonero.org` is not a username.
   static func localPart(_ raw: String) -> String? {
     let lower = raw.lowercased()
     let local: String
@@ -32,13 +34,9 @@ enum UsernameRecipient {
     } else {
       return nil
     }
-    let labels = local.split(separator: ".", omittingEmptySubsequences: false)
-    guard (1...2).contains(labels.count),
-      labels.allSatisfy({ label in
-        label.utf8.count >= 3 && label.utf8.count <= 15 && !label.contains("__")
-          && label.first.map { $0 >= "a" && $0 <= "z" } == true
-          && label.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 95 }
-      })
+    guard local.utf8.count >= 3, local.utf8.count <= 15, !local.contains("__"),
+      local.first.map({ $0 >= "a" && $0 <= "z" }) == true,
+      local.utf8.allSatisfy({ (97...122).contains($0) || (48...57).contains($0) || $0 == 95 })
     else { return nil }
     return local
   }

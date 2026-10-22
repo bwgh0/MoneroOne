@@ -273,11 +273,26 @@ final class OpenAliasTests: XCTestCase {
             assertName(input, query: "joe.monero.one", display: "@joe")
             if case .name(let name) = OpenAlias.classify(input) { XCTAssertTrue(name.isUsername) }
         }
-        assertName("@work.Joe", query: "work.joe.monero.one", display: "@work.joe")
         assertName("@xmr_garden_club", query: "xmr_garden_club.monero.one", display: "@xmr_garden_club")
         for invalid in ["@jo", "@abcdefghijklmnop", "@joe__smith", "@jóe", "@@joe", "@joe/path"] {
             XCTAssertEqual(OpenAlias.classify(invalid), .invalidName)
         }
+    }
+
+    /// A username is one label. The `@` form never takes a dot, and a
+    /// dotted name under monero.one stays reserved, with no lookup.
+    func testUsernameIsOneLabel() {
+        assertName("@joe", query: "joe.monero.one", display: "@joe")
+        assertName("joe@monero.one", query: "joe.monero.one", display: "@joe")
+        for input in ["@paypal.com", "@getmonero.org", "@work.joe", "@joe."] {
+            XCTAssertEqual(OpenAlias.classify(input), .invalidName, input)
+        }
+        for input in ["a.b@monero.one", "work.joe@monero.one", "a.b.monero.one"] {
+            XCTAssertEqual(OpenAlias.classify(input), .reserved, input)
+        }
+        XCTAssertNil(UsernameRecipient.localPart("@work.joe"))
+        XCTAssertNil(UsernameRecipient.localPart("work.joe@monero.one"))
+        XCTAssertEqual(UsernameRecipient.localPart("@Joe"), "joe")
     }
 
     func testClassifyOperatorNames() {
@@ -324,7 +339,7 @@ final class OpenAliasTests: XCTestCase {
 
     func testClassifyInvalidNames() {
         let inputs = [
-            "@ab.org", "joe@", "a@b@c.com",
+            "@getmonero.org", "joe@", "a@b@c.com",
             "d\u{043E}nate@getmonero.org",  // Cyrillic "о"
             "-pay.example.com", "a..b.com", "pay.example.123",
             "pay.onion", "joe@localhost",

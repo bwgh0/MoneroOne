@@ -202,7 +202,10 @@ struct UsernameFlowView: View {
         ) { appeared = true }
         HapticFeedback.shared.transactionSuccess()
       } catch UsernameFailure.noFreeClaim { stage = .noFreeClaim } catch {
-        self.error = error.localizedDescription
+        // A failure the app does not name (the network, say) gets one plain message, not the system's.
+        self.error =
+          (error as? UsernameFailure)?.localizedDescription
+          ?? String(localized: "The claim could not be completed. Please try again.")
         stage = .confirm
       }
     }

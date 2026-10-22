@@ -149,15 +149,13 @@ extension Color {
   }
 }
 
-/// Only the top edge curves. The boundary below the username stays flat.
+/// The Core edge on Home: a band inside the card's top edge that thins to
+/// nothing around the corners (the card shape minus itself moved down).
 struct UsernameTopEdge: Shape {
+  var cornerRadius: CGFloat = 20
+  var thickness: CGFloat = 2
   func path(in rect: CGRect) -> Path {
-    let r: CGFloat = min(20, rect.width / 2)
-    var path = Path()
-    path.move(to: CGPoint(x: 0, y: r))
-    path.addQuadCurve(to: CGPoint(x: r, y: 1), control: CGPoint(x: 0, y: 1))
-    path.addLine(to: CGPoint(x: rect.maxX - r, y: 1))
-    path.addQuadCurve(to: CGPoint(x: rect.maxX, y: r), control: CGPoint(x: rect.maxX, y: 1))
-    return path
+    let card = RoundedRectangle(cornerRadius: cornerRadius).path(in: rect)
+    return card.subtracting(card.offsetBy(dx: 0, dy: thickness))
   }
 }

@@ -162,8 +162,8 @@ struct BalanceCard: View {
                 .fill(Color(.secondarySystemGroupedBackground))
                 .shadow(color: colorScheme == .light ? .black.opacity(0.08) : .clear, radius: 12, x: 0, y: 4)
         }
-        .overlay(alignment: .top) {
-            if username != nil { UsernameTopEdge().stroke(Color.brand, lineWidth: 2).frame(height: 20).allowsHitTesting(false) }
+        .overlay {
+            if username != nil { UsernameTopEdge().fill(Color.brand).allowsHitTesting(false) }
         }
     }
 

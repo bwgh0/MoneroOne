@@ -483,10 +483,7 @@ struct OpenAliasResolver {
         ]
     }
 
-    struct Proxy: Equatable {
-        let host: String
-        let port: NWEndpoint.Port
-    }
+    typealias Proxy = TorNetwork.Proxy
 
     /// The Tor setting: a SOCKS proxy `host:port`, empty when Tor is off.
     var proxyAddress: () -> String? = { UserDefaults.standard.string(forKey: "proxyAddress") }
@@ -513,7 +510,16 @@ struct OpenAliasResolver {
         let timeout = torOn ? Config.dohTimeoutTor : Config.dohTimeoutDirect
         let transport = makeTransport(Self.sessionConfiguration(proxy: proxy, timeout: timeout))
         let bridge = DnsBridge(transport: transport, servers: servers, queryCap: Config.queryCap)
+        // A Tor switch during the lookup ends it: no request of the old
+        // route goes out after the switch.
+        let readProxy = proxyAddress
+        let route = TorNetwork.route(for: proxyText)
+        let routeWatch = TorNetwork.onRouteChange(from: route, current: { TorNetwork.route(for: readProxy()) }) {
+            bridge.stop()
+            transport.invalidate()
+        }
         defer {
+            NotificationCenter.default.removeObserver(routeWatch)
             bridge.stop()
             transport.invalidate()
         }
@@ -561,16 +567,7 @@ struct OpenAliasResolver {
 
     /// `host:port`, split at the last `:`. Nil when it fails to parse.
     static func parseProxy(_ raw: String) -> Proxy? {
-        let text = raw.trimmingCharacters(in: .whitespaces)
-        guard let colon = text.lastIndex(of: ":") else { return nil }
-        var host = String(text[..<colon])
-        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
-        let portText = text[text.index(after: colon)...]
-        guard !host.isEmpty,
-              portText.allSatisfy(\.isASCII), portText.allSatisfy(\.isNumber),
-              let value = UInt16(portText), value > 0,
-              let port = NWEndpoint.Port(rawValue: value) else { return nil }
-        return Proxy(host: host, port: port)
+        TorNetwork.parseProxy(raw)
     }
 
     /// A new ephemeral session for each lookup: no cookies, no cache, no
@@ -586,9 +583,7 @@ struct OpenAliasResolver {
         configuration.waitsForConnectivity = false
         configuration.timeoutIntervalForRequest = timeout
         if let proxy {
-            configuration.proxyConfigurations = [
-                ProxyConfiguration(socksv5Proxy: .hostPort(host: NWEndpoint.Host(proxy.host), port: proxy.port)),
-            ]
+            configuration.proxyConfigurations = [TorNetwork.proxyConfiguration(for: proxy)]
         }
         return configuration
     }

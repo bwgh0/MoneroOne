@@ -145,6 +145,8 @@
 		0A1A50000000000000000B02 /* OpenAliasResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1A50000000000000000F02 /* OpenAliasResolver.swift */; };
 		0A1A50000000000000000B03 /* OpenAliasViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1A50000000000000000F03 /* OpenAliasViews.swift */; };
 		0A1A50000000000000000B04 /* OpenAliasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1A50000000000000000F04 /* OpenAliasTests.swift */; };
+		70E0A00000000000000000B1 /* TorNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E0A00000000000000000F1 /* TorNetwork.swift */; };
+		70E0A00000000000000000B2 /* TorNetworkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E0A00000000000000000F2 /* TorNetworkTests.swift */; };
 		TXSTATUS123456789ABCDEF01 /* MoneroTransaction+Status.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */; };
 		79EHBYMQ890HSWGX9A766GWT /* TrustedLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = GL3BJBT1LYNYZPYODUN2Z9VQ /* TrustedLocation.swift */; };
 		QAMZ0UB2O8VQDF4FSC4AUXUE /* TrustedLocationsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TCL37IUYOMDWC3RVR9YBDRJA /* TrustedLocationsManager.swift */; };
@@ -377,6 +379,8 @@
 		0A1A50000000000000000F02 /* OpenAliasResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAliasResolver.swift; sourceTree = "<group>"; };
 		0A1A50000000000000000F03 /* OpenAliasViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAliasViews.swift; sourceTree = "<group>"; };
 		0A1A50000000000000000F04 /* OpenAliasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAliasTests.swift; sourceTree = "<group>"; };
+		70E0A00000000000000000F1 /* TorNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorNetwork.swift; sourceTree = "<group>"; };
+		70E0A00000000000000000F2 /* TorNetworkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorNetworkTests.swift; sourceTree = "<group>"; };
 		TXSTATUSREF12345678ABCDE /* MoneroTransaction+Status.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroTransaction+Status.swift"; sourceTree = "<group>"; };
 		GL3BJBT1LYNYZPYODUN2Z9VQ /* TrustedLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocation.swift; sourceTree = "<group>"; };
 		TCL37IUYOMDWC3RVR9YBDRJA /* TrustedLocationsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustedLocationsManager.swift; sourceTree = "<group>"; };
@@ -504,6 +508,7 @@
 				CAC4E1D0000000000000D40T /* GethashesDeviceDiagTests.swift */,
 				DEE91100000000000000F002 /* MoneroPaymentURITests.swift */,
 				0A1A50000000000000000F04 /* OpenAliasTests.swift */,
+				70E0A00000000000000000F2 /* TorNetworkTests.swift */,
 			);
 			path = MoneroOneTests;
 			sourceTree = "<group>";
@@ -703,6 +708,7 @@
 				D77F0BB8CE9A785C4AC06B27 /* NodeManager.swift */,
 				0A1A50000000000000000F01 /* OpenAlias.swift */,
 				0A1A50000000000000000F02 /* OpenAliasResolver.swift */,
+				70E0A00000000000000000F1 /* TorNetwork.swift */,
 				A1B2C3D4E5F60003DEADBEEF /* DiagnosticLog.swift */,
 				C8E3A1A09E96D4C5D54FF186 /* PriceAlertNotificationManager.swift */,
 				8689F5157606DB44F6B09ECD /* PriceAlertService.swift */,
@@ -1091,6 +1097,7 @@
 D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				DEE91100000000000000B002 /* MoneroPaymentURITests.swift in Sources */,
 				0A1A50000000000000000B04 /* OpenAliasTests.swift in Sources */,
+				70E0A00000000000000000B2 /* TorNetworkTests.swift in Sources */,
 				CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */,
 				9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */,
 				9A7E1C0D00FE00000000B0FE /* PaymentLinkV2Tests.swift in Sources */,
@@ -1184,6 +1191,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				DCD815950DC4B62A202683AD /* NodeManager.swift in Sources */,
 				0A1A50000000000000000B01 /* OpenAlias.swift in Sources */,
 				0A1A50000000000000000B02 /* OpenAliasResolver.swift in Sources */,
+				70E0A00000000000000000B1 /* TorNetwork.swift in Sources */,
 				A1B2C3D4E5F60004DEADBEEF /* DiagnosticLog.swift in Sources */,
 				3FA12723C8F524DD76D5080C /* NodeSettingsView.swift in Sources */,
 				84BEB133F2C7D5434D9A865D /* PINEntryView.swift in Sources */,

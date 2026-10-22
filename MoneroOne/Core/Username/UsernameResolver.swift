@@ -34,9 +34,10 @@ enum UsernameTrust: String, Codable {
 enum UsernameSendRecheck {
   /// The message that stops the payment, or nil to send it. Only a new
   /// address stops it. A new trust level alone does not: its amount limit
-  /// applies to this payment.
+  /// applies to this payment. `sentAmount` is what the payment really sends
+  /// (for send all, the review's sweep amount); nil when it is not known.
   static func failure(
-    reviewedAddress: String, amount: Decimal?, isSendingAll: Bool,
+    reviewedAddress: String, sentAmount: Decimal?,
     result: Result<OpenAliasResult, OpenAliasFailure>
   ) -> String? {
     switch result {
@@ -47,7 +48,7 @@ enum UsernameSendRecheck {
           localized: "The username changed since your review. Look it up again before sending.")
       }
       if let trust = checked.usernameTrust, let limit = trust.amountLimit,
-        isSendingAll || (amount ?? .greatestFiniteMagnitude) > limit
+        (sentAmount ?? .greatestFiniteMagnitude) > limit
       {
         return trust.limitMessage
       }

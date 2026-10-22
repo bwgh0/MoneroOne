@@ -110,11 +110,10 @@ final class UsernameResolutionTests: XCTestCase {
 
   private let reviewed = "4" + String(repeating: "A", count: 94)
   private func recheck(
-    _ trust: UsernameTrust?, address: String? = nil, amount: String = "0.05",
-    all: Bool = false
+    _ trust: UsernameTrust?, address: String? = nil, amount: String? = "0.05"
   ) -> String? {
     UsernameSendRecheck.failure(
-      reviewedAddress: reviewed, amount: Decimal(string: amount), isSendingAll: all,
+      reviewedAddress: reviewed, sentAmount: amount.flatMap { Decimal(string: $0) },
       result: .success(
         OpenAliasResult(
           address: address ?? reviewed, recipientName: nil, dnssec: .off, usernameTrust: trust)))
@@ -128,8 +127,7 @@ final class UsernameResolutionTests: XCTestCase {
     }
     XCTAssertEqual(
       UsernameSendRecheck.failure(
-        reviewedAddress: reviewed, amount: 1, isSendingAll: false,
-        result: .failure(.usernameVerification)),
+        reviewedAddress: reviewed, sentAmount: 1, result: .failure(.usernameVerification)),
       OpenAliasFailure.usernameVerification.message)
   }
   func testRecheckAppliesTheLimitOfTheNewTrust() {
@@ -138,10 +136,20 @@ final class UsernameResolutionTests: XCTestCase {
     XCTAssertEqual(recheck(.stale, amount: "0.5"), stale)
     XCTAssertEqual(recheck(.expired, amount: "0.11"), stale)
     XCTAssertNil(recheck(.stale, amount: "0.1"))
-    XCTAssertEqual(recheck(.stale, amount: "0.01", all: true), stale)
+    // An amount that is not known counts as over the limit.
+    XCTAssertEqual(recheck(.stale, amount: nil), stale)
     // Published at broadcast: no limit.
     XCTAssertNil(recheck(.published, amount: "5"))
-    XCTAssertNil(recheck(.published, amount: "5", all: true))
+    XCTAssertNil(recheck(.published, amount: nil))
+  }
+  /// The review switches to send all when the amount and its fee pass the
+  /// balance. The sweep amount it really sends decides, not send all itself.
+  func testSendAllPassesWhenItsSweepAmountIsUnderTheLimit() {
+    let stale = "Username records are out of date. The payment limit is 0.1 XMR."
+    let sweep = SendReviewFee.xmr(90_000_000_000)  // 0.09 XMR
+    XCTAssertNil(recheck(.stale, amount: "\(sweep)"))
+    XCTAssertNil(recheck(.pending, amount: "\(sweep)"))
+    XCTAssertEqual(recheck(.stale, amount: "\(SendReviewFee.xmr(500_000_000_000))"), stale)
   }
   func testPendingGetsTheLimitWithItsOwnMessage() {
     let pending = "This username is not in the public log yet. The payment limit is 0.1 XMR."
@@ -156,7 +164,7 @@ final class UsernameResolutionTests: XCTestCase {
     XCTAssertEqual(UsernameTrust.expired.limitMessage, stale)
     // Published at review, pending at broadcast: the pending limit applies.
     XCTAssertEqual(recheck(.pending, amount: "0.5"), pending)
-    XCTAssertEqual(recheck(.pending, amount: "0.01", all: true), pending)
+    XCTAssertEqual(recheck(.pending, amount: nil), pending)
     XCTAssertNil(recheck(.pending, amount: "0.1"))
   }
 }

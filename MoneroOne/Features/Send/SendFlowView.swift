@@ -667,9 +667,13 @@ struct SendFlowView: View {
                     phase = .error(message: String(localized: "The wallet changed. Review the payment again."))
                     return
                 }
+                // Send all sends the review's sweep amount. A hardware wallet
+                // builds its sweep later; it sends at most the unlocked balance.
+                let sentAmount = isSendingAll
+                    ? preparedSend.map { SendReviewFee.xmr($0.amount) } ?? walletManager.displayUnlockedBalance
+                    : Decimal(string: amountString)
                 let failure = UsernameSendRecheck.failure(
-                    reviewedAddress: recipientAddress, amount: Decimal(string: amountString),
-                    isSendingAll: isSendingAll, result: result)
+                    reviewedAddress: recipientAddress, sentAmount: sentAmount, result: result)
                 // Same address, new trust level: the amount step and the
                 // review use its limit from now on.
                 if case .success(let checked) = result, checked.address == recipientAddress {

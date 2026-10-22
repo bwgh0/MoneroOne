@@ -152,6 +152,12 @@ final class UsernameStore: ObservableObject {
     try persistence.write(next)
     state = next
   }
+  /// While a saved claim may hold a name, only its own wallet offers a
+  /// claim. Other wallets show nothing until a check settles it.
+  func offersClaim(walletKey: String, network: String) -> Bool {
+    guard let pending = state.pending else { return true }
+    return pending.walletKey == walletKey && pending.network == network
+  }
   var hasLocalClaimSlot: Bool {
     !storageError && (state.nextFreeClaim.map { $0 <= Date() } ?? true)
   }

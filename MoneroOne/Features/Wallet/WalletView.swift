@@ -38,11 +38,10 @@ struct WalletView: View {
     private var ownUsername: UsernameBinding? {
         usernames.binding(walletKey: walletManager.usernameWalletKey, network: walletManager.usernameNetwork)
     }
-    /// Another wallet's saved claim does not hide the offer: a claim from
-    /// this wallet checks that claim first and stops only while its result is unknown.
     private var canOfferUsername: Bool {
         UsernameConfiguration.current != nil && walletManager.isUnlocked && !walletManager.isViewOnly && !walletManager.usernameWalletKey.isEmpty
             && !walletManager.isHardwareWallet && ownUsername == nil && usernames.hasLocalClaimSlot
+            && usernames.offersClaim(walletKey: walletManager.usernameWalletKey, network: walletManager.usernameNetwork)
     }
 
     /// Height the empty activity card needs to reach the bottom of the

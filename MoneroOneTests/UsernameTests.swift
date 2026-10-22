@@ -326,6 +326,16 @@ final class UsernameTests: XCTestCase {
     XCTAssertLessThanOrEqual(name.size().width, available)
     XCTAssertGreaterThan(BalanceCard.usernameMaxSize, 18)
   }
+  func testOnlyTheSavedClaimsWalletOffersAClaim() throws {
+    let store = UsernameStore(persistence: UsernameMemory())
+    XCTAssertTrue(store.offersClaim(walletKey: "wallet-B", network: "mainnet"))
+    try store.savePending(pending())
+    XCTAssertTrue(store.offersClaim(walletKey: "wallet-A", network: "mainnet"))
+    XCTAssertFalse(store.offersClaim(walletKey: "wallet-B", network: "mainnet"))
+    XCTAssertFalse(store.offersClaim(walletKey: "wallet-A", network: "testnet"))
+    try store.clearPending(walletKey: "wallet-A")
+    XCTAssertTrue(store.offersClaim(walletKey: "wallet-B", network: "mainnet"))
+  }
   func testDeletingAWalletClearsOnlyItsSavedClaim() throws {
     let store = UsernameStore(persistence: UsernameMemory())
     try store.savePending(pending())

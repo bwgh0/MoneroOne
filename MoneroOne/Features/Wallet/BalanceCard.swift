@@ -147,7 +147,7 @@ struct BalanceCard: View {
                             .font(.system(size: min(usernameSize, Self.usernameMaxSize), weight: .medium)).tracking(-0.35).lineLimit(1)
                         Spacer(minLength: 0)
                         Image(systemName: "chevron.right").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                    }.padding(.horizontal, 24).frame(height: 48)
+                    }.padding(.horizontal, 24).frame(height: 48).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Your username, \(username.shortName)")

@@ -3950,6 +3950,7 @@ class WalletManager: ObservableObject {
 
     func deleteWallet(id: UUID) {
         let isDeletingActive = (id == activeWallet?.id)
+        let usernameKey = wallets.first { $0.id == id }?.cachedPrimaryAddress ?? ""
 
         // Delete keychain data for this wallet — both seed and view-only slots;
         // deleteSeed wipes shared pinhash/salt as well.
@@ -3959,6 +3960,10 @@ class WalletManager: ObservableObject {
         walletStore.removeWallet(id: id)
         wallets = walletStore.loadWallets()
         walletsNeedingRestore.remove(id)
+        // Its saved username claim goes too, unless another row holds the same wallet.
+        if !wallets.contains(where: { $0.cachedPrimaryAddress == usernameKey }) {
+            try? UsernameStore.shared.clearPending(walletKey: usernameKey)
+        }
 
         if isDeletingActive {
             // Stop current wallet

@@ -136,11 +136,23 @@ final class UsernameRegistry {
     defer { store.endClaim() }
     let handle = try UsernameRules.normalize(displayHandle)
     if let pending = store.state.pending {
-      guard pending.walletKey == walletKey, pending.network == network, pending.handle == handle
-      else {
+      let same = pending.walletKey == walletKey && pending.network == network && pending.handle == handle
+      let admitted: UsernameBinding?
+      do {
+        admitted = try await recheck(pending, store: store)
+      } catch {
+        // The result is still unknown: the saved claim stays and blocks
+        // other names until a later check finds it.
+        if same { throw error }
         throw UsernameFailure.pendingClaim
       }
-      return try await submit(pending, store: store)
+      if let admitted {
+        if same { return admitted }
+        // The earlier claim went through and used this phone's free claim.
+        throw UsernameFailure.noFreeClaim
+      }
+      // The name is free or another owner holds it. The saved claim is gone,
+      // and a new claim starts here (a taken name stops at the check below).
     }
     guard isCurrentWallet(), !store.storageError else { throw UsernameFailure.walletChanged }
     let info = try object(await request("info"))
@@ -185,6 +197,64 @@ final class UsernameRegistry {
     return try await submit(pending, store: store)
   }
 
+  /// Checks a claim saved before its POST. Returns the binding when the name
+  /// points to the claim's wallet, and nil after it clears the claim (the
+  /// name is free, or another owner holds it). Throws, and keeps the claim,
+  /// while the registry cannot answer or its answer does not verify.
+  private func recheck(_ pending: PendingUsernameClaim, store: UsernameStore) async throws
+    -> UsernameBinding?
+  {
+    // A claim signed for another registry can never finish against this one.
+    guard pending.registrarKey == configuration.registrarKey,
+      pending.rulesHash == configuration.rulesHash
+    else {
+      try store.savePending(nil)
+      return nil
+    }
+    let records: [[String: Any]]
+    do {
+      let existing = try object(await request("handles/" + pending.handle))
+      guard let rows = existing["records"] as? [[String: Any]], !rows.isEmpty else {
+        throw UsernameFailure.verification
+      }
+      records = rows
+    } catch is RegistryNotFound {
+      try store.savePending(nil)
+      return nil
+    }
+    guard let genesis = records.first?["record"] as? String else {
+      throw UsernameFailure.verification
+    }
+    if Self.isOtherGenesis(genesis, pending: pending) {
+      try store.savePending(nil)
+      return nil
+    }
+    guard records.count == 1 else { throw UsernameFailure.verification }
+    return try accept(genesis, pending: pending, store: store)
+  }
+
+  /// True when the name's first record is a different genesis than the one
+  /// this phone signed: another owner holds the name. A record with this
+  /// genesis but a bad signature is not proof of that.
+  private static func isOtherGenesis(_ record: String, pending: PendingUsernameClaim) -> Bool {
+    do {
+      _ = try OAHCore.call(claimCheck(record, pending: pending))
+      return false
+    } catch let error as OAHError {
+      return error.code == "mobile.claim_mismatch"
+    } catch { return false }
+  }
+
+  private static func claimCheck(_ record: String, pending: PendingUsernameClaim) -> [String: Any] {
+    [
+      "op": "verify_claim", "record": record,
+      "expected_record_hash": pending.recordHash, "handle": pending.handle,
+      "subaddress": pending.subaddress,
+      "network": pending.network, "registrar_key": pending.registrarKey, "rules": pending.rules,
+      "rules_hash": pending.rulesHash,
+    ]
+  }
+
   private func submit(_ pending: PendingUsernameClaim, store: UsernameStore) async throws
     -> UsernameBinding
   {
@@ -192,15 +262,6 @@ final class UsernameRegistry {
       pending.rulesHash == configuration.rulesHash
     else {
       throw UsernameFailure.verification
-    }
-    do {
-      let existing = try object(await request("handles/" + pending.handle))
-      guard let records = existing["records"] as? [[String: Any]], records.count == 1,
-        let record = records.first?["record"] as? String
-      else { throw UsernameFailure.verification }
-      return try accept(record, pending: pending, store: store)
-    } catch is RegistryNotFound {
-      // Nothing was admitted yet; use the same signed request.
     }
     #if DEBUG
       let proof = Data(store.state.deviceID.utf8).base64EncodedString()
@@ -241,13 +302,7 @@ final class UsernameRegistry {
     -> UsernameBinding
   {
     do {
-      _ = try OAHCore.call([
-        "op": "verify_claim", "record": record,
-        "expected_record_hash": pending.recordHash, "handle": pending.handle,
-        "subaddress": pending.subaddress,
-        "network": pending.network, "registrar_key": pending.registrarKey, "rules": pending.rules,
-        "rules_hash": pending.rulesHash,
-      ])
+      _ = try OAHCore.call(Self.claimCheck(record, pending: pending))
     } catch { throw UsernameFailure.verification }
     let binding = UsernameBinding(
       walletKey: pending.walletKey, network: pending.network,

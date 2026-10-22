@@ -20,6 +20,10 @@ struct UsernameFlowView: View {
   private enum Stage { case welcome, choose, confirm, claiming, revealed, noFreeClaim }
 
   private var valid: Bool { (try? UsernameRules.normalize(input)) != nil }
+  /// This wallet's saved claim: the flow stays on it until a check settles it.
+  private var resumesPendingClaim: Bool {
+    store.state.pending.map { $0.walletKey == walletKey && $0.network == network } ?? false
+  }
   private var currentWallet: Bool {
     wallets.isUnlocked && wallets.walletSessionId == walletSession
       && wallets.usernameWalletKey == walletKey
@@ -116,7 +120,7 @@ struct UsernameFlowView: View {
       )
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
-          if (stage == .choose || stage == .confirm) && store.state.pending == nil {
+          if (stage == .choose || stage == .confirm) && !resumesPendingClaim {
             Button("Back", systemImage: "chevron.left") {
               error = nil
               stage = stage == .confirm ? .choose : .welcome

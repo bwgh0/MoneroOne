@@ -130,6 +130,12 @@ final class UsernameStore: ObservableObject {
     try persistence.write(next)
     state = next
   }
+  /// A deleted wallet can never finish its saved claim. Clearing it frees
+  /// the claim for the other wallets on this phone.
+  func clearPending(walletKey: String) throws {
+    guard !walletKey.isEmpty, state.pending?.walletKey == walletKey else { return }
+    try savePending(nil)
+  }
   func accept(_ binding: UsernameBinding) throws {
     guard !storageError else { throw UsernameFailure.storage }
     var next = state

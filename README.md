@@ -110,7 +110,8 @@ Receipt write failures stop resolution.
 The UI distinguishes “Signature checked,” “Not yet in the public log,” and stale
 records. A first payment asks the user to confirm the username. The provisional
 stale-record cap is 0.1 XMR; Send rechecks the username before broadcasting and
-stops if the destination or trust status changed during review. The cap awaits
+stops only if the address changed during review. A new trust level alone does not
+stop it; the limit of the new trust level applies. The cap awaits
 founder preference. API and mirror requests respect Tor with no direct fallback.
 No public resolution configuration is enabled yet.
 

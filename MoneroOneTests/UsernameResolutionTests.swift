@@ -105,6 +105,44 @@ final class UsernameResolutionTests: XCTestCase {
       } catch { XCTAssertTrue(store.receipts.isEmpty) }
     }
   }
+
+  // MARK: - Recheck before broadcast
+
+  private let reviewed = "4" + String(repeating: "A", count: 94)
+  private func recheck(
+    _ trust: UsernameTrust?, address: String? = nil, amount: String = "0.05",
+    all: Bool = false
+  ) -> String? {
+    UsernameSendRecheck.failure(
+      reviewedAddress: reviewed, amount: Decimal(string: amount), isSendingAll: all,
+      result: .success(
+        OpenAliasResult(
+          address: address ?? reviewed, recipientName: nil, dnssec: .off, usernameTrust: trust)))
+  }
+  func testRecheckBlocksOnlyWhenTheAddressChanged() {
+    let changed = "The username changed since your review. Look it up again before sending."
+    XCTAssertEqual(recheck(.published, address: "8" + String(repeating: "B", count: 94)), changed)
+    // A trust change alone sends.
+    for trust in [UsernameTrust.published, .pending, .stale, .expired] {
+      XCTAssertNil(recheck(trust), "\(trust)")
+    }
+    XCTAssertEqual(
+      UsernameSendRecheck.failure(
+        reviewedAddress: reviewed, amount: 1, isSendingAll: false,
+        result: .failure(.usernameVerification)),
+      OpenAliasFailure.usernameVerification.message)
+  }
+  func testRecheckAppliesTheLimitOfTheNewTrust() {
+    let stale = "Username records are out of date. The payment limit is 0.1 XMR."
+    // Published at review, stale at broadcast: the limit applies.
+    XCTAssertEqual(recheck(.stale, amount: "0.5"), stale)
+    XCTAssertEqual(recheck(.expired, amount: "0.11"), stale)
+    XCTAssertNil(recheck(.stale, amount: "0.1"))
+    XCTAssertEqual(recheck(.stale, amount: "0.01", all: true), stale)
+    // Published at broadcast: no limit.
+    XCTAssertNil(recheck(.published, amount: "5"))
+    XCTAssertNil(recheck(.published, amount: "5", all: true))
+  }
 }
 
 private final class ReceiptMemory: UsernameResolutionPersistence {

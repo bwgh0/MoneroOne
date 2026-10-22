@@ -17,6 +17,32 @@ enum UsernameTrust: String, Codable {
   }
 }
 
+/// The username check Send runs just before it broadcasts.
+enum UsernameSendRecheck {
+  /// The message that stops the payment, or nil to send it. Only a new
+  /// address stops it. A new trust level alone does not: its amount limit
+  /// applies to this payment.
+  static func failure(
+    reviewedAddress: String, amount: Decimal?, isSendingAll: Bool,
+    result: Result<OpenAliasResult, OpenAliasFailure>
+  ) -> String? {
+    switch result {
+    case .failure(let error): return error.message
+    case .success(let checked):
+      if checked.address != reviewedAddress {
+        return String(
+          localized: "The username changed since your review. Look it up again before sending.")
+      }
+      if let limit = checked.usernameTrust?.amountLimit,
+        isSendingAll || (amount ?? .greatestFiniteMagnitude) > limit
+      {
+        return String(localized: "Username records are out of date. The payment limit is 0.1 XMR.")
+      }
+      return nil
+    }
+  }
+}
+
 enum UsernameRecipient {
   /// Classification is local and deliberately checks syntax only. The shared
   /// core checks the frozen rules and signatures when a lookup completes.

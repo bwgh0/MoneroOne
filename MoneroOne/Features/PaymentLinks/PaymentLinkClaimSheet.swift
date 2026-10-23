@@ -5,6 +5,9 @@ import SwiftUI
 /// this device sent, it says so and offers Reclaim instead.
 struct PaymentLinkClaimSheet: View {
     let presentation: PaymentLinksCoordinator.Presentation
+    /// Passed in, not read from the environment: a sheet at the app root
+    /// sits outside the root's environment objects.
+    let priceService: PriceService
 
     @EnvironmentObject var walletManager: WalletManager
     @ObservedObject private var store = EnvelopeStore.shared
@@ -19,6 +22,7 @@ struct PaymentLinkClaimSheet: View {
             EnvelopeSessionView(
                 record: record,
                 walletManager: walletManager,
+                priceService: priceService,
                 claimWhenReady: presentation.autoClaim && presentation.kind == .claim,
                 title: title,
                 onClose: { dismiss() }
@@ -55,20 +59,22 @@ private extension View {
 /// envelope open.
 private struct EnvelopeSessionView: View {
     @StateObject private var session: EnvelopeSession
+    let priceService: PriceService
     let title: String
     let onClose: () -> Void
 
-    init(record: EnvelopeRecord, walletManager: WalletManager, claimWhenReady: Bool = false, title: String, onClose: @escaping () -> Void) {
+    init(record: EnvelopeRecord, walletManager: WalletManager, priceService: PriceService, claimWhenReady: Bool = false, title: String, onClose: @escaping () -> Void) {
         let session = EnvelopeSession(record: record, walletManager: walletManager)
         session.claimWhenReady = claimWhenReady
         _session = StateObject(wrappedValue: session)
+        self.priceService = priceService
         self.title = title
         self.onClose = onClose
     }
 
     var body: some View {
         NavigationStack {
-            EnvelopeSessionContent(session: session, onClose: onClose)
+            EnvelopeSessionContent(session: session, priceService: priceService, onClose: onClose)
                 .claimSheetBar(title: title, onClose: onClose)
         }
         .interactiveDismissDisabled(session.isSweeping)
@@ -81,10 +87,15 @@ private struct EnvelopeSessionView: View {
 /// sheet and by the sent link detail.
 struct EnvelopeSessionContent: View {
     @ObservedObject var session: EnvelopeSession
+    @ObservedObject var priceService: PriceService
     var onClose: (() -> Void)?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var copiedHash = false
     @State private var showWalletList = false
+    /// The paper card reached the top of the open envelope: the lines under
+    /// it and the actions come in.
+    @State private var cardLanded = false
 
     private var record: EnvelopeRecord { session.record }
     private var isOwn: Bool { record.role == .sent }
@@ -97,10 +108,13 @@ struct EnvelopeSessionContent: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            Spacer(minLength: 16)
+            // The envelope keeps its place from state to state (26 on a tall
+            // phone); a short phone gives it less.
+            Spacer()
+                .frame(minHeight: 16, maxHeight: 26)
 
             hero
-                .frame(height: 160)
+                .frame(height: PaymentLinkEnvelopeHero.size.height)
 
             VStack(spacing: 12) {
                 text
@@ -113,6 +127,9 @@ struct EnvelopeSessionContent: View {
             actions
                 .padding(.horizontal)
                 .padding(.bottom)
+                .opacity(restIsShown ? 1 : 0)
+                .offset(y: restIsShown || reduceMotion ? 0 : 20)
+                .animation(reduceMotion ? .easeInOut(duration: 0.35) : .easeOut(duration: 0.4).delay(0.1), value: restIsShown)
         }
         .padding()
         .navigationDestination(isPresented: $showWalletList) {
@@ -122,39 +139,80 @@ struct EnvelopeSessionContent: View {
 
     // MARK: - Hero
 
+    /// The envelope, sealed while the link is checked and when it holds no
+    /// money to take (none yet, claimed, expired, an error). It opens when
+    /// the check sees money (Waiting, Ready) and stays open while the claim
+    /// runs. Done keeps the green check.
     @ViewBuilder
     private var hero: some View {
-        switch session.phase {
-        case .idle, .checking, .waiting, .sweeping:
-            GradientSpinner()
-                .accessibilityHidden(true)
-        case .ready:
-            disc(systemImage: "envelope.open.fill", tint: .brand)
-        case .done:
+        if case .done = session.phase {
             SuccessCheckmarkView()
                 .accessibilityHidden(true)
-        case .noFunding:
-            disc(systemImage: "tray", tint: .gray)
-        case .alreadyClaimed, .reclaimed:
-            disc(systemImage: "checkmark.seal.fill", tint: .gray)
-        case .failed:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 80))
-                .foregroundStyle(.red)
-                .accessibilityHidden(true)
+        } else {
+            PaymentLinkEnvelopeHero(isOpen: envelopeOpens, isChecking: envelopeChecks, amount: cardFigures.card) {
+                withAnimation(.easeInOut(duration: 0.35)) { cardLanded = true }
+            }
         }
     }
 
-    private func disc(systemImage: String, tint: Color) -> some View {
-        ZStack {
-            Circle()
-                .fill(tint.opacity(0.15))
-                .frame(width: 120, height: 120)
-            Image(systemName: systemImage)
-                .font(.system(size: 48, weight: .semibold))
-                .foregroundStyle(tint)
+    private var envelopeOpens: Bool {
+        switch session.phase {
+        case .waiting, .sweeping: return true
+        case .ready: return !record.isExpired()
+        default: return false
         }
-        .accessibilityHidden(true)
+    }
+
+    /// The link is being checked: light crosses the sealed envelope.
+    private var envelopeChecks: Bool {
+        switch session.phase {
+        case .idle, .checking: return true
+        default: return false
+        }
+    }
+
+    /// Until the card lands, the lines under an open envelope and the
+    /// actions wait.
+    private var restIsShown: Bool { !envelopeOpens || cardLanded }
+
+    /// The amount the card shows, and the line under the envelope: the
+    /// other unit. In Fiat Mode the card shows "~$856.75" and the line
+    /// "~2.49996 XMR"; else the card shows the XMR amount and the line its
+    /// value. Ours, ready: the unlocked balance, exact. Sent to us: what
+    /// the claim delivers, an estimate.
+    private var cardFigures: (card: EnvelopeCardAmount, line: String?) {
+        var xmr = hintAmount
+        var approximate = true
+        if case .ready(let unlocked) = session.phase {
+            if !isOwn, let net = record.netAmount {
+                xmr = EnvelopeRuntime.xmr(net)
+            } else {
+                xmr = EnvelopeRuntime.xmr(unlocked)
+                approximate = false
+            }
+        }
+        guard let xmr else { return (EnvelopeCardAmount(text: "", showsUnit: true), nil) }
+        let xmrText = (approximate ? "~" : "") + XMRFormatter.format(xmr)
+        let fiat = priceService.formatFiatValue(xmr).map { "~" + $0 }
+        if priceService.showFiatFirst, let fiat {
+            return (EnvelopeCardAmount(text: fiat, showsUnit: false), xmrText + " XMR")
+        }
+        return (EnvelopeCardAmount(text: xmrText, showsUnit: true), fiat)
+    }
+
+    /// The line under the open envelope, with the card's amount for
+    /// VoiceOver (the envelope itself is hidden from it).
+    @ViewBuilder
+    private var cardLine: some View {
+        let figures = cardFigures
+        if let line = figures.line {
+            Text(verbatim: line)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .opacity(restIsShown ? 1 : 0)
+                .accessibilityLabel(Text(verbatim: "\(figures.card.text)\(figures.card.showsUnit ? " XMR" : ""), \(line)"))
+        }
     }
 
     // MARK: - Text
@@ -168,7 +226,11 @@ struct EnvelopeSessionContent: View {
         }
         switch session.phase {
         case .idle, .checking:
-            if !isOwn {
+            if isOwn {
+                Text("Checking the link…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
                 Text("Checking the link…")
                     .font(.title2.weight(.semibold))
             }
@@ -191,12 +253,7 @@ struct EnvelopeSessionContent: View {
                 Text("On its way")
                     .font(.title2.weight(.semibold))
             }
-            if let hintAmount {
-                Text("~\(XMRFormatter.format(hintAmount)) XMR", comment: "Claim sheet: the link's amount from its last check, an estimate")
-                    .font(.title3.weight(.semibold))
-                    .monospacedDigit()
-                    .accessibilityLabel(Text("About \(XMRFormatter.format(hintAmount)) XMR", comment: "VoiceOver: the link's estimated amount"))
-            }
+            cardLine
             Text("\(min(confirmations, EnvelopeLink.confirmationsToUnlock))/\(EnvelopeLink.confirmationsToUnlock) confirmations")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -207,11 +264,15 @@ struct EnvelopeSessionContent: View {
                 .foregroundStyle(.secondary)
 
         case .ready(let unlocked):
-            readyAmount(unlocked: unlocked)
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
+            if envelopeOpens {
+                cardLine
+            } else {
+                readyAmount(unlocked: unlocked)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+            }
             if record.isExpired() {
                 Text("Expired")
                     .font(.headline)
@@ -220,6 +281,7 @@ struct EnvelopeSessionContent: View {
                 Text("Claim by \(expiryDate.formatted(date: .abbreviated, time: .omitted))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .opacity(restIsShown ? 1 : 0)
             }
 
         case .sweeping:

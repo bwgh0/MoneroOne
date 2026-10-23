@@ -24,6 +24,13 @@ struct BalanceCard: View {
     /// Opens Activity's Links filter. Nil: no open-link lines.
     var onOpenLinks: (() -> Void)? = nil
     var onHardwareSyncTap: (() -> Void)? = nil
+    /// The balance the hero shows while payments wait for their Money
+    /// arrives moment. Nil: `balance`.
+    var heroBalance: Decimal? = nil
+    /// Money arrives: the moment to play, once.
+    var arrival: MoneyArrival? = nil
+    /// The moment settled.
+    var onArrivalDone: () -> Void = {}
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var balanceSize: CGFloat = 32
@@ -36,17 +43,32 @@ struct BalanceCard: View {
     /// so a near miss on the chart, Now or a range does not close History.
     @State private var historyFrame: CGRect = .null
     private static let cardSpace = "BalanceCard"
+    /// Money arrives: the moment whose +amount rose into the hero.
+    @State private var risenArrivalId: UUID?
+    @State private var arrivalStep = ArrivalStep.idle
+    @State private var hidesCaption = false
+    @State private var isHeroGreen = false
+    @State private var shineOffset: CGFloat = -1.5
 
     private var historicalPoint: PortfolioDataPoint? { selectedHistoryPoint.wrappedValue }
     private var showsOpenLinks: Bool { onOpenLinks != nil && !openLinks.isEmpty }
-    private var displayedBalance: Decimal { historicalPoint?.balance ?? balance }
+    private var displayedBalance: Decimal { historicalPoint?.balance ?? shownBalance }
+
+    /// Now: the moment's old balance until its +amount rises, else the
+    /// held balance, else the wallet's.
+    private var shownBalance: Decimal {
+        if let arrival, risenArrivalId != arrival.id {
+            return arrival.fromBalance
+        }
+        return heroBalance ?? balance
+    }
 
     /// A historical amount uses the sampled price at that same moment.
     private var fiatBalance: String? {
         if let historicalPoint {
             return priceService.formatFiat(Decimal(historicalPoint.value))
         }
-        return priceService.formatFiatValue(balance)
+        return priceService.formatFiatValue(shownBalance)
     }
 
     /// Fiat Mode puts the fiat balance in the hero and the XMR amount under
@@ -149,7 +171,7 @@ struct BalanceCard: View {
             }
 
             // Unlocked Balance
-            if unlockedBalance != balance {
+            if unlockedBalance != shownBalance {
                 availableRow
                     // Kept in place while viewing the past so the card does not shrink.
                     .opacity(historicalPoint == nil ? 1 : 0)
@@ -277,6 +299,7 @@ struct BalanceCard: View {
             toggleHistory()
         }
         .coordinateSpace(.named(Self.cardSpace))
+        .task(id: arrival?.id) { await playArrival() }
     }
 
     // MARK: - Status row
@@ -438,12 +461,9 @@ struct BalanceCard: View {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(heroText)
-                            .font(.system(size: balanceSize, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
+                        heroNumber
+                            .foregroundStyle(isHeroGreen ? Color.green : Color.primary)
+                            .overlay { heroShine }
 
                         if !isFiatFirst {
                             Text("XMR")
@@ -452,15 +472,17 @@ struct BalanceCard: View {
                         }
                     }
                     .fixedSize(horizontal: false, vertical: true)
-                    .animation(digitAnimation, value: heroText)
+                    .animation(heroAnimation, value: heroText)
 
-                    if let captionText {
-                        Text(captionText)
+                    if captionText != nil || arrival != nil {
+                        Text(captionText ?? " ")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .monospacedDigit()
                             .contentTransition(.numericText())
                             .animation(digitAnimation, value: captionText)
+                            .opacity(captionText == nil || hidesCaption ? 0 : 1)
+                            .overlay(alignment: .leading) { arrivalPlus }
                     }
                 }
 
@@ -481,6 +503,176 @@ struct BalanceCard: View {
     private var digitAnimation: Animation? {
         guard !reduceMotion else { return nil }
         return .easeInOut(duration: historicalPoint == nil ? 0.2 : 0.1)
+    }
+
+    /// The hero's roll. Reduce Motion: a Money arrives moment cross-fades
+    /// the new balance in (crossFade).
+    private var heroAnimation: Animation? {
+        if reduceMotion, arrival != nil { return .easeInOut(duration: 0.35) }
+        return digitAnimation
+    }
+
+    private var heroNumber: some View {
+        Text(heroText)
+            .font(.system(size: balanceSize, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .contentTransition(reduceMotion ? .opacity : .numericText())
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+    }
+
+    // MARK: - Money arrives
+
+    private enum ArrivalStep {
+        /// No +amount.
+        case idle
+        /// The +amount sits in the caption's place.
+        case shown
+        /// The +amount rose into the balance and faded.
+        case risen
+    }
+
+    /// "1.2845 XMR", or "$440.22" in Fiat Mode.
+    private var arrivalAmountText: String? {
+        guard let arrival else { return nil }
+        if isFiatFirst, let fiat = priceService.formatFiatValue(arrival.amount) {
+            return fiat
+        }
+        return "\(XMRFormatter.format(arrival.amount)) XMR"
+    }
+
+    /// "+1.2845 XMR", or "+$440.22" in Fiat Mode.
+    private var arrivalPlusText: String? {
+        arrivalAmountText.map { "+\($0)" }
+    }
+
+    /// VoiceOver says each moment once: "Received 1.2845 XMR".
+    private func announceArrival() {
+        guard let amount = arrivalAmountText else { return }
+        let text = String(
+            localized: "Received \(amount)",
+            comment: "VoiceOver: a payment arrived on the balance card. The amount is in XMR, or in the fiat currency in Fiat Mode"
+        )
+        UIAccessibility.post(notification: .announcement, argument: text)
+    }
+
+    @ViewBuilder
+    private var arrivalPlus: some View {
+        if let arrivalPlusText, let arrival {
+            Text(arrivalPlusText)
+                .font(arrival.isFirstPayment ? .title3.weight(.semibold) : .subheadline.weight(.semibold))
+                .foregroundStyle(.green)
+                .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize()
+                .opacity(arrivalStep == .shown ? 1 : 0)
+                .offset(y: arrivalOffset)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// arrive: up 20 pt into place; then 20 pt more into the balance.
+    private var arrivalOffset: CGFloat {
+        guard !reduceMotion else { return 0 }
+        switch arrivalStep {
+        case .idle: return 20
+        case .shown: return 0
+        case .risen: return -20
+        }
+    }
+
+    /// The first payment's single heroShine across the green balance.
+    @ViewBuilder
+    private var heroShine: some View {
+        if arrival?.isFirstPayment == true, !reduceMotion {
+            GeometryReader { geo in
+                LinearGradient(
+                    colors: [.clear, .white.opacity(0.3), .white.opacity(0.6), .white.opacity(0.3), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: geo.size.width * 0.35)
+                .blur(radius: 8)
+                .offset(x: shineOffset * geo.size.width)
+                .animation(.easeInOut(duration: 1.2), value: shineOffset)
+            }
+            .mask { heroNumber }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
+    /// The moment, from the mockup. Every payment: the caption fades out
+    /// and the green +amount arrives in its place; at 0.55 s it rises into
+    /// the balance, which rolls, the Available line discloses and a soft
+    /// tap plays; the caption returns at 0.8 s. The first payment: a bigger
+    /// +amount; at 0.65 s the balance rolls and turns green, the success
+    /// haptic at 0.8 s, one shine at 1.0 s, back to the label color at
+    /// 2.0 s. Reduce Motion: fades only, no shine; haptics stay.
+    private func playArrival() async {
+        guard let arrival, risenArrivalId != arrival.id else { return }
+        let isFirst = arrival.isFirstPayment
+        let rise = isFirst ? 0.65 : 0.55
+        let captionBack = reduceMotion ? 0.8 : rise + 0.25
+        var clock = 0.0
+        var isAnnounced = false
+        func wait(until time: Double) async throws {
+            if time > clock { try await Task.sleep(for: .seconds(time - clock)) }
+            clock = max(clock, time)
+        }
+        do {
+            withAnimation(.easeInOut(duration: 0.2)) { hidesCaption = true }
+            if reduceMotion {
+                withAnimation(.easeInOut(duration: 0.2)) { arrivalStep = .shown }
+            } else {
+                try await wait(until: 0.1)
+                withAnimation(.easeOut(duration: 0.4)) { arrivalStep = .shown }
+            }
+
+            try await wait(until: rise)
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .easeIn(duration: 0.25)) { arrivalStep = .risen }
+            // disclose: the Available line and the card's growth. The
+            // activity list under the card drops other animations; this one
+            // moves it with the card.
+            var disclose = Transaction(animation: reduceMotion ? .easeInOut(duration: 0.35) : .spring(response: 0.3, dampingFraction: 0.8))
+            disclose.isHistoryDisclosure = true
+            withTransaction(disclose) {
+                risenArrivalId = arrival.id
+            }
+            announceArrival()
+            isAnnounced = true
+            if isFirst {
+                withAnimation(.easeInOut(duration: 0.35)) { isHeroGreen = true }
+            } else {
+                HapticFeedback.shared.softTick()
+            }
+
+            try await wait(until: 0.8)
+            if isFirst { HapticFeedback.shared.transactionSuccess() }
+
+            try await wait(until: captionBack)
+            withAnimation(.easeInOut(duration: 0.2)) { hidesCaption = false }
+
+            if isFirst {
+                if !reduceMotion {
+                    try await wait(until: 1.0)
+                    shineOffset = 1.5
+                }
+                try await wait(until: 2.0)
+                withAnimation(.easeInOut(duration: 0.35)) { isHeroGreen = false }
+                try await wait(until: 2.35)
+            } else {
+                try await wait(until: 1.05)
+            }
+        } catch {
+            // Off screen meanwhile: land on the end state.
+        }
+        if !isAnnounced { announceArrival() }
+        risenArrivalId = arrival.id
+        arrivalStep = .idle
+        hidesCaption = false
+        isHeroGreen = false
+        onArrivalDone()
     }
 
     private var availableRow: some View {
@@ -630,8 +822,9 @@ private struct HistoryRevealClip: Shape {
 // MARK: - Connection Step Indicator
 
 /// Progressive connection status indicator with 6 stages
-/// Shows: Network -> Node -> Connecting -> Loading -> Syncing -> Synced
-private struct ConnectionStepIndicator: View {
+/// Shows: Network -> Node -> Connecting -> Loading -> Syncing -> Synced.
+/// Send's review shows it too, above Send, while it waits for the wallet.
+struct ConnectionStepIndicator: View {
     let stage: ConnectionStage
     let syncProgress: Double?  // nil if not syncing, 0-100 if syncing
 

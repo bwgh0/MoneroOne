@@ -20,6 +20,17 @@ struct WalletView: View {
     /// fill the leftover height on short screens (iPhone Duo cover).
     @State private var viewportHeight: CGFloat = 0
     @State private var aboveRecentHeight: CGFloat = 0
+    /// Money arrives: the moment on the balance card, the balance when the
+    /// history last changed, and the hero's hold during a catch-up.
+    @State private var playingArrival: MoneyArrival?
+    @State private var balanceAtHistory: Decimal?
+    @State private var arrivalHold = MoneyArrivalHold()
+
+    /// The home at Now with nothing open on it.
+    private var isHomeIdle: Bool {
+        walletManager.isUnlocked && selectedHistoryPoint == nil && !isHistoryExpanded
+            && !showSend && !showReceive && !showWalletManager && !showLinks && hardwareSheetIntent == nil
+    }
 
     /// Height the empty activity card needs to reach the bottom of the
     /// viewport, so short screens don't end in a blank third. Nil when there
@@ -103,7 +114,11 @@ struct WalletView: View {
                                 // session guard.
                                 walletManager.clearTerminalSessionState()
                                 hardwareSheetIntent = .syncSentTransactions
-                            }
+                            },
+                            heroBalance: arrivalHold.held ?? MoneyArrivalWatch(walletManager: walletManager, links: paymentLinks)
+                                .heroBalance(balanceAtHistory: balanceAtHistory),
+                            arrival: playingArrival,
+                            onArrivalDone: { playingArrival = nil }
                         )
                         .id(walletManager.walletSessionId)
                         .padding(.horizontal)
@@ -159,6 +174,7 @@ struct WalletView: View {
             .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
                                      && !isHistoryExpanded && !showSend && !showReceive
                                      && !showWalletManager && !showLinks && hardwareSheetIntent == nil)
+            .playsMoneyArrivals(isIdle: isHomeIdle, playing: $playingArrival, balanceAtHistory: $balanceAtHistory, hold: $arrivalHold)
             .onChange(of: walletManager.walletSessionId) { _, _ in
                 selectedHistoryPoint = nil
                 historyModel = BalanceHistoryModel()
@@ -395,6 +411,8 @@ struct ActivityAsOfText: View {
 struct RecentTransactionCard: View {
     let transaction: MoneroTransaction
     let onTap: () -> Void
+    /// Draws the row again at each new confirmation (see `TransactionRowState`).
+    private let state: TransactionRowState
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
@@ -403,21 +421,19 @@ struct RecentTransactionCard: View {
     /// Rows name contacts: a saved, renamed or deleted contact shows at once.
     @ObservedObject private var contactStore = ContactStore.shared
 
+    init(transaction: MoneroTransaction, onTap: @escaping () -> Void) {
+        self.transaction = transaction
+        self.onTap = onTap
+        self.state = transaction.rowState
+    }
+
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
         let amount = amount(row.xmr)
         Button(action: onTap) {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.15))
-                        .frame(width: 40, height: 40)
-
-                    Image(systemName: row.systemImage)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(iconColor)
-                }
-                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge, symbol: row.badgeSymbol ?? "link")
+                TransactionDisc(systemImage: row.systemImage, tint: iconColor, ringState: ConfirmationRing.state(of: transaction))
+                    .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge, symbol: row.badgeSymbol ?? "link")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.title)

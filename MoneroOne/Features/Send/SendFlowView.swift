@@ -165,6 +165,11 @@ struct SendFlowView: View {
         .interactiveDismissDisabled(phase.isSendingState)
         .onAppear {
             walletManager.isSendFlowPresented = true
+            // Send can need the wallet at any step: no payment-link check
+            // starts while it is open, and one that holds the wallet gives
+            // it back now.
+            EnvelopeRuntime.shared.beginSend()
+            Task { await EnvelopeRuntime.shared.returnWalletForSend() }
             aliasLookup.network = walletManager.networkType
             handlePrefill()
         }
@@ -217,11 +222,14 @@ struct SendFlowView: View {
             aliasLookup.cancel()
             recipientInput = ""
             recipientAddress = ""
+            // The claim checks the link: it needs the wallet slot Send held.
+            EnvelopeRuntime.shared.endSend()
             PaymentLinksCoordinator.shared.handle(text: text, networkType: walletManager.networkType, activeAddress: walletManager.primaryAddress)
             dismiss()
         }
         .onDisappear {
             walletManager.isSendFlowPresented = false
+            EnvelopeRuntime.shared.endSend()
             aliasLookup.cancel()
             guard let shownPaymentRequest else { return }
             walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: false)
@@ -260,6 +268,15 @@ struct SendFlowView: View {
     ///     amount/address and retry without restarting from
     ///     address-entry. Snap back to `.review` so the inputs are
     ///     editable instead of stuck on the dead `.sending` step.
+    /// The success haptic and the send chime for a link's Ready step, at
+    /// once. Every other send shows the Sent mark, which plays them when
+    /// its circle closes.
+    private func playLinkReadyFeedback() {
+        guard isLinkMode, linkRecordId != nil else { return }
+        HapticFeedback.shared.transactionSuccess()
+        SoundFeedback.shared.playSendComplete()
+    }
+
     private func handleHardwareSheetDismiss() {
         let outcome = walletManager.lastHardwareSessionOutcome
         walletManager.pendingBroadcastStep = nil
@@ -288,8 +305,7 @@ struct SendFlowView: View {
                     Task {
                         try? await Task.sleep(nanoseconds: 900_000_000)
                         await MainActor.run {
-                            HapticFeedback.shared.transactionSuccess()
-                            SoundFeedback.shared.playSendComplete()
+                            playLinkReadyFeedback()
                             withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                                 phase = .success(txHash: txId)
                             }
@@ -401,7 +417,15 @@ struct SendFlowView: View {
             )
 
         case .success where isLinkMode && linkRecordId != nil:
-            PaymentLinkReadyStep(recordId: linkRecordId ?? "", onDone: { dismiss() })
+            // The sending step fades out (0.35 s) as the check comes in; the
+            // ready step brings in its own parts.
+            PaymentLinkReadyStep(
+                recordId: linkRecordId ?? "",
+                amountString: amountString,
+                priceService: priceService,
+                onDone: { dismiss() }
+            )
+            .transition(.identity)
 
         case .review:
             SendReviewStep(
@@ -493,8 +517,10 @@ struct SendFlowView: View {
                 canRetry: !isLinkMode,
                 successNote: transferTarget.map {
                     String(localized: "It shows in \($0.name) when you next open that wallet.", comment: "Transfer sent: the wallet that receives it")
-                }
+                },
+                reservesLinkReady: isLinkMode
             )
+            .transition(.asymmetric(insertion: .opacity, removal: .opacity.animation(.easeInOut(duration: 0.35))))
         }
     }
 
@@ -813,8 +839,7 @@ struct SendFlowView: View {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     phase = .success(txHash: txHash)
                 }
-                HapticFeedback.shared.transactionSuccess()
-                SoundFeedback.shared.playSendComplete()
+                playLinkReadyFeedback()
             } catch {
                 sendInProgress = false
                 let msg = friendlyErrorMessage(for: error)
@@ -859,8 +884,7 @@ struct SendFlowView: View {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     phase = .success(txHash: txHash)
                 }
-                HapticFeedback.shared.transactionSuccess()
-                SoundFeedback.shared.playSendComplete()
+                playLinkReadyFeedback()
             } catch {
                 sendInProgress = false
                 // A failed broadcast may still have reached the network.

@@ -377,9 +377,19 @@ class MoneroWallet: ObservableObject {
 
         // Update block heights for connection progress tracking
         if let heights = kit?.blockHeights {
+            let isNewBlock = heights.daemonHeight != daemonHeight
             walletHeight = heights.walletHeight
             daemonHeight = heights.daemonHeight
+            if isNewBlock { recountConfirmations(at: heights.daemonHeight) }
         }
+    }
+
+    /// A new block: count the rings' confirmations again
+    /// (`MoneroTransaction.counted(at:)`). Publishes a changed count only.
+    private func recountConfirmations(at height: UInt64) {
+        let recounted = transactions.map { $0.counted(at: height) }
+        guard recounted.map(\.rowState) != transactions.map(\.rowState) else { return }
+        transactions = recounted
     }
 
     private func friendlyErrorMessage(for error: Error) -> String {

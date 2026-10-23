@@ -137,6 +137,7 @@ final class PaymentLinksCoordinator: ObservableObject {
 /// `monero:` link opens Send.
 struct PaymentLinkClaimPresenter: ViewModifier {
     @ObservedObject var walletManager: WalletManager
+    let priceService: PriceService
     @ObservedObject var coordinator: PaymentLinksCoordinator
     @State private var shown: PaymentLinksCoordinator.Presentation?
 
@@ -152,7 +153,7 @@ struct PaymentLinkClaimPresenter: ViewModifier {
                 // A lock closes the sheet; the link opens again after unlock.
                 if walletManager.isUnlocked { coordinator.dismiss() }
             }) { presentation in
-                PaymentLinkClaimSheet(presentation: presentation)
+                PaymentLinkClaimSheet(presentation: presentation, priceService: priceService)
                     .environmentObject(walletManager)
             }
             .alert(
@@ -201,7 +202,7 @@ struct PaymentLinkClaimPresenter: ViewModifier {
 
 extension View {
     /// Root of the app: claim links open their sheet here.
-    func presentsPaymentLinkClaims(walletManager: WalletManager) -> some View {
-        modifier(PaymentLinkClaimPresenter(walletManager: walletManager, coordinator: .shared))
+    func presentsPaymentLinkClaims(walletManager: WalletManager, priceService: PriceService) -> some View {
+        modifier(PaymentLinkClaimPresenter(walletManager: walletManager, priceService: priceService, coordinator: .shared))
     }
 }

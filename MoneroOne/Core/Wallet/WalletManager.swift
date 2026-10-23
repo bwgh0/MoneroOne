@@ -3099,6 +3099,49 @@ class WalletManager: ObservableObject {
         return !isViewOnly
     }
 
+    /// Send's review waits here before it builds the transaction. Takes the
+    /// active wallet back from a payment-link check at once, then waits
+    /// until the wallet runs and wallet2 reports it synced. Throws only
+    /// when cancelled (Back, a new build, a lock).
+    func awaitReadyToSend() async throws {
+        while true {
+            try Task.checkCancellation()
+            if moneroWallet == nil, EnvelopeRuntime.shared.holdsActiveWallet {
+                await EnvelopeRuntime.shared.returnWalletForSend()
+            }
+            if isReadyToSend { return }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+    }
+
+    /// The active wallet runs and is synced, so Send's review can build.
+    /// The "Synced" held through a restart after a payment-link check does
+    /// not count: that wallet is still starting.
+    var isReadyToSend: Bool {
+        SendWaitRules.isReady(
+            walletRunning: isUnlocked && moneroWallet != nil,
+            walletState: moneroWallet?.syncState ?? .idle,
+            daemonHeight: moneroWallet?.daemonHeight ?? 0,
+            syncBlocked: isSyncBlocked
+        )
+    }
+
+    /// The step Send's review shows while it waits: the balance card's,
+    /// except while "Synced" holds through a restart. Then it is where the
+    /// restarted wallet really is.
+    var sendWaitStage: ConnectionStage {
+        if isReadyToSend { return .synced }
+        guard connectionStage == .synced else { return connectionStage }
+        guard let wallet = moneroWallet else { return .connecting }
+        return SendWaitRules.stage(walletState: wallet.syncState, daemonHeight: wallet.daemonHeight)
+    }
+
+    /// The scan's percent for `sendWaitStage`.
+    var sendWaitProgress: Double? {
+        if case .syncing(let progress, _) = moneroWallet?.syncState { return progress }
+        return nil
+    }
+
     func estimateFee(to address: String, amount: Decimal, priority: SendPriority = .default) async throws -> Decimal {
         if isViewOnly && !isHardwareWallet { throw WalletError.viewOnlyCannotSend }
         // A payment-link check (Activity's Links filter or a link's detail)
@@ -3862,6 +3905,10 @@ class WalletManager: ObservableObject {
             syncState = .error(String(localized: "No wallet to reset"))
             return
         }
+
+        // The rescan's sync sets the Money arrives baseline again, with
+        // no moment.
+        MoneyArrivalStore().forgetBaseline(walletId: info.id, network: MoneyArrivalStore.network(isTestnet: isTestnet))
 
         // Reset displayed state
         syncState = .connecting

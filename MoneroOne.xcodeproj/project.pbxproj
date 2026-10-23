@@ -13,6 +13,10 @@
 		5E7D70000000000000000B06 /* ContactsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F06 /* ContactsSheet.swift */; };
 		5E7D70000000000000000B01 /* SendRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F01 /* SendRecordStore.swift */; };
 		5E7D70000000000000000B04 /* ContactStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D70000000000000000F04 /* ContactStore.swift */; };
+		4D07100000000000000000D2 /* MotionMomentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000D1 /* MotionMomentsTests.swift */; };
+		4D07100000000000000000C2 /* MoneyArrival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000C1 /* MoneyArrival.swift */; };
+		4D07100000000000000000B2 /* ConfirmationRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000B1 /* ConfirmationRing.swift */; };
+		4D07100000000000000000A2 /* SendSuccessMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000A1 /* SendSuccessMark.swift */; };
 		5EED00000000000000000026 /* SeedEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000016 /* SeedEntryModel.swift */; };
 		5EED00000000000000000027 /* SeedWordField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000017 /* SeedWordField.swift */; };
 		5EED00000000000000000028 /* SeedPhraseEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EED00000000000000000018 /* SeedPhraseEntryView.swift */; };
@@ -198,6 +202,7 @@
 		9A7E1C0D000800000000B008 /* PaymentLinkClaimSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */; };
 		9A7E1C0D000900000000B009 /* PaymentLinkSendSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */; };
 		9A7E1C0D000F00000000B00F /* PaymentLinkCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000F00000000F00F /* PaymentLinkCard.swift */; };
+		9A7E1C0D00EE00000000B0EE /* PaymentLinkEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D00EE00000000F0EE /* PaymentLinkEnvelope.swift */; };
 		9A7E1C0D000A00000000B00A /* PaymentLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */; };
 		9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */; };
 		9A7E1C0D00FE00000000B0FE /* PaymentLinkV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7E1C0D00FE00000000F0FE /* PaymentLinkV2Tests.swift */; };
@@ -253,6 +258,10 @@
 		5E7D70000000000000000F06 /* ContactsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsSheet.swift; sourceTree = "<group>"; };
 		5E7D70000000000000000F01 /* SendRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendRecordStore.swift; sourceTree = "<group>"; };
 		5E7D70000000000000000F04 /* ContactStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactStore.swift; sourceTree = "<group>"; };
+		4D07100000000000000000D1 /* MotionMomentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionMomentsTests.swift; sourceTree = "<group>"; };
+		4D07100000000000000000C1 /* MoneyArrival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyArrival.swift; sourceTree = "<group>"; };
+		4D07100000000000000000B1 /* ConfirmationRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationRing.swift; sourceTree = "<group>"; };
+		4D07100000000000000000A1 /* SendSuccessMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendSuccessMark.swift; sourceTree = "<group>"; };
 		5EED00000000000000000016 /* SeedEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedEntryModel.swift; sourceTree = "<group>"; };
 		5EED00000000000000000017 /* SeedWordField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedWordField.swift; sourceTree = "<group>"; };
 		5EED00000000000000000018 /* SeedPhraseEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPhraseEntryView.swift; sourceTree = "<group>"; };
@@ -441,6 +450,7 @@
 		9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkClaimSheet.swift; sourceTree = "<group>"; };
 		9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkSendSteps.swift; sourceTree = "<group>"; };
 		9A7E1C0D000F00000000F00F /* PaymentLinkCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkCard.swift; sourceTree = "<group>"; };
+		9A7E1C0D00EE00000000F0EE /* PaymentLinkEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkEnvelope.swift; sourceTree = "<group>"; };
 		9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinksView.swift; sourceTree = "<group>"; };
 		9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkTests.swift; sourceTree = "<group>"; };
 		9A7E1C0D00FE00000000F0FE /* PaymentLinkV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentLinkV2Tests.swift; sourceTree = "<group>"; };
@@ -503,6 +513,7 @@
 				7E71E0000000000000000003 /* ReviewPromptGateTests.swift */,
 				5C0A1A000000000000000001 /* SupportMailTests.swift */,
 				57A75E000000000000000005 /* WhatsNewTests.swift */,
+				4D07100000000000000000D1 /* MotionMomentsTests.swift */,
 				5EED00000000000000000055 /* legacy-vectors.json */,
 				5EED00000000000000000052 /* PolyseedCodecTests.swift */,
 				5EED00000000000000000051 /* LegacySeedCodecTests.swift */,
@@ -689,6 +700,8 @@
 				029F663A58F5CE2B18C3B33C /* ScrambledText.swift */,
 				AA000000000000000000000D /* SelectableOptionCard.swift */,
 				A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */,
+				4D07100000000000000000B1 /* ConfirmationRing.swift */,
+				4D07100000000000000000A1 /* SendSuccessMark.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -711,6 +724,7 @@
 			children = (
 				AA0000000000000000000005 /* AddWalletView.swift */,
 				A39B30F864DF425DCA258A4B /* BalanceCard.swift */,
+				4D07100000000000000000C1 /* MoneyArrival.swift */,
 				885C8AC405766D0B3663F27F /* MainTabView.swift */,
 				1202A246B0E4F7871A06D84B /* BalanceHistoryChart.swift */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* WalletManagerSheet.swift */,
@@ -828,6 +842,7 @@
 				9A7E1C0D000800000000F008 /* PaymentLinkClaimSheet.swift */,
 				9A7E1C0D000900000000F009 /* PaymentLinkSendSteps.swift */,
 				9A7E1C0D000F00000000F00F /* PaymentLinkCard.swift */,
+				9A7E1C0D00EE00000000F0EE /* PaymentLinkEnvelope.swift */,
 				9A7E1C0D000A00000000F00A /* PaymentLinksView.swift */,
 			);
 			path = PaymentLinks;
@@ -1120,6 +1135,7 @@
 				7E71E0000000000000000004 /* ReviewPromptGateTests.swift in Sources */,
 				5C0A1A000000000000000002 /* SupportMailTests.swift in Sources */,
 				57A75E000000000000000006 /* WhatsNewTests.swift in Sources */,
+				4D07100000000000000000D2 /* MotionMomentsTests.swift in Sources */,
 				5EED00000000000000000062 /* PolyseedCodecTests.swift in Sources */,
 				5EED00000000000000000061 /* LegacySeedCodecTests.swift in Sources */,
 D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
@@ -1201,6 +1217,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				326517A0B392547A7BA61678 /* TrustedLocationSyncView.swift in Sources */,
 				E7C33EC8082FAB9206BD8A0B /* BackupView.swift in Sources */,
 				F336976B66186C3C48D2922A /* BalanceCard.swift in Sources */,
+				4D07100000000000000000C2 /* MoneyArrival.swift in Sources */,
 				AED7CF4AF876D3B29142BC6C /* BiometricAuthManager.swift in Sources */,
 				3B8992253B39E12706EEC3BC /* CommandCenterView.swift in Sources */,
 				C0E85580EF176D61DF97BA87 /* ContentView.swift in Sources */,
@@ -1258,6 +1275,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				9A7E1C0D000800000000B008 /* PaymentLinkClaimSheet.swift in Sources */,
 				9A7E1C0D000900000000B009 /* PaymentLinkSendSteps.swift in Sources */,
 				9A7E1C0D000F00000000B00F /* PaymentLinkCard.swift in Sources */,
+				9A7E1C0D00EE00000000B0EE /* PaymentLinkEnvelope.swift in Sources */,
 				9A7E1C0D000A00000000B00A /* PaymentLinksView.swift in Sources */,
 				A1B2C3D400000001A0000006 /* SendFlowView.swift in Sources */,
 				0A1A50000000000000000B03 /* OpenAliasViews.swift in Sources */,
@@ -1281,6 +1299,8 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				57A75E000000000000000004 /* WhatsNewViews.swift in Sources */,
 				A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */,
 				A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */,
+				4D07100000000000000000B2 /* ConfirmationRing.swift in Sources */,
+				4D07100000000000000000A2 /* SendSuccessMark.swift in Sources */,
 				A1B2C3D400000001A0000004 /* GradientSpinner.swift in Sources */,
 				A8A11451E8974DBF2ED283A3 /* TransactionsPanelView.swift in Sources */,
 				8BFA73260FA46CA7935C386F /* UnlockView.swift in Sources */,

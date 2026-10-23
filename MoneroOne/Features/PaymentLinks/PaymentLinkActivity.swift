@@ -177,6 +177,7 @@ struct PaymentLinkStatusLabel: View {
                 .foregroundStyle(status.textColor)
                 .lineLimit(1)
                 .fixedSize()
+                .contentTransition(.opacity)
         }
     }
 }
@@ -256,6 +257,8 @@ struct ActivityRowText {
     private let link: PaymentLinkActivity?
     private let isIncoming: Bool
     private let transactionStatus: String
+    /// "3 of 10 confirmations" while the row's ring shows.
+    private let confirmationsSpoken: String?
 
     @MainActor
     init(transaction: MoneroTransaction, date: String, walletManager: WalletManager, store: EnvelopeStore) {
@@ -264,6 +267,7 @@ struct ActivityRowText {
         systemImage = isIncoming ? "arrow.down.left" : "arrow.up.right"
         subtitle = date
         transactionStatus = transaction.displayStatusText
+        confirmationsSpoken = ConfirmationRing.spokenProgress(of: transaction)
         if let link {
             title = link.record.displayName
             badgeSymbol = "link"
@@ -310,17 +314,21 @@ struct ActivityRowText {
     /// Link rows keep the words VoiceOver said before the names: "Sent by
     /// Link, Dinner, minus 0.02 XMR, Waiting, Oct 16, 2026 at 9:41 AM".
     func accessibilityLabel(amount: TransactionAmountText) -> String {
-        guard let link else {
-            return "\(title) \(amount.spoken), \(subtitle), \(transactionStatus)"
+        let label: String
+        if let link {
+            label = PaymentLinkActivity.accessibilityLabel(
+                kind: link.title,
+                name: title,
+                isIncoming: isIncoming,
+                amountSpoken: amount.spoken,
+                status: linkStatus?.text ?? transactionStatus,
+                date: subtitle
+            )
+        } else {
+            label = "\(title) \(amount.spoken), \(subtitle), \(transactionStatus)"
         }
-        return PaymentLinkActivity.accessibilityLabel(
-            kind: link.title,
-            name: title,
-            isIncoming: isIncoming,
-            amountSpoken: amount.spoken,
-            status: linkStatus?.text ?? transactionStatus,
-            date: subtitle
-        )
+        guard let confirmationsSpoken else { return label }
+        return "\(label), \(confirmationsSpoken)"
     }
 }
 

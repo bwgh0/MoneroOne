@@ -471,6 +471,10 @@ struct CreateWalletView: View {
                 let name = walletName.trimmingCharacters(in: .whitespaces).isEmpty ? WalletStore().nextWalletName(existing: walletManager.wallets) : walletName.trimmingCharacters(in: .whitespaces)
                 let emoji = walletEmoji
                 try walletManager.addWallet(name: name, emoji: emoji, mnemonic: mnemonic, pin: pin, restoreHeight: chainHeight)
+                // A new wallet: its first payment gets the bigger Money arrives.
+                if let walletId = walletManager.activeWallet?.id {
+                    MoneyArrivalStore().markFirstPaymentEligible(walletId: walletId)
+                }
 
                 if !isAddingWallet {
                     KeychainStorage().savePinLength(selectedPINLength)

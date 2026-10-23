@@ -330,8 +330,8 @@ struct TransactionListView: View {
 
     @ViewBuilder
     private func rows(_ items: [ActivityListItem]) -> some View {
-        ForEach(items) { item in
-            switch item {
+        ForEach(items.map(ActivityListRow.init)) { row in
+            switch row.item {
             case .transaction(let transaction):
                 NavigationLink {
                     ActivityDetailView(transaction: transaction)
@@ -900,6 +900,25 @@ enum TransactionListLogic {
 
 /// One Activity row: a transaction, or a link sent to us that waits to be
 /// claimed (no transaction yet).
+/// A list item with the state its row shows. `ActivityListItem`'s `==`
+/// uses `MoneroTransaction`'s, which compares ids only, so a list of items
+/// alone looked unchanged after a new block.
+struct ActivityListRow: Identifiable, Equatable {
+    let item: ActivityListItem
+    let state: TransactionRowState?
+
+    init(_ item: ActivityListItem) {
+        self.item = item
+        if case .transaction(let transaction) = item {
+            state = transaction.rowState
+        } else {
+            state = nil
+        }
+    }
+
+    var id: String { item.id }
+}
+
 enum ActivityListItem: Identifiable, Equatable {
     case transaction(MoneroTransaction)
     case linkToClaim(EnvelopeRecord)
@@ -928,6 +947,8 @@ enum ActivityListItem: Identifiable, Equatable {
 
 struct TransactionRow: View {
     let transaction: MoneroTransaction
+    /// Draws the row again at each new confirmation (see `TransactionRowState`).
+    private let state: TransactionRowState
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
@@ -935,6 +956,11 @@ struct TransactionRow: View {
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
     /// Rows name contacts: a saved, renamed or deleted contact shows at once.
     @ObservedObject private var contactStore = ContactStore.shared
+
+    init(transaction: MoneroTransaction) {
+        self.transaction = transaction
+        self.state = transaction.rowState
+    }
 
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
@@ -944,6 +970,7 @@ struct TransactionRow: View {
             isIncoming: transaction.type == .incoming,
             showsLinkBadge: row.showsLinkBadge,
             badgeSymbol: row.badgeSymbol ?? "link",
+            ringState: ConfirmationRing.state(of: transaction),
             title: row.title,
             subtitle: row.subtitle
         ) { alignment in
@@ -993,11 +1020,13 @@ struct TransactionRow: View {
 struct ActivityRowLayout<Amount: View>: View {
     let systemImage: String
     let isIncoming: Bool
-    /// A payment link's row: the tile gets the link badge.
+    /// A payment link's row: the disc gets the link badge.
     var showsLinkBadge = false
     /// The badge's glyph: the link, or the wallet on a send between your
     /// wallets.
     var badgeSymbol = "link"
+    /// A transaction's confirmation ring on the disc.
+    var ringState: ConfirmationRing.State = .hidden
     /// "Received", "Sent", or a payment link's name.
     let title: String
     let subtitle: String
@@ -1015,9 +1044,9 @@ struct ActivityRowLayout<Amount: View>: View {
                         icon
                         details(stacked: true)
                     }
-                    // Under the title text: 36 icon + 12.
+                    // Under the title text: 40 disc + 12.
                     amount(.leading)
-                        .padding(.leading, 48)
+                        .padding(.leading, TransactionDisc.size + 12)
                 }
             } else {
                 HStack(spacing: 12) {
@@ -1036,13 +1065,9 @@ struct ActivityRowLayout<Amount: View>: View {
 
     private var tint: Color { isIncoming ? .green : .brand }
 
+    /// The 40 pt disc that Home's rows use.
     private var icon: some View {
-        Image(systemName: systemImage)
-            .font(.subheadline.weight(.semibold))
-            .foregroundColor(tint)
-            .frame(width: 36, height: 36)
-            .background(tint.opacity(0.15))
-            .cornerRadius(8)
+        TransactionDisc(systemImage: systemImage, tint: tint, ringState: ringState)
             .paymentLinkBadge(tint, isShown: showsLinkBadge, symbol: badgeSymbol)
     }
 
@@ -1159,6 +1184,8 @@ struct TransactionAmountColumn: View {
     let isIncoming: Bool
     /// The transaction whose status shows under the amount.
     let transaction: MoneroTransaction?
+    /// Draws the status again at each new confirmation (see `TransactionRowState`).
+    private let state: TransactionRowState?
     /// A payment link's state, shown in place of the transaction's status.
     let linkStatus: PaymentLinkRowStatus?
     /// Leading when the column sits under the title (accessibility sizes).
@@ -1173,6 +1200,7 @@ struct TransactionAmountColumn: View {
         self.amount = amount
         self.isIncoming = transaction.type == .incoming
         self.transaction = transaction
+        self.state = transaction.rowState
         self.linkStatus = linkStatus
         self.alignment = alignment
     }
@@ -1183,6 +1211,7 @@ struct TransactionAmountColumn: View {
         self.amount = amount
         self.isIncoming = isIncoming
         self.transaction = nil
+        self.state = nil
         self.linkStatus = linkStatus
         self.alignment = alignment
     }
@@ -1224,8 +1253,19 @@ struct TransactionAmountColumn: View {
         .layoutPriority(1)
     }
 
-    @ViewBuilder
+    /// The status word cross-fades when it changes (crossFade 0.35 s):
+    /// "Pending" to "Locked" at the first block, to "Confirmed" at 10.
     private var status: some View {
+        statusLabel
+            .animation(.easeInOut(duration: 0.35), value: statusText)
+    }
+
+    private var statusText: String {
+        linkStatus?.text ?? transaction?.displayStatusText ?? ""
+    }
+
+    @ViewBuilder
+    private var statusLabel: some View {
         if let linkStatus {
             PaymentLinkStatusLabel(status: linkStatus)
         } else if let transaction {
@@ -1248,6 +1288,7 @@ struct TransactionAmountColumn: View {
                     .foregroundColor(transaction.displayStatusColor)
                     .lineLimit(1)
                     .fixedSize()
+                    .contentTransition(.opacity)
             }
         }
     }

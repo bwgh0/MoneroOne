@@ -35,6 +35,56 @@ extension Color {
     static let brandPressed = Color(red: 0xE6 / 255, green: 0x5C / 255, blue: 0) // #E65C00
 }
 
+/// The payment link envelope and its paper card (link-card mockup, final
+/// v2). Picture colors, never UI colors: the dark laid paper, the orange
+/// wax and liner, the ivory card. Fixed, so the envelope looks the same in
+/// light and dark and in the shared picture. The liner and the unit on the
+/// card use `brandToken` and `brandPressed`.
+enum EnvelopeArt {
+    static let pocketTop = Color(rgb: 0x2E2E33)
+    static let pocketMiddle = Color(rgb: 0x26262A)
+    static let pocketBottom = Color(rgb: 0x202024)
+    static let flapTop = Color(rgb: 0x36363C)
+    static let flapMiddle = Color(rgb: 0x2D2D32)
+    static let flapBottom = Color(rgb: 0x29292E)
+    static let flapInside = Color(rgb: 0x26262A)
+    static let linerMiddle = Color(rgb: 0xF56200)
+    static let waxLight = Color(rgb: 0xFF8A3D)
+    static let waxMiddle = Color(rgb: 0xFF6A0A)
+    static let waxDeep = Color(rgb: 0xB54500)
+    static let waxRing = Color(rgb: 0xF06A10)
+    static let waxStamp = Color(rgb: 0xD95400)
+    static let waxGlint = Color(rgb: 0xFFC496)
+    static let waxShade = Color(rgb: 0x6E2400)
+    static let waxShine = Color(rgb: 0xFFE2C4)
+    static let crack = Color(rgb: 0x4A1800)
+    /// The stamp that presses the seal: the mark's gray (`logoGray`), as
+    /// the wax is its orange.
+    static let stampMetal = Color(rgb: 0x4C4C4C)
+    static let paperLight = Color(rgb: 0xFBF8F1)
+    static let paperMiddle = Color(rgb: 0xF3EDE1)
+    static let paperDeep = Color(rgb: 0xE9E1D1)
+    static let paperEdge = Color(rgb: 0x503C1E)
+    static let ink = Color(rgb: 0x1F1F22)
+    static let cardLabel = Color(rgb: 0x6E675C)
+    static let foilDeep = Color(rgb: 0xB84A00)
+    static let foilEnd = Color(rgb: 0xC24E00)
+    static let backdropLight = Color(rgb: 0xF1EFEB)
+    static let backdropMiddle = Color(rgb: 0xE4E0DA)
+    static let backdropDeep = Color(rgb: 0xD6D1C9)
+}
+
+private extension Color {
+    /// sRGB from 0xRRGGBB.
+    init(rgb: UInt32) {
+        self.init(
+            red: Double((rgb >> 16) & 0xFF) / 255,
+            green: Double((rgb >> 8) & 0xFF) / 255,
+            blue: Double(rgb & 0xFF) / 255
+        )
+    }
+}
+
 extension ShapeStyle where Self == Color {
     /// Lets `.brand` go wherever SwiftUI takes a shape style, for example
     /// `.foregroundStyle(.brand)` and `.fill(.brand)`.

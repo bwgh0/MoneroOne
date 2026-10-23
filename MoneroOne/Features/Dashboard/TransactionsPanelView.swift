@@ -126,6 +126,8 @@ struct TransactionsPanelView: View {
 struct TransactionPanelRow: View {
     let transaction: MoneroTransaction
     let onTap: () -> Void
+    /// Draws the row again at each new confirmation (see `TransactionRowState`).
+    private let state: TransactionRowState
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
     @EnvironmentObject var priceHistoryService: PriceHistoryService
@@ -134,22 +136,20 @@ struct TransactionPanelRow: View {
     /// Rows name contacts: a saved, renamed or deleted contact shows at once.
     @ObservedObject private var contactStore = ContactStore.shared
 
+    init(transaction: MoneroTransaction, onTap: @escaping () -> Void) {
+        self.transaction = transaction
+        self.onTap = onTap
+        self.state = transaction.rowState
+    }
+
     var body: some View {
         let row = ActivityRowText(transaction: transaction, date: formattedDate, walletManager: walletManager, store: paymentLinks)
         let amount = amount(row.xmr)
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Icon
-                ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.15))
-                        .frame(width: 40, height: 40)
-
-                    Image(systemName: row.systemImage)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(iconColor)
-                }
-                .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge, symbol: row.badgeSymbol ?? "link")
+                TransactionDisc(systemImage: row.systemImage, tint: iconColor, ringState: ConfirmationRing.state(of: transaction))
+                    .paymentLinkBadge(iconColor, isShown: row.showsLinkBadge, symbol: row.badgeSymbol ?? "link")
 
                 // Details
                 VStack(alignment: .leading, spacing: 2) {

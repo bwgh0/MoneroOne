@@ -1147,20 +1147,21 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertEqual(PaymentLinkCard.amount(1_000_000_000_000), .init(text: "1", scale: 1))
         XCTAssertEqual(PaymentLinkCard.amount(50_000_000_000).text, "0.05")
         XCTAssertEqual(PaymentLinkCard.amount(25_404_800_000).text, "0.0254048")
-        XCTAssertEqual(PaymentLinkCard.amount(12_345_678_901_200).text, "~12.35")
+        // The long amount fits on one line of the envelope's foil.
+        XCTAssertEqual(PaymentLinkCard.amount(12_345_678_901_200).text, "12.3456789012")
     }
 
     /// The card shrinks the amount first, then rounds it with "~", and
     /// never shows "XMR" alone.
     func testLinkCardShrinksThenRounds() {
-        // 210 per character: 1008 fits 4.8 characters, 40% fits 12.
-        let width: (String) -> CGFloat = { CGFloat($0.count) * 210 }
+        // 170 per character: 820 fits 4.8 characters, 40% fits 12.
+        let width: (String) -> CGFloat = { CGFloat($0.count) * 170 }
         func card(_ piconero: UInt64) -> PaymentLinkCard.Amount {
             PaymentLinkCard.amount(piconero, width: width)
         }
         XCTAssertEqual(card(50_000_000_000), .init(text: "0.05", scale: 1))
         XCTAssertEqual(card(25_404_800_000).text, "0.0254048")
-        XCTAssertEqual(card(25_404_800_000).scale, 1008 / 1890, accuracy: 0.0001)
+        XCTAssertEqual(card(25_404_800_000).scale, 820 / 1530, accuracy: 0.0001)
         XCTAssertEqual(card(12_345_678_901_200).text, "~12.35")
         XCTAssertEqual(card(123_456_789).text, "~0.00012")
         XCTAssertEqual(card(1_234_567_891_234_000_000).text, "~1,234,568")
@@ -1669,6 +1670,89 @@ final class PaymentLinkTests: XCTestCase {
         }
         runtime.endHardwareSession()
         XCTAssertFalse(runtime.hardwareSessionHolds)
+    }
+
+    /// While Send is open no link check takes the active wallet: a lease
+    /// and a check both refuse, and giving the wallet back with no check
+    /// running returns at once.
+    @MainActor
+    func testSendKeepsLinkChecksOut() async {
+        let runtime = EnvelopeRuntime.shared
+        let walletManager = WalletManager()
+        runtime.beginSend()
+        XCTAssertTrue(runtime.sendHolds)
+        do {
+            try await runtime.acquire(walletManager)
+            XCTFail("a lease started while Send was open")
+        } catch {
+            XCTAssertEqual(error as? EnvelopeRuntime.RuntimeError, .walletBusy)
+        }
+        do {
+            _ = try await runtime.check(link: vector, address: vectorAddress)
+            XCTFail("a check ran while Send was open")
+        } catch {
+            XCTAssertEqual(error as? EnvelopeRuntime.RuntimeError, .walletBusy)
+        }
+        await runtime.returnWalletForSend()
+        XCTAssertFalse(runtime.holdsActiveWallet)
+        runtime.endSend()
+        XCTAssertFalse(runtime.sendHolds)
+    }
+
+    /// Review builds only on a synced wallet: "Synced" held through a
+    /// restart, a scan or a node with no height yet keeps it waiting.
+    func testReviewWaitsForASyncedWallet() {
+        typealias Rules = SendWaitRules
+        XCTAssertTrue(Rules.isReady(walletRunning: true, walletState: .synced, daemonHeight: 100, syncBlocked: false))
+        XCTAssertFalse(Rules.isReady(walletRunning: true, walletState: .syncing(progress: 0.6, remaining: 40), daemonHeight: 100, syncBlocked: false))
+        XCTAssertFalse(Rules.isReady(walletRunning: true, walletState: .connecting, daemonHeight: 100, syncBlocked: false))
+        XCTAssertFalse(Rules.isReady(walletRunning: true, walletState: .synced, daemonHeight: 0, syncBlocked: false))
+        XCTAssertFalse(Rules.isReady(walletRunning: false, walletState: .synced, daemonHeight: 100, syncBlocked: false))
+        XCTAssertFalse(Rules.isReady(walletRunning: true, walletState: .synced, daemonHeight: 100, syncBlocked: true))
+
+        XCTAssertEqual(Rules.stage(walletState: .synced, daemonHeight: 100), .synced)
+        XCTAssertEqual(Rules.stage(walletState: .synced, daemonHeight: 0), .connecting)
+        XCTAssertEqual(Rules.stage(walletState: .syncing(progress: 50, remaining: 5), daemonHeight: 100), .syncing)
+        XCTAssertEqual(Rules.stage(walletState: .connecting, daemonHeight: 0), .connecting)
+        // A restarting or failing wallet with heights from before the restart
+        // is still connecting, never "Scanning...".
+        XCTAssertEqual(Rules.stage(walletState: .connecting, daemonHeight: 100), .connecting)
+        XCTAssertEqual(Rules.stage(walletState: .idle, daemonHeight: 100), .connecting)
+        XCTAssertEqual(Rules.stage(walletState: .error("node down"), daemonHeight: 100), .connecting)
+    }
+
+    /// The slot shows a real failure at once and a wait only after its
+    /// delay. Only a failure the user can fix by trying again offers Retry.
+    func testSendWaitSlotAndRetry() {
+        typealias Rules = SendWaitRules
+        XCTAssertEqual(Rules.slot(failure: nil, failureCanRetry: false, isWaitShown: false, isConnected: false, syncBlocked: false, syncFailed: false), .none)
+        XCTAssertEqual(Rules.slot(failure: "x", failureCanRetry: true, isWaitShown: false, isConnected: true, syncBlocked: false, syncFailed: false), .failed("x", canRetry: true))
+        XCTAssertEqual(Rules.slot(failure: nil, failureCanRetry: false, isWaitShown: true, isConnected: false, syncBlocked: true, syncFailed: true), .offline)
+        XCTAssertEqual(Rules.slot(failure: nil, failureCanRetry: false, isWaitShown: true, isConnected: true, syncBlocked: true, syncFailed: false), .paused)
+        XCTAssertEqual(Rules.slot(failure: nil, failureCanRetry: false, isWaitShown: true, isConnected: true, syncBlocked: false, syncFailed: true), .nodeUnreachable)
+        XCTAssertEqual(Rules.slot(failure: nil, failureCanRetry: false, isWaitShown: true, isConnected: true, syncBlocked: false, syncFailed: false), .progress)
+
+        XCTAssertFalse(Rules.canRetry(after: MoneroCoreError.insufficientFunds("1")))
+        XCTAssertFalse(Rules.canRetry(after: PaymentLinkFunder.FundingError.insufficientFunds))
+        XCTAssertTrue(Rules.canRetry(after: MoneroCoreError.transactionSendFailed("daemon busy")))
+        XCTAssertTrue(Rules.canRetry(after: PaymentLinkFunder.FundingError.notSynced))
+    }
+
+    /// The gate keeps waiting while no wallet runs and stops when Review
+    /// goes away.
+    @MainActor
+    func testTheSendGateWaitsUntilCancelled() async {
+        let walletManager = WalletManager()
+        let gate = Task { try await walletManager.awaitReadyToSend() }
+        try? await Task.sleep(for: .milliseconds(600))
+        XCTAssertFalse(walletManager.isReadyToSend)
+        gate.cancel()
+        do {
+            try await gate.value
+            XCTFail("the gate returned with no wallet running")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
     }
 
     /// Cancel ends a Trezor session for real: a new session waits for the

@@ -4,7 +4,7 @@ import UIKit
 /// Short "send complete" chime, played once a transaction is broadcast.
 ///
 /// The asset is our own synthesized `SendComplete` data asset: two ascending
-/// bell notes, 0.85 s. Playback goes through an `.ambient` audio session, so
+/// bell notes, 0.70 s. Playback goes through an `.ambient` audio session, so
 /// it respects the silent switch and mixes with music or a call instead of
 /// interrupting them. Failures never reach the UI: a missing asset or a
 /// session error just means no chime.

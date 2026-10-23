@@ -192,9 +192,10 @@ private struct HistoryDisclosureKey: TransactionKey {
 }
 
 extension Transaction {
-    /// Marks the History open and close animation. Views that otherwise
-    /// drop animations, such as the activity list, keep this one so they
-    /// move with the card instead of jumping ahead of it.
+    /// Marks the balance card's growth: History opening and closing, and
+    /// the Available line of Money arrives. Views that otherwise drop
+    /// animations, such as the activity list, keep this one so they move
+    /// with the card instead of jumping ahead of it.
     var isHistoryDisclosure: Bool {
         get { self[HistoryDisclosureKey.self] }
         set { self[HistoryDisclosureKey.self] = newValue }

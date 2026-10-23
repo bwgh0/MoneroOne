@@ -1710,10 +1710,15 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertFalse(Rules.isReady(walletRunning: false, walletState: .synced, daemonHeight: 100, syncBlocked: false))
         XCTAssertFalse(Rules.isReady(walletRunning: true, walletState: .synced, daemonHeight: 100, syncBlocked: true))
 
-        XCTAssertEqual(Rules.stage(walletState: .synced, walletHeight: 100, daemonHeight: 100), .synced)
-        XCTAssertEqual(Rules.stage(walletState: .syncing(progress: 0.5, remaining: 5), walletHeight: 95, daemonHeight: 100), .syncing)
-        XCTAssertEqual(Rules.stage(walletState: .connecting, walletHeight: 0, daemonHeight: 0), .connecting)
-        XCTAssertEqual(Rules.stage(walletState: .connecting, walletHeight: 90, daemonHeight: 100), .loadingBlocks(wallet: 90, daemon: 100))
+        XCTAssertEqual(Rules.stage(walletState: .synced, daemonHeight: 100), .synced)
+        XCTAssertEqual(Rules.stage(walletState: .synced, daemonHeight: 0), .connecting)
+        XCTAssertEqual(Rules.stage(walletState: .syncing(progress: 50, remaining: 5), daemonHeight: 100), .syncing)
+        XCTAssertEqual(Rules.stage(walletState: .connecting, daemonHeight: 0), .connecting)
+        // A restarting or failing wallet with heights from before the restart
+        // is still connecting, never "Scanning...".
+        XCTAssertEqual(Rules.stage(walletState: .connecting, daemonHeight: 100), .connecting)
+        XCTAssertEqual(Rules.stage(walletState: .idle, daemonHeight: 100), .connecting)
+        XCTAssertEqual(Rules.stage(walletState: .error("node down"), daemonHeight: 100), .connecting)
     }
 
     /// The slot shows a real failure at once and a wait only after its

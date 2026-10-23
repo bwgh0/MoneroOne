@@ -426,16 +426,17 @@ enum SendWaitRules {
     }
 
     /// The step of a wallet that starts again while the balance card still
-    /// holds "Synced", by the balance card's own rules.
-    static func stage(walletState: MoneroWallet.SyncState, walletHeight: UInt64, daemonHeight: UInt64) -> ConnectionStage {
+    /// holds "Synced". Only wallet2's own state counts: the heights from
+    /// before the restart say nothing about where the wallet is now, so a
+    /// wallet that is not scanning yet is still connecting.
+    static func stage(walletState: MoneroWallet.SyncState, daemonHeight: UInt64) -> ConnectionStage {
         switch walletState {
-        case .synced where daemonHeight > 0:
-            return .synced
+        case .synced:
+            return daemonHeight > 0 ? .synced : .connecting
         case .syncing:
             return .syncing
-        default:
-            guard daemonHeight > 0 else { return .connecting }
-            return walletHeight >= daemonHeight ? .syncing : .loadingBlocks(wallet: walletHeight, daemon: daemonHeight)
+        case .idle, .connecting, .error:
+            return .connecting
         }
     }
 

@@ -3118,7 +3118,7 @@ class WalletManager: ObservableObject {
         if isReadyToSend { return .synced }
         guard connectionStage == .synced else { return connectionStage }
         guard let wallet = moneroWallet else { return .connecting }
-        return SendWaitRules.stage(walletState: wallet.syncState, walletHeight: wallet.walletHeight, daemonHeight: wallet.daemonHeight)
+        return SendWaitRules.stage(walletState: wallet.syncState, daemonHeight: wallet.daemonHeight)
     }
 
     /// The scan's percent for `sendWaitStage`.

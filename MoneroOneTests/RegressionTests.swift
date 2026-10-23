@@ -659,6 +659,45 @@ final class DecimalInputFilteringTests: XCTestCase {
     }
 }
 
+// MARK: - Amount Paste Regression Tests
+
+/// Paste on the amount step took every digit of any clipboard text, so an address gave junk digits.
+/// Now only a whole-text amount pastes (same cases as Android's AmountInputPasteTest).
+final class AmountPasteTests: XCTestCase {
+
+    func testOneAmountPastes() {
+        XCTAssertEqual(SendAmountStep.pastedAmount("1.5", decimalSeparator: "."), "1.5")
+        XCTAssertEqual(SendAmountStep.pastedAmount(" 0.123456789012\n", decimalSeparator: "."), "0.123456789012")
+        XCTAssertEqual(SendAmountStep.pastedAmount("12", decimalSeparator: "."), "12")
+        XCTAssertEqual(SendAmountStep.pastedAmount(".5", decimalSeparator: "."), ".5")
+    }
+
+    func testTheLocaleSeparatorOrADotPastes() {
+        XCTAssertEqual(SendAmountStep.pastedAmount("12,30", decimalSeparator: ","), "12.30")
+        XCTAssertEqual(SendAmountStep.pastedAmount("12.30", decimalSeparator: ","), "12.30")
+        XCTAssertNil(SendAmountStep.pastedAmount("12,30", decimalSeparator: "."))
+    }
+
+    func testAnAddressLeavesTheAmount() {
+        let address = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A"
+        XCTAssertNil(SendAmountStep.pastedAmount(address, decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("monero:\(address)?tx_amount=1.5", decimalSeparator: "."))
+    }
+
+    func testDigitsAreNeverTakenOutOfOtherText() {
+        XCTAssertNil(SendAmountStep.pastedAmount("", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount(".", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("hello", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("1.5 XMR", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("$12.30", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("1,234.56", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("1.2.3", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("1 000", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("0.1234567890123", decimalSeparator: "."))
+        XCTAssertNil(SendAmountStep.pastedAmount("١٢", decimalSeparator: "."))
+    }
+}
+
 // MARK: - Connection Stage Regression Tests
 
 final class ConnectionStageRegressionTests: XCTestCase {

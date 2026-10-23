@@ -295,12 +295,27 @@ struct SendAmountStep: View {
     }
 
     private func pasteAmount() {
-        guard let clipboard = UIPasteboard.general.string else { return }
-        let filtered = filterDecimalInput(clipboard.trimmingCharacters(in: .whitespacesAndNewlines))
-        if !filtered.isEmpty {
-            amountString = filtered
-            HapticFeedback.shared.softTick()
-        }
+        guard let clipboard = UIPasteboard.general.string,
+              let amount = Self.pastedAmount(clipboard) else { return }
+        amountString = filterDecimalInput(amount)
+        HapticFeedback.shared.softTick()
+    }
+
+    /// Pasted text as an amount, with "." as the separator. Nil unless the whole text, trimmed, is one
+    /// amount: digits with at most one decimal separator (the locale's or ".") and at most 12 decimals.
+    /// Digits are never taken out of other text (an address, a link, "1.5 XMR"). Same rule as Android's
+    /// `AmountInput.pasted`.
+    static func pastedAmount(_ text: String, decimalSeparator: String = Locale.current.decimalSeparator ?? ".") -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dotted = decimalSeparator == "." || decimalSeparator.isEmpty
+            ? trimmed
+            : trimmed.replacingOccurrences(of: decimalSeparator, with: ".")
+        let parts = dotted.split(separator: ".", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count <= 2,
+              dotted.contains(where: { $0.isASCII && $0.isNumber }),
+              parts.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } }),
+              parts.count < 2 || parts[1].count <= 12 else { return nil }
+        return dotted
     }
 
     private func filterDecimalInput(_ input: String) -> String {

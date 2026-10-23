@@ -285,6 +285,13 @@ enum WalletRowSurface {
             RoundedRectangle(cornerRadius: 12).strokeBorder(color, lineWidth: lineWidth)
         }
     }
+
+    /// The glass button's own side inset around its label; the fallback
+    /// style has none. Controls laid over a row (the pencil, the handle)
+    /// add it to line up with their slots in the label.
+    static var labelInset: CGFloat {
+        if #available(iOS 26.0, *) { 12 } else { 0 }
+    }
 }
 
 /// The inside of a wallet switcher row: the emoji circle with its kind
@@ -302,6 +309,9 @@ struct WalletRowContent<Trailing: View>: View {
     let address: String?
     /// A line in the address's place (Transfer: why a wallet is dimmed).
     let note: String?
+    /// Fiat Mode: the balance in fiat ("$150.23"), shown in place of XMR.
+    /// nil shows XMR (Fiat Mode off, or no price yet).
+    let fiatBalance: String?
     let trailing: Trailing
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -312,6 +322,7 @@ struct WalletRowContent<Trailing: View>: View {
         balance: Decimal?,
         address: String?,
         note: String? = nil,
+        fiatBalance: String? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.wallet = wallet
@@ -320,7 +331,14 @@ struct WalletRowContent<Trailing: View>: View {
         self.balance = balance
         self.address = address
         self.note = note
+        self.fiatBalance = fiatBalance
         self.trailing = trailing()
+    }
+
+    /// "1.2345 XMR", "$150.23" in Fiat Mode, or "— XMR" when unknown.
+    private var balanceText: String {
+        if let fiatBalance, balance != nil { return fiatBalance }
+        return "\(balance.map(XMRFormatter.format) ?? "—") XMR"
     }
 
     var body: some View {
@@ -352,19 +370,13 @@ struct WalletRowContent<Trailing: View>: View {
                         Text("Needs restore", comment: "Wallet switcher: the wallet's keys are not on this iPhone")
                     }
                     .font(.callout.weight(.medium))
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .minimumScaleFactor(0.8)
                     .foregroundStyle(Color.brand)
                     .accessibilityIdentifier("wallet.row.needsRestore")
                 } else if showsBalance {
-                    HStack(spacing: 0) {
-                        Text(balance.map(XMRFormatter.format) ?? "—")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .layoutPriority(0)
-                        Text(" XMR")
-                            .layoutPriority(1)
-                    }
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(balance == nil ? Color.secondary : Color.brand)
+                    WalletRowBalance(text: balanceText)
+                        .foregroundStyle(balance == nil ? Color.secondary : Color.brand)
                 }
 
                 if let note {
@@ -380,11 +392,61 @@ struct WalletRowContent<Trailing: View>: View {
                         .monospaced()
                 }
             }
+            // The text takes the width before the spacer does, so a short
+            // line like "Needs restore" does not wrap.
+            .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             trailing
         }
+    }
+}
+
+/// A wallet row's balance line. Every digit, always: a long balance shrinks
+/// to fit, down to 60% (the balance floor), and wraps at that size when it
+/// is still too wide, so no digit is ever lost to an ellipsis.
+private struct WalletRowBalance: View {
+    let text: String
+    @ScaledMetric(relativeTo: .callout) private var calloutSize: CGFloat = 16
+
+    private static let floor: CGFloat = 0.6
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            // One line while it fits at the floor. The scale factor goes a
+            // little lower than the check, so rounding never cuts a digit.
+            FloorWidthLayout(scale: Self.floor) {
+                Text(verbatim: text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(Self.floor - 0.05)
+            }
+            Text(verbatim: text)
+                .font(.system(size: calloutSize * Self.floor, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.callout.weight(.medium))
+    }
+}
+
+/// Reports its content's ideal width at `scale`, so `ViewThatFits` keeps a
+/// shrinking line while it can still fit at that scale. A real width
+/// passes through untouched.
+private struct FloorWidthLayout: Layout {
+    let scale: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let size = content.sizeThatFits(proposal)
+        guard proposal.width == nil else { return size }
+        return CGSize(width: size.width * scale, height: size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(
+            at: bounds.origin,
+            proposal: ProposedViewSize(width: proposal.width ?? bounds.width, height: proposal.height ?? bounds.height)
+        )
     }
 }
 
@@ -414,9 +476,10 @@ struct WalletRowCheck: View {
 /// The row is a Button so a tap is a plain button tap: switch, or close the
 /// list when it is the active one. The pencil renames.
 ///
-/// Reorder is driven by `WalletManagerRows`: one UIKit long-press recognizer
-/// on the enclosing scroll view lifts a row (see `RowGestureHost`), and the
-/// rows draw the lift and slide aside in SwiftUI.
+/// Reorder is driven by `WalletManagerRows`: a press on the grab handle,
+/// recognised by UIKit on the enclosing scroll view, lifts the row at once
+/// (see `RowGestureHost`), and the rows draw the lift and slide aside in
+/// SwiftUI.
 ///
 /// A horizontal swipe, recognised by the list (`RowGestureHost`), moves an
 /// inactive row with the finger and reveals the custom Delete zone; the row
@@ -450,6 +513,14 @@ struct WalletRow: View {
     var swipeTranslation: CGFloat = 0
     /// A tap on an open row closes it.
     var onCloseDelete: () -> Void = {}
+    /// Fiat Mode: the balance in fiat, shown in place of XMR.
+    var fiatBalance: String? = nil
+
+    /// The handle column, from the row's leading edge: its 16pt margin, the
+    /// glass inset, the 16pt row padding, the 24pt handle and 12pt of
+    /// slack, which stops short of the emoji. A press there lifts the row
+    /// at once; the list hit-tests it against the row's frame.
+    static var handleZoneWidth: CGFloat { 16 + WalletRowSurface.labelInset + 16 + 24 + 12 }
 
     /// How far an open row moves left to show Delete.
     static let deleteWidth: CGFloat = 88
@@ -548,10 +619,30 @@ struct WalletRow: View {
         // identifier.
         .overlay(alignment: .trailing) {
             // Same trailing slots as `rowContent`: pencil, 14pt gap, the
-            // 24pt check or circle, 16pt row padding.
+            // 24pt check or circle, 16pt row padding, the glass inset.
             renameButton
-                .padding(.trailing, 16 + 24 + 14)
+                .padding(.trailing, 16 + 24 + 14 + WalletRowSurface.labelInset)
         }
+        .overlay(alignment: .leading) {
+            // The handle's slot in `rowContent`, after the glass inset and
+            // the 16pt row padding.
+            reorderHandle
+                .padding(.leading, 16 + WalletRowSurface.labelInset)
+        }
+    }
+
+    /// The grab handle. The list's press recognizer drags the row from here
+    /// (`RowGestureHost`); the glyph only marks the spot. Hidden from
+    /// VoiceOver, like the pencil: the row already has Move up / Move down
+    /// on the rotor, so each wallet stays one stop.
+    private var reorderHandle: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.title3)
+            .foregroundStyle(.secondary)
+            .frame(width: 24, height: 24)
+            .contentShape(Rectangle())
+            .accessibilityHidden(true)
+            .accessibilityIdentifier("wallet.row.handle")
     }
 
     /// Names the last-known or unavailable balance on inactive wallets.
@@ -604,14 +695,22 @@ struct WalletRow: View {
     // MARK: - Content
 
     private var rowContent: some View {
-        WalletRowContent(wallet: wallet, needsRestore: needsRestore, balance: balance, address: address) {
-            // Holds the pencil's place; the real pencil is `renameButton`,
-            // laid over the row outside its Button so its tap renames.
+        HStack(spacing: 14) {
+            // Holds the handle's place; the real handle is `reorderHandle`,
+            // laid over the row outside its Button.
             Color.clear
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
 
-            WalletRowCheck(isSelected: isActive)
+            WalletRowContent(wallet: wallet, needsRestore: needsRestore, balance: balance, address: address, fiatBalance: fiatBalance) {
+                // Holds the pencil's place; the real pencil is `renameButton`,
+                // laid over the row outside its Button so its tap renames.
+                Color.clear
+                    .frame(width: 24, height: 24)
+                    .accessibilityHidden(true)
+
+                WalletRowCheck(isSelected: isActive)
+            }
         }
     }
 }
@@ -620,11 +719,8 @@ struct WalletRow: View {
 /// the user drags), the active one marked in place with a check and an orange
 /// ring, then Add Wallet. Inline on the dashboard, not a sheet.
 ///
-/// On iOS 27 the rows are a system reorder container: the drop hands back the
-/// moved ids and the id they land before, and `applyReorder` persists that
-/// order. Before iOS 27 the order changes one slot at a time through the
-/// row's context menu; VoiceOver has the same Move up / Move down on every
-/// version.
+/// A row moves by its grab handle (`RowGestureHost`) and `moveWallet`
+/// persists the order; VoiceOver has Move up / Move down on every row.
 struct WalletManagerRows: View {
     @Binding var isExpanded: Bool
     @EnvironmentObject var walletManager: WalletManager
@@ -704,7 +800,7 @@ struct WalletManagerRows: View {
         .background {
             RowGestureHost(
                 isEnabled: isExpanded && !isSwitching && !walletManager.isSwitchingWallet,
-                shouldBegin: { point in rowId(at: point) != nil },
+                shouldBegin: { point in handleRowId(at: point) != nil },
                 onBegan: lift,
                 onChanged: move,
                 onEnded: drop,
@@ -838,10 +934,11 @@ struct WalletManagerRows: View {
     private func row(for wallet: WalletInfo) -> some View {
         let isActive = wallet.id == walletManager.activeWallet?.id
         let needsRestore = walletManager.needsRestore(wallet.id)
+        let balance: Decimal? = isActive ? walletManager.displayBalance : wallet.cachedBalance
         return WalletRow(
             wallet: wallet,
             isActive: isActive,
-            balance: isActive ? walletManager.displayBalance : wallet.cachedBalance,
+            balance: balance,
             address: isActive ? walletManager.primaryAddress : wallet.cachedPrimaryAddress,
             onTap: {
                 guard dragId == nil, Date() > suppressTapsUntil else { return }
@@ -878,7 +975,9 @@ struct WalletManagerRows: View {
             onCloseDelete: {
                 guard Date() > suppressTapsUntil else { return }
                 withAnimation(WalletRow.settle) { openDeleteId = nil }
-            }
+            },
+            // Fiat Mode, as on the Activity rows.
+            fiatBalance: priceService.showFiatFirst ? balance.flatMap { priceService.formatFiatValue($0) } : nil
         )
     }
 
@@ -931,6 +1030,13 @@ struct WalletManagerRows: View {
 
     private func rowId(at point: CGPoint) -> UUID? {
         rowFrames.first { $0.value.contains(point) }?.key
+    }
+
+    /// The row whose grab handle is under `point`: the row's leading column,
+    /// full height. Not on a row with Delete open, whose handle has slid away.
+    private func handleRowId(at point: CGPoint) -> UUID? {
+        guard let id = rowId(at: point), id != openDeleteId, let frame = rowFrames[id] else { return nil }
+        return point.x < frame.minX + WalletRow.handleZoneWidth ? id : nil
     }
 
     /// The press began on a row: lift it. Frames are snapshotted here so the
@@ -1036,10 +1142,11 @@ struct WalletManagerRows: View {
 
 
 
-/// One UIKit long-press recognizer on the enclosing scroll view, the way
-/// UITableView reorders. UIKit arbitrates with the scroll view itself: hold
-/// still for 0.4 s and the press begins and the pan is cancelled; move earlier
-/// and the press fails and the list scrolls. SwiftUI gesture compositions
+/// One UIKit press recognizer on the enclosing scroll view, the way
+/// UITableView reorders by its grabber. It begins only on a row's grab
+/// handle, at touch down, with no hold, and stops the scroll view's pan for
+/// that touch; a touch anywhere else fails it at once, so the list scrolls
+/// and the delete swipe has no rival. SwiftUI gesture compositions
 /// could not do this inside a ScrollView (each attempt swallowed the vertical
 /// drags), the iOS 27 reorder container asserted on every lift, and system
 /// drag and drop showed a copy badge. Locations are in window space, which
@@ -1117,8 +1224,8 @@ private struct RowGestureHost: UIViewRepresentable {
         init(_ parent: RowGestureHost) {
             self.parent = parent
             super.init()
-            recognizer.minimumPressDuration = 0.4
-            recognizer.allowableMovement = 10
+            // At touch down: the handle needs no hold.
+            recognizer.minimumPressDuration = 0
             recognizer.delegate = self
             recognizer.addTarget(self, action: #selector(handle(_:)))
             pan.delegate = self

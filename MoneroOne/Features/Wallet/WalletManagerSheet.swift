@@ -286,12 +286,18 @@ enum WalletRowSurface {
         }
     }
 
-    /// The glass button's own side inset around its label; the fallback
-    /// style has none. Controls laid over a row (the pencil, the handle)
-    /// add it to line up with their slots in the label.
+    /// The glass button's own side inset around its label at the default
+    /// text size (it grows at the accessibility sizes); the fallback style
+    /// has none. The handle, laid over a row, adds it to line up with its
+    /// slot in the label and with the press zone.
     static var labelInset: CGFloat {
         if #available(iOS 26.0, *) { 12 } else { 0 }
     }
+
+    /// The largest text size the row's glyphs (handle, pencil, check) grow
+    /// to. Their 24pt slots sit 14pt apart and the glyphs draw past them as
+    /// the text grows; past this size the pencil reaches the check.
+    static let glyphSizeCap: DynamicTypeSize = .accessibility1
 }
 
 /// The inside of a wallet switcher row: the emoji circle with its kind
@@ -459,6 +465,7 @@ struct WalletRowCheck: View {
         if isSelected {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title3)
+                .dynamicTypeSize(...WalletRowSurface.glyphSizeCap)
                 .foregroundStyle(.green)
                 .frame(width: 24, height: 24)
                 .accessibilityLabel("Current wallet")
@@ -617,11 +624,16 @@ struct WalletRow: View {
         }
         // After the row's accessibility modifiers, so the pencil keeps its own
         // identifier.
-        .overlay(alignment: .trailing) {
-            // Same trailing slots as `rowContent`: pencil, 14pt gap, the
-            // 24pt check or circle, 16pt row padding, the glass inset.
-            renameButton
-                .padding(.trailing, 16 + 24 + 14 + WalletRowSurface.labelInset)
+        .overlayPreferenceValue(PencilSlotKey.self) { slot in
+            // On the pencil's slot in `rowContent`. The glass style's inset
+            // grows with the text size, so the slot is read, not computed.
+            GeometryReader { proxy in
+                if let slot {
+                    let rect = proxy[slot]
+                    renameButton
+                        .position(x: rect.midX, y: rect.midY)
+                }
+            }
         }
         .overlay(alignment: .leading) {
             // The handle's slot in `rowContent`, after the glass inset and
@@ -638,6 +650,7 @@ struct WalletRow: View {
     private var reorderHandle: some View {
         Image(systemName: "line.3.horizontal")
             .font(.title3)
+            .dynamicTypeSize(...WalletRowSurface.glyphSizeCap)
             .foregroundStyle(.secondary)
             .frame(width: 24, height: 24)
             .contentShape(Rectangle())
@@ -681,6 +694,7 @@ struct WalletRow: View {
         Button(action: onRename) {
             Image(systemName: "pencil.circle.fill")
                 .font(.title3)
+                .dynamicTypeSize(...WalletRowSurface.glyphSizeCap)
                 .foregroundStyle(.secondary.opacity(0.5))
                 .frame(width: 24, height: 24)
                 .padding(10)
@@ -707,11 +721,22 @@ struct WalletRow: View {
                 // laid over the row outside its Button so its tap renames.
                 Color.clear
                     .frame(width: 24, height: 24)
+                    .anchorPreference(key: PencilSlotKey.self, value: .bounds) { $0 }
                     .accessibilityHidden(true)
 
                 WalletRowCheck(isSelected: isActive)
             }
         }
+    }
+}
+
+/// The pencil's placeholder in a wallet row's label, where `WalletRow`
+/// lays the real pencil.
+private struct PencilSlotKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
     }
 }
 

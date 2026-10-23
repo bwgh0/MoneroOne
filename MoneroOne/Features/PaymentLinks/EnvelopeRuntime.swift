@@ -96,6 +96,12 @@ final class EnvelopeRuntime: ObservableObject {
     /// A Trezor session holds MoneroKit's one wallet slot: no lease, check
     /// or envelope starts until it ends.
     private(set) var hardwareSessionHolds = false
+    /// Send is open and can need the active wallet at any step: no lease
+    /// or check starts until it closes.
+    private(set) var sendHolds = false
+    /// A payment-link screen stopped the active wallet and has not given
+    /// it back yet.
+    var holdsActiveWallet: Bool { mainSuspended }
 
     private init() {
         NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
@@ -111,11 +117,16 @@ final class EnvelopeRuntime: ObservableObject {
     /// A payment-link screen needs envelope wallets. The first lease stops
     /// the active wallet; it reads the claim destination before it does.
     func acquire(_ walletManager: WalletManager) async throws {
-        guard !hardwareSessionHolds else { throw RuntimeError.walletBusy }
+        guard !hardwareSessionHolds, !sendHolds else { throw RuntimeError.walletBusy }
         leases += 1
         resumeTask?.cancel()
         resumeTask = nil
         await resumeInFlight?.value
+        // Send opened while the active wallet was starting again.
+        guard !sendHolds else {
+            leases -= 1
+            throw RuntimeError.walletBusy
+        }
         guard !mainSuspended else { return }
         self.walletManager = walletManager
         guard let address = Self.mainAddress(of: walletManager) else {
@@ -172,6 +183,35 @@ final class EnvelopeRuntime: ObservableObject {
     /// The Trezor session ended and started the active wallet again.
     func endHardwareSession() {
         hardwareSessionHolds = false
+    }
+
+    /// Send opened. Until `endSend()`, no lease or check starts; a check
+    /// that holds the wallet now gives it back through
+    /// `returnWalletForSend()`.
+    func beginSend() {
+        sendHolds = true
+    }
+
+    /// Send closed: link checks may start again.
+    func endSend() {
+        sendHolds = false
+    }
+
+    /// Send needs the active wallet: gives it back at once, without the
+    /// short delay. A running link check stops at its next step (a sweep
+    /// in progress finishes first), the envelope closes and the active
+    /// wallet starts again. Returns at once when no screen holds the wallet.
+    func returnWalletForSend() async {
+        resumeTask?.cancel()
+        resumeTask = nil
+        await resumeInFlight?.value
+        guard mainSuspended else { return }
+        DiagnosticLog.shared.log("Envelope: Send took the active wallet back from a link check")
+        generation += 1
+        let resume = Task { @MainActor in await self.resumeMain() }
+        resumeInFlight = resume
+        await resume.value
+        resumeInFlight = nil
     }
 
     /// Waits while the last payment-link screen lets go of the active
@@ -237,7 +277,7 @@ final class EnvelopeRuntime: ObservableObject {
     ///   - number: the link's number ("Link 7"), for the diagnostic log.
     func check(link: EnvelopeLink, address: String, estimateSweepFee: Bool = false, fundingHeight: UInt64? = nil, number: Int? = nil) async throws -> EnvelopeObservation {
         try await serial { [self] in
-            guard let walletManager, mainSuspended, !hardwareSessionHolds else { throw RuntimeError.walletBusy }
+            guard let walletManager, mainSuspended, !hardwareSessionHolds, !sendHolds else { throw RuntimeError.walletBusy }
             let name = Self.logName(number)
             let floor = EnvelopeStatusRules.scanFloor(restoreHeight: link.restoreHeight, fundingHeight: fundingHeight)
             if openEnvelopeId != link.id {
@@ -506,7 +546,7 @@ final class EnvelopeRuntime: ObservableObject {
         let started = generation
         while true {
             try Task.checkCancellation()
-            if generation != started || hardwareSessionHolds { throw CancellationError() }
+            if generation != started || hardwareSessionHolds || sendHolds { throw CancellationError() }
             // Before the synced check: a short scan can report its first
             // height and synced in one update.
             noteRefresh(of: wallet)

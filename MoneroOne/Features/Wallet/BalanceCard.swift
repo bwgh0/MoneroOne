@@ -822,8 +822,9 @@ private struct HistoryRevealClip: Shape {
 // MARK: - Connection Step Indicator
 
 /// Progressive connection status indicator with 6 stages
-/// Shows: Network -> Node -> Connecting -> Loading -> Syncing -> Synced
-private struct ConnectionStepIndicator: View {
+/// Shows: Network -> Node -> Connecting -> Loading -> Syncing -> Synced.
+/// Send's review shows it too, above Send, while it waits for the wallet.
+struct ConnectionStepIndicator: View {
     let stage: ConnectionStage
     let syncProgress: Double?  // nil if not syncing, 0-100 if syncing
 

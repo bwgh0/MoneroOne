@@ -363,7 +363,15 @@ struct PaymentLinkReviewStep: View {
     let onConfirm: () -> Void
 
     @State private var errorMessage: String?
+    /// A failed build offers Retry, except for a lack of funds.
+    @State private var errorCanRetry = true
     @State private var showContent = false
+    /// The review waits for a running, synced wallet before it builds.
+    @State private var isWaitingForSync = true
+    /// The wait passed half a second: the status slot above Send shows.
+    @State private var isWaitShown = false
+    /// Bumped by Retry: the review waits and builds again.
+    @State private var retry = 0
 
     private var amount: Decimal { Decimal(string: amountString) ?? 0 }
 
@@ -389,21 +397,28 @@ struct PaymentLinkReviewStep: View {
                             value: draft?.reserve,
                             note: String(localized: "Covers the recipient's claim fee.")
                         )
-                        if let draft {
-                            Divider().padding(.horizontal)
-                            totalRow(draft.fundingAmount + draft.networkFee)
-                            Divider().padding(.horizontal)
-                            HStack {
-                                Text("Expires")
-                                    .foregroundStyle(.secondary)
-                                Spacer()
+                        // Total and Expires hold their places until the
+                        // link is built.
+                        Divider().padding(.horizontal)
+                        totalRow(draft.map { $0.fundingAmount + $0.networkFee })
+                        Divider().padding(.horizontal)
+                        HStack {
+                            Text("Expires")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            if let draft {
                                 Text(draft.expiryDate.formatted(date: .abbreviated, time: .omitted))
                                     .fontWeight(.medium)
+                            } else {
+                                Text(Date(timeIntervalSinceNow: EnvelopeLink.defaultLifetime).formatted(date: .abbreviated, time: .omitted))
+                                    .fontWeight(.medium)
+                                    .redacted(reason: .placeholder)
+                                    .accessibilityHidden(true)
                             }
-                            .font(.subheadline)
-                            .padding()
-                            .accessibilityElement(children: .combine)
                         }
+                        .font(.subheadline)
+                        .padding()
+                        .accessibilityElement(children: .combine)
                         // The note, as Send's review shows a memo.
                         if !note.isEmpty {
                             Divider().padding(.horizontal)
@@ -424,64 +439,105 @@ struct PaymentLinkReviewStep: View {
                     .cornerRadius(16)
 
                     bearerWarning
-
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .multilineTextAlignment(.center)
-                    }
                 }
                 .padding()
                 .opacity(showContent ? 1 : 0)
                 .offset(y: showContent ? 0 : 20)
             }
 
-            Button(action: onConfirm) {
-                HStack(spacing: 8) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.callout.weight(.semibold))
-                    Text("Send")
-                        .font(.callout.weight(.semibold))
+            // Send, with the wallet's status or a failed build above it.
+            VStack(spacing: 10) {
+                SendWaitStatus(
+                    walletManager: walletManager,
+                    failure: errorMessage,
+                    failureCanRetry: errorCanRetry,
+                    isWaitShown: isWaitShown,
+                    onRetry: {
+                        // A failed build builds again; a wait asks the node again.
+                        if errorMessage != nil { retry += 1 } else { Task { await walletManager.refresh() } }
+                    }
+                )
+
+                Button(action: onConfirm) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.callout.weight(.semibold))
+                        Text("Send")
+                            .font(.callout.weight(.semibold))
+                    }
+                    .foregroundStyle(draft != nil && !sendInProgress ? .brand : .gray)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
                 }
-                .foregroundStyle(draft != nil && !sendInProgress ? .brand : .gray)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .glassButtonStyle()
+                .disabled(draft == nil || sendInProgress)
+                .accessibilityLabel("Send with a link")
+                .accessibilityHint(sendHint)
             }
-            .glassButtonStyle()
-            .disabled(draft == nil || sendInProgress)
             .padding()
-            .accessibilityLabel("Send with a link")
-            .accessibilityHint(draft != nil ? "Double tap to fund the link with \(XMRFormatter.format(amount)) XMR" : "Preparing the link")
         }
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
-        .task(id: rebuild) {
-            // Same amount as before: keep the envelope already built, so
-            // Back and Review again do not make a new secret each time.
-            // Its funding transaction is built again when it is gone.
-            errorMessage = nil
-            if let draft, draft.atomicAmount == EnvelopeRuntime.piconero(amount) {
-                if await PaymentLinkFunder.isReady(draft, walletManager: walletManager) { return }
-                self.draft = nil
-                do {
-                    self.draft = try await PaymentLinkFunder.buildFunding(for: draft, walletManager: walletManager)
-                } catch {
-                    errorMessage = EnvelopeSession.message(for: error)
-                }
-                return
-            }
-            draft = nil
-            do {
-                draft = try await PaymentLinkFunder.makeDraft(amount: amount, walletManager: walletManager)
-            } catch {
-                errorMessage = EnvelopeSession.message(for: error)
-            }
+        .task(id: [rebuild, retry]) {
+            await buildDraft()
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
                 showContent = true
+            }
+        }
+    }
+
+    private var sendHint: Text {
+        if draft != nil { return Text("Double tap to fund the link with \(XMRFormatter.format(amount)) XMR") }
+        return isWaitingForSync ? Text("Waiting for your wallet to sync", comment: "VoiceOver hint on the gray Send button while Review waits for the wallet to sync") : Text("Preparing the link")
+    }
+
+    /// Waits for a running, synced wallet (a payment-link check gives it
+    /// back at once), then builds the link. The status slot shows only
+    /// when the wait takes a moment, and stays until the values are in.
+    private func buildDraft() async {
+        errorMessage = nil
+        // Same amount as before: keep the envelope already built, so Back
+        // and Review again do not make a new secret each time. Its funding
+        // transaction is built again when it is gone.
+        let kept = draft.flatMap { $0.atomicAmount == EnvelopeRuntime.piconero(amount) ? $0 : nil }
+        if let kept, await PaymentLinkFunder.isReady(kept, walletManager: walletManager) { return }
+        draft = nil
+        isWaitingForSync = true
+        let showWait = Task { @MainActor in
+            try? await Task.sleep(for: SendWaitRules.slotDelay)
+            guard !Task.isCancelled else { return }
+            withAnimation(SendWaitRules.crossFade) { isWaitShown = true }
+        }
+        do {
+            try await walletManager.awaitReadyToSend()
+        } catch {
+            // Back or a new build.
+            showWait.cancel()
+            return
+        }
+        showWait.cancel()
+        isWaitingForSync = false
+        do {
+            let built: PaymentLinkDraft
+            if let kept {
+                built = try await PaymentLinkFunder.buildFunding(for: kept, walletManager: walletManager)
+            } else {
+                built = try await PaymentLinkFunder.makeDraft(amount: amount, walletManager: walletManager)
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(SendWaitRules.crossFade) {
+                draft = built
+                isWaitShown = false
+            }
+        } catch {
+            guard !Task.isCancelled else { return }
+            withAnimation(SendWaitRules.crossFade) {
+                errorCanRetry = SendWaitRules.canRetry(after: error)
+                errorMessage = EnvelopeSession.message(for: error)
+                isWaitShown = false
             }
         }
     }
@@ -547,13 +603,8 @@ struct PaymentLinkReviewStep: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-            } else if errorMessage != nil {
-                Text("Error")
-                    .fontWeight(.medium)
-                    .foregroundStyle(.red)
             } else {
-                ProgressView()
-                    .scaleEffect(0.8)
+                ReviewValuePlaceholder(sample: ReviewValuePlaceholder.feeSample, priceService: priceService)
             }
         }
         .font(.subheadline)
@@ -562,20 +613,24 @@ struct PaymentLinkReviewStep: View {
         .accessibilityLabel(value.map { "\(title): \(XMRFormatter.format($0)) XMR" } ?? "\(title): loading")
     }
 
-    private func totalRow(_ total: Decimal) -> some View {
+    private func totalRow(_ total: Decimal?) -> some View {
         HStack {
             Text("Total")
                 .fontWeight(.semibold)
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("\(XMRFormatter.format(total)) XMR")
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.brand)
-                if let fiat = priceService.formatFiatValue(total) {
-                    Text("≈ \(fiat)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            if let total {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(XMRFormatter.format(total)) XMR")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.brand)
+                    if let fiat = priceService.formatFiatValue(total) {
+                        Text("≈ \(fiat)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+            } else {
+                ReviewValuePlaceholder(sample: amount, priceService: priceService, weight: .semibold)
             }
         }
         .font(.subheadline)

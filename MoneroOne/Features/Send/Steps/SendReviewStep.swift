@@ -21,8 +21,16 @@ struct SendReviewStep: View {
     let onConfirm: () -> Void
 
     @State private var feeError: String?
+    /// A failed build offers Retry, except for a lack of funds.
+    @State private var feeErrorCanRetry = true
     @State private var showContent = false
     @State private var upgradedToSendAll = false
+    /// The review waits for a running, synced wallet before it builds.
+    @State private var isWaitingForSync = true
+    /// The wait passed half a second: the status slot above Send shows.
+    @State private var isWaitShown = false
+    /// Bumped by Retry: the review waits and builds again.
+    @State private var retry = 0
     var onUpgradeToSendAll: (() -> Void)?
 
     private var amount: Decimal {
@@ -146,13 +154,8 @@ struct SendReviewStep: View {
                                             .foregroundStyle(.secondary)
                                     }
                                 }
-                            } else if feeError != nil {
-                                Text("Error")
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.red)
                             } else {
-                                ProgressView()
-                                    .scaleEffect(0.8)
+                                ReviewValuePlaceholder(sample: ReviewValuePlaceholder.feeSample, priceService: priceService)
                             }
                         }
                         .font(.subheadline)
@@ -160,14 +163,14 @@ struct SendReviewStep: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityLabel(estimatedFee.map { String(localized: "Network fee: \(XMRFormatter.format($0)) XMR") } ?? String(localized: "Network fee: loading"))
 
-                        // Total
-                        if let total = total {
-                            Divider().padding(.horizontal)
+                        // Total. Its row holds its place until the value is known.
+                        Divider().padding(.horizontal)
 
-                            HStack {
-                                Text("Total")
-                                    .fontWeight(.semibold)
-                                Spacer()
+                        HStack {
+                            Text("Total")
+                                .fontWeight(.semibold)
+                            Spacer()
+                            if let total = total {
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text("\(XMRFormatter.format(total)) XMR")
                                         .fontWeight(.semibold)
@@ -178,10 +181,12 @@ struct SendReviewStep: View {
                                             .foregroundStyle(.secondary)
                                     }
                                 }
+                            } else {
+                                ReviewValuePlaceholder(sample: amount > 0 ? amount : walletManager.displayUnlockedBalance, priceService: priceService, weight: .semibold)
                             }
-                            .font(.subheadline)
-                            .padding()
                         }
+                        .font(.subheadline)
+                        .padding()
 
                         // The description in the OpenAlias record.
                         if let txDescription = aliasSummary?.txDescription {
@@ -208,22 +213,25 @@ struct SendReviewStep: View {
                     }
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(16)
-
-                    // Fee error
-                    if let error = feeError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .multilineTextAlignment(.center)
-                    }
                 }
                 .padding()
                 .opacity(showContent ? 1 : 0)
                 .offset(y: showContent ? 0 : 20)
             }
 
-            // Send button
+            // Send button, with the wallet's status or a failed build above it
             VStack(spacing: 10) {
+                SendWaitStatus(
+                    walletManager: walletManager,
+                    failure: feeError,
+                    failureCanRetry: feeErrorCanRetry,
+                    isWaitShown: isWaitShown,
+                    onRetry: {
+                        // A failed build builds again; a wait asks the node again.
+                        if feeError != nil { retry += 1 } else { Task { await walletManager.refresh() } }
+                    }
+                )
+
                 Button(action: onConfirm) {
                     HStack(spacing: 8) {
                         Image(systemName: "paperplane.fill")
@@ -238,14 +246,14 @@ struct SendReviewStep: View {
                 .glassButtonStyle()
                 .disabled(estimatedFee == nil || sendInProgress)
                 .accessibilityLabel("Send transaction")
-                .accessibilityHint(estimatedFee != nil ? "Double tap to send \(XMRFormatter.format(amount)) XMR" : "Waiting for fee estimate")
+                .accessibilityHint(sendHint)
             }
             .padding()
         }
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
-        .task(id: rebuild) {
+        .task(id: [rebuild, retry]) {
             await loadFee()
         }
         .onAppear {
@@ -259,22 +267,60 @@ struct SendReviewStep: View {
     /// shows the fee it pays for the inputs it really spends. A hardware
     /// wallet would need the device to build it, so it keeps wallet2's
     /// estimate, which counts one input.
+    private var sendHint: Text {
+        if estimatedFee != nil { return Text("Double tap to send \(XMRFormatter.format(amount)) XMR") }
+        return isWaitingForSync ? Text("Waiting for your wallet to sync", comment: "VoiceOver hint on the gray Send button while Review waits for the wallet to sync") : Text("Waiting for fee estimate")
+    }
+
+    /// Waits for a running, synced wallet (a payment-link check gives it
+    /// back at once), then builds. The status slot shows only when the
+    /// wait takes a moment, and stays until the values are in.
     private func loadFee() async {
         feeError = nil
         estimatedFee = nil
         preparedSend = nil
+        isWaitingForSync = true
+        let showWait = Task { @MainActor in
+            try? await Task.sleep(for: SendWaitRules.slotDelay)
+            guard !Task.isCancelled else { return }
+            withAnimation(SendWaitRules.crossFade) { isWaitShown = true }
+        }
+        do {
+            try await walletManager.awaitReadyToSend()
+        } catch {
+            // Back or a new build.
+            showWait.cancel()
+            return
+        }
+        showWait.cancel()
+        isWaitingForSync = false
+        await build()
+        guard !Task.isCancelled else { return }
+        withAnimation(SendWaitRules.crossFade) { isWaitShown = false }
+    }
 
+    private func fail(_ error: Error) {
+        withAnimation(SendWaitRules.crossFade) {
+            feeErrorCanRetry = SendWaitRules.canRetry(after: error)
+            feeError = error.localizedDescription
+        }
+    }
+
+    private func build() async {
         guard !walletManager.requiresHardwareSession else {
             do {
-                estimatedFee = try await walletManager.estimateFee(to: recipientAddress, amount: amount)
+                let fee = try await walletManager.estimateFee(to: recipientAddress, amount: amount)
+                guard !Task.isCancelled else { return }
+                withAnimation(SendWaitRules.crossFade) { estimatedFee = fee }
 
                 // If amount + fee exceeds balance, auto-upgrade to send all
-                if let fee = estimatedFee, amount + fee > walletManager.displayUnlockedBalance, !isSendingAll {
+                if amount + fee > walletManager.displayUnlockedBalance, !isSendingAll {
                     upgradedToSendAll = true
                     onUpgradeToSendAll?()
                 }
             } catch {
-                feeError = error.localizedDescription
+                guard !Task.isCancelled else { return }
+                fail(error)
             }
             return
         }
@@ -298,11 +344,13 @@ struct SendReviewStep: View {
             }
             // Back or a rebuild while it was signing: that review is gone.
             guard !Task.isCancelled else { return }
-            preparedSend = prepared
-            estimatedFee = SendReviewFee.xmr(prepared.fee)
+            withAnimation(SendWaitRules.crossFade) {
+                preparedSend = prepared
+                estimatedFee = SendReviewFee.xmr(prepared.fee)
+            }
         } catch {
             guard !Task.isCancelled else { return }
-            feeError = error.localizedDescription
+            fail(error)
         }
     }
 
@@ -359,5 +407,149 @@ enum SendReviewFee {
         guard let amount else { return true }
         let piconero = MoneroWallet.piconero(amount)
         return piconero > 0 && preparedAmount == UInt64(piconero)
+    }
+}
+
+/// Review waits for a running, synced wallet before it builds, on every
+/// send path. The rules, apart from the views so tests can pin them.
+enum SendWaitRules {
+    /// A wait shorter than this shows no status, so a ready wallet shows no flash.
+    static let slotDelay: Duration = .milliseconds(500)
+    static let crossFade: Animation = .easeInOut(duration: 0.35)
+
+    /// The review builds only on a running wallet that wallet2 reports
+    /// synced at a known chain tip. Syncing is not enough: wallet2 can
+    /// refuse to build until it is synced.
+    static func isReady(walletRunning: Bool, walletState: MoneroWallet.SyncState, daemonHeight: UInt64, syncBlocked: Bool) -> Bool {
+        guard walletRunning, !syncBlocked, daemonHeight > 0 else { return false }
+        return walletState == .synced
+    }
+
+    /// The step of a wallet that starts again while the balance card still
+    /// holds "Synced", by the balance card's own rules.
+    static func stage(walletState: MoneroWallet.SyncState, walletHeight: UInt64, daemonHeight: UInt64) -> ConnectionStage {
+        switch walletState {
+        case .synced where daemonHeight > 0:
+            return .synced
+        case .syncing:
+            return .syncing
+        default:
+            guard daemonHeight > 0 else { return .connecting }
+            return walletHeight >= daemonHeight ? .syncing : .loadingBlocks(wallet: walletHeight, daemon: daemonHeight)
+        }
+    }
+
+    /// What the slot above Send shows.
+    enum Slot: Equatable {
+        case none
+        /// The balance card's steps; "Synced" while the review builds.
+        case progress
+        case paused
+        case offline
+        /// The network is up and the wallet cannot reach its node.
+        case nodeUnreachable
+        /// The build failed.
+        case failed(String, canRetry: Bool)
+    }
+
+    /// A failed build always shows. A wait shows once it passed `slotDelay`.
+    static func slot(failure: String?, failureCanRetry: Bool, isWaitShown: Bool,
+                     isConnected: Bool, syncBlocked: Bool, syncFailed: Bool) -> Slot {
+        if let failure { return .failed(failure, canRetry: failureCanRetry) }
+        guard isWaitShown else { return .none }
+        if !isConnected { return .offline }
+        if syncBlocked { return .paused }
+        if syncFailed { return .nodeUnreachable }
+        return .progress
+    }
+
+    /// A failed build offers Retry, except for a lack of funds: the review
+    /// offers All Funds for that, as before.
+    static func canRetry(after error: Error) -> Bool {
+        if SendReviewFee.isNotEnoughMoney(error) { return false }
+        if case PaymentLinkFunder.FundingError.insufficientFunds = error { return false }
+        return true
+    }
+}
+
+/// The slot directly above Send on Review: where the wallet is while the
+/// review waits for it, or why the build failed.
+struct SendWaitStatus: View {
+    @ObservedObject var walletManager: WalletManager
+    @ObservedObject private var networkMonitor = NetworkMonitor.shared
+    let failure: String?
+    let failureCanRetry: Bool
+    let isWaitShown: Bool
+    let onRetry: () -> Void
+
+    private var slot: SendWaitRules.Slot {
+        var syncFailed = false
+        if case .error = walletManager.syncState { syncFailed = true }
+        return SendWaitRules.slot(
+            failure: failure,
+            failureCanRetry: failureCanRetry,
+            isWaitShown: isWaitShown,
+            isConnected: networkMonitor.isConnected,
+            syncBlocked: walletManager.isSyncBlocked,
+            syncFailed: syncFailed
+        )
+    }
+
+    var body: some View {
+        Group {
+            switch slot {
+            case .none:
+                EmptyView()
+            case .progress:
+                ConnectionStepIndicator(stage: walletManager.sendWaitStage, syncProgress: walletManager.sendWaitProgress)
+            case .paused:
+                HStack {
+                    Circle()
+                        .fill(Color.gray)
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text("Paused")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .accessibilityLabel("Sync status: paused")
+                }
+            case .offline:
+                ErrorBanner(message: String(localized: "No internet connection"), type: .offline, retryAction: onRetry)
+            case .nodeUnreachable:
+                ErrorBanner(
+                    message: String(localized: "Could not reach the node. Check your connection and try again."),
+                    type: .error,
+                    retryAction: onRetry
+                )
+            case .failed(let message, let canRetry):
+                ErrorBanner(message: message, type: .error, retryAction: canRetry ? onRetry : nil)
+            }
+        }
+        .transition(.opacity)
+    }
+}
+
+/// A review value that is not known yet: gray bars the size of the value
+/// and its fiat line, so nothing moves when it fills in. VoiceOver skips
+/// them; the row says it is loading.
+struct ReviewValuePlaceholder: View {
+    /// A typical network fee, for the bars' width.
+    static let feeSample = Decimal(string: "0.00003152") ?? 0
+
+    let sample: Decimal
+    let priceService: PriceService
+    var weight: Font.Weight = .medium
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text("\(XMRFormatter.format(sample)) XMR")
+                .fontWeight(weight)
+            if let fiat = priceService.formatFiatValue(sample) {
+                Text("≈ \(fiat)")
+                    .font(.caption)
+            }
+        }
+        .redacted(reason: .placeholder)
+        .accessibilityHidden(true)
     }
 }

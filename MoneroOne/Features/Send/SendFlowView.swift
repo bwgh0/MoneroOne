@@ -141,6 +141,11 @@ struct SendFlowView: View {
         .interactiveDismissDisabled(phase.isSendingState)
         .onAppear {
             walletManager.isSendFlowPresented = true
+            // Send can need the wallet at any step: no payment-link check
+            // starts while it is open, and one that holds the wallet gives
+            // it back now.
+            EnvelopeRuntime.shared.beginSend()
+            Task { await EnvelopeRuntime.shared.returnWalletForSend() }
             aliasLookup.network = walletManager.networkType
             handlePrefill()
         }
@@ -192,11 +197,14 @@ struct SendFlowView: View {
             aliasLookup.cancel()
             recipientInput = ""
             recipientAddress = ""
+            // The claim checks the link: it needs the wallet slot Send held.
+            EnvelopeRuntime.shared.endSend()
             PaymentLinksCoordinator.shared.handle(text: text, networkType: walletManager.networkType, activeAddress: walletManager.primaryAddress)
             dismiss()
         }
         .onDisappear {
             walletManager.isSendFlowPresented = false
+            EnvelopeRuntime.shared.endSend()
             aliasLookup.cancel()
             guard let shownPaymentRequest else { return }
             walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: false)

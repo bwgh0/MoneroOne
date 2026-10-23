@@ -54,7 +54,7 @@ final class VoiceOverTests: XCTestCase {
             "Wallet 2, last known balance \(MoneroOne.XMRFormatter.format(0)) XMR",
         ], "one element per wallet")
         let middle = elements[1]
-        XCTAssertEqual(middle.accessibilityCustomActions?.map(\.name), ["Rename", "Delete", "Move up", "Move down"])
+        XCTAssertEqual(middle.accessibilityCustomActions?.map(\.name), ["Edit", "Delete", "Move up", "Move down"])
         XCTAssertEqual(moreContent(of: middle), ["Address: 44AFFq5kSiGBoZ4NMDwY", "Icon: 🏦"])
 
         for action in middle.accessibilityCustomActions ?? [] {
@@ -64,14 +64,14 @@ final class VoiceOverTests: XCTestCase {
     }
 
     /// The active wallet is Selected and has no Delete: it is deleted from
-    /// Settings, as on screen.
+    /// Edit Wallet, as on screen.
     func testActiveWalletRowIsSelectedWithoutDelete() {
         let first = wallet("Wallet 1", source: .seed(.polyseed), address: "49pYEPhMVg43jhDUMquM")
         let elements = accessibilityElements(in: host(row(first, active: true, first: true), height: 140))
 
         XCTAssertEqual(elements.count, 1)
         XCTAssertTrue(elements[0].accessibilityTraits.contains(.selected))
-        XCTAssertEqual(elements[0].accessibilityCustomActions?.map(\.name), ["Rename", "Move down"])
+        XCTAssertEqual(elements[0].accessibilityCustomActions?.map(\.name), ["Edit", "Move down"])
     }
 
     /// A hardware wallet reads as one, active or not, as the shield badge on

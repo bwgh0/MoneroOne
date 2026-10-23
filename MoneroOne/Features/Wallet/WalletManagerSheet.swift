@@ -492,7 +492,7 @@ struct WalletRowCheck: View {
 /// inactive row with the finger and reveals the custom Delete zone; the row
 /// draws it from `isDeleteOpen` and `swipeTranslation`. VoiceOver stops once
 /// per wallet: the row reads the name
-/// and balance, and Rename / Delete / Move up / Move down are rotor actions
+/// and balance, and Edit / Delete / Move up / Move down are rotor actions
 /// on it.
 struct WalletRow: View {
     let wallet: WalletInfo
@@ -502,7 +502,8 @@ struct WalletRow: View {
     let address: String?
     let onTap: () -> Void
     let onRename: () -> Void
-    /// nil for the active wallet: it is deleted from Settings, not by a swipe.
+    /// nil for the active wallet: it is deleted from Edit Wallet, not by a
+    /// swipe.
     let onDelete: (() -> Void)?
     /// nil when the row is already first / last.
     let onMoveUp: (() -> Void)?
@@ -608,7 +609,7 @@ struct WalletRow: View {
         // VoiceOver cannot swipe, long-press, drag, or tap the pencil; all
         // of it is a rotor action on the row itself. SwiftUI hands actions
         // to VoiceOver last first (same on iOS 18.5, 26.1 and 27.0), so
-        // they are listed backwards to reach it as Rename, Delete, Move up,
+        // they are listed backwards to reach it as Edit, Delete, Move up,
         // Move down.
         .accessibilityActions {
             if let onMoveDown {
@@ -620,7 +621,7 @@ struct WalletRow: View {
             if let onDelete {
                 Button("Delete") { onDelete() }
             }
-            Button("Rename") { onRename() }
+            Button("Edit") { onRename() }
         }
         // After the row's accessibility modifiers, so the pencil keeps its own
         // identifier.
@@ -686,10 +687,10 @@ struct WalletRow: View {
         return parts.joined(separator: ", ")
     }
 
-    /// The pencil, for touch. A Button of its own so a tap on it renames
-    /// instead of switching. Hidden from VoiceOver: as its own element it
-    /// put a "Rename" stop before every wallet, and the row already has
-    /// Rename as a rotor action.
+    /// The pencil, for touch. A Button of its own so a tap on it opens Edit
+    /// Wallet instead of switching. Hidden from VoiceOver: as its own element
+    /// it put a stop before every wallet, and the row already has Edit as a
+    /// rotor action.
     private var renameButton: some View {
         Button(action: onRename) {
             Image(systemName: "pencil.circle.fill")
@@ -757,6 +758,8 @@ struct WalletManagerRows: View {
     @State private var renameText = ""
     @State private var renameEmoji = ""
     @State private var deleteWalletId: UUID?
+    /// Confirmed in Edit Wallet: deleted once that sheet has closed.
+    @State private var editDeleteWalletId: UUID?
     /// "Needs restore" seed wallet: the phrase restore cover.
     @State private var showRestoreCover = false
     @State private var restoreWalletId: UUID?
@@ -893,8 +896,17 @@ struct WalletManagerRows: View {
         .sheet(isPresented: Binding(
             get: { renameWalletId != nil },
             set: { if !$0 { renameWalletId = nil } }
-        )) {
-            RenameWalletSheet(
+        ), onDismiss: {
+            guard let id = editDeleteWalletId else { return }
+            editDeleteWalletId = nil
+            guard !isDeleting else { return }
+            isDeleting = true
+            walletManager.deleteWallet(id: id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                isDeleting = false
+            }
+        }) {
+            EditWalletSheet(
                 name: $renameText,
                 emoji: $renameEmoji,
                 onSave: {
@@ -903,9 +915,15 @@ struct WalletManagerRows: View {
                         walletManager.renameWallet(id: id, name: trimmed, emoji: renameEmoji)
                     }
                     renameWalletId = nil
+                },
+                onDelete: {
+                    // Close the sheet first; `onDismiss` deletes.
+                    editDeleteWalletId = renameWalletId
+                    renameWalletId = nil
                 }
             )
-            .presentationDetents([.medium])
+            // The Delete button must not be cut at accessibility text sizes.
+            .presentationDetents([dynamicTypeSize.isAccessibilitySize ? .large : .medium])
         }
         .alert("Delete Wallet?", isPresented: Binding(
             get: { deleteWalletId != nil },
@@ -1370,12 +1388,17 @@ private struct RowGestureHost: UIViewRepresentable {
     }
 }
 
-/// Sheet for renaming a wallet with a tappable emoji picker circle
-struct RenameWalletSheet: View {
+/// Edit Wallet: the name, the emoji picker circle, and Delete Wallet last,
+/// for every wallet (a swipe deletes only inactive ones).
+struct EditWalletSheet: View {
     @Binding var name: String
     @Binding var emoji: String
     let onSave: () -> Void
+    /// Confirmed: the caller closes the sheet, then deletes the wallet.
+    let onDelete: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmDelete = false
+    @State private var isDeleting = false
 
     var body: some View {
         NavigationStack {
@@ -1402,8 +1425,21 @@ struct RenameWalletSheet: View {
                 .padding(.horizontal)
 
                 Spacer()
+
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Text("Delete Wallet")
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+                .accessibilityIdentifier("wallet.edit.delete")
             }
-            .navigationTitle("Rename Wallet")
+            .navigationTitle("Edit Wallet")
             .navigationBarTitleDisplayMode(.inline)
             .horizontalBarsOnDuo()
             .toolbar {
@@ -1420,6 +1456,18 @@ struct RenameWalletSheet: View {
             }
         }
         .presentationBackground(Color(.systemBackground))
+        // The swipe's alert, here so it opens over this sheet.
+        .alert("Delete Wallet?", isPresented: $confirmDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                guard !isDeleting else { return }
+                isDeleting = true
+                onDelete()
+            }
+            .disabled(isDeleting)
+        } message: {
+            Text("This removes the wallet from this device. You can recover it with the seed phrase.")
+        }
     }
 }
 

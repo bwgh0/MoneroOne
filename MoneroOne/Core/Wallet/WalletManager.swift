@@ -3999,7 +3999,7 @@ class WalletManager: ObservableObject {
         // Tear down active wallet first so deleteWallet(id:) doesn't auto-switch.
         let ids = wallets.map { $0.id }
         for id in ids {
-            deleteWallet(id: id)
+            deleteWallet(id: id, switchToNext: false)
         }
         // Remove All is the full wipe: payment links and their secrets too.
         EnvelopeStore.shared.removeAll()
@@ -4015,7 +4015,10 @@ class WalletManager: ObservableObject {
         keychain.deleteBiometricPin()
     }
 
-    func deleteWallet(id: UUID) {
+    /// `switchToNext`: with the session PIN, deleting the active wallet opens
+    /// the next wallet with its keys, as the wallet switcher does, and the app
+    /// stays unlocked. Remove All passes false.
+    func deleteWallet(id: UUID, switchToNext: Bool = true) {
         let isDeletingActive = (id == activeWallet?.id)
 
         // Delete keychain data for this wallet — both seed and view-only slots;
@@ -4028,6 +4031,20 @@ class WalletManager: ObservableObject {
         walletStore.removeWallet(id: id)
         wallets = walletStore.loadWallets()
         walletsNeedingRestore.remove(id)
+
+        if isDeletingActive, switchToNext, currentPin != nil,
+           let next = wallets.first(where: { !walletsNeedingRestore.contains($0.id) }) {
+            // The deleted wallet has nothing to snapshot or save, so the
+            // switch starts from no active wallet. The switch stops the old
+            // wallet and opens the next one.
+            activeWallet = nil
+            if let result = prepareSwitchToWallet(id: next.id) {
+                Task {
+                    try? await completeSwitchToWallet(target: result.target)
+                }
+            }
+            return
+        }
 
         if isDeletingActive {
             // Stop current wallet

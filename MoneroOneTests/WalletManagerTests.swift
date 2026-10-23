@@ -724,6 +724,38 @@ final class NeedsRestoreTests: XCTestCase {
         XCTAssertEqual(manager.activeWallet?.id, made[1].id, "Skip A: it needs restore")
     }
 
+    /// Edit Wallet deletes the active wallet too: the app opens the next
+    /// wallet, as a switch does, and stays unlocked.
+    func testDeletingActiveWalletWhileUnlockedSwitchesAndStaysUnlocked() throws {
+        let made = try addSeedWallets(["A", "B"])
+        let manager = WalletManager()
+        manager.setCurrentPinForTesting(pin)
+        manager.isUnlocked = true
+        defer { manager.setCurrentPinForTesting(nil) }
+
+        manager.deleteWallet(id: made[1].id)
+
+        XCTAssertTrue(manager.isUnlocked, "Not the PIN screen")
+        XCTAssertEqual(manager.activeWallet?.id, made[0].id)
+        XCTAssertEqual(manager.wallets.map(\.id), [made[0].id])
+        XCTAssertNil(row(made[1].id))
+    }
+
+    /// The last wallet: the welcome screen, as after Remove All.
+    func testDeletingTheLastWalletWhileUnlockedEndsOnWelcome() throws {
+        let made = try addSeedWallets(["A"])
+        let manager = WalletManager()
+        manager.setCurrentPinForTesting(pin)
+        manager.isUnlocked = true
+
+        manager.deleteWallet(id: made[0].id)
+
+        XCTAssertFalse(manager.hasWallet)
+        XCTAssertFalse(manager.isUnlocked)
+        XCTAssertNil(manager.activeWallet)
+        XCTAssertNil(manager.currentPin)
+    }
+
     func testDeletingAWalletRemovesTheSendRecordsThatNameIt() throws {
         let made = try addSeedWallets(["A", "B", "C"])
         let manager = WalletManager()

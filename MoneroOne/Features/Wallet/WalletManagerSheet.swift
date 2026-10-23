@@ -490,7 +490,7 @@ struct WalletRowCheck: View {
 ///
 /// A horizontal swipe, recognised by the list (`RowGestureHost`), moves an
 /// inactive row with the finger and reveals the custom Delete zone; the row
-/// draws it from `isDeleteOpen` and `swipeTranslation`. VoiceOver stops once
+/// draws it from `isDeleteOpen` and `swipeTravel`. VoiceOver stops once
 /// per wallet: the row reads the name
 /// and balance, and Edit / Delete / Move up / Move down are rotor actions
 /// on it.
@@ -517,8 +517,10 @@ struct WalletRow: View {
     /// The Delete zone is open on this row. The list owns it, so one row is
     /// open at a time.
     var isDeleteOpen: Bool = false
-    /// The finger's horizontal travel while a swipe on this row is live.
-    var swipeTranslation: CGFloat = 0
+    /// The finger's travel while a swipe on this row is live; nil on the
+    /// other rows. Only `SwipeTrack` reads it, so a swipe move redraws
+    /// that modifier, not the row.
+    var swipeTravel: RowTravel? = nil
     /// A tap on an open row closes it.
     var onCloseDelete: () -> Void = {}
     /// Fiat Mode: the balance in fiat, shown in place of XMR.
@@ -537,45 +539,9 @@ struct WalletRow: View {
     static let settle = Animation.snappy(duration: 0.25)
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            if rowOffset < 0, let onDelete {
-                Button {
-                    onDelete()
-                } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: "trash.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .frame(width: 52, height: 52)
-                            .background(Color.red)
-                            .clipShape(Circle())
-                        Text("Delete")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.trailing, 12)
-                .opacity(min(1, -rowOffset / Self.deleteWidth))
-                .transition(.opacity)
-            }
-
-            rowButton
-                .offset(x: rowOffset)
-        }
-        .padding(.horizontal)
-    }
-
-    /// Where the row sits: at rest, open by the Delete width, or under the
-    /// finger. Past the Delete width it moves at a third of the finger's
-    /// pace (no full-swipe delete); it never moves right of rest. The
-    /// active wallet does not move: it is deleted from Settings.
-    private var rowOffset: CGFloat {
-        guard onDelete != nil else { return 0 }
-        let raw = (isDeleteOpen ? -Self.deleteWidth : 0) + swipeTranslation
-        if raw < -Self.deleteWidth {
-            return -Self.deleteWidth + (raw + Self.deleteWidth) / 3
-        }
-        return min(0, raw)
+        rowButton
+            .modifier(SwipeTrack(travel: swipeTravel, isDeleteOpen: isDeleteOpen, onDelete: onDelete))
+            .padding(.horizontal)
     }
 
     /// The tappable row, shared by both paths. The list swallows the
@@ -731,6 +697,81 @@ struct WalletRow: View {
     }
 }
 
+/// The finger's travel during a reorder drag or a delete swipe. Every touch
+/// writes it, and only the modifier of the one row under the finger reads
+/// it (`LiftOffset`, `SwipeTrack`). As `@State` on the list it re-ran the
+/// list and every glass row on each touch, which dropped frames.
+@MainActor @Observable
+final class RowTravel {
+    /// Vertical travel of the lifted row.
+    var drag: CGFloat = 0
+    /// Horizontal travel of the swiped row.
+    var swipe: CGFloat = 0
+}
+
+/// Where a row sits across a delete swipe, and the Delete zone it uncovers:
+/// at rest, open by the Delete width, or under the finger. Past the Delete
+/// width it moves at a third of the finger's pace (no full-swipe delete);
+/// it never moves right of rest. The active wallet (no `onDelete`) does not
+/// move: it is deleted from Edit Wallet.
+private struct SwipeTrack: ViewModifier {
+    /// Non-nil only on the row being swiped.
+    let travel: RowTravel?
+    let isDeleteOpen: Bool
+    let onDelete: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        let rowOffset = rowOffset
+        ZStack(alignment: .trailing) {
+            if rowOffset < 0, let onDelete {
+                Button {
+                    onDelete()
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "trash.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .frame(width: 52, height: 52)
+                            .background(Color.red)
+                            .clipShape(Circle())
+                        Text("Delete")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.trailing, 12)
+                .opacity(min(1, -rowOffset / WalletRow.deleteWidth))
+                .transition(.opacity)
+            }
+
+            content
+                .offset(x: rowOffset)
+        }
+    }
+
+    private var rowOffset: CGFloat {
+        guard onDelete != nil else { return 0 }
+        let raw = (isDeleteOpen ? -WalletRow.deleteWidth : 0) + (travel?.swipe ?? 0)
+        if raw < -WalletRow.deleteWidth {
+            return -WalletRow.deleteWidth + (raw + WalletRow.deleteWidth) / 3
+        }
+        return min(0, raw)
+    }
+}
+
+/// A row's vertical offset during a reorder: the lifted row follows the
+/// finger, read here so a move redraws this modifier only; the others take
+/// their slide from the list, which changes at slot crossings.
+private struct LiftOffset: ViewModifier {
+    let travel: RowTravel
+    let isLifted: Bool
+    let slide: CGFloat
+
+    func body(content: Content) -> some View {
+        content.offset(y: isLifted ? travel.drag : slide)
+    }
+}
+
 /// The pencil's placeholder in a wallet row's label, where `WalletRow`
 /// lays the real pencil.
 private struct PencilSlotKey: PreferenceKey {
@@ -778,9 +819,8 @@ struct WalletManagerRows: View {
 
     // Drag to reorder. UIKit recognises the press (`RowGestureHost`),
     // SwiftUI draws it: the lifted row follows the finger through
-    // `dragTranslation`, the others slide aside as `dropIndex` changes.
+    // `travel.drag`, the others slide aside as `dropIndex` changes.
     @State private var dragId: UUID?
-    @State private var dragTranslation: CGFloat = 0
     @State private var dropIndex: Int?
     /// Row frames in window space, kept current by the rows.
     @State private var rowFrames: [UUID: CGRect] = [:]
@@ -791,11 +831,13 @@ struct WalletManagerRows: View {
     @State private var suppressTapsUntil = Date.distantPast
 
     // Swipe to delete. UIKit recognises the pan (`RowGestureHost`), SwiftUI
-    // draws it: the swiped row follows `swipeTranslation`.
+    // draws it: the swiped row follows `travel.swipe`.
     @State private var swipeId: UUID?
-    @State private var swipeTranslation: CGFloat = 0
     /// The row whose Delete zone is open; one at a time.
     @State private var openDeleteId: UUID?
+    /// The finger's travel for both. The list body never reads it, so a
+    /// touch move redraws only the row under the finger.
+    @State private var travel = RowTravel()
 
     private var wallets: [WalletInfo] { walletManager.wallets }
 
@@ -804,7 +846,7 @@ struct WalletManagerRows: View {
             ForEach(wallets) { wallet in
                 row(for: wallet)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { rowFrames[wallet.id] = $0 }
-                    .offset(y: rowOffset(for: wallet.id))
+                    .modifier(LiftOffset(travel: travel, isLifted: dragId == wallet.id, slide: slideOffset(for: wallet.id)))
                     .scaleEffect(dragId == wallet.id ? 1.03 : 1)
                     .zIndex(dragId == wallet.id ? 1 : 0)
                     .animation(dragId == wallet.id ? nil : Self.slide, value: dropIndex)
@@ -1014,7 +1056,7 @@ struct WalletManagerRows: View {
             isLifted: dragId == wallet.id,
             needsRestore: needsRestore,
             isDeleteOpen: openDeleteId == wallet.id,
-            swipeTranslation: swipeId == wallet.id ? swipeTranslation : 0,
+            swipeTravel: swipeId == wallet.id ? travel : nil,
             onCloseDelete: {
                 guard Date() > suppressTapsUntil else { return }
                 withAnimation(WalletRow.settle) { openDeleteId = nil }
@@ -1035,13 +1077,13 @@ struct WalletManagerRows: View {
         case .began(let point):
             let id = rowId(at: point)
             swipeId = id
-            swipeTranslation = 0
+            travel.swipe = 0
             suppressTapsUntil = .distantFuture
             if openDeleteId != nil, openDeleteId != id {
                 withAnimation(WalletRow.settle) { openDeleteId = nil }
             }
         case .changed(let dx):
-            swipeTranslation = dx
+            travel.swipe = dx
         case .ended(let dx, let velocity):
             suppressTapsUntil = Date().addingTimeInterval(0.3)
             guard let id = swipeId else { return }
@@ -1058,13 +1100,13 @@ struct WalletManagerRows: View {
             withAnimation(WalletRow.settle) {
                 openDeleteId = open && canDelete ? id : nil
                 swipeId = nil
-                swipeTranslation = 0
+                travel.swipe = 0
             }
         case .cancelled:
             suppressTapsUntil = Date().addingTimeInterval(0.3)
             withAnimation(WalletRow.settle) {
                 swipeId = nil
-                swipeTranslation = 0
+                travel.swipe = 0
             }
         }
     }
@@ -1088,7 +1130,7 @@ struct WalletManagerRows: View {
         guard let id = rowId(at: point), let index = wallets.firstIndex(where: { $0.id == id }) else { return }
         framesAtLift = rowFrames
         liftPoint = point
-        dragTranslation = 0
+        travel.drag = 0
         dropIndex = index
         dragId = id
         suppressTapsUntil = .distantFuture
@@ -1097,8 +1139,8 @@ struct WalletManagerRows: View {
 
     private func move(to point: CGPoint) {
         guard let dragId, let frame = framesAtLift[dragId] else { return }
-        dragTranslation = point.y - liftPoint.y
-        let centerY = frame.midY + dragTranslation
+        travel.drag = point.y - liftPoint.y
+        let centerY = frame.midY + travel.drag
         let others = wallets.filter { $0.id != dragId }.compactMap { framesAtLift[$0.id]?.midY }
         let target = others.filter { $0 < centerY }.count
         if target != dropIndex {
@@ -1117,7 +1159,7 @@ struct WalletManagerRows: View {
         withAnimation(Self.slide) {
             if let target { walletManager.moveWallet(id: id, to: target) }
             dragId = nil
-            dragTranslation = 0
+            travel.drag = 0
             dropIndex = nil
         }
     }
@@ -1127,16 +1169,16 @@ struct WalletManagerRows: View {
         suppressTapsUntil = Date().addingTimeInterval(0.3)
         withAnimation(Self.slide) {
             dragId = nil
-            dragTranslation = 0
+            travel.drag = 0
             dropIndex = nil
         }
     }
 
-    /// Where each row draws while a drag is in flight: the lifted row follows
-    /// the finger, the rows between its old and new slot shift by one slot.
-    private func rowOffset(for id: UUID) -> CGFloat {
-        guard let dragId, let from = wallets.firstIndex(where: { $0.id == dragId }) else { return 0 }
-        if id == dragId { return dragTranslation }
+    /// Where each other row draws while a drag is in flight: the rows
+    /// between the lifted row's old and new slot shift by one slot. The
+    /// lifted row follows the finger in `LiftOffset`.
+    private func slideOffset(for id: UUID) -> CGFloat {
+        guard let dragId, id != dragId, let from = wallets.firstIndex(where: { $0.id == dragId }) else { return 0 }
         guard let to = dropIndex, to != from, let i = wallets.firstIndex(where: { $0.id == id }) else { return 0 }
         let slot = (framesAtLift[dragId]?.height ?? 0) + Self.rowGap
         if from < to, i > from, i <= to { return -slot }

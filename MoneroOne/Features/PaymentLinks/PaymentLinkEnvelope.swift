@@ -1154,6 +1154,9 @@ struct PaymentLinkSendHero: View {
     /// The brand springs (tokens `motion.springs`).
     private static let settle = Animation.spring(response: 0.4, dampingFraction: 0.8)
     private static let stepBack = Animation.spring(response: 0.5, dampingFraction: 0.8)
+    /// Every beat and motion of `play()` takes this many times its time
+    /// there (the times are at pace 1), all but the light sweep.
+    private static let pace: Double = 1.3
     /// The seal's middle on the envelope (design units).
     private static let sealCenter = CGPoint(x: 500, y: 305)
     /// The wax as a plain drop, before the stamp spreads it.
@@ -1301,10 +1304,10 @@ struct PaymentLinkSendHero: View {
 
         // 0.75: the check turns into the note.
         guard await pause(0.75) else { return }
-        withAnimation(.easeIn(duration: 0.25)) { checkOpacity = 0 }
-        withAnimation(.linear(duration: 0.14)) { noteShown = 1 }
-        withAnimation(.easeInOut(duration: 0.4)) { noteTint = 0 }
-        withAnimation(Self.settle) {
+        paced(.easeIn(duration: 0.25)) { checkOpacity = 0 }
+        paced(.linear(duration: 0.14)) { noteShown = 1 }
+        paced(.easeInOut(duration: 0.4)) { noteTint = 0 }
+        paced(Self.settle) {
             checkOffset = -Self.checkRise
             noteScale = CGSize(width: 1, height: 1)
             noteCorner = CGSize(width: Envelope.cornerRadius, height: Envelope.cornerRadius)
@@ -1313,16 +1316,16 @@ struct PaymentLinkSendHero: View {
 
         // 1.10: the open envelope comes up around the note.
         guard await pause(0.35) else { return }
-        withAnimation(.easeOut(duration: 0.3)) { envelopeShown = 1 }
-        withAnimation(Self.settle) { envelopeY = Self.drop }
+        paced(.easeOut(duration: 0.3)) { envelopeShown = 1 }
+        paced(Self.settle) { envelopeY = Self.drop }
 
         // 1.40: the note drops in.
         guard await pause(0.3) else { return }
-        withAnimation(Self.settle) { noteShift = 0 }
+        paced(Self.settle) { noteShift = 0 }
 
         // 1.75: the flap folds down; the envelope lifts to the middle.
         guard await pause(0.35) else { return }
-        withAnimation(Self.stepBack) {
+        paced(Self.stepBack) {
             flapAngle = 0
             envelopeY = 0
             noteY = 0
@@ -1333,26 +1336,26 @@ struct PaymentLinkSendHero: View {
 
         // 2.10: a plain drop of wax.
         guard await pause(0.23) else { return }
-        withAnimation(.linear(duration: 0.09)) { sealShown = 1 }
-        withAnimation(Self.settle) { sealScale = Self.dropScale }
+        paced(.linear(duration: 0.09)) { sealShown = 1 }
+        paced(Self.settle) { sealScale = Self.dropScale }
 
         // 2.25: the stamp comes in from the upper right and hovers over the wax.
         guard await pause(0.15) else { return }
-        withAnimation(.linear(duration: 0.15)) { toolShown = 1 }
-        withAnimation(Self.stepBack) {
+        paced(.linear(duration: 0.15)) { toolShown = 1 }
+        paced(Self.stepBack) {
             toolOffset = CGSize(width: 0, height: Self.toolHover)
             toolTilt = 0
         }
 
         // 2.65: it presses in; it meets the wax 0.09 s into the press.
         guard await pause(0.4) else { return }
-        withAnimation(.easeIn(duration: 0.1)) {
+        paced(.easeIn(duration: 0.1)) {
             toolOffset.height = Self.toolSink
             toolHeight = 0
         }
         guard await pause(0.09) else { return }
         HapticFeedback.shared.softTick()
-        withAnimation(.easeOut(duration: 0.16)) {
+        paced(.easeOut(duration: 0.16)) {
             sealScale = 1
             sealDome = 0
         }
@@ -1360,20 +1363,20 @@ struct PaymentLinkSendHero: View {
 
         // 2.90: it lifts; the ring and the mark show in the wax.
         guard await pause(0.16) else { return }
-        withAnimation(.easeIn(duration: 0.1)) {
+        paced(.easeIn(duration: 0.1)) {
             toolOffset.height = Self.toolSink - Self.toolLift
             toolHeight = 1
         }
         guard await pause(0.03) else { return }
-        withAnimation(.easeOut(duration: 0.12)) { sealMark = 1 }
+        paced(.easeOut(duration: 0.12)) { sealMark = 1 }
 
         // 3.00: it goes up and to the right, gone by 3.25.
         guard await pause(0.07) else { return }
-        withAnimation(Self.stepBack) {
+        paced(Self.stepBack) {
             toolOffset = Self.toolAway
             toolTilt = Self.toolTilt
         }
-        withAnimation(.easeIn(duration: 0.25)) { toolShown = 0 }
+        paced(.easeIn(duration: 0.25)) { toolShown = 0 }
 
         // 3.10: one light sweep; the foil shows where it has passed.
         guard await pause(0.1) else { return }
@@ -1401,10 +1404,15 @@ struct PaymentLinkSendHero: View {
         withAnimation(.easeInOut(duration: 0.35)) { fade = 1 }
     }
 
-    /// False when the view went away meanwhile.
+    /// An animation of `play()`, at its pace.
+    private func paced(_ animation: Animation, _ body: () -> Void) {
+        withAnimation(animation.speed(1 / Self.pace), body)
+    }
+
+    /// False when the view went away meanwhile. At the moment's pace.
     private func pause(_ seconds: Double) async -> Bool {
         do {
-            try await Task.sleep(for: .seconds(seconds))
+            try await Task.sleep(for: .seconds(seconds * Self.pace))
             return true
         } catch {
             return false

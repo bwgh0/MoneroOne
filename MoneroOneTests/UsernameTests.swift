@@ -381,6 +381,69 @@ final class UsernameTests: XCTestCase {
     XCTAssertNil(store.state.pending)
     XCTAssertTrue(store.state.bindings.isEmpty)
   }
+
+  /// Starts a new claim for a free name and answers POST /v1/claims with `reply`.
+  private func freshClaim(
+    _ registry: UsernameRegistry, _ store: UsernameStore, reply: (Int, Any) = (500, [String: Any]())
+  ) async -> Result<UsernameBinding, Error> {
+    UsernameURLProtocol.handler = { [info, f] request in
+      switch (request.httpMethod ?? "GET", request.url?.path ?? "") {
+      case ("GET", "/v1/handles/alice"): return (404, ["error": ["code": "handle.not_found"]])
+      case ("GET", "/v1/info"): return (200, info)
+      case ("GET", "/v1/rules"): return (200, Data(f["rules"]!.utf8))
+      case ("POST", "/v1/nonce"): return (200, ["nonce": String(repeating: "ab", count: 32)])
+      case ("POST", "/v1/claims"): return reply
+      default:
+        XCTFail("Unexpected request \(request.url?.path ?? "")")
+        throw URLError(.badURL)
+      }
+    }
+    do {
+      return .success(
+        try await registry.claim(
+          displayHandle: "Alice", walletKey: "wallet-A", network: "mainnet", store: store,
+          makeSubaddress: { [f] in f["owner"]! }, sign: { _, _ in "public-test-signature" },
+          isCurrentWallet: { true }))
+    } catch {
+      return .failure(error)
+    }
+  }
+  private func failure(_ result: Result<UsernameBinding, Error>) -> String? {
+    guard case .failure(let error) = result else { return nil }
+    return failure(error)
+  }
+
+  func testRegistryCodesShowTheirMessages() async throws {
+    let reserved = String(localized: "This username is reserved to protect users from scams.")
+    let other = String(localized: "The username service couldn't complete the request. Please try again.")
+    // (code, status, message, the saved claim is gone)
+    let rows: [(String, Int, String, Bool)] = [
+      ("geo.blocked", 403, UsernameFailure.regionBlocked.localizedDescription, true),
+      ("device.invalid", 403, UsernameFailure.deviceUnsupported.localizedDescription, true),
+      ("device.unsupported", 403, UsernameFailure.deviceUnsupported.localizedDescription, true),
+      ("device.unavailable", 503, UsernameFailure.retry.localizedDescription, false),
+      ("device.slot_used", 403, UsernameFailure.noFreeClaim.localizedDescription, true),
+      ("name.unavailable", 409, UsernameFailure.unavailable.localizedDescription, true),
+      ("handle.reserved", 403, reserved, false),
+      ("handle.blocked", 403, reserved, false),
+      ("rate.limited", 429, other, false),
+    ]
+    for (code, status, message, cleared) in rows {
+      let store = UsernameStore(persistence: UsernameMemory())
+      let result = await freshClaim(client(), store, reply: (status, ["error": ["code": code]]))
+      XCTAssertEqual(failure(result), message, code)
+      XCTAssertEqual(store.state.pending == nil, cleared, code)
+      XCTAssertTrue(store.state.bindings.isEmpty, code)
+    }
+    if Bundle.main.preferredLocalizations.first == "en" {
+      XCTAssertEqual(
+        UsernameFailure.regionBlocked.localizedDescription,
+        "Username registration isn't available in your region.")
+      XCTAssertEqual(UsernameFailure.deviceUnsupported.localizedDescription, "This phone can't claim a username.")
+      XCTAssertEqual(
+        UsernameFailure.retry.localizedDescription, "The claim could not be completed. Please try again.")
+    }
+  }
 }
 
 private final class UsernameMemory: UsernamePersistence {

@@ -98809,6 +98809,101 @@
         }
       }
     },
+    "This phone can't claim a username." : {
+      "comment" : "Error in the claim flow",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit diesem Telefon kann kein Benutzername registriert werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este teléfono no puede reservar un nombre de usuario."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce téléphone ne peut pas réserver de nom d’utilisateur."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo telefono non può richiedere un nome utente."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この端末ではユーザ名を取得できません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 휴대폰에서는 사용자 이름을 등록할 수 없습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met deze telefoon kun je geen gebruikersnaam claimen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Na tym telefonie nie można zarezerwować nazwy użytkownika."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este telefone não pode reservar um nome de usuário."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pe acest telefon nu se poate rezerva un nume de utilizator."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На этом телефоне нельзя зарегистрировать имя пользователя."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu telefonda kullanıcı adı talep edilemiyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На цьому телефоні не можна зареєструвати ім’я користувача."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此手机无法注册用户名。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此手機無法註冊使用者名稱。"
+          }
+        }
+      }
+    },
     "This protects you from wallet activity on untrusted networks like public Wi-Fi or unknown locations." : {
       "localizations" : {
         "de" : {
@@ -107492,6 +107587,101 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用者名稱記錄已過期。付款上限為 0.1 XMR。"
+          }
+        }
+      }
+    },
+    "Username registration isn't available in your region." : {
+      "comment" : "Error in the claim flow",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Registrierung von Benutzernamen ist in deiner Region nicht verfügbar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El registro de nombres de usuario no está disponible en tu región."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’enregistrement des noms d’utilisateur n’est pas disponible dans votre région."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La registrazione dei nomi utente non è disponibile nella tua zona."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お住まいの地域ではユーザ名の登録は利用できません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 지역에서는 사용자 이름 등록을 사용할 수 없습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registratie van gebruikersnamen is niet beschikbaar in jouw regio."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejestracja nazw użytkownika nie jest dostępna w Twoim regionie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O registro de nomes de usuário não está disponível na sua região."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrarea numelor de utilizator nu este disponibilă în regiunea ta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регистрация имён пользователей недоступна в вашем регионе."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanıcı adı kaydı bölgenizde kullanılamıyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Реєстрація імен користувачів недоступна у вашому регіоні."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你所在的地区不提供用户名注册。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你所在的地區不提供使用者名稱註冊。"
           }
         }
       }

@@ -3,6 +3,7 @@ import OAHCore
 
 enum UsernameFailure: Error, LocalizedError {
   case storage, walletChanged, unavailable, noFreeClaim, notConfigured, verification, pendingClaim
+  case regionBlocked, deviceUnsupported, retry
   case server(String)
   var errorDescription: String? {
     switch self {
@@ -15,6 +16,9 @@ enum UsernameFailure: Error, LocalizedError {
     case .verification: return String(localized: "The username response could not be verified. Please try again.")
     case .pendingClaim:
       return String(localized: "Finish checking the previous claim before choosing another username.")
+    case .regionBlocked: return String(localized: "Username registration isn't available in your region.")
+    case .deviceUnsupported: return String(localized: "This phone can't claim a username.")
+    case .retry: return String(localized: "The claim could not be completed. Please try again.")
     case .server(let message): return message
     }
   }
@@ -104,6 +108,9 @@ final class UsernameRegistry {
       if code == "handle.not_found" { throw RegistryNotFound() }
       if code == "device.slot_used" { throw UsernameFailure.noFreeClaim }
       if code == "name.unavailable" { throw UsernameFailure.unavailable }
+      if code == "geo.blocked" { throw UsernameFailure.regionBlocked }
+      if code == "device.invalid" || code == "device.unsupported" { throw UsernameFailure.deviceUnsupported }
+      if code == "device.unavailable" { throw UsernameFailure.retry }
       if code == "handle.reserved" || code == "handle.blocked" {
         throw UsernameFailure.server(String(localized: "This username is reserved to protect users from scams."))
       }
@@ -298,8 +305,9 @@ final class UsernameRegistry {
         try store.savePending(nil)
         throw UsernameFailure.server(String(localized: "The request expired. Please claim again."))
       } catch let error as UsernameFailure {
+        // The registry refused before it wrote anything: the claim is gone.
         switch error {
-        case .noFreeClaim, .unavailable: try store.savePending(nil)
+        case .noFreeClaim, .unavailable, .regionBlocked, .deviceUnsupported: try store.savePending(nil)
         default: break
         }
         throw error

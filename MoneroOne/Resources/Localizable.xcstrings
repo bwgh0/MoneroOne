@@ -43579,7 +43579,99 @@
       }
     },
     "Face ID now turns on for Trezor and view-only wallets." : {
-      "comment" : "What's New bullet."
+      "comment" : "What's New bullet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID lässt sich jetzt auch für Trezor- und Nur-ansehen-Wallets aktivieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID ahora se activa en carteras Trezor y de solo visualización."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID s’active désormais pour les portefeuilles Trezor et en mode audit."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID ora si attiva anche per i portafogli Trezor e di sola visualizzazione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trezor と閲覧専用ウォレットでも Face ID をオンにできるようになりました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이제 Trezor 및 보기 전용 지갑에서도 Face ID를 켤 수 있습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID gaat nu ook aan voor Trezor- en alleen-lezen-portemonnees."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID można teraz włączyć dla portfeli Trezor i tylko do podglądu."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Face ID agora pode ser ativado em carteiras Trezor e só leitura."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID se poate activa acum pentru portofelele Trezor și doar citire."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID теперь включается для кошельков Trezor и кошельков только для просмотра."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID artık Trezor ve yalnızca görüntüleme cüzdanlarında açılabiliyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID тепер вмикається для гаманців Trezor і гаманців лише для перегляду."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "现在可为 Trezor 钱包和只读钱包开启面容 ID。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在可為 Trezor 錢包和唯讀錢包開啟 Face ID。"
+          }
+        }
+      }
     },
     "Failed" : {
       "comment" : "Transaction status",
@@ -44993,7 +45085,99 @@
       }
     },
     "Fixed a slow first sync for new wallets with some region settings." : {
-      "comment" : "What's New bullet."
+      "comment" : "What's New bullet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Langsame erste Synchronisierung neuer Wallets bei manchen Regionseinstellungen behoben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se corrigió una primera sincronización lenta de carteras nuevas con algunas configuraciones de región."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correction d’une première synchronisation lente des nouveaux portefeuilles avec certains réglages de région."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Corretta una prima sincronizzazione lenta dei nuovi portafogli con alcune impostazioni di area geografica."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一部の地域設定で新しいウォレットの初回同期が遅くなる問題を修正しました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "일부 지역 설정에서 새 지갑의 첫 동기화가 느린 문제를 수정했습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trage eerste synchronisatie van nieuwe portemonnees bij sommige regio-instellingen opgelost."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naprawiono wolną pierwszą synchronizację nowych portfeli przy niektórych ustawieniach regionu."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Corrigida a primeira sincronização lenta de carteiras novas com algumas configurações de região."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Am remediat prima sincronizare lentă a portofelelor noi cu unele setări de regiune."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Исправлена медленная первая синхронизация новых кошельков при некоторых настройках региона."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bazı bölge ayarlarında yeni cüzdanların ilk eşzamanlamasının yavaş olması düzeltildi."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виправлено повільну першу синхронізацію нових гаманців за деяких налаштувань регіону."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修复了在某些地区设置下新钱包首次同步缓慢的问题。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修正了在某些地區設定下新錢包首次同步緩慢的問題。"
+          }
+        }
+      }
     },
     "Fixes for custom node logins." : {
       "comment" : "What's New bullet.",
@@ -56550,7 +56734,99 @@
       }
     },
     "Move XMR from one of your wallets to another. Tap the wallet name at the top, then Transfer." : {
-      "comment" : "What's New highlight text. Transfer is the Transfer button in the wallet switcher; use its translation."
+      "comment" : "What's New highlight text. Transfer is the Transfer button in the wallet switcher; use its translation.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschiebe XMR von einer deiner Wallets in eine andere. Tippe oben auf den Wallet-Namen und dann auf „Übertragen“."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mueve XMR de una de tus carteras a otra. Toca el nombre de la cartera arriba y luego Transferir."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacez des XMR d’un de vos portefeuilles vers un autre. Touchez le nom du portefeuille en haut, puis Transférer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sposta XMR da uno dei tuoi portafogli a un altro. Tocca il nome del portafoglio in alto, poi Trasferisci."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自分のウォレット間で XMR を移動できます。上部のウォレット名をタップし、「移動」をタップしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "내 지갑에서 다른 지갑으로 XMR을 옮기세요. 상단의 지갑 이름을 탭한 다음 이동을 탭하세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verplaats XMR van een van je portemonnees naar een andere. Tik bovenaan op de naam van de portemonnee en dan op Overboeken."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przenieś XMR z jednego portfela do drugiego. Stuknij nazwę portfela u góry, a potem Przenieś."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mova XMR de uma das suas carteiras para outra. Toque no nome da carteira no topo e depois em Transferir."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mută XMR dintr-unul dintre portofelele tale în altul. Atinge numele portofelului de sus, apoi Transferă."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переводите XMR с одного своего кошелька на другой. Нажмите на название кошелька вверху, затем «Перевод»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XMR'yi bir cüzdanınızdan diğerine taşıyın. Üstteki cüzdan adına, ardından Aktar'a dokunun."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переказуйте XMR з одного свого гаманця на інший. Торкніться назви гаманця вгорі, потім «Переказ»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在你的钱包之间转移 XMR。轻点顶部的钱包名称，然后轻点“转移”。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在你的錢包之間轉移 XMR。點一下頂部的錢包名稱，然後點一下「轉移」。"
+          }
+        }
+      }
     },
     "Move down" : {
       "localizations" : {
@@ -80041,6 +80317,101 @@
         }
       }
     },
+    "Reorder your wallets with the handle on the left." : {
+      "comment" : "What's New bullet. The handle is the drag handle at the left of each row in the wallet list.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordne deine Wallets mit dem Griff links neu an."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reordena tus carteras con el asa de la izquierda."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réorganisez vos portefeuilles avec la poignée à gauche."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riordina i tuoi portafogli con la maniglia a sinistra."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "左側のハンドルでウォレットを並べ替えられます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "왼쪽 핸들로 지갑 순서를 바꾸세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzig de volgorde van je portemonnees met de greep links."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zmieniaj kolejność portfeli uchwytem po lewej."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reordene suas carteiras com a alça à esquerda."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reordonează portofelele cu mânerul din stânga."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Меняйте порядок кошельков с помощью ручки слева."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cüzdanlarınızı soldaki tutamaçla yeniden sıralayın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Змінюйте порядок гаманців за допомогою ручки ліворуч."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用左侧的把手重新排列你的钱包。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用左側的把手重新排列你的錢包。"
+          }
+        }
+      }
+    },
     "Request Amount (optional)" : {
       "localizations" : {
         "de" : {
@@ -83145,6 +83516,196 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "俄羅斯盧布"
+          }
+        }
+      }
+    },
+    "Save the people you pay. Tap the contacts icon in Send." : {
+      "comment" : "What's New highlight text. Send is the Send button; use its translation.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speichere die Personen, an die du zahlst. Tippe in „Senden“ auf das Kontakte-Symbol."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda a las personas a las que pagas. Toca el ícono de contactos en Enviar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrez les personnes que vous payez. Touchez l’icône Contacts dans Envoyer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva le persone che paghi. Tocca l’icona dei contatti in Invia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支払う相手を保存できます。「送金」で連絡先アイコンをタップしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "송금 상대를 저장하세요. 보내기에서 연락처 아이콘을 탭하세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaar de mensen die je betaalt. Tik in Verzend op het contactenpictogram."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisz osoby, którym płacisz. W Wyślij stuknij ikonę kontaktów."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salve as pessoas para quem você paga. Toque no ícone de contatos em Enviar."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvează persoanele pe care le plătești. În Trimite, atinge pictograma de contacte."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохраняйте тех, кому платите. В разделе «Отправить» нажмите значок контактов."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ödeme yaptığınız kişileri kaydedin. Gönder'de kişiler simgesine dokunun."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зберігайте тих, кому платите. У розділі «Надіслати» торкніться значка контактів."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存你付款的对象。在“发送”中轻点联系人图标。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "儲存你付款的對象。在「傳送」中點一下聯絡人圖像。"
+          }
+        }
+      }
+    },
+    "Send waits for your wallet to sync and shows its progress." : {
+      "comment" : "What's New bullet. Send is the Send button; use its translation.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Senden“ wartet, bis deine Wallet synchronisiert ist, und zeigt den Fortschritt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar espera a que tu cartera se sincronice y muestra el progreso."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyer attend la synchronisation de votre portefeuille et affiche sa progression."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invia attende la sincronizzazione del portafoglio e ne mostra l’avanzamento."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「送金」はウォレットの同期を待ち、その進行状況を表示します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "보내기는 지갑 동기화를 기다리며 진행 상황을 보여줍니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verzend wacht tot je portemonnee is gesynchroniseerd en toont de voortgang."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wyślij czeka na synchronizację portfela i pokazuje jej postęp."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar espera a carteira sincronizar e mostra o progresso."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trimite așteaptă sincronizarea portofelului și arată progresul."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«Отправить» ждёт синхронизации кошелька и показывает её ход."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gönder, cüzdanınızın eşzamanlanmasını bekler ve ilerlemeyi gösterir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«Надіслати» чекає на синхронізацію гаманця й показує її перебіг."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“发送”会等待钱包同步完成，并显示进度。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「傳送」會等待錢包同步完成，並顯示進度。"
           }
         }
       }
@@ -102775,7 +103336,99 @@
       }
     },
     "Transfer between your wallets" : {
-      "comment" : "What's New highlight title."
+      "comment" : "What's New highlight title.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zwischen deinen Wallets übertragen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transferir entre tus carteras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transférer entre vos portefeuilles"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trasferisci tra i tuoi portafogli"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ウォレット間で移動"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "내 지갑 간 이동"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overboeken tussen je portemonnees"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przenoszenie środków między portfelami"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transferir entre suas carteiras"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer între portofelele tale"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перевод между вашими кошельками"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cüzdanlarınız arasında aktarım"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переказ між вашими гаманцями"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在你的钱包之间转移"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在你的錢包之間轉移"
+          }
+        }
+      }
     },
     "Trezor BLE write timed out" : {
       "localizations" : {
@@ -113051,8 +113704,100 @@
         }
       }
     },
-    "With Tor on, prices, charts and node checks also go through your Tor proxy." : {
-      "comment" : "What's New bullet."
+    "With Tor on, all app traffic goes through your Tor proxy." : {
+      "comment" : "What's New bullet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit aktiviertem Tor läuft der gesamte Datenverkehr der App über deinen Tor-Proxy."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con Tor activado, todo el tráfico de la app pasa por tu proxy Tor."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avec Tor activé, tout le trafic de l’app passe par votre proxy Tor."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con Tor attivo, tutto il traffico dell’app passa dal tuo proxy Tor."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tor をオンにすると、アプリのすべての通信が Tor プロキシを経由します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tor를 켜면 앱의 모든 트래픽이 Tor 프록시를 거칩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met Tor aan gaat al het verkeer van de app via je Tor-proxy."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gdy Tor jest włączony, cały ruch aplikacji idzie przez Twoje proxy Tor."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Com o Tor ativado, todo o tráfego do app passa pelo seu proxy Tor."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cu Tor activat, tot traficul aplicației trece prin proxy-ul tău Tor."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Когда Tor включён, весь трафик приложения идёт через ваш прокси Tor."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tor açıkken uygulamanın tüm trafiği Tor proxy'nizden geçer."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коли Tor увімкнено, увесь трафік застосунку йде через ваш проксі Tor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启 Tor 后，App 的所有流量都会通过你的 Tor 代理。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟 Tor 後，App 的所有流量都會經過你的 Tor 代理伺服器。"
+          }
+        }
+      }
     },
     "Word %lld" : {
       "localizations" : {
@@ -114381,7 +115126,99 @@
       }
     },
     "Your history shows as soon as a wallet opens, even on a slow node." : {
-      "comment" : "What's New bullet."
+      "comment" : "What's New bullet.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Verlauf erscheint, sobald sich eine Wallet öffnet, auch bei einem langsamen Node."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu historial aparece en cuanto se abre una cartera, incluso con un nodo lento."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre historique s’affiche dès l’ouverture d’un portefeuille, même avec un nœud lent."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cronologia appare appena si apre un portafoglio, anche con un nodo lento."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ノードが遅くても、ウォレットを開くとすぐに履歴が表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "노드가 느려도 지갑을 열자마자 기록이 표시됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je geschiedenis verschijnt zodra een portemonnee opent, ook bij een trage node."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Historia pojawia się zaraz po otwarciu portfela, nawet przy wolnym węźle."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu histórico aparece assim que uma carteira abre, mesmo com um nó lento."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Istoricul apare imediat ce se deschide un portofel, chiar și cu un nod lent."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "История появляется сразу после открытия кошелька, даже при медленном узле."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geçmişiniz, yavaş bir düğümde bile cüzdan açılır açılmaz görünür."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Історія з’являється одразу після відкриття гаманця, навіть із повільним вузлом."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即使节点较慢，钱包一打开就会显示历史记录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即使節點較慢，錢包一開啟就會顯示歷史記錄。"
+          }
+        }
+      }
     },
     "Your history starts here" : {
       "localizations" : {

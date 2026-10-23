@@ -66,6 +66,11 @@ enum WhatsNewNotes {
                     detail: "Whoever opens it claims the funds in Monero One. In Send, choose Link."
                 ),
                 .init(
+                    systemImage: "person.crop.circle",
+                    title: "Contacts",
+                    detail: "Save the people you pay. Tap the contacts icon in Send."
+                ),
+                .init(
                     systemImage: "at",
                     title: "Send to a name",
                     detail: "Enter an OpenAlias name in place of an address, checked with DNSSEC."
@@ -78,9 +83,11 @@ enum WhatsNewNotes {
             ],
             improvements: [
                 "Review shows the exact network fee you pay.",
+                "Send waits for your wallet to sync and shows its progress.",
+                "Reorder your wallets with the handle on the left.",
                 "Rounded QR codes.",
                 "Fixes for custom node logins.",
-                "With Tor on, prices, charts and node checks also go through your Tor proxy.",
+                "With Tor on, all app traffic goes through your Tor proxy.",
                 "Face ID now turns on for Trezor and view-only wallets.",
                 "Your history shows as soon as a wallet opens, even on a slow node.",
                 "Fixed a slow first sync for new wallets with some region settings.",

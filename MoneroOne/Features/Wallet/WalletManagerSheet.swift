@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Metal
 
 /// A UITextField subclass that forces the emoji keyboard by overriding textInputMode.
 private class EmojiUITextField: UITextField {
@@ -1331,6 +1332,7 @@ private struct RowGestureHost: UIViewRepresentable {
             scroll.addGestureRecognizer(pan)
             scrollView = scroll
             Self.yieldGlassDrags(to: scroll, swipe: pan)
+            Self.warmRenderer()
         }
 
         /// Liquid Glass buttons stretch toward a dragging finger through one
@@ -1351,11 +1353,43 @@ private struct RowGestureHost: UIViewRepresentable {
             }
         }
 
+        /// The first stretch of a glass row under a dragging finger makes
+        /// RenderBox create its Metal device and draw its first image: a
+        /// 25-30 ms stall about 170 ms into the first grab after launch.
+        /// The device is created off the main thread when the list opens,
+        /// and one tiny image that is never shown is drawn once the list
+        /// has settled. Nothing on screen changes.
+        @MainActor private static var rendererWarmed = false
+        @MainActor private static func warmRenderer() {
+            guard !rendererWarmed else { return }
+            rendererWarmed = true
+            DispatchQueue.global(qos: .userInitiated).async {
+                _ = MTLCreateSystemDefaultDevice()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                MainActor.assumeIsolated {
+                    let warmUp = RoundedRectangle(cornerRadius: 4)
+                        .fill(.black)
+                        .frame(width: 8, height: 8)
+                        .blur(radius: 2)
+                        .shadow(radius: 2)
+                    _ = ImageRenderer(content: warmUp).cgImage
+                }
+            }
+        }
+
         func detach() {
             recognizer.view?.removeGestureRecognizer(recognizer)
             pan.view?.removeGestureRecognizer(pan)
             scrollView?.isScrollEnabled = true
+            frameRate.stop(after: 0)
         }
+
+        /// Keeps the display at its top rate while a finger moves a row and
+        /// while the row settles. ProMotion runs at 60 Hz while only a touch
+        /// moves the row, so it followed the finger at half the rate of the
+        /// slide that a slot crossing starts.
+        private let frameRate = TopFrameRate()
 
         /// SwiftUI's own recognizer on the hosting view takes every touch
         /// down (that is the Button's pressed state) and is exclusive by
@@ -1393,6 +1427,7 @@ private struct RowGestureHost: UIViewRepresentable {
             case .began:
                 // Hold the list still for the rest of this touch.
                 scrollView?.isScrollEnabled = false
+                frameRate.start()
                 parent.onSwipe(.began(touchDownPoint))
                 parent.onSwipe(.changed(dx))
             case .changed:
@@ -1400,9 +1435,11 @@ private struct RowGestureHost: UIViewRepresentable {
             case .ended:
                 scrollView?.isScrollEnabled = true
                 parent.onSwipe(.ended(dx, velocity: gesture.velocity(in: nil).x))
+                frameRate.stop(after: TopFrameRate.settleTime)
             case .cancelled, .failed:
                 scrollView?.isScrollEnabled = true
                 parent.onSwipe(.cancelled)
+                frameRate.stop(after: TopFrameRate.settleTime)
             default:
                 break
             }
@@ -1413,6 +1450,7 @@ private struct RowGestureHost: UIViewRepresentable {
             switch gesture.state {
             case .began:
                 // Kill the pan for the rest of this touch; re-enabled on release.
+                frameRate.start()
                 scrollView?.isScrollEnabled = false
                 parent.onBegan(point)
             case .changed:
@@ -1420,13 +1458,47 @@ private struct RowGestureHost: UIViewRepresentable {
             case .ended:
                 scrollView?.isScrollEnabled = true
                 parent.onEnded(point)
+                frameRate.stop(after: TopFrameRate.settleTime)
             case .cancelled, .failed:
                 scrollView?.isScrollEnabled = true
                 parent.onCancelled()
+                frameRate.stop(after: TopFrameRate.settleTime)
             default:
                 break
             }
         }
+    }
+}
+
+/// A display link that asks for the display's top rate while it runs. It
+/// draws nothing: only its rate request counts.
+@MainActor
+private final class TopFrameRate: NSObject {
+    /// The drop and the swipe settle are 0.25-0.3 s springs; the rate holds
+    /// a little past them.
+    static let settleTime: TimeInterval = 0.4
+    private var link: CADisplayLink?
+
+    func start() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(end), object: nil)
+        guard link == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(frame(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    func stop(after delay: TimeInterval) {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(end), object: nil)
+        perform(#selector(end), with: nil, afterDelay: delay, inModes: [.common])
+    }
+
+    @objc private func end() {
+        link?.invalidate()
+        link = nil
+    }
+
+    @objc private func frame(_ link: CADisplayLink) {
     }
 }
 

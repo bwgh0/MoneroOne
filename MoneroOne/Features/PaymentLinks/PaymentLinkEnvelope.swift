@@ -274,6 +274,10 @@ struct WaxSeal: View {
     var shine: Double = 1
     /// 0 on the paper; 1 above it, as it presses on: a softer, lower shadow.
     var lift: CGFloat = 0
+    /// How much of the ring and the mark shows, 0...1 (0: a plain drop).
+    var mark: Double = 1
+    /// How round the wax still is, 0...1: the light on a fresh drop.
+    var dome: Double = 0
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -289,13 +293,39 @@ struct WaxSeal: View {
                     startRadius: 0,
                     endRadius: 172
                 ))
+            domeLight
+                .opacity(dome)
             ring
+                .opacity(mark)
             stamp
+                .opacity(mark)
             gloss
         }
         .frame(width: Envelope.sealSide, height: Envelope.sealSide, alignment: .topLeading)
         .compositingGroup()
         .shadow(color: .black.opacity(0.5 - 0.22 * lift), radius: 3 + 5 * lift, x: 0, y: 5 + 17 * lift)
+    }
+
+    /// A fresh drop: its round top catches the light and its edge falls away.
+    private var domeLight: some View {
+        let side = Envelope.sealSide
+        return ZStack {
+            RadialGradient(
+                colors: [EnvelopeArt.waxShade.opacity(0), EnvelopeArt.waxShade.opacity(0.4)],
+                center: .center,
+                startRadius: 56,
+                endRadius: 98
+            )
+            RadialGradient(
+                colors: [EnvelopeArt.waxShine.opacity(0.55), EnvelopeArt.waxShine.opacity(0)],
+                center: UnitPoint(x: 0.4, y: 0.34),
+                startRadius: 0,
+                endRadius: 62
+            )
+            .blendMode(.screen)
+        }
+        .frame(width: side, height: side)
+        .clipShape(WaxShape())
     }
 
     private var ring: some View {
@@ -356,6 +386,151 @@ struct WaxCrack: View {
         }
         .frame(width: Envelope.sealSide, height: Envelope.sealSide, alignment: .topLeading)
         .mask(WaxShape())
+    }
+}
+
+/// The stamp that presses the seal on the send side, seen from a little
+/// above: a graphite head, a collar with a thin orange band and a turned
+/// handle, 150 x 374. `contact` is the middle of the head's face, where it
+/// meets the wax.
+struct EnvelopeStampTool: View {
+    /// 1 above the paper, 0 on the wax: the shadow comes in and darkens.
+    var height: CGFloat = 1
+
+    static let size = CGSize(width: 150, height: 374)
+    static let contact = CGPoint(x: 75, y: 352)
+    /// A cap's height over its width: the angle we see the tool from.
+    static let squash: CGFloat = 22 / 75
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            metal(StampSideShape(side: CGRect(x: 0, y: 294, width: 150, height: 58)), from: 0, to: 150)
+            cap(CGRect(x: 0, y: 272, width: 150, height: 44))
+            collar
+            cap(CGRect(x: 29, y: 258.5, width: 92, height: 27))
+            metal(StampHandleShape(), from: 39, to: 111)
+            StampHandleShape()
+                .fill(RadialGradient(
+                    colors: [.white.opacity(0.22), .white.opacity(0)],
+                    center: UnitPoint(x: 62 / Self.size.width, y: 40 / Self.size.height),
+                    startRadius: 0,
+                    endRadius: 30
+                ))
+        }
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.45 - 0.2 * height), radius: 4 + 8 * height, x: 0, y: 6 + 24 * height)
+    }
+
+    /// The collar: its side, the orange band round its front, the turn's light.
+    private var collar: some View {
+        let side = StampSideShape(side: CGRect(x: 29, y: 272, width: 92, height: 22))
+        return ZStack(alignment: .topLeading) {
+            side.fill(EnvelopeArt.stampMetal)
+            Path { p in
+                p.move(to: CGPoint(x: 29, y: 283))
+                p.addStampFront(center: CGPoint(x: 75, y: 283), rx: 46, leftToRight: true)
+            }
+            .stroke(Color.brandToken, lineWidth: 5)
+            .clipShape(side)
+            side.fill(Self.turn(from: 29, to: 121))
+        }
+    }
+
+    /// A round part's side: graphite, light on the left, shade on the right.
+    private func metal(_ shape: some Shape, from minX: CGFloat, to maxX: CGFloat) -> some View {
+        ZStack {
+            shape.fill(EnvelopeArt.stampMetal)
+            shape.fill(Self.turn(from: minX, to: maxX))
+        }
+    }
+
+    /// A part's flat top, lit from the upper left, with a fine bright edge.
+    private func cap(_ rect: CGRect) -> some View {
+        let size = Self.size
+        let ellipse = Path(ellipseIn: rect)
+        return ZStack {
+            ellipse.fill(EnvelopeArt.stampMetal)
+            ellipse.fill(LinearGradient(
+                colors: [.white.opacity(0.2), .black.opacity(0.18)],
+                startPoint: UnitPoint(x: rect.minX / size.width, y: rect.minY / size.height),
+                endPoint: UnitPoint(x: rect.maxX / size.width, y: rect.maxY / size.height)
+            ))
+            ellipse.stroke(.white.opacity(0.2), lineWidth: 1.5)
+        }
+    }
+
+    /// The light across a round part from `minX` to `maxX` (tool units).
+    private static func turn(from minX: CGFloat, to maxX: CGFloat) -> LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0.42), location: 0),
+                .init(color: .black.opacity(0.1), location: 0.14),
+                .init(color: .white.opacity(0.22), location: 0.32),
+                .init(color: .white.opacity(0.04), location: 0.5),
+                .init(color: .black.opacity(0.18), location: 0.78),
+                .init(color: .black.opacity(0.5), location: 1),
+            ],
+            startPoint: UnitPoint(x: minX / size.width, y: 0.5),
+            endPoint: UnitPoint(x: maxX / size.width, y: 0.5)
+        )
+    }
+}
+
+/// A round part's side, from its top cap's middle line down to its front
+/// edge (half an ellipse), in the tool's units.
+struct StampSideShape: Shape {
+    let side: CGRect
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: side.minX, y: side.minY))
+        p.addLine(to: CGPoint(x: side.minX, y: side.maxY))
+        p.addStampFront(center: CGPoint(x: side.midX, y: side.maxY), rx: side.width / 2, leftToRight: true)
+        p.addLine(to: CGPoint(x: side.maxX, y: side.minY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// The turned handle: a round knob at the top, a long taper, a narrow neck
+/// and a foot on the collar, in the tool's units.
+struct StampHandleShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 75, y: 0))
+        p.addCurve(to: CGPoint(x: 111, y: 62), control1: CGPoint(x: 98, y: 0), control2: CGPoint(x: 111, y: 30))
+        p.addCurve(to: CGPoint(x: 94, y: 200), control1: CGPoint(x: 111, y: 110), control2: CGPoint(x: 100, y: 160))
+        p.addCurve(to: CGPoint(x: 92, y: 248), control1: CGPoint(x: 90, y: 225), control2: CGPoint(x: 90, y: 240))
+        p.addCurve(to: CGPoint(x: 100, y: 262), control1: CGPoint(x: 95, y: 255), control2: CGPoint(x: 100, y: 257))
+        p.addLine(to: CGPoint(x: 100, y: 272))
+        p.addStampFront(center: CGPoint(x: 75, y: 272), rx: 25, leftToRight: false)
+        p.addLine(to: CGPoint(x: 50, y: 262))
+        p.addCurve(to: CGPoint(x: 58, y: 248), control1: CGPoint(x: 50, y: 257), control2: CGPoint(x: 55, y: 255))
+        p.addCurve(to: CGPoint(x: 56, y: 200), control1: CGPoint(x: 60, y: 240), control2: CGPoint(x: 60, y: 225))
+        p.addCurve(to: CGPoint(x: 39, y: 62), control1: CGPoint(x: 50, y: 160), control2: CGPoint(x: 39, y: 110))
+        p.addCurve(to: CGPoint(x: 75, y: 0), control1: CGPoint(x: 39, y: 30), control2: CGPoint(x: 52, y: 0))
+        p.closeSubpath()
+        return p
+    }
+}
+
+private extension Path {
+    /// The front (lower) half of a cap's ellipse, from one end to the other.
+    mutating func addStampFront(center c: CGPoint, rx: CGFloat, leftToRight: Bool) {
+        let ry = rx * EnvelopeStampTool.squash
+        let k: CGFloat = 0.5523
+        let side: CGFloat = leftToRight ? 1 : -1
+        addCurve(
+            to: CGPoint(x: c.x, y: c.y + ry),
+            control1: CGPoint(x: c.x - side * rx, y: c.y + k * ry),
+            control2: CGPoint(x: c.x - side * k * rx, y: c.y + ry)
+        )
+        addCurve(
+            to: CGPoint(x: c.x + side * rx, y: c.y),
+            control1: CGPoint(x: c.x + side * k * rx, y: c.y + ry),
+            control2: CGPoint(x: c.x + side * rx, y: c.y + k * ry)
+        )
     }
 }
 
@@ -492,6 +667,10 @@ struct EnvelopeFront<Foil: View>: View {
     var sealOpacity: Double = 1
     var sealScale: CGFloat = 1
     var sealLift: CGFloat = 0
+    /// The send side's plain drop: the ring and the mark come in after the
+    /// stamp lifts, and the drop's round light goes when it is pressed.
+    var sealMark: Double = 1
+    var sealDome: Double = 0
     /// Drawn on the pocket, under the flap (the shared picture's amount).
     @ViewBuilder var foil: () -> Foil
 
@@ -506,7 +685,7 @@ struct EnvelopeFront<Foil: View>: View {
                 .opacity(sealBroken ? 1 : 0)
             flap
             if !sealBroken {
-                WaxSeal(light: light, sweep: sweep, shine: shine, lift: sealLift)
+                WaxSeal(light: light, sweep: sweep, shine: shine, lift: sealLift, mark: sealMark, dome: sealDome)
                     .scaleEffect(sealScale)
                     .opacity(sealOpacity)
                     .offset(x: seal.x, y: seal.y)
@@ -939,16 +1118,18 @@ struct PaymentLinkEnvelopeHero: View {
 /// up around the note, the note drops in, the flap folds down and the wax
 /// seal presses on. One light sweep shows the amount in orange foil.
 ///
-/// Times from the check (mockup send-link-moment, Option 2): at 0.55 the
-/// check fades (0.18 s) and rises 110 pt while the note grows out of its
-/// disc and rises with it (stepForward); at 0.85 the envelope fades in
-/// (0.3 s) and comes up 50 pt (stepForward); at 1.05 the note drops in
-/// (settle); at 1.30 the flap folds down and the envelope lifts to the
-/// middle (stepForward); at 1.60 the seal presses on from 1.5x
-/// (selector); at 1.75 it is on: softTick and
-/// `onSealed`; at 1.95 one light sweep (1.2 s). Reduce Motion: no check;
-/// one cross-fade (0.35 s) to the sealed envelope with the foil, and
-/// `onSealed` at once.
+/// Times from the check (send-stamp spec, 2026-10-23): at 0.75 the check
+/// fades (0.25 s) and rises 110 pt while the note grows out of its disc
+/// and rises with it (settle); at 1.10 the envelope fades in (0.3 s) and
+/// comes up 50 pt (settle); at 1.40 the note drops in (settle); at 1.75
+/// the flap folds down and the envelope lifts to the middle (stepBack);
+/// at 2.10 a plain drop of wax (settle); at 2.25 the stamp comes in from
+/// the upper right and hovers over it (stepBack); at 2.65 it presses in
+/// (0.1 s), and on contact: softTick, the wax spreads (0.16 s) and
+/// `onSealed`; at 2.90 it lifts, and the ring and the mark show in the
+/// wax; at 3.00 it goes (stepBack, gone by 3.25); at 3.10 one light sweep
+/// (1.2 s). Reduce Motion: no check and no stamp; one cross-fade (0.35 s)
+/// to the sealed envelope with the foil, and `onSealed` at once.
 struct PaymentLinkSendHero: View {
     /// The note's amount, also on the foil.
     let amount: EnvelopeCardAmount
@@ -970,7 +1151,21 @@ struct PaymentLinkSendHero: View {
     /// below its place in the pocket it is (design units).
     private static let seedScale = CGSize(width: 0.324, height: 0.475)
     private static let seedShift: CGFloat = 43.8
-    private static let stepForward = Animation.spring(response: 0.3, dampingFraction: 0.85)
+    /// The brand springs (tokens `motion.springs`).
+    private static let settle = Animation.spring(response: 0.4, dampingFraction: 0.8)
+    private static let stepBack = Animation.spring(response: 0.5, dampingFraction: 0.8)
+    /// The seal's middle on the envelope (design units).
+    private static let sealCenter = CGPoint(x: 500, y: 305)
+    /// The wax as a plain drop, before the stamp spreads it.
+    private static let dropScale: CGFloat = 0.86
+    /// The stamp, from its contact with the wax (design units): where it
+    /// comes in and goes, its tilt there, its hover, how far it sinks into
+    /// the wax and how far it lifts.
+    private static let toolAway = CGSize(width: 60, height: -260)
+    private static let toolTilt: Double = 10
+    private static let toolHover: CGFloat = -24
+    private static let toolSink: CGFloat = 5
+    private static let toolLift: CGFloat = 30
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasPlayed = false
@@ -990,8 +1185,13 @@ struct PaymentLinkSendHero: View {
     @State private var flapAngle: Double = 180
     @State private var flapLifted = true
     @State private var sealShown: Double = 0
-    @State private var sealScale: CGFloat = 1.5
-    @State private var sealLift: CGFloat = 1
+    @State private var sealScale: CGFloat = 0.3
+    @State private var sealMark: Double = 0
+    @State private var sealDome: Double = 1
+    @State private var toolShown: Double = 0
+    @State private var toolOffset = PaymentLinkSendHero.toolAway
+    @State private var toolTilt = PaymentLinkSendHero.toolTilt
+    @State private var toolHeight: CGFloat = 1
     @State private var sweep: CGFloat = Envelope.sweepStart
     /// The whole envelope; it fades only in Reduce Motion.
     @State private var fade: Double = 0
@@ -1003,6 +1203,8 @@ struct PaymentLinkSendHero: View {
                 SuccessCheckmarkView(checkOpacity: checkOpacity, checkOffset: checkOffset)
                     .frame(width: 160, height: 160)
                     .offset(x: Self.checkOrigin.x, y: Self.checkOrigin.y)
+                // Outside the art's layer: it rises above the frame unclipped.
+                tool
             }
         }
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
@@ -1053,12 +1255,30 @@ struct PaymentLinkSendHero: View {
             sweep: sweep,
             sealOpacity: sealShown,
             sealScale: sealScale,
-            sealLift: sealLift
+            sealMark: sealMark,
+            sealDome: sealDome
         ) {
             PaymentLinkCardFoil(amount: PaymentLinkCard.foil(amount.text, showsUnit: amount.showsUnit), showsUnit: amount.showsUnit)
                 .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
                 .mask(alignment: .topLeading) { EnvelopeFoilReveal(sweep: sweep) }
         }
+    }
+
+    /// The stamp, its face's middle on the seal's middle, moved by
+    /// `toolOffset` and tilted about that point.
+    private var tool: some View {
+        let size = EnvelopeStampTool.size
+        let contact = EnvelopeStampTool.contact
+        return EnvelopeStampTool(height: toolHeight)
+            .rotationEffect(.degrees(toolTilt), anchor: UnitPoint(x: contact.x / size.width, y: contact.y / size.height))
+            .offset(x: toolOffset.width, y: toolOffset.height)
+            .scaleEffect(Self.unit, anchor: .topLeading)
+            .offset(
+                x: Self.origin.x + (Self.sealCenter.x - contact.x) * Self.unit,
+                y: Self.origin.y + (Self.sealCenter.y - contact.y) * Self.unit + envelopeY
+            )
+            .opacity(toolShown)
+            .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
     }
 
     /// One layer of the envelope, drawn in design units, placed in points.
@@ -1079,50 +1299,84 @@ struct PaymentLinkSendHero: View {
         }
         fade = 1
 
-        // 0.55: the check turns into the note.
-        guard await pause(0.55) else { return }
-        withAnimation(.easeIn(duration: 0.18)) { checkOpacity = 0 }
+        // 0.75: the check turns into the note.
+        guard await pause(0.75) else { return }
+        withAnimation(.easeIn(duration: 0.25)) { checkOpacity = 0 }
         withAnimation(.linear(duration: 0.14)) { noteShown = 1 }
-        withAnimation(.easeInOut(duration: 0.3)) { noteTint = 0 }
-        withAnimation(Self.stepForward) {
+        withAnimation(.easeInOut(duration: 0.4)) { noteTint = 0 }
+        withAnimation(Self.settle) {
             checkOffset = -Self.checkRise
             noteScale = CGSize(width: 1, height: 1)
             noteCorner = CGSize(width: Envelope.cornerRadius, height: Envelope.cornerRadius)
             noteShift = -Envelope.cardRise
         }
 
-        // 0.85: the open envelope comes up around the note.
-        guard await pause(0.3) else { return }
+        // 1.10: the open envelope comes up around the note.
+        guard await pause(0.35) else { return }
         withAnimation(.easeOut(duration: 0.3)) { envelopeShown = 1 }
-        withAnimation(Self.stepForward) { envelopeY = Self.drop }
+        withAnimation(Self.settle) { envelopeY = Self.drop }
 
-        // 1.05: the note drops in.
-        guard await pause(0.2) else { return }
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { noteShift = 0 }
+        // 1.40: the note drops in.
+        guard await pause(0.3) else { return }
+        withAnimation(Self.settle) { noteShift = 0 }
 
-        // 1.30: the flap folds down; the envelope lifts to the middle.
-        guard await pause(0.25) else { return }
-        withAnimation(Self.stepForward) {
+        // 1.75: the flap folds down; the envelope lifts to the middle.
+        guard await pause(0.35) else { return }
+        withAnimation(Self.stepBack) {
             flapAngle = 0
             envelopeY = 0
             noteY = 0
         }
-        guard await pause(0.074) else { return }
+        // The flap passes 90 degrees: its outside shows.
+        guard await pause(0.12) else { return }
         flapLifted = false
 
-        // 1.60: the seal presses on.
-        guard await pause(0.226) else { return }
+        // 2.10: a plain drop of wax.
+        guard await pause(0.23) else { return }
         withAnimation(.linear(duration: 0.09)) { sealShown = 1 }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { sealScale = 1 }
-        withAnimation(.easeIn(duration: 0.16)) { sealLift = 0 }
+        withAnimation(Self.settle) { sealScale = Self.dropScale }
 
-        // 1.75: the seal is on.
+        // 2.25: the stamp comes in from the upper right and hovers over the wax.
         guard await pause(0.15) else { return }
+        withAnimation(.linear(duration: 0.15)) { toolShown = 1 }
+        withAnimation(Self.stepBack) {
+            toolOffset = CGSize(width: 0, height: Self.toolHover)
+            toolTilt = 0
+        }
+
+        // 2.65: it presses in; it meets the wax 0.09 s into the press.
+        guard await pause(0.4) else { return }
+        withAnimation(.easeIn(duration: 0.1)) {
+            toolOffset.height = Self.toolSink
+            toolHeight = 0
+        }
+        guard await pause(0.09) else { return }
         HapticFeedback.shared.softTick()
+        withAnimation(.easeOut(duration: 0.16)) {
+            sealScale = 1
+            sealDome = 0
+        }
         onSealed()
 
-        // 1.95: one light sweep; the foil shows where it has passed.
-        guard await pause(0.2) else { return }
+        // 2.90: it lifts; the ring and the mark show in the wax.
+        guard await pause(0.16) else { return }
+        withAnimation(.easeIn(duration: 0.1)) {
+            toolOffset.height = Self.toolSink - Self.toolLift
+            toolHeight = 1
+        }
+        guard await pause(0.03) else { return }
+        withAnimation(.easeOut(duration: 0.12)) { sealMark = 1 }
+
+        // 3.00: it goes up and to the right, gone by 3.25.
+        guard await pause(0.07) else { return }
+        withAnimation(Self.stepBack) {
+            toolOffset = Self.toolAway
+            toolTilt = Self.toolTilt
+        }
+        withAnimation(.easeIn(duration: 0.25)) { toolShown = 0 }
+
+        // 3.10: one light sweep; the foil shows where it has passed.
+        guard await pause(0.1) else { return }
         withAnimation(.easeInOut(duration: 1.2)) { sweep = Envelope.sweepEnd }
     }
 
@@ -1140,7 +1394,8 @@ struct PaymentLinkSendHero: View {
         flapLifted = false
         sealShown = 1
         sealScale = 1
-        sealLift = 0
+        sealMark = 1
+        sealDome = 0
         sweep = Envelope.sweepEnd
         onSealed()
         withAnimation(.easeInOut(duration: 0.35)) { fade = 1 }

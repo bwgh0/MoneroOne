@@ -58,6 +58,9 @@ enum EnvelopeArt {
     static let waxShade = Color(rgb: 0x6E2400)
     static let waxShine = Color(rgb: 0xFFE2C4)
     static let crack = Color(rgb: 0x4A1800)
+    /// The stamp that presses the seal: the mark's gray (`logoGray`), as
+    /// the wax is its orange.
+    static let stampMetal = Color(rgb: 0x4C4C4C)
     static let paperLight = Color(rgb: 0xFBF8F1)
     static let paperMiddle = Color(rgb: 0xF3EDE1)
     static let paperDeep = Color(rgb: 0xE9E1D1)

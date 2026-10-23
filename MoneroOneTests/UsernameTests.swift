@@ -1,3 +1,4 @@
+import DeviceCheck
 import UIKit
 import XCTest
 
@@ -37,13 +38,16 @@ final class UsernameTests: XCTestCase {
       subaddress: "public-test-address",
       genesisHash: hash, record: "record", claimedAt: Date(timeIntervalSince1970: 1_800_000_000))
   }
-  private func client() -> UsernameRegistry {
+  private func client(
+    tokens: UsernameDeviceTokens = FakeDeviceTokens(), allowDevProof: Bool = false
+  ) -> UsernameRegistry {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [UsernameURLProtocol.self]
     return UsernameRegistry(
       configuration: UsernameConfiguration(
         url: URL(string: "http://localhost:8787")!, registrarKey: f["key"]!,
-        rulesHash: f["rulesHash"]!), session: URLSession(configuration: config))
+        rulesHash: f["rulesHash"]!), session: URLSession(configuration: config),
+      deviceTokens: tokens, allowDevProof: allowDevProof)
   }
   private func claim(
     _ client: UsernameRegistry, _ store: UsernameStore, handle: String = "Alice",
@@ -57,6 +61,10 @@ final class UsernameTests: XCTestCase {
       },
       sign: { _, _ in
         XCTFail("Recovery must not sign another claim")
+        throw UsernameFailure.verification
+      },
+      claimKey: {
+        XCTFail("Recovery must not read the claim key")
         throw UsernameFailure.verification
       }, isCurrentWallet: current)
   }
@@ -202,7 +210,7 @@ final class UsernameTests: XCTestCase {
         sign: { _, _ in
           signed += 1
           return "public-test-signature"
-        }, isCurrentWallet: { true })
+        }, claimKey: { Self.claimKey }, isCurrentWallet: { true })
       XCTFail("Expected unavailable")
     } catch {
       XCTAssertEqual(failure(error), UsernameFailure.unavailable.localizedDescription)
@@ -382,37 +390,77 @@ final class UsernameTests: XCTestCase {
     XCTAssertTrue(store.state.bindings.isEmpty)
   }
 
-  /// Starts a new claim for a free name and answers POST /v1/claims with `reply`.
+  // MARK: - Device proof (registry README, "Device gates")
+
+  /// The shared test vector: the key bytes 0x00 ... 0x1f.
+  private static let claimKey = "6f19b34dced9cf703d2e0222e085d6a475695543cce6b912af942a541524ba6a"
+  /// Starts a new claim for a free name and answers POST /v1/claims with
+  /// `reply`. Gives the result and the `device` object of each claim POST.
   private func freshClaim(
     _ registry: UsernameRegistry, _ store: UsernameStore, reply: (Int, Any) = (500, [String: Any]())
-  ) async -> Result<UsernameBinding, Error> {
+  ) async -> (result: Result<UsernameBinding, Error>, devices: [[String: Any]]) {
+    var devices: [[String: Any]] = []
     UsernameURLProtocol.handler = { [info, f] request in
       switch (request.httpMethod ?? "GET", request.url?.path ?? "") {
       case ("GET", "/v1/handles/alice"): return (404, ["error": ["code": "handle.not_found"]])
       case ("GET", "/v1/info"): return (200, info)
       case ("GET", "/v1/rules"): return (200, Data(f["rules"]!.utf8))
       case ("POST", "/v1/nonce"): return (200, ["nonce": String(repeating: "ab", count: 32)])
-      case ("POST", "/v1/claims"): return reply
+      case ("POST", "/v1/claims"):
+        devices.append(UsernameURLProtocol.body(request)["device"] as? [String: Any] ?? [:])
+        return reply
       default:
         XCTFail("Unexpected request \(request.url?.path ?? "")")
         throw URLError(.badURL)
       }
     }
     do {
-      return .success(
-        try await registry.claim(
-          displayHandle: "Alice", walletKey: "wallet-A", network: "mainnet", store: store,
-          makeSubaddress: { [f] in f["owner"]! }, sign: { _, _ in "public-test-signature" },
-          isCurrentWallet: { true }))
+      let binding = try await registry.claim(
+        displayHandle: "Alice", walletKey: "wallet-A", network: "mainnet", store: store,
+        makeSubaddress: { [f] in f["owner"]! }, sign: { _, _ in "public-test-signature" },
+        claimKey: { Self.claimKey }, isCurrentWallet: { true })
+      return (.success(binding), devices)
     } catch {
-      return .failure(error)
+      return (.failure(error), devices)
     }
   }
   private func failure(_ result: Result<UsernameBinding, Error>) -> String? {
     guard case .failure(let error) = result else { return nil }
     return failure(error)
   }
+  private static func unbase64URL(_ text: String) -> Data? {
+    var standard = text.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+    standard += String(repeating: "=", count: (4 - standard.count % 4) % 4)
+    return Data(base64Encoded: standard)
+  }
 
+  func testClaimKeyIsTheSharedHMACVector() {
+    let key = Data((0..<32).map { UInt8($0) })
+    XCTAssertEqual(UsernameDevice.claimKey(privateViewKey: key), Self.claimKey)
+    let hex = (0..<32).map { String(format: "%02x", $0) }.joined()
+    XCTAssertEqual(UsernameDevice.keyBytes(hex: hex), key)
+    XCTAssertEqual(UsernameDevice.keyBytes(hex: hex.uppercased()), key)
+    XCTAssertNil(UsernameDevice.keyBytes(hex: String(hex.dropLast(2))))
+    XCTAssertNil(UsernameDevice.keyBytes(hex: String(hex.dropLast()) + "g"))
+    XCTAssertNil(UsernameDevice.claimKey(privateViewKey: key.dropLast()))
+  }
+  func testIosProofIsBase64URLOfTheTokenAndClaimKey() async throws {
+    // These bytes give "+", "/" and "=" in standard base64.
+    let token = Data([0xfb, 0xff, 0xbf, 0x00, 0x10])
+    XCTAssertEqual(token.base64EncodedString(), "+/+/ABA=")
+    let store = UsernameStore(persistence: UsernameMemory())
+    let (_, devices) = await freshClaim(client(tokens: FakeDeviceTokens(token: token)), store)
+    XCTAssertEqual(devices.count, 1)
+    XCTAssertEqual(devices.first?["platform"] as? String, "ios")
+    let proof = try XCTUnwrap(devices.first?["proof"] as? String)
+    // The registry's strict decoder: the URL-safe alphabet, no padding.
+    XCTAssertNil(proof.rangeOfCharacter(from: CharacterSet(charactersIn: "+/=")))
+    let json = try XCTUnwrap(Self.unbase64URL(proof))
+    XCTAssertEqual(UsernameDevice.base64URL(json), proof)
+    let object = try XCTUnwrap(JSONSerialization.jsonObject(with: json) as? [String: String])
+    XCTAssertEqual(object, ["device_token": "+/+/ABA=", "claim_key": Self.claimKey])
+    XCTAssertEqual(try UsernameDevice.iosProof(token: token, claimKey: Self.claimKey), proof)
+  }
   func testRegistryCodesShowTheirMessages() async throws {
     let reserved = String(localized: "This username is reserved to protect users from scams.")
     let other = String(localized: "The username service couldn't complete the request. Please try again.")
@@ -428,13 +476,21 @@ final class UsernameTests: XCTestCase {
       ("handle.blocked", 403, reserved, false),
       ("rate.limited", 429, other, false),
     ]
+    var claimKeys = Set<String>()
     for (code, status, message, cleared) in rows {
       let store = UsernameStore(persistence: UsernameMemory())
-      let result = await freshClaim(client(), store, reply: (status, ["error": ["code": code]]))
+      let (result, devices) = await freshClaim(
+        client(), store, reply: (status, ["error": ["code": code]]))
       XCTAssertEqual(failure(result), message, code)
       XCTAssertEqual(store.state.pending == nil, cleared, code)
       XCTAssertTrue(store.state.bindings.isEmpty, code)
+      let proof = try XCTUnwrap(devices.first?["proof"] as? String, code)
+      let object = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: XCTUnwrap(Self.unbase64URL(proof))) as? [String: String])
+      claimKeys.insert(object["claim_key"] ?? "")
     }
+    // The same wallet sends the same claim key on every attempt.
+    XCTAssertEqual(claimKeys, [Self.claimKey])
     if Bundle.main.preferredLocalizations.first == "en" {
       XCTAssertEqual(
         UsernameFailure.regionBlocked.localizedDescription,
@@ -443,6 +499,63 @@ final class UsernameTests: XCTestCase {
       XCTAssertEqual(
         UsernameFailure.retry.localizedDescription, "The claim could not be completed. Please try again.")
     }
+  }
+  func testPlatformErrorsShowTheirMessagesInARelease() async {
+    // (tokens, message): a phone that can never make a token, or one that can on a retry.
+    let rows: [(FakeDeviceTokens, String)] = [
+      (FakeDeviceTokens(isSupported: false), UsernameFailure.deviceUnsupported.localizedDescription),
+      (
+        FakeDeviceTokens(error: DCError(.featureUnsupported)),
+        UsernameFailure.deviceUnsupported.localizedDescription
+      ),
+      (FakeDeviceTokens(error: DCError(.unknownSystemFailure)), UsernameFailure.retry.localizedDescription),
+      (FakeDeviceTokens(error: URLError(.notConnectedToInternet)), UsernameFailure.retry.localizedDescription),
+      (FakeDeviceTokens(token: Data()), UsernameFailure.retry.localizedDescription),
+    ]
+    for (index, (tokens, message)) in rows.enumerated() {
+      let store = UsernameStore(persistence: UsernameMemory())
+      let (result, devices) = await freshClaim(client(tokens: tokens, allowDevProof: false), store)
+      XCTAssertEqual(failure(result), message, "row \(index)")
+      // No claim is sent, and none is saved to block another wallet.
+      XCTAssertTrue(devices.isEmpty, "row \(index)")
+      XCTAssertNil(store.state.pending, "row \(index)")
+    }
+  }
+  func testDevProofOnlyInDebugBuilds() async throws {
+    #if DEBUG
+      XCTAssertTrue(UsernameDevice.allowsDevProof)
+    #else
+      XCTAssertFalse(UsernameDevice.allowsDevProof)
+    #endif
+    // A debug build on a simulator, or a phone without DeviceCheck: the dev proof.
+    for tokens in [FakeDeviceTokens(isSupported: false), FakeDeviceTokens(error: DCError(.featureUnsupported))] {
+      let store = UsernameStore(persistence: UsernameMemory())
+      let (_, devices) = await freshClaim(client(tokens: tokens, allowDevProof: true), store)
+      XCTAssertEqual(devices.count, 1)
+      XCTAssertEqual(devices.first?["platform"] as? String, "dev")
+      XCTAssertEqual(
+        devices.first?["proof"] as? String, UsernameDevice.base64URL(Data(store.state.deviceID.utf8)))
+    }
+    // A phone that makes a token sends it, in a debug build too.
+    let (_, real) = await freshClaim(
+      client(tokens: FakeDeviceTokens(), allowDevProof: true), UsernameStore(persistence: UsernameMemory()))
+    XCTAssertEqual(real.first?["platform"] as? String, "ios")
+    // A transient error is never covered by the dev proof.
+    let store = UsernameStore(persistence: UsernameMemory())
+    let (result, none) = await freshClaim(
+      client(tokens: FakeDeviceTokens(error: DCError(.unknownSystemFailure)), allowDevProof: true), store)
+    XCTAssertEqual(failure(result), UsernameFailure.retry.localizedDescription)
+    XCTAssertTrue(none.isEmpty)
+  }
+}
+
+private struct FakeDeviceTokens: UsernameDeviceTokens {
+  var isSupported = true
+  var token = Data([0x01, 0x02, 0x03])
+  var error: Error?
+  func generateToken() async throws -> Data {
+    if let error { throw error }
+    return token
   }
 }
 

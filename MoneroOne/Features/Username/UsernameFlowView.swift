@@ -188,7 +188,9 @@ struct UsernameFlowView: View {
           },
           sign: { message, address in
             try wallets.signUsername(message, subaddress: address, expectedSession: walletSession)
-          }, isCurrentWallet: { currentWallet })
+          },
+          claimKey: { try wallets.usernameClaimKey(expectedSession: walletSession) },
+          isCurrentWallet: { currentWallet })
         guard currentWallet else {
           dismiss()
           return

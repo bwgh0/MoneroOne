@@ -1,3 +1,5 @@
+import CryptoKit
+import DeviceCheck
 import Foundation
 import OAHCore
 
@@ -28,7 +30,7 @@ struct UsernameConfiguration {
   let url: URL
   let registrarKey: String
   let rulesHash: String
-  /// The registry has no real device verifier yet. This explicit local
+  /// No production registry is configured yet. This explicit local
   /// development configuration cannot enable public claims in a release.
   static var current: UsernameConfiguration? {
     #if DEBUG
@@ -65,6 +67,107 @@ enum UsernameRules {
   }
 }
 
+/// Makes the phone's DeviceCheck token. Tests stand in for the platform.
+protocol UsernameDeviceTokens {
+  var isSupported: Bool { get }
+  func generateToken() async throws -> Data
+}
+
+struct AppleDeviceTokens: UsernameDeviceTokens {
+  var isSupported: Bool { DCDevice.current.isSupported }
+  func generateToken() async throws -> Data { try await DCDevice.current.generateToken() }
+}
+
+/// The `device` part of a claim (registry README, "Device gates").
+enum UsernameDevice {
+  /// Debug builds may send the dev proof when the phone cannot make a
+  /// token (a simulator). A release build never sends it.
+  #if DEBUG
+    static let allowsDevProof = true
+  #else
+    static let allowsDevProof = false
+  #endif
+
+  /// Lowercase hex of HMAC-SHA256(key: the wallet's 32-byte private view
+  /// key, message: "oah-registry/claim-key/v1"). The same wallet gives the
+  /// same key on every retry. Made when needed; never stored or logged.
+  static func claimKey(privateViewKey: Data) -> String? {
+    guard privateViewKey.count == 32 else { return nil }
+    let mac = HMAC<SHA256>.authenticationCode(
+      for: Data("oah-registry/claim-key/v1".utf8), using: SymmetricKey(data: privateViewKey))
+    return mac.map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// The 32 bytes of a 64-character hex key, or nil.
+  static func keyBytes(hex: String) -> Data? {
+    let digits = Array(hex.utf8)
+    guard digits.count == 64 else { return nil }
+    var bytes = Data(capacity: 32)
+    for i in stride(from: 0, to: 64, by: 2) {
+      guard let high = nibble(digits[i]), let low = nibble(digits[i + 1]) else { return nil }
+      bytes.append(high << 4 | low)
+    }
+    return bytes
+  }
+  private static func nibble(_ c: UInt8) -> UInt8? {
+    switch c {
+    case UInt8(ascii: "0")...UInt8(ascii: "9"): return c - UInt8(ascii: "0")
+    case UInt8(ascii: "a")...UInt8(ascii: "f"): return c - UInt8(ascii: "a") + 10
+    case UInt8(ascii: "A")...UInt8(ascii: "F"): return c - UInt8(ascii: "A") + 10
+    default: return nil
+    }
+  }
+
+  /// base64url without padding, as the registry decodes `device.proof`.
+  static func base64URL(_ data: Data) -> String {
+    data.base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
+  }
+
+  /// The `ios` proof: base64url of {"device_token", "claim_key"}, where the
+  /// token is the standard base64 of the DeviceCheck token.
+  static func iosProof(token: Data, claimKey: String) throws -> String {
+    let json = try JSONSerialization.data(
+      withJSONObject: ["device_token": token.base64EncodedString(), "claim_key": claimKey],
+      options: [.sortedKeys, .withoutEscapingSlashes])
+    return base64URL(json)
+  }
+
+  /// The dev proof that a local dev registry accepts. A release build has
+  /// none, whatever the caller asks.
+  private static func devProof(deviceID: String, allowed: Bool) -> [String: String]? {
+    #if DEBUG
+      return allowed ? ["platform": "dev", "proof": base64URL(Data(deviceID.utf8))] : nil
+    #else
+      return nil
+    #endif
+  }
+
+  /// The proof for one claim attempt. `featureUnsupported` means this phone
+  /// can never make a token; other platform errors can pass on a retry.
+  @MainActor
+  static func proof(
+    claimKey: String, deviceID: String, tokens: UsernameDeviceTokens, allowDevProof: Bool
+  ) async throws -> [String: String] {
+    guard tokens.isSupported else {
+      if let dev = devProof(deviceID: deviceID, allowed: allowDevProof) { return dev }
+      throw UsernameFailure.deviceUnsupported
+    }
+    let token: Data
+    do {
+      token = try await tokens.generateToken()
+    } catch let error as DCError where error.code == .featureUnsupported {
+      if let dev = devProof(deviceID: deviceID, allowed: allowDevProof) { return dev }
+      throw UsernameFailure.deviceUnsupported
+    } catch {
+      throw UsernameFailure.retry
+    }
+    guard !token.isEmpty else { throw UsernameFailure.retry }
+    return ["platform": "ios", "proof": try iosProof(token: token, claimKey: claimKey)]
+  }
+}
+
 final class UsernameSessionDelegate: NSObject, URLSessionTaskDelegate {
   func urlSession(
     _ session: URLSession, task: URLSessionTask,
@@ -79,8 +182,16 @@ final class UsernameSessionDelegate: NSObject, URLSessionTaskDelegate {
 final class UsernameRegistry {
   private let configuration: UsernameConfiguration
   private let session: URLSession
-  init(configuration: UsernameConfiguration, session: URLSession? = nil) {
+  private let deviceTokens: UsernameDeviceTokens
+  private let allowDevProof: Bool
+  init(
+    configuration: UsernameConfiguration, session: URLSession? = nil,
+    deviceTokens: UsernameDeviceTokens = AppleDeviceTokens(),
+    allowDevProof: Bool = UsernameDevice.allowsDevProof
+  ) {
     self.configuration = configuration
+    self.deviceTokens = deviceTokens
+    self.allowDevProof = allowDevProof
     let options = URLSessionConfiguration.ephemeral
     options.timeoutIntervalForRequest = 20
     options.timeoutIntervalForResource = 25
@@ -135,6 +246,7 @@ final class UsernameRegistry {
     displayHandle: String, walletKey: String, network: String, store: UsernameStore,
     makeSubaddress: () async throws -> String,
     sign: (String, String) throws -> String,
+    claimKey: () throws -> String,
     isCurrentWallet: () -> Bool
   ) async throws -> UsernameBinding {
     guard isCurrentWallet(), !walletKey.isEmpty else { throw UsernameFailure.walletChanged }
@@ -204,6 +316,12 @@ final class UsernameRegistry {
     else { throw UsernameFailure.verification }
     let signature = try sign(message, subaddress)
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
+    // A new token for each attempt, made before the claim is saved: a phone
+    // that cannot make one leaves no saved claim behind.
+    let device = try await UsernameDevice.proof(
+      claimKey: claimKey(), deviceID: store.state.deviceID, tokens: deviceTokens,
+      allowDevProof: allowDevProof)
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
     let pending = PendingUsernameClaim(
       walletKey: walletKey, network: network, handle: handle,
       displayHandle: displayHandle, subaddress: subaddress, nonce: nonce, unsignedRecord: bytes,
@@ -212,7 +330,7 @@ final class UsernameRegistry {
     // Persist before POST: if the reply is lost, check this exact signed
     // genesis on the next attempt instead of consuming another claim.
     try store.savePending(pending)
-    return try await submit(pending, store: store)
+    return try await submit(pending, device: device, store: store)
   }
 
   /// Checks a claim saved before its POST. Returns the binding when the name
@@ -273,48 +391,41 @@ final class UsernameRegistry {
     ]
   }
 
-  private func submit(_ pending: PendingUsernameClaim, store: UsernameStore) async throws
-    -> UsernameBinding
-  {
+  private func submit(
+    _ pending: PendingUsernameClaim, device: [String: String], store: UsernameStore
+  ) async throws -> UsernameBinding {
     guard pending.registrarKey == configuration.registrarKey,
       pending.rulesHash == configuration.rulesHash
     else {
       throw UsernameFailure.verification
     }
-    #if DEBUG
-      let proof = Data(store.state.deviceID.utf8).base64EncodedString()
-        .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
-        .replacingOccurrences(of: "=", with: "")
-      do {
-        let response = try object(
-          await request(
-            "claims",
-            body: [
-              "nonce": pending.nonce,
-              "record": pending.unsignedRecord, "owner_signature": pending.ownerSignature,
-              "device": ["platform": "dev", "proof": proof],
-              "terms_version": "local-development-v1",
-            ]))
-        guard response["handle"] as? String == pending.handle,
-          let record = response["record"] as? String
-        else {
-          throw UsernameFailure.verification
-        }
-        return try accept(record, pending: pending, store: store)
-      } catch is ExpiredClaim {
-        try store.savePending(nil)
-        throw UsernameFailure.server(String(localized: "The request expired. Please claim again."))
-      } catch let error as UsernameFailure {
-        // The registry refused before it wrote anything: the claim is gone.
-        switch error {
-        case .noFreeClaim, .unavailable, .regionBlocked, .deviceUnsupported: try store.savePending(nil)
-        default: break
-        }
-        throw error
+    do {
+      let response = try object(
+        await request(
+          "claims",
+          body: [
+            "nonce": pending.nonce,
+            "record": pending.unsignedRecord, "owner_signature": pending.ownerSignature,
+            "device": device,
+            "terms_version": "local-development-v1",
+          ]))
+      guard response["handle"] as? String == pending.handle,
+        let record = response["record"] as? String
+      else {
+        throw UsernameFailure.verification
       }
-    #else
-      throw UsernameFailure.notConfigured
-    #endif
+      return try accept(record, pending: pending, store: store)
+    } catch is ExpiredClaim {
+      try store.savePending(nil)
+      throw UsernameFailure.server(String(localized: "The request expired. Please claim again."))
+    } catch let error as UsernameFailure {
+      // The registry refused before it wrote anything: the claim is gone.
+      switch error {
+      case .noFreeClaim, .unavailable, .regionBlocked, .deviceUnsupported: try store.savePending(nil)
+      default: break
+      }
+      throw error
+    }
   }
 
   private func accept(_ record: String, pending: PendingUsernameClaim, store: UsernameStore) throws

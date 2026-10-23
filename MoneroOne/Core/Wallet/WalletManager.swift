@@ -3191,6 +3191,17 @@ class WalletManager: ObservableObject {
         return try wallet.signUsername(message, subaddress: subaddress)
     }
 
+    /// The username claim key, from the claiming wallet's private view key
+    /// (`UsernameDevice.claimKey`). Made for each claim; never stored or logged.
+    func usernameClaimKey(expectedSession: UUID) throws -> String {
+        guard isUnlocked, walletSessionId == expectedSession, !isHardwareWallet, !isViewOnly,
+              let hex = moneroWallet?.secretViewKey, hex != NullKeyAddress.zeroSecretKey,
+              let viewKey = UsernameDevice.keyBytes(hex: hex),
+              let claimKey = UsernameDevice.claimKey(privateViewKey: viewKey)
+        else { throw UsernameFailure.walletChanged }
+        return claimKey
+    }
+
     /// Create a new subaddress for receiving payments
     /// - Returns: The newly created SubAddress, or nil if creation failed
     func createSubaddress() async -> MoneroKit.SubAddress? {

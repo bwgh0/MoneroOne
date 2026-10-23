@@ -104,6 +104,8 @@ extension View {
 struct WhatsNewSheet: View {
     let entry: WhatsNewEntry
     @Environment(\.dismiss) private var dismiss
+    /// The bullet's column grows with the text, so the dot is never cut.
+    @ScaledMetric(relativeTo: .subheadline) private var bulletWidth: CGFloat = 8
 
     /// Keeps "Monero One" on one line when the title wraps. The name stays
     /// in Latin letters in every language.
@@ -144,7 +146,7 @@ struct WhatsNewSheet: View {
                                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                                     Text(verbatim: "•")
                                         .foregroundStyle(.tertiary)
-                                        .frame(width: 8)
+                                        .frame(width: bulletWidth)
                                         .accessibilityHidden(true)
                                     Text(entry.improvements[index])
                                         .foregroundStyle(.secondary)

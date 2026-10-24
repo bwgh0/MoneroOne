@@ -195,7 +195,12 @@ struct WhatsNewSheet: View {
             Image("MoneroSymbol")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 40, height: 40)
+                .frame(width: WhatsNewFeatureLayout.iconSize, height: WhatsNewFeatureLayout.iconSize)
+                // A hairline keeps the white tile visible on the white sheet.
+                .overlay {
+                    RoundedRectangle(cornerRadius: WhatsNewFeatureLayout.iconCornerRadius, style: .continuous)
+                        .strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)
+                }
                 .accessibilityHidden(true)
             Text("Version \(entry.version.description)")
                 .font(.body.weight(.medium))
@@ -290,10 +295,15 @@ enum WhatsNewFeatureLayout {
     static let closeSize: CGFloat = 44
     static let closeInset: CGFloat = 16
     /// The blurred copy of the picture behind it: how much larger, how
-    /// soft and how faint.
+    /// soft and how faint. Fainter in light, so a dark picture (the
+    /// envelope) does not turn the card into a gray box.
     static let blurScale: CGFloat = 1.6
     static let blurRadius: CGFloat = 28
     static let blurOpacity: Double = 0.6
+    static let blurOpacityLight: Double = 0.3
+    /// The app icon in the header, and the radius of its tile.
+    static let iconSize: CGFloat = 40
+    static let iconCornerRadius: CGFloat = 9
 
     static func cardHeight(width: CGFloat) -> CGFloat {
         width / cardAspectRatio
@@ -345,6 +355,7 @@ private struct WhatsNewFeatureRow: View {
 /// large and faint, and the sharp picture centered on top, straight.
 private struct WhatsNewFeatureCard: View {
     let scene: WhatsNewScene
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Color(uiColor: .secondarySystemBackground)
@@ -354,7 +365,9 @@ private struct WhatsNewFeatureCard: View {
                 WhatsNewScenePicture(scene: scene)
                     .scaleEffect(WhatsNewFeatureLayout.blurScale)
                     .blur(radius: WhatsNewFeatureLayout.blurRadius)
-                    .opacity(WhatsNewFeatureLayout.blurOpacity)
+                    .opacity(colorScheme == .dark
+                        ? WhatsNewFeatureLayout.blurOpacity
+                        : WhatsNewFeatureLayout.blurOpacityLight)
             }
             .overlay {
                 WhatsNewScenePicture(scene: scene)

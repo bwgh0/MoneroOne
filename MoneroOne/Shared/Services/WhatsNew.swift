@@ -30,10 +30,23 @@ struct NotesVersion: Comparable, Hashable, CustomStringConvertible {
     var description: String { "\(major).\(minor)" }
 }
 
+/// The picture at the top of a What's New card: the app's own views with
+/// sample data (`WhatsNewScenePicture`). A later release adds a case for
+/// each new highlight.
+enum WhatsNewScene: Equatable {
+    case transfer
+    case link
+    case contacts
+    case name
+    case seed
+}
+
 /// The notes of one big update. They ship in the app: no network call.
 struct WhatsNewEntry: Identifiable, Equatable {
     struct Highlight {
         let systemImage: String
+        /// The picture at the top of the highlight's card.
+        let scene: WhatsNewScene
         let title: LocalizedStringResource
         let detail: LocalizedStringResource
     }
@@ -57,26 +70,31 @@ enum WhatsNewNotes {
             highlights: [
                 .init(
                     systemImage: "arrow.left.arrow.right",
+                    scene: .transfer,
                     title: "Transfer between your wallets",
                     detail: "Move XMR from one of your wallets to another. Tap the wallet name at the top, then Transfer."
                 ),
                 .init(
                     systemImage: "link",
+                    scene: .link,
                     title: "Send XMR as a link",
                     detail: "Whoever opens it claims the funds in Monero One. In Send, choose Link."
                 ),
                 .init(
                     systemImage: "person.crop.circle",
+                    scene: .contacts,
                     title: "Contacts",
                     detail: "Save the people you pay. Tap the contacts icon in Send."
                 ),
                 .init(
                     systemImage: "at",
+                    scene: .name,
                     title: "Send to a name",
                     detail: "Enter an OpenAlias name in place of an address, checked with DNSSEC."
                 ),
                 .init(
                     systemImage: "key.fill",
+                    scene: .seed,
                     title: "New seed phrase entry",
                     detail: "One box per word, paste a whole phrase at once, and a checksum check."
                 ),

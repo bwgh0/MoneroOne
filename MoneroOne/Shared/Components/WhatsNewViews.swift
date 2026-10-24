@@ -127,13 +127,12 @@ struct WhatsNewSheet: View {
                     .foregroundStyle(.secondary)
                     .padding(.top, 8)
 
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(spacing: 16) {
                     ForEach(entry.highlights, id: \.systemImage) { highlight in
-                        WhatsNewHighlightRow(highlight: highlight)
+                        WhatsNewFeatureCard(highlight: highlight)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 40)
+                .padding(.top, 32)
 
                 if !entry.improvements.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
@@ -185,34 +184,38 @@ struct WhatsNewSheet: View {
     }
 }
 
-/// An icon disc (the Activity rows' 40 pt tinted disc), a title and two
-/// lines. One VoiceOver element: the title, then the text.
-private struct WhatsNewHighlightRow: View {
+/// One feature card (Apple's Tips cards): the picture fills the card's top
+/// edge to edge, then the title and the line. Radius 20 on the grouped
+/// page fill, no shadow. At the accessibility text sizes the picture
+/// hides and the text grows. One VoiceOver element: the title, then the
+/// text; the picture is hidden from VoiceOver.
+private struct WhatsNewFeatureCard: View {
     let highlight: WhatsNewEntry.Highlight
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(Color.brand.opacity(0.15))
-                    .frame(width: 40, height: 40)
-                Image(systemName: highlight.systemImage)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.brand)
+        VStack(alignment: .leading, spacing: 0) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                WhatsNewScenePicture(scene: highlight.scene)
             }
-            .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(highlight.title)
                     .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(highlight.detail)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, dynamicTypeSize.isAccessibilitySize ? 20 : 12)
+            .padding(.bottom, 20)
+            .accessibilityElement(children: .combine)
         }
-        .accessibilityElement(children: .combine)
+        .background(WhatsNewSceneColor.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 

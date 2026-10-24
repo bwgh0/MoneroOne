@@ -205,6 +205,7 @@ final class WhatsNewTests: XCTestCase {
         let notes = WhatsNewNotes.newest(in: WhatsNewNotes.entries, atOrBelow: NotesVersion("1.1.0"))
         XCTAssertEqual(notes?.version, NotesVersion(major: 1, minor: 1))
         XCTAssertEqual(notes?.highlights.map(\.systemImage), ["arrow.left.arrow.right", "link", "person.crop.circle", "at", "key.fill"])
+        XCTAssertEqual(notes?.highlights.map(\.scene), [.transfer, .link, .contacts, .name, .seed])
         XCTAssertEqual(notes?.improvements.count, 10)
     }
 }

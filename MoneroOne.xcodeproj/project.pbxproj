@@ -88,6 +88,7 @@
 		7E71E0000000000000000002 /* ReviewPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E71E0000000000000000001 /* ReviewPrompt.swift */; };
 		57A75E000000000000000002 /* WhatsNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A75E000000000000000001 /* WhatsNew.swift */; };
 		57A75E000000000000000004 /* WhatsNewViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A75E000000000000000003 /* WhatsNewViews.swift */; };
+		57A75E000000000000000008 /* WhatsNewScenes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A75E000000000000000007 /* WhatsNewScenes.swift */; };
 		CAC4E1D0000000000000C10P /* SecureClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000C20P /* SecureClipboard.swift */; };
 		A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000002 /* NumericKeypad.swift */; };
 		A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */; };
@@ -297,6 +298,7 @@
 		7E71E0000000000000000001 /* ReviewPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewPrompt.swift; sourceTree = "<group>"; };
 		57A75E000000000000000001 /* WhatsNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNew.swift; sourceTree = "<group>"; };
 		57A75E000000000000000003 /* WhatsNewViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewViews.swift; sourceTree = "<group>"; };
+		57A75E000000000000000007 /* WhatsNewScenes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewScenes.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000C20P /* SecureClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureClipboard.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000002 /* NumericKeypad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericKeypad.swift; sourceTree = "<group>"; };
 		A1B2C3D400000002A0000003 /* SuccessCheckmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessCheckmarkView.swift; sourceTree = "<group>"; };
@@ -692,6 +694,7 @@
 				C0DE7E470000000000000001 /* CodeText.swift */,
 				C2B3390E2738445B8D347933 /* ErrorBanner.swift */,
 				57A75E000000000000000003 /* WhatsNewViews.swift */,
+				57A75E000000000000000007 /* WhatsNewScenes.swift */,
 				0F1C17A0DAB5332E049A04B0 /* GlassSegmentedPicker.swift */,
 				A1B2C3D400000002A0000004 /* GradientSpinner.swift */,
 				A1B2C3D400000002A0000002 /* NumericKeypad.swift */,
@@ -1297,6 +1300,7 @@ BCEDC5F2AEF6B50AFDDF334D /* AddPriceAlertView.swift in Sources */,
 				7E71E0000000000000000002 /* ReviewPrompt.swift in Sources */,
 				57A75E000000000000000002 /* WhatsNew.swift in Sources */,
 				57A75E000000000000000004 /* WhatsNewViews.swift in Sources */,
+				57A75E000000000000000008 /* WhatsNewScenes.swift in Sources */,
 				A1B2C3D400000001A0000002 /* NumericKeypad.swift in Sources */,
 				A1B2C3D400000001A0000003 /* SuccessCheckmarkView.swift in Sources */,
 				4D07100000000000000000B2 /* ConfirmationRing.swift in Sources */,

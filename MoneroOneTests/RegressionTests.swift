@@ -751,6 +751,45 @@ final class SendAmountStartUnitTests: XCTestCase {
     }
 }
 
+/// Review in Fiat Mode: the fiat amount on top and the exact XMR under it,
+/// for the amount, the fee and the Total. Fiat Mode off, or no usable
+/// price: XMR on top, as before.
+final class ReviewAmountLinesTests: XCTestCase {
+
+    private let price = 165.42
+    private let xmr = Decimal(string: "0.302260911618")!
+
+    func testFiatModeWithAPricePutsFiatFirst() {
+        XCTAssertTrue(ReviewAmountLines.fiatFirst(fiatMode: true, price: price))
+        let lines = ReviewAmountLines(xmr: xmr, fiat: "$50.00", fiatFirst: true)
+        XCTAssertEqual(lines.primary, "$50.00")
+        XCTAssertEqual(lines.secondary, "0.302260911618 XMR")
+    }
+
+    func testFiatModeOffKeepsXMRFirst() {
+        XCTAssertFalse(ReviewAmountLines.fiatFirst(fiatMode: false, price: price))
+        let lines = ReviewAmountLines(xmr: xmr, fiat: "$50.00", fiatFirst: false)
+        XCTAssertEqual(lines.primary, "0.302260911618 XMR")
+        XCTAssertEqual(lines.secondary, "≈ $50.00")
+    }
+
+    func testNoUsablePriceKeepsXMRFirst() {
+        XCTAssertFalse(ReviewAmountLines.fiatFirst(fiatMode: true, price: nil))
+        XCTAssertFalse(ReviewAmountLines.fiatFirst(fiatMode: true, price: 0))
+        XCTAssertFalse(ReviewAmountLines.fiatFirst(fiatMode: true, price: .infinity))
+        // No fiat value: XMR alone, even when Fiat Mode asks for fiat first.
+        let lines = ReviewAmountLines(xmr: xmr, fiat: nil, fiatFirst: true)
+        XCTAssertEqual(lines.primary, "0.302260911618 XMR")
+        XCTAssertNil(lines.secondary)
+    }
+
+    func testTheXMRUnderTheFiatIsExact() {
+        let fee = Decimal(string: "0.00003152")!
+        let lines = ReviewAmountLines(xmr: fee, fiat: "$0.01", fiatFirst: true)
+        XCTAssertEqual(lines.secondary, "0.00003152 XMR")
+    }
+}
+
 // MARK: - Connection Stage Regression Tests
 
 final class ConnectionStageRegressionTests: XCTestCase {

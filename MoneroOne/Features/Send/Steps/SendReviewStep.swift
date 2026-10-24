@@ -51,6 +51,13 @@ struct SendReviewStep: View {
         return amount + fee
     }
 
+    /// An amount in the order Fiat Mode picks.
+    private func lines(_ xmr: Decimal) -> ReviewAmountLines {
+        ReviewAmountLines(xmr: xmr, fiat: priceService.formatFiatValue(xmr),
+                          fiatFirst: ReviewAmountLines.fiatFirst(fiatMode: priceService.showFiatFirst,
+                                                                 price: priceService.xmrPrice))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -133,20 +140,22 @@ struct SendReviewStep: View {
                                 if let fee = estimatedFee {
                                     let sendAmount = preparedSend.map { SendReviewFee.xmr($0.amount) }
                                         ?? walletManager.displayUnlockedBalance - fee
-                                    Text("\(XMRFormatter.format(sendAmount)) XMR")
+                                    let sent = lines(sendAmount)
+                                    Text(verbatim: sent.primary)
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
-                                    if let fiat = priceService.formatFiatValue(sendAmount) {
-                                        Text("≈ \(fiat)")
+                                    if let secondary = sent.secondary {
+                                        Text(verbatim: secondary)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                 }
                             } else {
-                                Text("\(XMRFormatter.format(amount)) XMR")
+                                let sent = lines(amount)
+                                Text(verbatim: sent.primary)
                                     .font(.title.weight(.bold))
-                                if let fiat = priceService.formatFiatValue(amount) {
-                                    Text("≈ \(fiat)")
+                                if let secondary = sent.secondary {
+                                    Text(verbatim: secondary)
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                 }
@@ -163,17 +172,18 @@ struct SendReviewStep: View {
                                 .foregroundStyle(.secondary)
                             Spacer()
                             if let fee = estimatedFee {
+                                let feeLines = lines(fee)
                                 VStack(alignment: .trailing, spacing: 2) {
-                                    Text("\(XMRFormatter.format(fee)) XMR")
+                                    Text(verbatim: feeLines.primary)
                                         .fontWeight(.medium)
-                                    if let fiatFee = priceService.formatFiatValue(fee) {
-                                        Text("≈ \(fiatFee)")
+                                    if let secondary = feeLines.secondary {
+                                        Text(verbatim: secondary)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                 }
                             } else {
-                                ReviewValuePlaceholder(sample: ReviewValuePlaceholder.feeSample, priceService: priceService)
+                                ReviewValuePlaceholder(lines: lines(ReviewValuePlaceholder.feeSample))
                             }
                         }
                         .font(.subheadline)
@@ -192,18 +202,19 @@ struct SendReviewStep: View {
                                     .fontWeight(.semibold)
                                 Spacer()
                                 if let total = total {
+                                    let totalLines = lines(total)
                                     VStack(alignment: .trailing, spacing: 2) {
-                                        Text("\(XMRFormatter.format(total)) XMR")
+                                        Text(verbatim: totalLines.primary)
                                             .fontWeight(.semibold)
                                             .foregroundStyle(.brand)
-                                        if let fiatTotal = priceService.formatFiatValue(total) {
-                                            Text("≈ \(fiatTotal)")
+                                        if let secondary = totalLines.secondary {
+                                            Text(verbatim: secondary)
                                                 .font(.caption)
                                                 .foregroundStyle(.secondary)
                                         }
                                     }
                                 } else {
-                                    ReviewValuePlaceholder(sample: amount > 0 ? amount : walletManager.displayUnlockedBalance, priceService: priceService, weight: .semibold)
+                                    ReviewValuePlaceholder(lines: lines(amount > 0 ? amount : walletManager.displayUnlockedBalance), weight: .semibold)
                                 }
                             }
                             .font(.subheadline)
@@ -467,6 +478,32 @@ struct TransferParties {
     var isToSelf: Bool { from.id == to.id }
 }
 
+/// A Review amount in the order Fiat Mode picks. Fiat Mode with a usable
+/// price: the fiat value on top and the exact XMR under it, like every
+/// amount in Fiat Mode (the sending step too). Otherwise the XMR on top and
+/// "≈ fiat" under it.
+struct ReviewAmountLines: Equatable {
+    let primary: String
+    /// Nil with no price.
+    let secondary: String?
+
+    static func fiatFirst(fiatMode: Bool, price: Double?) -> Bool {
+        guard fiatMode, let price else { return false }
+        return PriceService.isPlausiblePrice(price)
+    }
+
+    init(xmr: Decimal, fiat: String?, fiatFirst: Bool) {
+        let xmrText = "\(XMRFormatter.format(xmr)) XMR"
+        if fiatFirst, let fiat {
+            primary = fiat
+            secondary = xmrText
+        } else {
+            primary = xmrText
+            secondary = fiat.map { "≈ \($0)" }
+        }
+    }
+}
+
 /// The review's fee rules, apart from the view so tests can pin them.
 enum SendReviewFee {
     static func xmr(_ piconero: UInt64) -> Decimal {
@@ -638,16 +675,28 @@ struct ReviewValuePlaceholder: View {
     /// A typical network fee, for the bars' width.
     static let feeSample = Decimal(string: "0.00003152") ?? 0
 
-    let sample: Decimal
-    let priceService: PriceService
+    /// A sample amount in the order Fiat Mode picks.
+    let lines: ReviewAmountLines
     var weight: Font.Weight = .medium
+
+    init(lines: ReviewAmountLines, weight: Font.Weight = .medium) {
+        self.lines = lines
+        self.weight = weight
+    }
+
+    /// XMR on top (the payment link review).
+    @MainActor
+    init(sample: Decimal, priceService: PriceService, weight: Font.Weight = .medium) {
+        self.init(lines: ReviewAmountLines(xmr: sample, fiat: priceService.formatFiatValue(sample), fiatFirst: false),
+                  weight: weight)
+    }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text("\(XMRFormatter.format(sample)) XMR")
+            Text(verbatim: lines.primary)
                 .fontWeight(weight)
-            if let fiat = priceService.formatFiatValue(sample) {
-                Text("≈ \(fiat)")
+            if let secondary = lines.secondary {
+                Text(verbatim: secondary)
                     .font(.caption)
             }
         }

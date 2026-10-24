@@ -59,6 +59,12 @@ struct SendAmountStep: View {
     @State private var softwareKeyboardVisible = false
     @State private var isFiatMode = false
     @State private var fiatString = ""
+    /// The fiat the user typed and the XMR worked out from it. A swap to XMR
+    /// and back with no edit shows this fiat again, as typed.
+    @State private var enteredFiat: TypedFiat?
+    /// The fiat a swap from XMR showed, and that XMR. Showing it is not an
+    /// edit: the XMR stays exact.
+    @State private var swappedFiat: TypedFiat?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -315,12 +321,17 @@ struct SendAmountStep: View {
             }
         }
         .onChange(of: fiatString) { _ in
-            if isFiatMode {
-                syncXMRFromFiat()
-            }
+            guard isFiatMode,
+                  Self.fiatChangeIsEdit(fiat: fiatString, amount: amountString, swapped: swappedFiat) else { return }
+            syncXMRFromFiat()
+            enteredFiat = TypedFiat(fiat: fiatString, xmr: amountString)
         }
         .onChange(of: paymentRequest) { _, request in
-            guard let request, isFiatMode else { return }
+            guard let request else { return }
+            // The link's amount is not the fiat the user typed: a swap shows
+            // it at the price.
+            enteredFiat = nil
+            guard isFiatMode else { return }
             if Self.linkKeepsFiat(amount: request.amount) {
                 // No amount: the amount starts over, still in fiat, as on a
                 // fresh Send.
@@ -508,20 +519,29 @@ struct SendAmountStep: View {
             isFiatMode.toggle()
         }
         if isFiatMode {
-            // Sync fiat from current XMR amount
-            syncFiatFromXMR()
+            // The same amount in fiat. The XMR stays as it is, so a swap back
+            // gives it back exactly; only a fiat edit works it out again.
+            let fiat = Self.fiatAfterSwap(entered: enteredFiat, amount: amountString,
+                                          price: priceService.xmrPrice)
+            swappedFiat = TypedFiat(fiat: fiat, xmr: amountString)
+            fiatString = fiat
         }
         HapticFeedback.shared.softTick()
     }
 
-    private func syncFiatFromXMR() {
-        guard let price = priceService.xmrPrice,
-              let xmr = Double(amountString), xmr > 0 else {
-            fiatString = ""
-            return
-        }
-        let fiat = xmr * price
-        fiatString = formatFiatNumber(fiat)
+    /// The fiat a swap from XMR shows: the fiat the user typed, while the
+    /// amount is still the XMR it made (a round trip with no edit gives it
+    /// back as typed), else the amount at the price.
+    static func fiatAfterSwap(entered: TypedFiat?, amount: String, price: Double?) -> String {
+        if let typed = restoredFiat(entered, amount: amount, price: price) { return typed }
+        guard let price, let xmr = Double(amount), xmr > 0 else { return "" }
+        return formatFiatNumber(xmr * price)
+    }
+
+    /// A change of the fiat amount that the XMR must follow: anything but the
+    /// fiat a swap just showed for this same XMR.
+    static func fiatChangeIsEdit(fiat: String, amount: String, swapped: TypedFiat?) -> Bool {
+        swapped != TypedFiat(fiat: fiat, xmr: amount)
     }
 
     private func syncXMRFromFiat() {
@@ -543,7 +563,7 @@ struct SendAmountStep: View {
         amountString = result
     }
 
-    private func formatFiatNumber(_ value: Double) -> String {
+    private static func formatFiatNumber(_ value: Double) -> String {
         let s = String(format: "%.2f", value)
         // Trim trailing zeros after decimal
         if s.contains(".") {

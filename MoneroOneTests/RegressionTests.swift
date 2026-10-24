@@ -791,6 +791,40 @@ final class SendAmountStartUnitTests: XCTestCase {
         XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "0.302260911618", price: .nan))
         XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "0.302260911618", price: 0))
     }
+
+    // A swap to the other unit and back, with no edit, gives back exactly what was there.
+
+    func testXMRToFiatAndBackKeepsTheExactXMR() {
+        // 0.02 XMR shows as 3.31 (3.3084 rounded). Showing it is not an edit:
+        // the XMR is not worked out again from the rounded fiat.
+        let fiat = SendAmountStep.fiatAfterSwap(entered: nil, amount: "0.02", price: price)
+        XCTAssertEqual(fiat, "3.31")
+        let swapped = SendAmountStep.TypedFiat(fiat: fiat, xmr: "0.02")
+        XCTAssertFalse(SendAmountStep.fiatChangeIsEdit(fiat: fiat, amount: "0.02", swapped: swapped))
+    }
+
+    func testAFiatEditAfterTheSwapConvertsAgain() {
+        let swapped = SendAmountStep.TypedFiat(fiat: "3.31", xmr: "0.02")
+        XCTAssertTrue(SendAmountStep.fiatChangeIsEdit(fiat: "3.3", amount: "0.02", swapped: swapped))
+        XCTAssertTrue(SendAmountStep.fiatChangeIsEdit(fiat: "3.31", amount: "0.020009672349", swapped: swapped))
+        XCTAssertTrue(SendAmountStep.fiatChangeIsEdit(fiat: "3.31", amount: "0.02", swapped: nil))
+    }
+
+    func testFiatToXMRAndBackKeepsTheTypedFiat() {
+        // "2.50" at the price would show as "2.5": the typed fiat comes back as typed.
+        let entered = SendAmountStep.TypedFiat(fiat: "2.50", xmr: "0.015113045581")
+        XCTAssertEqual(SendAmountStep.fiatAfterSwap(entered: entered, amount: "0.015113045581", price: price), "2.50")
+        let plain = SendAmountStep.TypedFiat(fiat: "2.5", xmr: "0.015113045581")
+        XCTAssertEqual(SendAmountStep.fiatAfterSwap(entered: plain, amount: "0.015113045581", price: price), "2.5")
+    }
+
+    func testAnXMREditBetweenSwapsUsesThePrice() {
+        let entered = SendAmountStep.TypedFiat(fiat: "2.5", xmr: "0.015113045581")
+        // 0.016 x 165.42 = 2.64672
+        XCTAssertEqual(SendAmountStep.fiatAfterSwap(entered: entered, amount: "0.016", price: price), "2.65")
+        XCTAssertEqual(SendAmountStep.fiatAfterSwap(entered: entered, amount: "", price: price), "")
+        XCTAssertEqual(SendAmountStep.fiatAfterSwap(entered: nil, amount: "0", price: price), "")
+    }
 }
 
 /// Review in Fiat Mode: the fiat amount on top and the exact XMR under it,

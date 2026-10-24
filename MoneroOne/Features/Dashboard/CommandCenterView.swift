@@ -12,9 +12,8 @@ struct CommandCenterView: View {
     /// card's open-link lines, else All.
     @State private var allTransactionsFilter: TransactionListView.FilterType = .all
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
-    /// Wallet switcher expanded: the greeting slides out, the switcher pill
-    /// stretches, and the wallet rows replace the balance column (same
-    /// choreography as WalletView on iPhone).
+    /// Wallet switcher expanded: the wallet rows slide in under the switcher
+    /// pill, in place of the Activity column (WalletView's slide on iPhone).
     @State private var showWalletManager = false
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
     @State private var whatsNewEntry: WhatsNewEntry?
@@ -87,36 +86,47 @@ struct CommandCenterView: View {
 
     // MARK: - Two Columns (portrait, iPhone Duo unfolded)
 
+    /// The header spans both columns, so the wallet switcher sits at the top
+    /// trailing corner (beside the vertical bar on the unfolded iPhone Duo),
+    /// and its rows open right below it, in place of Activity, while the
+    /// balance column stays.
+    ///
     /// Equal columns so the gutter sits on the fold when the Duo is half
     /// open in book pose (HIG: even column counts, nothing straddles the
     /// division region).
     private var twoColumnLayout: some View {
-        HStack(alignment: .top, spacing: 16) {
-            // Wallet balance, its history and actions share one column.
-            VStack(spacing: 16) {
-                greetingHeader
-                if showWalletManager {
-                    walletRows
-                    Spacer(minLength: 0)
-                } else {
+        VStack(spacing: 16) {
+            greetingHeader
+
+            HStack(alignment: .top, spacing: 16) {
+                // Wallet balance, its history and actions share one column.
+                VStack(spacing: 16) {
                     balanceCard
                     quickActions
                     Spacer(minLength: 0)
                 }
-            }
-            .animation(reduceMotion ? nil : .snappy(duration: 0.35), value: showWalletManager)
-            .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity)
 
-            // Column 2: Transactions
-            transactionsPanel
+                // Column 2: Activity, or the wallet rows under the switcher.
+                VStack(spacing: 0) {
+                    if showWalletManager {
+                        walletRows
+                        Spacer(minLength: 0)
+                    } else {
+                        transactionsPanel
+                    }
+                }
+                .animation(reduceMotion ? nil : .snappy(duration: 0.35), value: showWalletManager)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 
     // MARK: - Pieces
 
     /// The greeting and the chip stay put whether the list is open or not;
-    /// only the content below swaps, and that is what shows the open state.
+    /// only the content below the chip swaps, and that is what shows the
+    /// open state. The row spans the whole dashboard width.
     private var greetingHeader: some View {
         HStack(spacing: 0) {
             DynamicGreeting()

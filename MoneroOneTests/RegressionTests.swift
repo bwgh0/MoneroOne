@@ -725,6 +725,30 @@ final class SendAmountStartUnitTests: XCTestCase {
         XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: true, price: price, amount: "1.5"))
         XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: false, price: price, amount: "1.5"))
     }
+
+    // Back to the recipient and on again: an amount typed in fiat stays in fiat.
+
+    private let typed = SendAmountStep.TypedFiat(fiat: "50", xmr: "0.302260911618")
+
+    func testAmountTypedInFiatComesBackInFiat() {
+        XCTAssertEqual(SendAmountStep.restoredFiat(typed, amount: "0.302260911618", price: price), "50")
+    }
+
+    func testAnAmountFilledInSinceKeepsXMR() {
+        // A QR code or a monero: link filled in another amount.
+        XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "1.5", price: price))
+        XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "", price: price))
+    }
+
+    func testAmountTypedInXMRHasNothingToRestore() {
+        XCTAssertNil(SendAmountStep.restoredFiat(nil, amount: "0.302260911618", price: price))
+    }
+
+    func testNoUsablePriceRestoresNothing() {
+        XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "0.302260911618", price: nil))
+        XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "0.302260911618", price: .nan))
+        XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "0.302260911618", price: 0))
+    }
 }
 
 // MARK: - Connection Stage Regression Tests

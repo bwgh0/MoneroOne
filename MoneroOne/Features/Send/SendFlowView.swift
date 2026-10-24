@@ -36,6 +36,8 @@ struct SendFlowView: View {
     @State private var aliasSummary: OpenAliasSummary?
     @StateObject private var aliasLookup = OpenAliasLookupModel()
     @State private var amountString = ""
+    /// The amount as typed in fiat, kept for the way back to the recipient.
+    @State private var typedFiat: SendAmountStep.TypedFiat?
     @State private var memo = ""
     @State private var isSendingAll = false
     @State private var estimatedFee: Decimal?
@@ -396,6 +398,7 @@ struct SendFlowView: View {
                 amountString: $amountString,
                 memo: isLinkMode ? $linkNote : $memo,
                 isSendingAll: $isSendingAll,
+                typedFiat: $typedFiat,
                 recipientAddress: recipientAddress,
                 recipientDisplayName: walletRecipient?.name ?? matchedContact?.name ?? aliasSummary?.name.display,
                 title: isTransfer ? String(localized: "Transfer") : nil,

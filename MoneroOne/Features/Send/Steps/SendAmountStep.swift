@@ -4,6 +4,9 @@ struct SendAmountStep: View {
     @Binding var amountString: String
     @Binding var memo: String
     @Binding var isSendingAll: Bool
+    /// The amount the user typed in fiat. The flow keeps it while this step
+    /// is gone (back to the recipient), so the amount comes back in fiat.
+    @Binding var typedFiat: TypedFiat?
     let recipientAddress: String
     /// The OpenAlias name, when the recipient came from one.
     var recipientDisplayName: String? = nil
@@ -29,6 +32,12 @@ struct SendAmountStep: View {
     enum AmountPrefill {
         case qrCode
         case paymentLink
+    }
+
+    /// A fiat amount as the user typed it, and the XMR amount it made.
+    struct TypedFiat: Equatable {
+        let fiat: String
+        let xmr: String
     }
 
     @State private var showContent = false
@@ -301,11 +310,19 @@ struct SendAmountStep: View {
                 showContent = true
             }
             if !memo.isEmpty { showMemo = true }
-            if Self.startsInFiat(fiatMode: priceService.showFiatFirst,
-                                 price: priceService.xmrPrice,
-                                 amount: amountString) {
+            if let fiat = Self.restoredFiat(typedFiat,
+                                            amount: amountString,
+                                            price: priceService.xmrPrice) {
+                fiatString = fiat
+                isFiatMode = true
+            } else if Self.startsInFiat(fiatMode: priceService.showFiatFirst,
+                                        price: priceService.xmrPrice,
+                                        amount: amountString) {
                 isFiatMode = true
             }
+        }
+        .onDisappear {
+            typedFiat = isFiatMode ? TypedFiat(fiat: fiatString, xmr: amountString) : nil
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             softwareKeyboardVisible = true
@@ -405,6 +422,16 @@ struct SendAmountStep: View {
     static func startsInFiat(fiatMode: Bool, price: Double?, amount: String) -> Bool {
         guard fiatMode, let price, PriceService.isPlausiblePrice(price) else { return false }
         return amount.isEmpty
+    }
+
+    /// The fiat amount to show again when the step comes back (the user went
+    /// back to the recipient and continued): the one the user typed, while
+    /// the amount is still the XMR it made and a usable price exists. An
+    /// amount filled in since (a QR code, a `monero:` link) keeps XMR.
+    static func restoredFiat(_ typed: TypedFiat?, amount: String, price: Double?) -> String? {
+        guard let typed, !amount.isEmpty, typed.xmr == amount,
+              let price, PriceService.isPlausiblePrice(price) else { return nil }
+        return typed.fiat
     }
 
     private func toggleFiatMode() {

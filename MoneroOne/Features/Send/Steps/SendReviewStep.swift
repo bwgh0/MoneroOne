@@ -570,14 +570,18 @@ enum SendReviewFee {
     }
 
     /// wallet2 refused the transfer for lack of unlocked money, with its
-    /// real inputs and fee counted.
+    /// real inputs and fee counted: "not enough money to transfer, ..." or
+    /// "not enough unlocked money". A lack of decoys ("Not enough rct
+    /// outputs", "not enough outputs for specified ring size") is a
+    /// different fault. Same rule as Android's `ReviewFee.isNotEnoughMoney`.
     static func isNotEnoughMoney(_ error: Error) -> Bool {
         guard let coreError = error as? MoneroCoreError else { return false }
         switch coreError {
         case .insufficientFunds:
             return true
         case .transactionSendFailed(let message):
-            return message.lowercased().contains("not enough")
+            let text = message.lowercased()
+            return text.contains("not enough money") || text.contains("not enough unlocked money")
         default:
             return false
         }

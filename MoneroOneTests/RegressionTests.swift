@@ -2439,7 +2439,13 @@ final class SendReviewFeeTests: XCTestCase {
             "not enough money to transfer, available only 0.300000000000, transaction amount 0.300061380000 = 0.300000000000 + 0.000061380000 (fee)")))
         XCTAssertTrue(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionSendFailed(
             "Not enough money to transfer, overall balance only 0.3, sent amount 0.3")))
+        XCTAssertTrue(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionSendFailed(
+            "not enough unlocked money to transfer, available only 0.3, sent amount 0.3")))
         XCTAssertFalse(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionSendFailed("failed to get random outputs to mix")))
+        // A lack of decoys (the regtest chain) is a failed build, not over balance.
+        XCTAssertFalse(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionSendFailed("Not enough rct outputs")))
+        XCTAssertFalse(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionSendFailed(
+            "not enough outputs for specified ring size")))
         XCTAssertFalse(SendReviewFee.isNotEnoughMoney(MoneroCoreError.transactionCommitFailed("not enough money")))
         XCTAssertFalse(SendReviewFee.isNotEnoughMoney(MoneroCoreError.walletNotInitialized))
         XCTAssertFalse(SendReviewFee.isNotEnoughMoney(WalletError.notUnlocked))

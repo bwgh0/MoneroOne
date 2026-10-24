@@ -98,12 +98,10 @@ enum PaymentLinkFunder {
         let prepared: PreparedTransaction
         do {
             prepared = try await walletManager.prepareSend(to: draft.address, amount: draft.fundingAmount, memo: memo)
-        } catch let error as MoneroCoreError {
-            // Not enough once the real inputs are counted.
-            if case .insufficientFunds = error { throw FundingError.insufficientFunds }
-            if case .transactionSendFailed(let message) = error, message.lowercased().contains("not enough") {
-                throw FundingError.insufficientFunds
-            }
+        } catch {
+            // Not enough once the real inputs are counted. The same check as
+            // plain Send: a lack of decoys is a failed build, not the balance.
+            if SendReviewFee.isNotEnoughMoney(error) { throw FundingError.insufficientFunds }
             throw error
         }
         guard fundingMatches(address: prepared.address, amount: prepared.amount,

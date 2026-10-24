@@ -1736,6 +1736,8 @@ final class PaymentLinkTests: XCTestCase {
         XCTAssertFalse(Rules.canRetry(after: PaymentLinkFunder.FundingError.insufficientFunds))
         XCTAssertTrue(Rules.canRetry(after: MoneroCoreError.transactionSendFailed("daemon busy")))
         XCTAssertTrue(Rules.canRetry(after: PaymentLinkFunder.FundingError.notSynced))
+        // A lack of decoys is a failed build: Retry, not All Funds.
+        XCTAssertTrue(Rules.canRetry(after: MoneroCoreError.transactionSendFailed("Not enough rct outputs")))
     }
 
     /// The gate keeps waiting while no wallet runs and stops when Review

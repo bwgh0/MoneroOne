@@ -22,6 +22,9 @@ struct SendAmountStep: View {
     let priceService: PriceService
     /// Where a filled-in amount came from; the step says so above the amount.
     var amountPrefill: AmountPrefill? = nil
+    /// The `monero:` link that filled the flow last. A new one while this
+    /// step shows can fill in another amount.
+    var paymentRequest: WalletManager.PaymentRequest? = nil
     /// Payment links: no Max, the memo control names the link ("Add note"),
     /// and the title names the link.
     var isLinkMode = false
@@ -304,6 +307,13 @@ struct SendAmountStep: View {
                 syncXMRFromFiat()
             }
         }
+        .onChange(of: paymentRequest) { _, request in
+            // The link's amount shows in XMR, as it came, not the old fiat.
+            guard let request, isFiatMode, !Self.linkKeepsFiat(amount: request.amount) else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isFiatMode = false
+            }
+        }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: softwareKeyboardVisible)
         .onAppear {
             withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
@@ -432,6 +442,15 @@ struct SendAmountStep: View {
         guard let typed, !amount.isEmpty, typed.xmr == amount,
               let price, PriceService.isPlausiblePrice(price) else { return nil }
         return typed.fiat
+    }
+
+    /// A `monero:` link filled the flow. A link with an amount shows that
+    /// amount in XMR, as it came (like any filled-in amount), and the fiat
+    /// the user typed before is dropped, so a later return does not bring
+    /// it back. A link with no amount leaves the unit and the typed fiat
+    /// as they are.
+    static func linkKeepsFiat(amount: String?) -> Bool {
+        amount == nil
     }
 
     private func toggleFiatMode() {

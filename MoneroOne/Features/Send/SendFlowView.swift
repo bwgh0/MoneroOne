@@ -408,6 +408,7 @@ struct SendFlowView: View {
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
+                paymentRequest: shownPaymentRequest,
                 isLinkMode: isLinkMode,
                 linkNamePlaceholder: EnvelopeRecord.linkName(EnvelopeStore.shared.nextNumber),
                 onContinue: {
@@ -792,6 +793,9 @@ struct SendFlowView: View {
         aliasSummary = nil
         amountString = request.amount ?? ""
         amountPrefill = request.amount == nil ? nil : .paymentLink
+        if !SendAmountStep.linkKeepsFiat(amount: request.amount) {
+            typedFiat = nil
+        }
         isSendingAll = false
         discardPreparedSend()
 

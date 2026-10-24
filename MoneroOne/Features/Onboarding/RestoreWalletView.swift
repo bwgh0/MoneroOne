@@ -395,7 +395,7 @@ struct RestoreWalletView: View {
 
             EmojiPickerCircle(emoji: $walletEmoji, size: 80, fontSize: 44)
 
-            TextField("Wallet Name", text: $walletName)
+            TextField("Wallet name", text: $walletName)
                 .font(.title3.weight(.medium))
                 .multilineTextAlignment(.center)
                 .submitLabel(.done)

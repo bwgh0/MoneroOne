@@ -1529,10 +1529,10 @@ struct EditWalletSheet: View {
                 // Same field recipe as the Send sheet: label above, 16pt
                 // padding, 12pt radius, secondary fill, 16pt screen margins.
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Wallet Name")
+                    Text("Wallet name")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    TextField("Wallet Name", text: $name)
+                    TextField("Wallet name", text: $name)
                         .padding()
                         .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)

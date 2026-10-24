@@ -135,12 +135,13 @@ struct TransferPartiesCard: View {
             Button {
                 if case .ready(let address) = state { onSelect(from, address) }
             } label: {
+                // A menu item shows a Text after the Label as its subtitle.
                 Label {
                     Text("This Wallet", comment: "Transfer: the current wallet as a destination")
-                    Text("Sends XMR back to itself", comment: "Transfer menu: the subtitle of This Wallet")
                 } icon: {
                     Image(uiImage: WalletMenuIcon.image(for: from, colorScheme: colorScheme))
                 }
+                Text("Sends XMR back to itself", comment: "Transfer menu: the subtitle of This Wallet")
             }
             .disabled(!isReady(state))
         }
@@ -153,10 +154,10 @@ struct TransferPartiesCard: View {
         } label: {
             Label {
                 Text(verbatim: wallet.name)
-                Text(subtitle(for: wallet, state: state))
             } icon: {
                 Image(uiImage: WalletMenuIcon.image(for: wallet, colorScheme: colorScheme))
             }
+            Text(subtitle(for: wallet, state: state))
         }
         .disabled(!isReady(state))
     }

@@ -251,17 +251,19 @@ final class WhatsNewTests: XCTestCase {
 
     func testTheTransferLoopPressesShowsTheAmountThenMovesIt() {
         typealias Loop = WhatsNewTransferLoop
-        XCTAssertEqual(Loop.Step.allCases, [.start, .press, .amount, .sent, .received])
-        XCTAssertEqual(Loop.Step.allCases.map(Loop.buttonScale(at:)), [1, Loop.pressScale, 1, 1, 1])
+        XCTAssertEqual(Loop.Step.allCases, [.start, .press, .amount, .sent, .received, .fade])
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.buttonScale(at:)), [1, Loop.pressScale, 1, 1, 1, 1])
         XCTAssertLessThan(Loop.pressScale, 1)
-        XCTAssertEqual(Loop.Step.allCases.map(Loop.showsAmount(at:)), [false, false, true, true, true])
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.showsAmount(at:)), [false, false, true, true, true, false])
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.pictureOpacity(at:)), [1, 1, 1, 1, 1, 0])
         // From rolls down first, then To rolls up.
         XCTAssertEqual(Loop.Step.allCases.map(Loop.fromBalance(at:)), [
             Loop.fromBalance, Loop.fromBalance, Loop.fromBalance,
-            Loop.fromBalance - Loop.amount, Loop.fromBalance - Loop.amount,
+            Loop.fromBalance - Loop.amount, Loop.fromBalance - Loop.amount, Loop.fromBalance - Loop.amount,
         ])
         XCTAssertEqual(Loop.Step.allCases.map(Loop.toBalance(at:)), [
-            Loop.toBalance, Loop.toBalance, Loop.toBalance, Loop.toBalance, Loop.toBalance + Loop.amount,
+            Loop.toBalance, Loop.toBalance, Loop.toBalance, Loop.toBalance,
+            Loop.toBalance + Loop.amount, Loop.toBalance + Loop.amount,
         ])
         XCTAssertEqual(Loop.fromBalance(at: .received), Decimal(string: "1034.503917"))
         XCTAssertEqual(Loop.toBalance(at: .received), Decimal(string: "250.25"))
@@ -276,21 +278,37 @@ final class WhatsNewTests: XCTestCase {
 
     func testTheTransferLoopRunsAboutFiveSecondsWithRests() {
         typealias Loop = WhatsNewTransferLoop
-        XCTAssertEqual(Loop.cycleDuration, 5.55, accuracy: 0.001)
+        XCTAssertEqual(Loop.cycleDuration, 5.9, accuracy: 0.001)
         XCTAssertTrue((4...6).contains(Loop.cycleDuration))
         // The rests: on the result before the way back, on the start frame
         // before the press.
-        XCTAssertEqual(Loop.delay(before: .start), 2.0)
+        XCTAssertEqual(Loop.delay(before: .fade), 2.0)
         XCTAssertEqual(Loop.delay(before: .press), 1.4)
+        // Each step begins after the one before it has finished.
+        let begins = Loop.Step.allCases.map(Loop.begin(of:))
+        XCTAssertEqual(begins.count, 6)
+        for (index, expected) in [0, 1.75, 1.85, 2.85, 3.35, 5.55].enumerated() {
+            XCTAssertEqual(begins[index], expected, accuracy: 0.001)
+        }
+        // The step at a time: on a begin it is that step; the cycle wraps.
+        XCTAssertEqual(Loop.step(at: 0), .start)
+        XCTAssertEqual(Loop.step(at: 1.75), .press)
+        XCTAssertEqual(Loop.step(at: 2.0), .amount)
+        XCTAssertEqual(Loop.step(at: 3.35), .received)
+        XCTAssertEqual(Loop.step(at: 5.6), .fade)
+        XCTAssertEqual(Loop.step(at: Loop.cycleDuration), .start)
+        XCTAssertEqual(Loop.step(at: Loop.cycleDuration + 1.75), .press)
         // The motion tokens: crossFade 0.35, press 0.1, settle 0.4,
         // rollDigits 0.2. No move takes longer than 0.5 s.
-        XCTAssertEqual(Loop.Step.allCases.map(Loop.duration(of:)), [0.35, 0.1, 0.4, 0.2, 0.2])
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.duration(of:)), [0.35, 0.1, 0.4, 0.2, 0.2, 0.35])
         XCTAssertTrue(Loop.Step.allCases.allSatisfy { Loop.duration(of: $0) <= 0.5 })
     }
 
     func testReduceMotionShowsTheLoopsLastFrameStill() {
         typealias Loop = WhatsNewTransferLoop
-        XCTAssertEqual(Loop.stillStep, Loop.Step.allCases.last)
+        // The result: the last frame before the fade.
+        XCTAssertEqual(Loop.stillStep, .received)
+        XCTAssertEqual(Loop.pictureOpacity(at: Loop.stillStep), 1)
         XCTAssertTrue(Loop.showsAmount(at: Loop.stillStep))
         XCTAssertEqual(Loop.buttonScale(at: Loop.stillStep), 1)
         XCTAssertEqual(Loop.fromBalance(at: Loop.stillStep), Loop.fromBalance - Loop.amount)

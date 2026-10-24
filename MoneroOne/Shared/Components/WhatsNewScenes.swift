@@ -134,10 +134,11 @@ private enum SceneSample {
 
 /// The Transfer picture's loop (round 4, rule 5): Transfer is pressed, the
 /// amount shows between the two wallets, the From balance rolls down, then
-/// the To balance rolls up. A rest on the result, then a cross-fade back.
+/// the To balance rolls up. A rest on the result, then the picture fades
+/// out and comes back at the start.
 enum WhatsNewTransferLoop {
     enum Step: CaseIterable {
-        /// The picture as it stands: nothing has moved.
+        /// The picture as it stands: nothing has moved. It fades back in.
         case start
         /// Transfer is pressed.
         case press
@@ -147,13 +148,16 @@ enum WhatsNewTransferLoop {
         case sent
         /// The amount reaches the To wallet: its balance rolls up.
         case received
+        /// The picture fades out, so the balances go back unseen.
+        case fade
     }
 
     static let fromBalance = Decimal(string: "1284.503917") ?? 0
     static let toBalance = Decimal(string: "0.25") ?? 0
     static let amount: Decimal = 250
 
-    /// The frame that stands still with Reduce Motion: the last one.
+    /// The frame that stands still with Reduce Motion: the result, the last
+    /// frame before the fade.
     static let stillStep: Step = .received
 
     /// The Transfer button's press (`motion.press`, larger than 0.98 so it
@@ -163,17 +167,20 @@ enum WhatsNewTransferLoop {
     static func fromBalance(at step: Step) -> Decimal {
         switch step {
         case .start, .press, .amount: fromBalance
-        case .sent, .received: fromBalance - amount
+        case .sent, .received, .fade: fromBalance - amount
         }
     }
 
     static func toBalance(at step: Step) -> Decimal {
-        step == .received ? toBalance + amount : toBalance
+        switch step {
+        case .start, .press, .amount, .sent: toBalance
+        case .received, .fade: toBalance + amount
+        }
     }
 
     static func showsAmount(at step: Step) -> Bool {
         switch step {
-        case .start, .press: false
+        case .start, .press, .fade: false
         case .amount, .sent, .received: true
         }
     }
@@ -182,27 +189,43 @@ enum WhatsNewTransferLoop {
         step == .press ? pressScale : 1
     }
 
-    /// The wait before the move to `step`. Before `start`, the rest on the
-    /// result; before `press`, the rest on the start frame.
+    static func pictureOpacity(at step: Step) -> Double {
+        step == .fade ? 0 : 1
+    }
+
+    /// The wait before the move to `step`: the rest on the start frame
+    /// before the press, the time to read the amount, the gap between the
+    /// two rolls, and the rest on the result before the fade.
     static func delay(before step: Step) -> Double {
         switch step {
-        case .start: 2.0
+        case .start, .amount: 0
         case .press: 1.4
-        case .amount: 0
         case .sent: 0.6
         case .received: 0.3
+        case .fade: 2.0
         }
     }
 
-    /// The length of the move to `step`: the cross-fade back, the press,
-    /// the settle spring's response, and the digit roll.
+    /// The length of the move to `step`: the fades (crossFade), the press,
+    /// the settle spring's response, and the digit roll (rollDigits).
     static func duration(of step: Step) -> Double {
         switch step {
-        case .start: 0.35
+        case .start, .fade: 0.35
         case .press: 0.1
         case .amount: 0.4
         case .sent, .received: 0.2
         }
+    }
+
+    /// When the move to `step` begins, from the start of a cycle.
+    static func begin(of step: Step) -> Double {
+        var time = 0.0
+        for earlier in Step.allCases {
+            time += delay(before: earlier)
+            if earlier == step { break }
+            time += duration(of: earlier)
+        }
+        return time
     }
 
     /// One cycle, rests included.
@@ -210,20 +233,26 @@ enum WhatsNewTransferLoop {
         Step.allCases.reduce(0) { $0 + delay(before: $1) + duration(of: $1) }
     }
 
+    /// The step shown `elapsed` seconds after the loop began. A time on a
+    /// step's begin shows that step.
+    static func step(at elapsed: Double) -> Step {
+        let time = (max(0, elapsed) + 1e-6).truncatingRemainder(dividingBy: cycleDuration)
+        return Step.allCases.last { begin(of: $0) <= time } ?? .start
+    }
+
     /// The motion tokens: crossFade, press, settle, rollDigits.
     static func animation(to step: Step) -> Animation {
         let duration = duration(of: step)
-        let move: Animation = switch step {
+        return switch step {
         case .amount: .spring(response: duration, dampingFraction: 0.8)
-        case .start, .press, .sent, .received: .easeInOut(duration: duration)
+        case .start, .press, .sent, .received, .fade: .easeInOut(duration: duration)
         }
-        return move.delay(delay(before: step))
     }
 }
 
 /// Two wallet switcher rows (the current one with its brand ring) and the
 /// Transfer button, as in the wallet list. On the top card it plays the
-/// Transfer loop; with Reduce Motion it shows the loop's last frame, still.
+/// Transfer loop; with Reduce Motion it shows the loop's result, still.
 private struct TransferScene: View {
     let isAnimated: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -234,18 +263,50 @@ private struct TransferScene: View {
             if !isAnimated || reduceMotion {
                 TransferSceneFrame(step: WhatsNewTransferLoop.stillStep)
             } else if isOnScreen {
-                PhaseAnimator(WhatsNewTransferLoop.Step.allCases) { step in
-                    TransferSceneFrame(step: step)
-                } animation: { step in
-                    WhatsNewTransferLoop.animation(to: step)
-                }
+                TransferSceneLoop()
             } else {
-                // Off screen: the loop stops on its first frame, so it
-                // starts again from there without a jump.
+                // Off screen: the loop stops on its first frame and starts
+                // again from there, without a jump.
                 TransferSceneFrame(step: .start)
             }
         }
         .onScreenChange(isAnimated: isAnimated) { isOnScreen = $0 }
+    }
+}
+
+/// The loop: one redraw at each step's begin, then that step's animation.
+/// It ends when the sheet closes.
+private struct TransferSceneLoop: View {
+    @State private var start = Date.now
+
+    var body: some View {
+        TimelineView(TransferLoopSchedule(start: start)) { context in
+            let step = WhatsNewTransferLoop.step(at: context.date.timeIntervalSince(start))
+            TransferSceneFrame(step: step)
+                .animation(WhatsNewTransferLoop.animation(to: step), value: step)
+        }
+    }
+}
+
+/// The dates the steps begin, cycle after cycle.
+private struct TransferLoopSchedule: TimelineSchedule {
+    let start: Date
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        let cycle = WhatsNewTransferLoop.cycleDuration
+        let begins = WhatsNewTransferLoop.Step.allCases.map(WhatsNewTransferLoop.begin(of:))
+        let cyclesDone = (max(0, startDate.timeIntervalSince(start)) / cycle).rounded(.down)
+        var cycleStart = start.addingTimeInterval(cyclesDone * cycle)
+        var index = 0
+        return AnyIterator {
+            let date = cycleStart.addingTimeInterval(begins[index])
+            index += 1
+            if index == begins.count {
+                index = 0
+                cycleStart = cycleStart.addingTimeInterval(cycle)
+            }
+            return date
+        }
     }
 }
 
@@ -306,14 +367,15 @@ private struct TransferSceneFrame: View {
             .scenePart(Capsule())
             .scaleEffect(WhatsNewTransferLoop.buttonScale(at: step))
         }
+        .opacity(WhatsNewTransferLoop.pictureOpacity(at: step))
     }
 
-    /// A balance rolls in the direction it changes; the way back to the
-    /// start cross-fades.
+    /// A balance rolls in the direction it changes. Back at the start the
+    /// picture is clear, so the balances swap at once.
     private func row(name: String, emoji: String, balance: Decimal, address: String, isActive: Bool) -> some View {
         SceneWalletRow(name: name, emoji: emoji, balance: balance, address: address, isActive: isActive)
             .contentTransition(step == .start
-                ? .opacity
+                ? .identity
                 : .numericText(value: NSDecimalNumber(decimal: balance).doubleValue))
     }
 }

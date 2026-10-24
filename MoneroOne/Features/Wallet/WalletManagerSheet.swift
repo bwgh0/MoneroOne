@@ -854,14 +854,15 @@ struct WalletManagerRows: View {
                     .animation(.snappy(duration: 0.2), value: dragId)
             }
 
-            // Transfer needs a second wallet. With one, Add Wallet fills
-            // the row, as before.
+            // Transfer can send back to this wallet, so one wallet is
+            // enough. A wallet that cannot send (view-only) has no Transfer,
+            // and Add Wallet fills the row.
             // At the accessibility text sizes the two buttons stack, so
             // neither label is cut.
             let layout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
             layout {
-                if wallets.count >= 2 {
+                if walletManager.canSend {
                     transferButton
                 }
                 addWalletButton
@@ -900,7 +901,8 @@ struct WalletManagerRows: View {
         .glassButtonStyle()
     }
 
-    /// Opens Transfer: Send's steps, from this wallet to another of yours.
+    /// Opens Transfer: Send's steps, from this wallet to another of yours or
+    /// back to this one.
     private var transferButton: some View {
         Button {
             showTransfer = true
@@ -918,7 +920,7 @@ struct WalletManagerRows: View {
             .padding(.vertical, 14)
         }
         .glassButtonStyle()
-        .accessibilityHint("Moves XMR to another of your wallets")
+        .accessibilityHint(Text("Moves XMR to another of your wallets, or back to this one", comment: "VoiceOver: the Transfer button in the wallet switcher"))
         .accessibilityIdentifier("wallet.switcher.transfer")
     }
 

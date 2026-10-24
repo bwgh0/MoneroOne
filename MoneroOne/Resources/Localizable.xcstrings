@@ -57865,6 +57865,101 @@
         }
       }
     },
+    "Moves XMR to another of your wallets, or back to this one" : {
+      "comment" : "VoiceOver: the Transfer button in the wallet switcher",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschiebt XMR in eine andere deiner Wallets oder zurück in diese"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mueve XMR a otra de tus carteras o de vuelta a esta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplace des XMR vers un autre de vos portefeuilles, ou les renvoie vers celui-ci"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sposta XMR in un altro dei tuoi portafogli o di nuovo in questo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XMRを別のウォレットに移動するか、このウォレットに戻します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XMR을 다른 지갑으로 옮기거나 이 지갑으로 다시 보냅니다"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verplaatst XMR naar een andere van je portemonnees, of terug naar deze"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przenosi XMR do innego z twoich portfeli lub z powrotem do tego"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move XMR para outra das suas carteiras ou de volta para esta"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mută XMR într-un alt portofel al tău sau înapoi în acesta"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переводит XMR на другой ваш кошелёк или обратно на этот"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XMR'yi başka bir cüzdanınıza ya da yeniden bu cüzdana taşır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переказує XMR на інший ваш гаманець або назад на цей"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将 XMR 转移到你的另一个钱包，或转回此钱包"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將 XMR 轉移到你的另一個錢包，或轉回此錢包"
+          }
+        }
+      }
+    },
     "Moves between transactions" : {
       "comment" : "VoiceOver hint: swipe up or down on the chart",
       "localizations" : {

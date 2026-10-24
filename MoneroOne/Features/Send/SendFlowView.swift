@@ -7,11 +7,11 @@ struct SendFlowView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
 
-    /// Transfer (the wallet switcher): the root lists your other wallets in
-    /// place of the address step, and a pick goes on to the amount.
+    /// Transfer (the wallet switcher): the amount step is the root, with
+    /// From and To at its top in place of the address step.
     private let isTransfer: Bool
-    /// Transfer: the wallet picked under To. Its saved primary address is
-    /// `recipientAddress`.
+    /// Transfer: the wallet chosen under To, this one for This Wallet. Its
+    /// saved primary address is `recipientAddress`.
     @State private var transferTarget: WalletInfo?
     @ObservedObject private var contactStore = ContactStore.shared
     @State private var showContacts = false
@@ -22,9 +22,10 @@ struct SendFlowView: View {
     init(isTransfer: Bool = false, onTransferDone: (() -> Void)? = nil) {
         self.isTransfer = isTransfer
         self.onTransferDone = onTransferDone
+        _phase = State(initialValue: isTransfer ? .amount : .address)
     }
 
-    @State private var phase: SendFlowPhase = .address
+    @State private var phase: SendFlowPhase
 
     // Send data
     /// The only address that reaches the fee estimate and the send.
@@ -113,7 +114,7 @@ struct SendFlowView: View {
             ZStack {
                 if canSign {
                     if isTransfer {
-                        TransferWalletList(onPick: pickTransferTarget)
+                        phaseContent(.amount)
                     } else {
                         phaseContent(.address)
                     }
@@ -175,6 +176,10 @@ struct SendFlowView: View {
         }
         .onChange(of: recipientInput) { _, newValue in
             aliasLookup.textChanged(newValue)
+        }
+        .onChange(of: walletManager.primaryAddress) { _, _ in
+            // Transfer with one wallet: its address can load after Send opens.
+            chooseOnlyTransferTarget()
         }
         .onChange(of: walletManager.pendingPaymentRequest) { _, newRequest in
             // A link tapped while Send is open replaces what is on screen.
@@ -393,6 +398,9 @@ struct SendFlowView: View {
                 isSendingAll: $isSendingAll,
                 recipientAddress: recipientAddress,
                 recipientDisplayName: walletRecipient?.name ?? matchedContact?.name ?? aliasSummary?.name.display,
+                title: isTransfer ? String(localized: "Transfer") : nil,
+                header: isTransfer ? TransferPartiesCard(selected: transferTarget, onSelect: chooseTransferTarget) : nil,
+                recipientReady: !isTransfer || transferTarget != nil,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
                 amountPrefill: amountPrefill,
@@ -516,7 +524,9 @@ struct SendFlowView: View {
                 onClose: { dismiss() },
                 canRetry: !isLinkMode,
                 successNote: transferTarget.map {
-                    String(localized: "It shows in \($0.name) when you next open that wallet.", comment: "Transfer sent: the wallet that receives it")
+                    $0.id == walletManager.activeWallet?.id
+                        ? String(localized: "You can spend it again in about 20 minutes.", comment: "Transfer sent: to this wallet, when its XMR unlocks")
+                        : String(localized: "It shows in \($0.name) when you next open that wallet.", comment: "Transfer sent: the wallet that receives it")
                 },
                 reservesLinkReady: isLinkMode
             )
@@ -601,11 +611,15 @@ struct SendFlowView: View {
 
     /// The stack follows `phase`. A pop by the back button or the edge swipe
     /// writes the shorter path back as the phase one step earlier. A wallet
-    /// that cannot sign shows only the root.
+    /// that cannot sign shows only the root. Transfer's root is the amount
+    /// step, so its stack holds the steps after it.
     private var stepPath: Binding<[SendFlowStep]> {
         Binding(
-            get: { canSign ? phase.stackPath : [] },
-            set: { phase = phase.popped(to: $0) }
+            get: {
+                guard canSign else { return [] }
+                return isTransfer ? Array(phase.stackPath.dropFirst()) : phase.stackPath
+            },
+            set: { phase = phase.popped(to: isTransfer ? [.amount] + $0 : $0) }
         )
     }
 
@@ -643,16 +657,31 @@ struct SendFlowView: View {
 
     // MARK: - Transfer
 
-    /// A To row on Transfer: its wallet's saved address, checked as Send
-    /// checks an address, then the amount.
-    private func pickTransferTarget(_ wallet: WalletInfo, address: String) {
+    /// A choice under To on Transfer: its wallet's saved address, checked as
+    /// Send checks an address.
+    private func chooseTransferTarget(_ wallet: WalletInfo, address: String) {
         guard walletManager.isValidAddress(address) else { return }
-        HapticFeedback.shared.buttonPress()
+        HapticFeedback.shared.softTick()
         isLinkMode = false
         aliasSummary = nil
         transferTarget = wallet
         recipientAddress = address
-        goForward(to: .amount)
+    }
+
+    /// Transfer with no other wallet: This Wallet is the only destination,
+    /// so it is chosen at once.
+    private func chooseOnlyTransferTarget() {
+        guard isTransfer, transferTarget == nil,
+              let active = walletManager.activeWallet,
+              !walletManager.wallets.contains(where: { $0.id != active.id }),
+              let address = WalletAddressMatch.savedAddress(
+                of: active,
+                activeWalletId: active.id,
+                activePrimaryAddress: walletManager.primaryAddress
+              ),
+              walletManager.isValidAddress(address) else { return }
+        transferTarget = active
+        recipientAddress = address
     }
 
     /// The wallet whose saved address is in Send's field, this one too.
@@ -718,7 +747,10 @@ struct SendFlowView: View {
 
     private func handlePrefill() {
         // Transfer pays one of your wallets: nothing else fills it.
-        guard !isTransfer else { return }
+        guard !isTransfer else {
+            chooseOnlyTransferTarget()
+            return
+        }
         if let request = walletManager.currentPaymentRequest() {
             apply(request, animated: false)
             return

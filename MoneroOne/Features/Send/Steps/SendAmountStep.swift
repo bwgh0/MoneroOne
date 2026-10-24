@@ -7,6 +7,12 @@ struct SendAmountStep: View {
     let recipientAddress: String
     /// The OpenAlias name, when the recipient came from one.
     var recipientDisplayName: String? = nil
+    /// A title in place of "Send to …" (Transfer).
+    var title: String? = nil
+    /// Transfer: From and To above the amount.
+    var header: TransferPartiesCard? = nil
+    /// False while Transfer has no wallet under To: Continue waits for one.
+    var recipientReady = true
     let unlockedBalance: Decimal
     let priceService: PriceService
     /// Where a filled-in amount came from; the step says so above the amount.
@@ -33,7 +39,13 @@ struct SendAmountStep: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 16) {
-                    Spacer(minLength: 12)
+                    if let header {
+                        header
+                            .padding(.top, 4)
+                            .padding(.bottom, -8)
+                    } else {
+                        Spacer(minLength: 12)
+                    }
 
                     if let amountPrefill {
                         HStack(spacing: 4) {
@@ -241,12 +253,12 @@ struct SendAmountStep: View {
                 .glassButtonStyle()
                 .disabled(!canContinue)
                 .accessibilityLabel("Continue")
-                .accessibilityHint(canContinue ? "Proceed to review transaction" : "Enter a valid amount first")
+                .accessibilityHint(continueHint)
             }
             .padding(.horizontal)
             .padding(.bottom, 8)
         }
-        .navigationTitle(isLinkMode ? String(localized: "Send with a Link") : String(localized: "Send to \(recipientDisplayName ?? formatAddress(recipientAddress))"))
+        .navigationTitle(title ?? (isLinkMode ? String(localized: "Send with a Link") : String(localized: "Send to \(recipientDisplayName ?? formatAddress(recipientAddress))")))
         .navigationBarTitleDisplayMode(.inline)
         .horizontalBarsOnDuo()
         .onChange(of: amountString) { newValue in
@@ -285,8 +297,15 @@ struct SendAmountStep: View {
         return showMemo ? String(localized: "Hide memo") : String(localized: "Add memo")
     }
 
+    private var continueHint: Text {
+        if canContinue { return Text("Proceed to review transaction") }
+        if !recipientReady { return Text("Choose a wallet", comment: "Transfer: To before a wallet is chosen") }
+        return Text("Enter a valid amount first")
+    }
+
     private var canContinue: Bool {
-        guard let amount = Decimal(string: amountString),
+        guard recipientReady,
+              let amount = Decimal(string: amountString),
               amount > 0,
               amount <= unlockedBalance else {
             return false

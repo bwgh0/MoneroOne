@@ -109,7 +109,7 @@ enum WhatsNewLinks {
     static let rate = URL(string: "https://apps.apple.com/app/id6757898541?action=write-review")!
 }
 
-/// Flighty's What's New layout: the app icon and the version in a small
+/// Flighty's What's New layout: the Monero logo and the version in a small
 /// row, a large leading title, one full-width card per feature with its
 /// title and line under it, Other Improvements, then Share with Friends
 /// and Rate on the App Store. The X at the top right stays in place while
@@ -188,21 +188,18 @@ struct WhatsNewSheet: View {
         .closesForPaymentLink()
     }
 
-    /// The app icon and "Version 1.1", lined up with the X while the sheet
+    /// The Monero logo and "Version 1.1", lined up with the X while the sheet
     /// is at its top. The trailing room keeps a wrapped version clear of it.
     private var header: some View {
         HStack(spacing: 12) {
-            // The home screen icon, rendered from monero-one.icon by ictool
-            // (light and dark), with the app icon shape already cut.
-            Image("AppIconImage")
+            // The balance card's logo, drawn the same way (BalanceCard.balanceRow).
+            Image("MoneroSymbol")
                 .resizable()
-                .scaledToFit()
+                .scaledToFill()
                 .frame(width: WhatsNewFeatureLayout.iconSize, height: WhatsNewFeatureLayout.iconSize)
-                // A hairline keeps the white plate visible on the white sheet.
-                .overlay {
-                    RoundedRectangle(cornerRadius: WhatsNewFeatureLayout.iconCornerRadius, style: .continuous)
-                        .strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)
-                }
+                .clipShape(Circle())
+                .scaleEffect(1.15)
+                .clipShape(Circle())
                 .accessibilityHidden(true)
             Text("Version \(entry.version.description)")
                 .font(.body.weight(.medium))
@@ -303,9 +300,8 @@ enum WhatsNewFeatureLayout {
     static let blurScale: CGFloat = 1.6
     static let blurRadius: CGFloat = 28
     static let blurOpacity: Double = 0.6
-    /// The app icon in the header, and the radius of its tile.
+    /// The Monero logo in the header.
     static let iconSize: CGFloat = 40
-    static let iconCornerRadius: CGFloat = 9
 
     static func cardHeight(width: CGFloat) -> CGFloat {
         width / cardAspectRatio

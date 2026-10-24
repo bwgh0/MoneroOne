@@ -295,12 +295,12 @@ enum WhatsNewFeatureLayout {
     static let closeSize: CGFloat = 44
     static let closeInset: CGFloat = 16
     /// The blurred copy of the picture behind it: how much larger, how
-    /// soft and how faint. Fainter in light, so a dark picture (the
-    /// envelope) does not turn the card into a gray box.
+    /// soft and how faint. Dark mode only: in light, a dark picture (the
+    /// envelope) turns the card into a gray box, so light cards show only
+    /// the fill and the glow.
     static let blurScale: CGFloat = 1.6
     static let blurRadius: CGFloat = 28
     static let blurOpacity: Double = 0.6
-    static let blurOpacityLight: Double = 0.3
     /// The app icon in the header, and the radius of its tile.
     static let iconSize: CGFloat = 40
     static let iconCornerRadius: CGFloat = 9
@@ -352,7 +352,8 @@ private struct WhatsNewFeatureRow: View {
 }
 
 /// A feature's card: the cell fill, the one brand glow, the picture blurred
-/// large and faint, and the sharp picture centered on top, straight.
+/// large and faint (dark mode only), and the sharp picture centered on top,
+/// straight.
 private struct WhatsNewFeatureCard: View {
     let scene: WhatsNewScene
     @Environment(\.colorScheme) private var colorScheme
@@ -365,9 +366,7 @@ private struct WhatsNewFeatureCard: View {
                 WhatsNewScenePicture(scene: scene)
                     .scaleEffect(WhatsNewFeatureLayout.blurScale)
                     .blur(radius: WhatsNewFeatureLayout.blurRadius)
-                    .opacity(colorScheme == .dark
-                        ? WhatsNewFeatureLayout.blurOpacity
-                        : WhatsNewFeatureLayout.blurOpacityLight)
+                    .opacity(colorScheme == .dark ? WhatsNewFeatureLayout.blurOpacity : 0)
             }
             .overlay {
                 // The sharp picture plays its loop (only Transfer has one).

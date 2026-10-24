@@ -105,8 +105,6 @@ struct WhatsNewSheet: View {
     let entry: WhatsNewEntry
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// One per opening of the sheet: the pictures slide in once.
-    @State private var revealClock = WhatsNewRevealClock()
     /// The bullet's column grows with the text, so the dot is never cut.
     @ScaledMetric(relativeTo: .subheadline) private var bulletWidth: CGFloat = 8
 
@@ -134,8 +132,7 @@ struct WhatsNewSheet: View {
                     ForEach(Array(entry.highlights.enumerated()), id: \.element.systemImage) { index, highlight in
                         WhatsNewFeatureRow(
                             highlight: highlight,
-                            pictureTrailing: index.isMultiple(of: 2),
-                            revealClock: revealClock
+                            pictureTrailing: index.isMultiple(of: 2)
                         )
                     }
                 }
@@ -195,21 +192,15 @@ struct WhatsNewSheet: View {
 /// the other, nothing behind them (the rows of Apple's What's New in
 /// Pages). Pictures alternate sides, trailing first, so the eye follows a
 /// diagonal. Each tilts 3 degrees and slopes down toward the next one, on
-/// one soft brand glow, and slides in from its own side the first time it
-/// scrolls into view. At the accessibility text sizes the picture hides
+/// one soft brand glow. The picture is in place when the sheet opens, with
+/// no entrance motion. At the accessibility text sizes the picture hides
 /// and the text takes the full width. One VoiceOver element: the title,
 /// then the line; the picture is hidden from VoiceOver.
 private struct WhatsNewFeatureRow: View {
     let highlight: WhatsNewEntry.Highlight
     /// True puts the picture on the trailing side (rows 1, 3 and 5).
     let pictureTrailing: Bool
-    let revealClock: WhatsNewRevealClock
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var revealed = false
-
-    /// The distance a picture slides in from its own side.
-    private static let slide: CGFloat = 24
 
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
@@ -240,68 +231,11 @@ private struct WhatsNewFeatureRow: View {
     }
 
     private var picture: some View {
-        let shown = revealed || reduceMotion
-        return WhatsNewScenePicture(scene: highlight.scene)
+        WhatsNewScenePicture(scene: highlight.scene)
             // Right pictures turn counterclockwise, left ones clockwise.
             .rotationEffect(.degrees(pictureTrailing ? -3 : 3))
             .background { WhatsNewGlow().padding(-50) }
-            .offset(x: shown ? 0 : (pictureTrailing ? Self.slide : -Self.slide))
-            .opacity(shown ? 1 : 0)
             .frame(width: WhatsNewScenePicture.slotWidth)
-            .modifier(WhatsNewRevealTrigger(action: reveal))
-    }
-
-    private func reveal() {
-        guard !revealed else { return }
-        guard !reduceMotion else {
-            revealed = true
-            return
-        }
-        // Motion token `settle`.
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8).delay(revealClock.delay())) {
-            revealed = true
-        }
-    }
-}
-
-/// Runs the slide-in the first time the picture scrolls into view. Before
-/// iOS 18 it runs when the sheet opens.
-private struct WhatsNewRevealTrigger: ViewModifier {
-    let action: () -> Void
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.onScrollVisibilityChange(threshold: 0.25) { visible in
-                if visible { action() }
-            }
-        } else {
-            content.onAppear(perform: action)
-        }
-    }
-}
-
-/// The slide-in clock of one sheet opening: pictures that come into view
-/// together start 60 ms apart, top first. The pictures that show when the
-/// sheet opens wait until it has finished rising.
-@MainActor
-final class WhatsNewRevealClock {
-    static let stagger: TimeInterval = 0.06
-    /// The time the sheet takes to rise.
-    static let sheetRise: TimeInterval = 0.4
-    private let opened: Date
-    private var last: Date = .distantPast
-    private var burst = 0
-
-    init(opened: Date = .now) {
-        self.opened = opened
-    }
-
-    /// The delay of a picture that comes into view now.
-    func delay(now: Date = .now) -> TimeInterval {
-        burst = now.timeIntervalSince(last) < 0.1 ? burst + 1 : 0
-        last = now
-        let rising = max(0, Self.sheetRise - now.timeIntervalSince(opened))
-        return rising + Double(burst) * Self.stagger
     }
 }
 

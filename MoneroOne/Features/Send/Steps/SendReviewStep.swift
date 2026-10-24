@@ -235,6 +235,18 @@ struct SendReviewStep: View {
                     }
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(16)
+
+                    // A send back to this wallet: what it does, 8 pt under
+                    // the card.
+                    if transfer?.isToSelf == true {
+                        Text("Sends XMR back to this wallet as a new payment. You can spend it again in about 20 minutes.", comment: "Transfer: the footer under From and To when the XMR goes back to the same wallet")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.top, -12)
+                    }
                 }
                 .padding()
                 .opacity(showContent ? 1 : 0)

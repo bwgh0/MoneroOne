@@ -38872,101 +38872,6 @@
         }
       }
     },
-    "Double tap to send to this wallet" : {
-      "comment" : "VoiceOver: a Transfer destination",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Doppeltippen, um an diese Wallet zu senden"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toca dos veces para enviar a esta cartera"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Touchez deux fois pour envoyer à ce portefeuille"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tocca due volte per inviare a questo portafoglio"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ダブルタップしてこのウォレットに送金します"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 지갑으로 보내려면 두 번 탭하십시오"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tik dubbel om naar deze portemonnee te verzenden"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stuknij dwukrotnie, aby wysłać do tego portfela"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toque duas vezes para enviar para esta carteira"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apasă dublu pentru a trimite către acest portofel"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Коснитесь дважды, чтобы отправить на этот кошелёк"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu cüzdana göndermek için çift dokunun"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Двічі торкніться, щоб надіслати на цей гаманець"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连按两次以发送到此钱包"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點兩下來傳送到此錢包"
-          }
-        }
-      }
-    },
     "Double tap to skip biometric setup" : {
       "localizations" : {
         "de" : {
@@ -46218,7 +46123,7 @@
       }
     },
     "From %@" : {
-      "comment" : "Activity row: a transfer from another of your wallets, by its name",
+      "comment" : "Activity row: a transfer from another of your wallets, by its name\nTransfer: the subtitle under the title, the wallet that sends",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -57767,100 +57672,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已上移"
-          }
-        }
-      }
-    },
-    "Moves XMR to another of your wallets" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verschiebt XMR in eine andere deiner Wallets"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mueve XMR a otra de tus carteras"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Déplace des XMR vers un autre de vos portefeuilles"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sposta XMR in un altro dei tuoi portafogli"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XMRを別のウォレットに移動します"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XMR을 다른 지갑으로 옮깁니다"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verplaatst XMR naar een andere van je portemonnees"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Przenosi XMR do innego z twoich portfeli"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move XMR para outra das suas carteiras"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mută XMR într-un alt portofel al tău"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Переводит XMR на другой ваш кошелёк"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XMR'yi başka bir cüzdanınıza taşır"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Переказує XMR на інший ваш гаманець"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将 XMR 转移到你的另一个钱包"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "將 XMR 轉移到你的另一個錢包"
           }
         }
       }

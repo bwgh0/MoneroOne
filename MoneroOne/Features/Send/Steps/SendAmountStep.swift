@@ -9,7 +9,9 @@ struct SendAmountStep: View {
     var recipientDisplayName: String? = nil
     /// A title in place of "Send to …" (Transfer).
     var title: String? = nil
-    /// Transfer: From and To above the amount.
+    /// A second line under the title (Transfer: "From Alpha").
+    var subtitle: String? = nil
+    /// Transfer: To above the amount.
     var header: TransferPartiesCard? = nil
     /// False while Transfer has no wallet under To: Continue waits for one.
     var recipientReady = true
@@ -258,8 +260,26 @@ struct SendAmountStep: View {
             .padding(.horizontal)
             .padding(.bottom, 8)
         }
-        .navigationTitle(title ?? (isLinkMode ? String(localized: "Send with a Link") : String(localized: "Send to \(recipientDisplayName ?? formatAddress(recipientAddress))")))
+        .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let subtitle {
+                // The title over the subtitle; VoiceOver reads them as one
+                // header.
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text(navigationTitle)
+                            .font(.headline)
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .lineLimit(1)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
+                }
+            }
+        }
         .horizontalBarsOnDuo()
         .onChange(of: amountString) { newValue in
             // Clear send-all when user edits amount
@@ -288,6 +308,10 @@ struct SendAmountStep: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             softwareKeyboardVisible = false
         }
+    }
+
+    private var navigationTitle: String {
+        title ?? (isLinkMode ? String(localized: "Send with a Link") : String(localized: "Send to \(recipientDisplayName ?? formatAddress(recipientAddress))"))
     }
 
     private var memoToggleTitle: String {

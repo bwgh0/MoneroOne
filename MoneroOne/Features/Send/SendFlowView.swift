@@ -399,6 +399,7 @@ struct SendFlowView: View {
                 recipientAddress: recipientAddress,
                 recipientDisplayName: walletRecipient?.name ?? matchedContact?.name ?? aliasSummary?.name.display,
                 title: isTransfer ? String(localized: "Transfer") : nil,
+                subtitle: isTransfer ? walletManager.activeWallet.map { String(localized: "From \($0.name)", comment: "Transfer: the subtitle under the title, the wallet that sends") } : nil,
                 header: isTransfer ? TransferPartiesCard(selected: transferTarget, onSelect: chooseTransferTarget) : nil,
                 recipientReady: !isTransfer || transferTarget != nil,
                 unlockedBalance: walletManager.displayUnlockedBalance,

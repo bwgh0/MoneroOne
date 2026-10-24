@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// The top of Transfer's amount step: From (the current wallet, fixed) over
-/// To. With other wallets, To is a pull-down whose first item is This
-/// Wallet; with none, To is fixed on This Wallet. Under the card, a footer
-/// says what a send to This Wallet does.
+/// The top of Transfer's amount step: the To row. With other wallets, To is
+/// a pull-down whose first item is This Wallet; with none, To is fixed on
+/// This Wallet. From shows under the step's title.
 struct TransferPartiesCard: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
@@ -31,31 +30,9 @@ struct TransferPartiesCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(spacing: 0) {
-                if let from {
-                    TransferPartyRow(label: String(localized: "From", comment: "Transfer review: the wallet that sends")) {
-                        TransferPartyDisc.emoji(from.emoji)
-                    } name: {
-                        Text(from.name)
-                    }
-                }
-                Divider().padding(.leading, 68)
-                toRow
-            }
+        toRow
             .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 16))
-
-            if isThisWallet {
-                Text("Sends XMR back to this wallet as a new payment. You can spend it again in about 20 minutes.", comment: "Transfer: the footer under From and To when the XMR goes back to the same wallet")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 16)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isThisWallet)
     }
 
     // MARK: - To

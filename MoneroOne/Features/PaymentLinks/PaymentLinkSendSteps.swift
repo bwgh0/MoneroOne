@@ -375,6 +375,17 @@ struct PaymentLinkReviewStep: View {
 
     private var amount: Decimal { Decimal(string: amountString) ?? 0 }
 
+    /// An amount in the order Fiat Mode picks, as on the Send Review.
+    private func lines(_ xmr: Decimal) -> ReviewAmountLines {
+        ReviewAmountLines(xmr: xmr, priceService: priceService)
+    }
+
+    /// VoiceOver's label for a fee row, in the order of the screen: in Fiat
+    /// Mode the fiat value, then the exact XMR. Otherwise the XMR alone.
+    static func valueLabel(title: String, value: Decimal, lines: ReviewAmountLines) -> String {
+        "\(title): \(lines.spokenFiatFirst ?? "\(XMRFormatter.format(value)) XMR")"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -567,11 +578,12 @@ struct PaymentLinkReviewStep: View {
     }
 
     private var amountRow: some View {
-        VStack(spacing: 4) {
-            Text("\(XMRFormatter.format(amount)) XMR")
+        let sent = lines(amount)
+        return VStack(spacing: 4) {
+            Text(verbatim: sent.primary)
                 .font(.title.weight(.bold))
-            if let fiat = priceService.formatFiatValue(amount) {
-                Text("≈ \(fiat)")
+            if let secondary = sent.secondary {
+                Text(verbatim: secondary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -594,23 +606,24 @@ struct PaymentLinkReviewStep: View {
             }
             Spacer()
             if let value {
+                let valueLines = lines(value)
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(XMRFormatter.format(value)) XMR")
+                    Text(verbatim: valueLines.primary)
                         .fontWeight(.medium)
-                    if let fiat = priceService.formatFiatValue(value) {
-                        Text("≈ \(fiat)")
+                    if let secondary = valueLines.secondary {
+                        Text(verbatim: secondary)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             } else {
-                ReviewValuePlaceholder(sample: ReviewValuePlaceholder.feeSample, priceService: priceService)
+                ReviewValuePlaceholder(lines: lines(ReviewValuePlaceholder.feeSample))
             }
         }
         .font(.subheadline)
         .padding()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(value.map { "\(title): \(XMRFormatter.format($0)) XMR" } ?? "\(title): loading")
+        .accessibilityLabel(value.map { Self.valueLabel(title: title, value: $0, lines: lines($0)) } ?? "\(title): loading")
     }
 
     private func totalRow(_ total: Decimal?) -> some View {
@@ -619,18 +632,19 @@ struct PaymentLinkReviewStep: View {
                 .fontWeight(.semibold)
             Spacer()
             if let total {
+                let totalLines = lines(total)
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(XMRFormatter.format(total)) XMR")
+                    Text(verbatim: totalLines.primary)
                         .fontWeight(.semibold)
                         .foregroundStyle(.brand)
-                    if let fiat = priceService.formatFiatValue(total) {
-                        Text("≈ \(fiat)")
+                    if let secondary = totalLines.secondary {
+                        Text(verbatim: secondary)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             } else {
-                ReviewValuePlaceholder(sample: amount, priceService: priceService, weight: .semibold)
+                ReviewValuePlaceholder(lines: lines(amount), weight: .semibold)
             }
         }
         .font(.subheadline)

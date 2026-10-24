@@ -788,6 +788,57 @@ final class ReviewAmountLinesTests: XCTestCase {
         let lines = ReviewAmountLines(xmr: fee, fiat: "$0.01", fiatFirst: true)
         XCTAssertEqual(lines.secondary, "0.00003152 XMR")
     }
+
+    // MARK: VoiceOver (I3c): a value shown fiat first is read fiat first.
+
+    private let fee = Decimal(string: "0.00003152")!
+
+    func testFiatFirstIsSpokenInTheOrderOfTheScreen() {
+        let lines = ReviewAmountLines(xmr: fee, fiat: "$0.01", fiatFirst: true)
+        XCTAssertTrue(lines.isFiatFirst)
+        XCTAssertEqual(lines.spokenFiatFirst, "$0.01, 0.00003152 XMR")
+    }
+
+    func testXMRFirstHasNoFiatFirstSpeech() {
+        XCTAssertNil(ReviewAmountLines(xmr: fee, fiat: "$0.01", fiatFirst: false).spokenFiatFirst)
+        // No fiat value: XMR is on top, even in Fiat Mode.
+        let noFiat = ReviewAmountLines(xmr: fee, fiat: nil, fiatFirst: true)
+        XCTAssertFalse(noFiat.isFiatFirst)
+        XCTAssertNil(noFiat.spokenFiatFirst)
+    }
+
+    func testSendReviewFeeLabelFollowsFiatMode() {
+        let fiatFirst = ReviewAmountLines(xmr: fee, fiat: "$0.01", fiatFirst: true)
+        XCTAssertEqual(SendReviewFee.accessibilityLabel(fee: fee, lines: fiatFirst),
+                       "Network fee: $0.01, 0.00003152 XMR")
+        let xmrFirst = ReviewAmountLines(xmr: fee, fiat: "$0.01", fiatFirst: false)
+        XCTAssertEqual(SendReviewFee.accessibilityLabel(fee: fee, lines: xmrFirst),
+                       "Network fee: 0.00003152 XMR")
+    }
+
+    func testLinkReviewFeeRowLabelsFollowFiatMode() {
+        let fiatFirst = ReviewAmountLines(xmr: fee, fiat: "$0.01", fiatFirst: true)
+        XCTAssertEqual(PaymentLinkReviewStep.valueLabel(title: "Claim fee reserve", value: fee, lines: fiatFirst),
+                       "Claim fee reserve: $0.01, 0.00003152 XMR")
+        let xmrFirst = ReviewAmountLines(xmr: fee, fiat: "$0.01", fiatFirst: false)
+        XCTAssertEqual(PaymentLinkReviewStep.valueLabel(title: "Network Fee", value: fee, lines: xmrFirst),
+                       "Network Fee: 0.00003152 XMR")
+    }
+
+    @MainActor
+    func testPriceServiceOrderNeedsFiatModeAndAPlausiblePrice() {
+        let service = PriceService()
+        let saved = (service.showFiatFirst, service.xmrPrice)
+        defer { service.showFiatFirst = saved.0; service.xmrPrice = saved.1 }
+        service.showFiatFirst = true
+        service.xmrPrice = price
+        XCTAssertTrue(ReviewAmountLines(xmr: xmr, priceService: service).isFiatFirst)
+        service.xmrPrice = nil
+        XCTAssertFalse(ReviewAmountLines(xmr: xmr, priceService: service).isFiatFirst)
+        service.xmrPrice = price
+        service.showFiatFirst = false
+        XCTAssertFalse(ReviewAmountLines(xmr: xmr, priceService: service).isFiatFirst)
+    }
 }
 
 // MARK: - Connection Stage Regression Tests

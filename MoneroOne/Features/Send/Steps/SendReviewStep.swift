@@ -53,9 +53,7 @@ struct SendReviewStep: View {
 
     /// An amount in the order Fiat Mode picks.
     private func lines(_ xmr: Decimal) -> ReviewAmountLines {
-        ReviewAmountLines(xmr: xmr, fiat: priceService.formatFiatValue(xmr),
-                          fiatFirst: ReviewAmountLines.fiatFirst(fiatMode: priceService.showFiatFirst,
-                                                                 price: priceService.xmrPrice))
+        ReviewAmountLines(xmr: xmr, priceService: priceService)
     }
 
     var body: some View {
@@ -189,7 +187,7 @@ struct SendReviewStep: View {
                         .font(.subheadline)
                         .padding()
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel(estimatedFee.map { String(localized: "Network fee: \(XMRFormatter.format($0)) XMR") } ?? String(localized: "Network fee: loading"))
+                        .accessibilityLabel(estimatedFee.map { SendReviewFee.accessibilityLabel(fee: $0, lines: lines($0)) } ?? String(localized: "Network fee: loading"))
 
                         // Total. Its row holds its place until the value is known.
                         // A send back to this wallet has no total: only the
@@ -486,6 +484,8 @@ struct ReviewAmountLines: Equatable {
     let primary: String
     /// Nil with no price.
     let secondary: String?
+    /// The fiat value is on top.
+    let isFiatFirst: Bool
 
     static func fiatFirst(fiatMode: Bool, price: Double?) -> Bool {
         guard fiatMode, let price else { return false }
@@ -497,15 +497,42 @@ struct ReviewAmountLines: Equatable {
         if fiatFirst, let fiat {
             primary = fiat
             secondary = xmrText
+            isFiatFirst = true
         } else {
             primary = xmrText
             secondary = fiat.map { "≈ \($0)" }
+            isFiatFirst = false
         }
+    }
+
+    /// The order the current Fiat Mode and price pick (both Reviews).
+    @MainActor
+    init(xmr: Decimal, priceService: PriceService) {
+        self.init(xmr: xmr, fiat: priceService.formatFiatValue(xmr),
+                  fiatFirst: Self.fiatFirst(fiatMode: priceService.showFiatFirst,
+                                            price: priceService.xmrPrice))
+    }
+
+    /// What VoiceOver reads for a value shown fiat first: the fiat value,
+    /// then the exact XMR, as on the screen. Nil when XMR is on top: those
+    /// labels read the XMR alone, as before.
+    var spokenFiatFirst: String? {
+        guard isFiatFirst, let secondary else { return nil }
+        return "\(primary), \(secondary)"
     }
 }
 
 /// The review's fee rules, apart from the view so tests can pin them.
 enum SendReviewFee {
+    /// VoiceOver's fee label, in the order of the screen: in Fiat Mode the
+    /// fiat value, then the exact XMR. Otherwise the XMR alone.
+    static func accessibilityLabel(fee: Decimal, lines: ReviewAmountLines) -> String {
+        if let spoken = lines.spokenFiatFirst {
+            return String(localized: "Network fee: \(spoken)", comment: "VoiceOver, Review in Fiat Mode: the network fee in fiat, then the exact XMR, e.g. \"$0.01, 0.00003152 XMR\"")
+        }
+        return String(localized: "Network fee: \(XMRFormatter.format(fee)) XMR")
+    }
+
     static func xmr(_ piconero: UInt64) -> Decimal {
         Decimal(piconero) / 1_000_000_000_000
     }
@@ -682,13 +709,6 @@ struct ReviewValuePlaceholder: View {
     init(lines: ReviewAmountLines, weight: Font.Weight = .medium) {
         self.lines = lines
         self.weight = weight
-    }
-
-    /// XMR on top (the payment link review).
-    @MainActor
-    init(sample: Decimal, priceService: PriceService, weight: Font.Weight = .medium) {
-        self.init(lines: ReviewAmountLines(xmr: sample, fiat: priceService.formatFiatValue(sample), fiatFirst: false),
-                  weight: weight)
     }
 
     var body: some View {

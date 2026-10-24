@@ -247,6 +247,56 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertEqual(WhatsNewFeatureLayout.closeInset, 16)
     }
 
+    // MARK: - The Transfer loop (top card)
+
+    func testTheTransferLoopPressesShowsTheAmountThenMovesIt() {
+        typealias Loop = WhatsNewTransferLoop
+        XCTAssertEqual(Loop.Step.allCases, [.start, .press, .amount, .sent, .received])
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.buttonScale(at:)), [1, Loop.pressScale, 1, 1, 1])
+        XCTAssertLessThan(Loop.pressScale, 1)
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.showsAmount(at:)), [false, false, true, true, true])
+        // From rolls down first, then To rolls up.
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.fromBalance(at:)), [
+            Loop.fromBalance, Loop.fromBalance, Loop.fromBalance,
+            Loop.fromBalance - Loop.amount, Loop.fromBalance - Loop.amount,
+        ])
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.toBalance(at:)), [
+            Loop.toBalance, Loop.toBalance, Loop.toBalance, Loop.toBalance, Loop.toBalance + Loop.amount,
+        ])
+        XCTAssertEqual(Loop.fromBalance(at: .received), Decimal(string: "1034.503917"))
+        XCTAssertEqual(Loop.toBalance(at: .received), Decimal(string: "250.25"))
+    }
+
+    func testTheTransferLoopEndsWithTheSameTotal() {
+        typealias Loop = WhatsNewTransferLoop
+        let total = Loop.fromBalance + Loop.toBalance
+        XCTAssertEqual(Loop.fromBalance(at: .start) + Loop.toBalance(at: .start), total)
+        XCTAssertEqual(Loop.fromBalance(at: .received) + Loop.toBalance(at: .received), total)
+    }
+
+    func testTheTransferLoopRunsAboutFiveSecondsWithRests() {
+        typealias Loop = WhatsNewTransferLoop
+        XCTAssertEqual(Loop.cycleDuration, 5.55, accuracy: 0.001)
+        XCTAssertTrue((4...6).contains(Loop.cycleDuration))
+        // The rests: on the result before the way back, on the start frame
+        // before the press.
+        XCTAssertEqual(Loop.delay(before: .start), 2.0)
+        XCTAssertEqual(Loop.delay(before: .press), 1.4)
+        // The motion tokens: crossFade 0.35, press 0.1, settle 0.4,
+        // rollDigits 0.2. No move takes longer than 0.5 s.
+        XCTAssertEqual(Loop.Step.allCases.map(Loop.duration(of:)), [0.35, 0.1, 0.4, 0.2, 0.2])
+        XCTAssertTrue(Loop.Step.allCases.allSatisfy { Loop.duration(of: $0) <= 0.5 })
+    }
+
+    func testReduceMotionShowsTheLoopsLastFrameStill() {
+        typealias Loop = WhatsNewTransferLoop
+        XCTAssertEqual(Loop.stillStep, Loop.Step.allCases.last)
+        XCTAssertTrue(Loop.showsAmount(at: Loop.stillStep))
+        XCTAssertEqual(Loop.buttonScale(at: Loop.stillStep), 1)
+        XCTAssertEqual(Loop.fromBalance(at: Loop.stillStep), Loop.fromBalance - Loop.amount)
+        XCTAssertEqual(Loop.toBalance(at: Loop.stillStep), Loop.toBalance + Loop.amount)
+    }
+
     // MARK: - Links
 
     func testShareWithFriendsSharesTheWebsite() {

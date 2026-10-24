@@ -370,7 +370,8 @@ private struct WhatsNewFeatureCard: View {
                         : WhatsNewFeatureLayout.blurOpacityLight)
             }
             .overlay {
-                WhatsNewScenePicture(scene: scene)
+                // The sharp picture plays its loop (only Transfer has one).
+                WhatsNewScenePicture(scene: scene, isAnimated: true)
                     .padding(WhatsNewFeatureLayout.cardPadding)
             }
             .clipShape(RoundedRectangle(cornerRadius: WhatsNewFeatureLayout.cardCornerRadius, style: .continuous))

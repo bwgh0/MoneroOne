@@ -23,6 +23,9 @@ enum WhatsNewSceneColor {
 /// takes 96% of it). It keeps that size at every text size.
 struct WhatsNewScenePicture: View {
     let scene: WhatsNewScene
+    /// Plays the scene's loop. Only Transfer, the top card, has one; the
+    /// blurred copy behind a card stays still.
+    var isAnimated = false
 
     var body: some View {
         let nativeWidth = nativeWidth
@@ -42,7 +45,7 @@ struct WhatsNewScenePicture: View {
     @ViewBuilder
     private var content: some View {
         switch scene {
-        case .transfer: TransferScene()
+        case .transfer: TransferScene(isAnimated: isAnimated)
         case .link: LinkScene()
         case .contacts: ContactsScene()
         case .name: NameScene()
@@ -129,25 +132,166 @@ private enum SceneSample {
 
 // MARK: - Transfer between your wallets
 
+/// The Transfer picture's loop (round 4, rule 5): Transfer is pressed, the
+/// amount shows between the two wallets, the From balance rolls down, then
+/// the To balance rolls up. A rest on the result, then a cross-fade back.
+enum WhatsNewTransferLoop {
+    enum Step: CaseIterable {
+        /// The picture as it stands: nothing has moved.
+        case start
+        /// Transfer is pressed.
+        case press
+        /// Transfer is let go and the amount shows between the wallets.
+        case amount
+        /// The amount leaves the From wallet: its balance rolls down.
+        case sent
+        /// The amount reaches the To wallet: its balance rolls up.
+        case received
+    }
+
+    static let fromBalance = Decimal(string: "1284.503917") ?? 0
+    static let toBalance = Decimal(string: "0.25") ?? 0
+    static let amount: Decimal = 250
+
+    /// The frame that stands still with Reduce Motion: the last one.
+    static let stillStep: Step = .received
+
+    /// The Transfer button's press (`motion.press`, larger than 0.98 so it
+    /// reads at the picture's scale).
+    static let pressScale: CGFloat = 0.96
+
+    static func fromBalance(at step: Step) -> Decimal {
+        switch step {
+        case .start, .press, .amount: fromBalance
+        case .sent, .received: fromBalance - amount
+        }
+    }
+
+    static func toBalance(at step: Step) -> Decimal {
+        step == .received ? toBalance + amount : toBalance
+    }
+
+    static func showsAmount(at step: Step) -> Bool {
+        switch step {
+        case .start, .press: false
+        case .amount, .sent, .received: true
+        }
+    }
+
+    static func buttonScale(at step: Step) -> CGFloat {
+        step == .press ? pressScale : 1
+    }
+
+    /// The wait before the move to `step`. Before `start`, the rest on the
+    /// result; before `press`, the rest on the start frame.
+    static func delay(before step: Step) -> Double {
+        switch step {
+        case .start: 2.0
+        case .press: 1.4
+        case .amount: 0
+        case .sent: 0.6
+        case .received: 0.3
+        }
+    }
+
+    /// The length of the move to `step`: the cross-fade back, the press,
+    /// the settle spring's response, and the digit roll.
+    static func duration(of step: Step) -> Double {
+        switch step {
+        case .start: 0.35
+        case .press: 0.1
+        case .amount: 0.4
+        case .sent, .received: 0.2
+        }
+    }
+
+    /// One cycle, rests included.
+    static var cycleDuration: Double {
+        Step.allCases.reduce(0) { $0 + delay(before: $1) + duration(of: $1) }
+    }
+
+    /// The motion tokens: crossFade, press, settle, rollDigits.
+    static func animation(to step: Step) -> Animation {
+        let duration = duration(of: step)
+        let move: Animation = switch step {
+        case .amount: .spring(response: duration, dampingFraction: 0.8)
+        case .start, .press, .sent, .received: .easeInOut(duration: duration)
+        }
+        return move.delay(delay(before: step))
+    }
+}
+
 /// Two wallet switcher rows (the current one with its brand ring) and the
-/// Transfer button, as in the wallet list.
+/// Transfer button, as in the wallet list. On the top card it plays the
+/// Transfer loop; with Reduce Motion it shows the loop's last frame, still.
 private struct TransferScene: View {
+    let isAnimated: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isOnScreen = true
+
+    var body: some View {
+        Group {
+            if !isAnimated || reduceMotion {
+                TransferSceneFrame(step: WhatsNewTransferLoop.stillStep)
+            } else if isOnScreen {
+                PhaseAnimator(WhatsNewTransferLoop.Step.allCases) { step in
+                    TransferSceneFrame(step: step)
+                } animation: { step in
+                    WhatsNewTransferLoop.animation(to: step)
+                }
+            } else {
+                // Off screen: the loop stops on its first frame, so it
+                // starts again from there without a jump.
+                TransferSceneFrame(step: .start)
+            }
+        }
+        .onScreenChange(isAnimated: isAnimated) { isOnScreen = $0 }
+    }
+}
+
+private extension View {
+    /// iOS 18 and later: reports when the card scrolls off screen and back.
+    /// On iOS 17 the loop runs while the sheet is open.
+    @ViewBuilder
+    func onScreenChange(isAnimated: Bool, _ action: @escaping (Bool) -> Void) -> some View {
+        if #available(iOS 18.0, *), isAnimated {
+            onScrollVisibilityChange(threshold: 0.01, action)
+        } else {
+            self
+        }
+    }
+}
+
+/// One frame of the Transfer picture.
+private struct TransferSceneFrame: View {
+    let step: WhatsNewTransferLoop.Step
+
     var body: some View {
         VStack(spacing: 12) {
-            SceneWalletRow(
-                name: String(localized: "Everyday Spending", comment: "What's New picture: a sample wallet name"),
-                emoji: "\u{1F4B0}",
-                balance: Decimal(string: "1284.503917") ?? 0,
-                address: SceneSample.address("4AdUndXH", "5ZDxJ8Bq"),
-                isActive: true
-            )
-            SceneWalletRow(
-                name: String(localized: "Long-Term Savings Wallet", comment: "What's New picture: a sample wallet name"),
-                emoji: "\u{1F3D4}\u{FE0F}",
-                balance: Decimal(string: "0.25") ?? 0,
-                address: SceneSample.address("86yLe8Lm", "QHv5ezC1"),
-                isActive: false
-            )
+            VStack(spacing: 12) {
+                row(
+                    name: String(localized: "Everyday Spending", comment: "What's New picture: a sample wallet name"),
+                    emoji: "\u{1F4B0}",
+                    balance: WhatsNewTransferLoop.fromBalance(at: step),
+                    address: SceneSample.address("4AdUndXH", "5ZDxJ8Bq"),
+                    isActive: true
+                )
+                row(
+                    name: String(localized: "Long-Term Savings Wallet", comment: "What's New picture: a sample wallet name"),
+                    emoji: "\u{1F3D4}\u{FE0F}",
+                    balance: WhatsNewTransferLoop.toBalance(at: step),
+                    address: SceneSample.address("86yLe8Lm", "QHv5ezC1"),
+                    isActive: false
+                )
+            }
+            // Across the gap between From and To.
+            .overlay {
+                let shows = WhatsNewTransferLoop.showsAmount(at: step)
+                SceneTransferAmount(amount: WhatsNewTransferLoop.amount)
+                    .scaleEffect(shows ? 1 : 0.8)
+                    .opacity(shows ? 1 : 0)
+            }
+
             // `WalletManagerRows.transferButton`, half the row's width.
             HStack(spacing: 8) {
                 Image(systemName: "arrow.left.arrow.right.circle.fill")
@@ -160,7 +304,44 @@ private struct TransferScene: View {
             .padding(.vertical, 14)
             .frame(width: 179)
             .scenePart(Capsule())
+            .scaleEffect(WhatsNewTransferLoop.buttonScale(at: step))
         }
+    }
+
+    /// A balance rolls in the direction it changes; the way back to the
+    /// start cross-fades.
+    private func row(name: String, emoji: String, balance: Decimal, address: String, isActive: Bool) -> some View {
+        SceneWalletRow(name: name, emoji: emoji, balance: balance, address: address, isActive: isActive)
+            .contentTransition(step == .start
+                ? .opacity
+                : .numericText(value: NSDecimalNumber(decimal: balance).doubleValue))
+    }
+}
+
+/// The amount on its way from From to To: a brand chip on the part fill,
+/// in fiat with Fiat Mode, as the rows.
+private struct SceneTransferAmount: View {
+    let amount: Decimal
+    @EnvironmentObject private var priceService: PriceService
+
+    private var text: String {
+        if priceService.showFiatFirst, let fiat = priceService.formatFiatValue(amount) { return fiat }
+        return "\(XMRFormatter.format(amount)) XMR"
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrow.down")
+            Text(verbatim: text)
+                .lineLimit(1)
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(.brand)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.brand.opacity(0.15), in: Capsule())
+        .background(WhatsNewSceneColor.part, in: Capsule())
+        .sceneShadow()
     }
 }
 

@@ -208,4 +208,29 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertEqual(notes?.highlights.map(\.scene), [.transfer, .link, .contacts, .name, .seed])
         XCTAssertEqual(notes?.improvements.count, 10)
     }
+
+    // MARK: - Feature rows
+
+    func testEachPictureTakes70PercentOfTheContentWidth() {
+        // A 402 pt phone: 354 pt of content inside the 24 pt margins.
+        XCTAssertEqual(WhatsNewFeatureLayout.pictureWidth(contentWidth: 354), 247.8, accuracy: 0.001)
+        // The readable column caps the content at 480 - 48.
+        XCTAssertEqual(WhatsNewFeatureLayout.pictureWidth(contentWidth: 432), 302.4, accuracy: 0.001)
+    }
+
+    func testPicturesAlternateEdgesTrailingFirst() {
+        XCTAssertEqual((0..<5).map(WhatsNewFeatureLayout.pictureTrailing(row:)), [true, false, true, false, true])
+    }
+
+    func testEachPictureTiltsTowardTheNextOneByAnAngleThatVaries() {
+        let tilts = (0..<5).map(WhatsNewFeatureLayout.tilt(row:))
+        XCTAssertEqual(tilts, [-4, 3, -2, 4, -3])
+        for row in 0..<5 {
+            // Trailing pictures turn counterclockwise, leading ones clockwise.
+            XCTAssertEqual(tilts[row] < 0, WhatsNewFeatureLayout.pictureTrailing(row: row))
+            XCTAssertTrue((2...4).contains(abs(tilts[row])))
+        }
+        // No two rows in a row share an angle.
+        XCTAssertTrue(zip(tilts, tilts.dropFirst()).allSatisfy { abs($0) != abs($1) })
+    }
 }

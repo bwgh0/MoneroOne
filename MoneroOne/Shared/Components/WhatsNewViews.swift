@@ -128,12 +128,9 @@ struct WhatsNewSheet: View {
                     .foregroundStyle(.secondary)
                     .padding(.top, 8)
 
-                VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 24 : 32) {
+                VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 24 : WhatsNewFeatureLayout.rowSpacing) {
                     ForEach(Array(entry.highlights.enumerated()), id: \.element.systemImage) { index, highlight in
-                        WhatsNewFeatureRow(
-                            highlight: highlight,
-                            pictureTrailing: index.isMultiple(of: 2)
-                        )
+                        WhatsNewFeatureRow(highlight: highlight, row: index)
                     }
                 }
                 .padding(.top, 32)
@@ -188,31 +185,59 @@ struct WhatsNewSheet: View {
     }
 }
 
-/// One feature row: the picture on one side, the title and the line on
-/// the other, nothing behind them (the rows of Apple's What's New in
-/// Pages). Pictures alternate sides, trailing first, so the eye follows a
-/// diagonal. Each tilts 3 degrees and slopes down toward the next one, on
-/// one soft brand glow. The picture is in place when the sheet opens, with
-/// no entrance motion. At the accessibility text sizes the picture hides
-/// and the text takes the full width. One VoiceOver element: the title,
-/// then the line; the picture is hidden from VoiceOver.
+/// The layout of the feature rows: each picture on its own line, 70% of
+/// the content width, at the trailing edge for row 1, the leading edge for
+/// row 2, and so on. Each tilts a little, by a different angle on each
+/// row, and slopes down toward the next picture. The title and the line
+/// sit under the picture at the full content width.
+enum WhatsNewFeatureLayout {
+    /// The picture's share of the content width.
+    static let pictureShare: CGFloat = 0.7
+    /// The space between a picture and its title.
+    static let pictureToText: CGFloat = 20
+    /// The space between two rows (24 at the accessibility text sizes,
+    /// where the pictures hide).
+    static let rowSpacing: CGFloat = 40
+    /// The tilt of each row's picture in degrees, row 1 first. A trailing
+    /// picture turns counterclockwise (negative) and a leading one
+    /// clockwise, so each slopes down toward the next one.
+    static let tilts: [Double] = [-4, 3, -2, 4, -3]
+
+    /// Row 1 (index 0) puts its picture at the trailing edge.
+    static func pictureTrailing(row: Int) -> Bool {
+        row.isMultiple(of: 2)
+    }
+
+    static func tilt(row: Int) -> Double {
+        tilts[row % tilts.count]
+    }
+
+    static func pictureWidth(contentWidth: CGFloat) -> CGFloat {
+        contentWidth * pictureShare
+    }
+}
+
+/// One feature row, nothing behind it (the rows of Apple's What's New in
+/// Pages): the picture on its own line on one soft brand glow, then the
+/// title and the line. `WhatsNewFeatureLayout` sets the picture's width,
+/// edge and tilt. Everything is in place when the sheet opens, with no
+/// entrance motion. At the accessibility text sizes the picture hides.
+/// One VoiceOver element: the title, then the line; the picture is hidden
+/// from VoiceOver.
 private struct WhatsNewFeatureRow: View {
     let highlight: WhatsNewEntry.Highlight
-    /// True puts the picture on the trailing side (rows 1, 3 and 5).
-    let pictureTrailing: Bool
+    /// The row's place in the list, from 0.
+    let row: Int
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
             text
         } else {
-            HStack(spacing: 16) {
-                if !pictureTrailing { picture }
+            VStack(alignment: .leading, spacing: WhatsNewFeatureLayout.pictureToText) {
+                picture
                 text
-                if pictureTrailing { picture }
             }
-            // The picture's margin is 20, 4 less than the text's 24.
-            .padding(pictureTrailing ? .trailing : .leading, -4)
         }
     }
 
@@ -231,11 +256,38 @@ private struct WhatsNewFeatureRow: View {
     }
 
     private var picture: some View {
-        WhatsNewScenePicture(scene: highlight.scene)
-            // Right pictures turn counterclockwise, left ones clockwise.
-            .rotationEffect(.degrees(pictureTrailing ? -3 : 3))
-            .background { WhatsNewGlow().padding(-50) }
-            .frame(width: WhatsNewScenePicture.slotWidth)
+        WhatsNewPictureSlot(trailing: WhatsNewFeatureLayout.pictureTrailing(row: row)) {
+            WhatsNewScenePicture(scene: highlight.scene)
+                .rotationEffect(.degrees(WhatsNewFeatureLayout.tilt(row: row)))
+                .background { WhatsNewGlow().padding(-50) }
+        }
+    }
+}
+
+/// Takes the full content width, offers the picture its share of it and
+/// puts it at the leading or the trailing edge.
+private struct WhatsNewPictureSlot: Layout {
+    let trailing: Bool
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let picture = subviews.first else { return .zero }
+        let size = picture.sizeThatFits(pictureProposal(proposal.width))
+        return CGSize(width: proposal.width ?? size.width, height: size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let picture = subviews.first else { return }
+        let pictureProposal = pictureProposal(bounds.width)
+        let width = picture.sizeThatFits(pictureProposal).width
+        picture.place(
+            at: CGPoint(x: trailing ? bounds.maxX - width : bounds.minX, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: pictureProposal
+        )
+    }
+
+    private func pictureProposal(_ width: CGFloat?) -> ProposedViewSize {
+        ProposedViewSize(width: width.map(WhatsNewFeatureLayout.pictureWidth(contentWidth:)), height: nil)
     }
 }
 

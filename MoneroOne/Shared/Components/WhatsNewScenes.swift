@@ -1,7 +1,7 @@
 import SwiftUI
 
 // What's New feature rows (spec: _scratch/2026-10-24-whats-new-r2): the
-// picture beside each row's text. Each scene is the app's own views with
+// picture above each row's text. Each scene is the app's own views with
 // sample data, laid out at the default text size and scaled as one
 // picture. No scene runs wallet logic or reads a store.
 
@@ -14,17 +14,19 @@ enum WhatsNewSceneColor {
 }
 
 /// The picture of one highlight: the scene laid out at its native width,
-/// then scaled as one picture to the row's 186 pt picture slot (the
-/// envelope is 178 pt wide). It keeps that size at every text size.
+/// then scaled as one picture to the width the row gives it (the envelope
+/// takes 96% of it). It keeps that size at every text size.
 struct WhatsNewScenePicture: View {
     let scene: WhatsNewScene
 
-    /// The picture slot's width in a row (the mockup, a 402 pt phone).
-    static let slotWidth: CGFloat = 186
-
     var body: some View {
-        ScaledPictureLayout(nativeWidth: nativeWidth, scale: scale) {
-            content.scaleEffect(scale)
+        let nativeWidth = nativeWidth
+        ScaledPictureLayout(nativeWidth: nativeWidth, fill: fill) {
+            content.frame(width: nativeWidth)
+        }
+        // The layout reports the scaled size; this draws the scene at it.
+        .visualEffect { content, proxy in
+            content.scaleEffect(proxy.size.width / nativeWidth)
         }
         // Each scene is laid out at the default size, then scaled.
         .dynamicTypeSize(.large)
@@ -53,22 +55,27 @@ struct WhatsNewScenePicture: View {
         }
     }
 
-    private var scale: CGFloat {
-        scene == .link ? 1 : Self.slotWidth / nativeWidth
+    /// The share of the given width the picture takes. The envelope stays
+    /// a little narrower than the scenes of parts, as in round 2 (178 of
+    /// 186).
+    private var fill: CGFloat {
+        scene == .link ? 178.0 / 186.0 : 1
     }
 }
 
-/// Lays its one subview out at the native width and reports the scaled
-/// size, so the row sees the picture at the size it draws. The subview
-/// carries its own `scaleEffect` around its center.
+/// Lays its one subview out at the native width and reports it scaled to
+/// `fill` of the proposed width, so the row sees the picture at the size
+/// it draws. The subview stays centered at its native size until the
+/// picture's `visualEffect` scales it.
 private struct ScaledPictureLayout: Layout {
     let nativeWidth: CGFloat
-    let scale: CGFloat
+    let fill: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let subview = subviews.first else { return .zero }
         let native = subview.sizeThatFits(ProposedViewSize(width: nativeWidth, height: nil))
-        return CGSize(width: native.width * scale, height: native.height * scale)
+        let width = (proposal.width ?? nativeWidth) * fill
+        return CGSize(width: width, height: native.height * width / nativeWidth)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

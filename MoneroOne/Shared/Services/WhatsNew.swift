@@ -69,16 +69,16 @@ enum WhatsNewNotes {
             version: NotesVersion(major: 1, minor: 1),
             highlights: [
                 .init(
-                    systemImage: "arrow.left.arrow.right",
-                    scene: .transfer,
-                    title: "Transfer between your wallets",
-                    detail: "Move XMR from one of your wallets to another. Tap the wallet name at the top, then Transfer."
-                ),
-                .init(
                     systemImage: "link",
                     scene: .link,
                     title: "Send XMR as a link",
                     detail: "Whoever opens it claims the funds in Monero One. In Send, choose Link."
+                ),
+                .init(
+                    systemImage: "arrow.left.arrow.right",
+                    scene: .transfer,
+                    title: "Transfer between your wallets",
+                    detail: "Move XMR from one of your wallets to another. Tap the wallet name at the top, then Transfer."
                 ),
                 .init(
                     systemImage: "person.crop.circle",

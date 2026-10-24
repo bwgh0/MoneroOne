@@ -192,11 +192,13 @@ struct WhatsNewSheet: View {
     /// is at its top. The trailing room keeps a wrapped version clear of it.
     private var header: some View {
         HStack(spacing: 12) {
-            Image("MoneroSymbol")
+            // The home screen icon, rendered from monero-one.icon by ictool
+            // (light and dark), with the app icon shape already cut.
+            Image("AppIconImage")
                 .resizable()
                 .scaledToFit()
                 .frame(width: WhatsNewFeatureLayout.iconSize, height: WhatsNewFeatureLayout.iconSize)
-                // A hairline keeps the white tile visible on the white sheet.
+                // A hairline keeps the white plate visible on the white sheet.
                 .overlay {
                     RoundedRectangle(cornerRadius: WhatsNewFeatureLayout.iconCornerRadius, style: .continuous)
                         .strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)

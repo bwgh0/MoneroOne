@@ -208,4 +208,22 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertEqual(notes?.highlights.map(\.scene), [.transfer, .link, .contacts, .name, .seed])
         XCTAssertEqual(notes?.improvements.count, 10)
     }
+
+    // MARK: - Slide-in
+
+    @MainActor
+    func testPicturesThatComeIntoViewTogetherStart60msApart() {
+        let clock = WhatsNewRevealClock()
+        XCTAssertEqual(clock.delay(now: start), 0)
+        XCTAssertEqual(clock.delay(now: start), 0.06, accuracy: 0.0001)
+        XCTAssertEqual(clock.delay(now: start.addingTimeInterval(0.01)), 0.12, accuracy: 0.0001)
+    }
+
+    @MainActor
+    func testAPictureScrolledIntoViewLaterStartsAtOnce() {
+        let clock = WhatsNewRevealClock()
+        _ = clock.delay(now: start)
+        _ = clock.delay(now: start)
+        XCTAssertEqual(clock.delay(now: start.addingTimeInterval(1)), 0)
+    }
 }

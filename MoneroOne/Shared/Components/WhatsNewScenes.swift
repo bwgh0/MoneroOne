@@ -1,71 +1,82 @@
 import SwiftUI
 
-// What's New feature cards (spec: _scratch/2026-10-23-whats-new-cards): the
-// picture at the top of each card. Each scene is the app's own views with
+// What's New feature rows (spec: _scratch/2026-10-24-whats-new-r2): the
+// picture beside each row's text. Each scene is the app's own views with
 // sample data, laid out at the default text size and scaled as one
 // picture. No scene runs wallet logic or reads a store.
 
-/// The card and part fills of the pictures. A sheet raises the system
-/// colors one level in dark mode (the grouped page becomes #1C1C1E, like
-/// the sheet), so these resolve at the base level: the card is the grouped
-/// page (#F2F2F7 / #000000) and the parts are cards on it (#FFFFFF /
-/// #1C1C1E), as they sit in the app.
+/// The part fills of the pictures. They resolve at the sheet's own level,
+/// as any view in a sheet does: white in light, #2C2C2E in dark on the
+/// #1C1C1E sheet. The hairline keeps a white part's edge on the white sheet.
 enum WhatsNewSceneColor {
-    static let card = Color(uiColor: UIColor { traits in
-        UIColor.systemGroupedBackground.resolvedColor(with: traits.modifyingTraits { $0.userInterfaceLevel = .base })
-    })
-    static let part = Color(uiColor: UIColor { traits in
-        UIColor.secondarySystemGroupedBackground.resolvedColor(with: traits.modifyingTraits { $0.userInterfaceLevel = .base })
-    })
+    static let part = Color(uiColor: .secondarySystemGroupedBackground)
+    static let hairline = Color(uiColor: .separator)
 }
 
-/// The picture of one highlight: the top 208 pt of a 354 pt card, the same
-/// ratio on a wider card.
+/// The picture of one highlight: the scene laid out at its native width,
+/// then scaled as one picture to the row's 186 pt picture slot (the
+/// envelope is 178 pt wide). It keeps that size at every text size.
 struct WhatsNewScenePicture: View {
     let scene: WhatsNewScene
 
-    /// The card's width and picture height in the mockup (a 402 pt phone).
-    static let baseWidth: CGFloat = 354
-    static let baseHeight: CGFloat = 208
+    /// The picture slot's width in a row (the mockup, a 402 pt phone).
+    static let slotWidth: CGFloat = 186
 
     var body: some View {
-        Color.clear
-            .aspectRatio(Self.baseWidth / Self.baseHeight, contentMode: .fit)
-            .overlay {
-                GeometryReader { proxy in
-                    let fit = proxy.size.width / Self.baseWidth
-                    content
-                        .scaleEffect(scale * fit)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                }
-            }
-            .clipped()
-            // Each scene is laid out at the default size, then scaled.
-            .dynamicTypeSize(.large)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+        ScaledPictureLayout(nativeWidth: nativeWidth, scale: scale) {
+            content.scaleEffect(scale)
+        }
+        // Each scene is laid out at the default size, then scaled.
+        .dynamicTypeSize(.large)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
-    /// Each scene at its native width.
     @ViewBuilder
     private var content: some View {
         switch scene {
-        case .transfer: TransferScene().frame(width: 370).fixedSize(horizontal: false, vertical: true)
+        case .transfer: TransferScene()
         case .link: LinkScene()
-        case .contacts: ContactsScene().frame(width: 370).fixedSize(horizontal: false, vertical: true)
-        case .name: NameScene().frame(width: 360).fixedSize(horizontal: false, vertical: true)
-        case .seed: SeedScene().frame(width: 360).fixedSize(horizontal: false, vertical: true)
+        case .contacts: ContactsScene()
+        case .name: NameScene()
+        case .seed: SeedScene()
+        }
+    }
+
+    /// Each scene's native width. Transfer keeps "Everyday Spending" whole.
+    private var nativeWidth: CGFloat {
+        switch scene {
+        case .transfer: 370
+        case .link: LinkScene.width
+        case .contacts: 320
+        case .name, .seed: 300
         }
     }
 
     private var scale: CGFloat {
-        switch scene {
-        case .transfer: 0.66
-        case .link: 1
-        case .contacts: 0.68
-        case .name: 0.85
-        case .seed: 0.87
-        }
+        scene == .link ? 1 : Self.slotWidth / nativeWidth
+    }
+}
+
+/// Lays its one subview out at the native width and reports the scaled
+/// size, so the row sees the picture at the size it draws. The subview
+/// carries its own `scaleEffect` around its center.
+private struct ScaledPictureLayout: Layout {
+    let nativeWidth: CGFloat
+    let scale: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+        let native = subview.sizeThatFits(ProposedViewSize(width: nativeWidth, height: nil))
+        return CGSize(width: native.width * scale, height: native.height * scale)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(
+            at: CGPoint(x: bounds.midX, y: bounds.midY),
+            anchor: .center,
+            proposal: ProposedViewSize(width: nativeWidth, height: nil)
+        )
     }
 }
 
@@ -82,6 +93,14 @@ private struct SceneShadow: ViewModifier {
 
 private extension View {
     func sceneShadow() -> some View { modifier(SceneShadow()) }
+
+    /// A part of a picture: the part fill, the hairline and the raised
+    /// shadow.
+    func scenePart<S: InsettableShape>(_ shape: S) -> some View {
+        background(WhatsNewSceneColor.part, in: shape)
+            .overlay { shape.strokeBorder(WhatsNewSceneColor.hairline, lineWidth: 0.5) }
+            .sceneShadow()
+    }
 }
 
 /// Sample addresses: only their 8…8 short form shows.
@@ -123,8 +142,7 @@ private struct TransferScene: View {
             .foregroundStyle(.brand)
             .padding(.vertical, 14)
             .frame(width: 179)
-            .background(WhatsNewSceneColor.part, in: Capsule())
-            .sceneShadow()
+            .scenePart(Capsule())
         }
     }
 }
@@ -181,7 +199,11 @@ private struct SceneWalletRow: View {
         .padding(16)
         .background(WhatsNewSceneColor.part, in: Capsule())
         .overlay {
-            Capsule().strokeBorder(Color.brand.opacity(isActive ? 0.7 : 0), lineWidth: 1.5)
+            // The current wallet's brand ring takes the hairline's place.
+            Capsule().strokeBorder(
+                isActive ? Color.brand.opacity(0.7) : WhatsNewSceneColor.hairline,
+                lineWidth: isActive ? 1.5 : 0.5
+            )
         }
         .sceneShadow()
     }
@@ -190,9 +212,10 @@ private struct SceneWalletRow: View {
 // MARK: - Send XMR as a link
 
 /// The sealed envelope of the Link ready step with "0.5000 XMR" in foil,
-/// 236 pt wide.
+/// 178 pt wide.
 private struct LinkScene: View {
-    private static let unit: CGFloat = 236 / Envelope.width
+    static let width: CGFloat = 178
+    private static let unit: CGFloat = width / Envelope.width
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -264,8 +287,7 @@ private struct SceneContactRow: View {
             Spacer(minLength: 0)
         }
         .padding(16)
-        .background(WhatsNewSceneColor.part, in: Capsule())
-        .sceneShadow()
+        .scenePart(Capsule())
     }
 }
 
@@ -295,8 +317,7 @@ private struct NameScene: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 54)
-                .background(WhatsNewSceneColor.part, in: RoundedRectangle(cornerRadius: 12))
-                .sceneShadow()
+                .scenePart(RoundedRectangle(cornerRadius: 12))
 
             OpenAliasResolvedLines(summary: summary)
         }
@@ -361,8 +382,7 @@ private struct SceneSeedCell: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(WhatsNewSceneColor.part, in: RoundedRectangle(cornerRadius: 12))
-        .sceneShadow()
+        .scenePart(RoundedRectangle(cornerRadius: 12))
     }
 }
 

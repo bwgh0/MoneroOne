@@ -100,10 +100,13 @@ extension View {
 // MARK: - Sheet
 
 /// Apple's "What's New in Pages" pattern: a large centered title, the
-/// version, three highlight rows, Other Improvements, one Continue button.
+/// version, the highlight rows, Other Improvements, one Continue button.
 struct WhatsNewSheet: View {
     let entry: WhatsNewEntry
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// One per opening of the sheet: the pictures slide in once.
+    @State private var revealClock = WhatsNewRevealClock()
     /// The bullet's column grows with the text, so the dot is never cut.
     @ScaledMetric(relativeTo: .subheadline) private var bulletWidth: CGFloat = 8
 
@@ -127,9 +130,13 @@ struct WhatsNewSheet: View {
                     .foregroundStyle(.secondary)
                     .padding(.top, 8)
 
-                VStack(spacing: 16) {
-                    ForEach(entry.highlights, id: \.systemImage) { highlight in
-                        WhatsNewFeatureCard(highlight: highlight)
+                VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 24 : 32) {
+                    ForEach(Array(entry.highlights.enumerated()), id: \.element.systemImage) { index, highlight in
+                        WhatsNewFeatureRow(
+                            highlight: highlight,
+                            pictureTrailing: index.isMultiple(of: 2),
+                            revealClock: revealClock
+                        )
                     }
                 }
                 .padding(.top, 32)
@@ -184,38 +191,128 @@ struct WhatsNewSheet: View {
     }
 }
 
-/// One feature card (Apple's Tips cards): the picture fills the card's top
-/// edge to edge, then the title and the line. Radius 20 on the grouped
-/// page fill, no shadow. At the accessibility text sizes the picture
-/// hides and the text grows. One VoiceOver element: the title, then the
-/// text; the picture is hidden from VoiceOver.
-private struct WhatsNewFeatureCard: View {
+/// One feature row: the picture on one side, the title and the line on
+/// the other, nothing behind them (the rows of Apple's What's New in
+/// Pages). Pictures alternate sides, trailing first, so the eye follows a
+/// diagonal. Each tilts 3 degrees and slopes down toward the next one, on
+/// one soft brand glow, and slides in from its own side the first time it
+/// scrolls into view. At the accessibility text sizes the picture hides
+/// and the text takes the full width. One VoiceOver element: the title,
+/// then the line; the picture is hidden from VoiceOver.
+private struct WhatsNewFeatureRow: View {
     let highlight: WhatsNewEntry.Highlight
+    /// True puts the picture on the trailing side (rows 1, 3 and 5).
+    let pictureTrailing: Bool
+    let revealClock: WhatsNewRevealClock
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var revealed = false
+
+    /// The distance a picture slides in from its own side.
+    private static let slide: CGFloat = 24
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if !dynamicTypeSize.isAccessibilitySize {
-                WhatsNewScenePicture(scene: highlight.scene)
+        if dynamicTypeSize.isAccessibilitySize {
+            text
+        } else {
+            HStack(spacing: 16) {
+                if !pictureTrailing { picture }
+                text
+                if pictureTrailing { picture }
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(highlight.title)
-                    .font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(highlight.detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.top, dynamicTypeSize.isAccessibilitySize ? 20 : 12)
-            .padding(.bottom, 20)
-            .accessibilityElement(children: .combine)
+            // The picture's margin is 20, 4 less than the text's 24.
+            .padding(pictureTrailing ? .trailing : .leading, -4)
         }
-        .background(WhatsNewSceneColor.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var text: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(highlight.title)
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(highlight.detail)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var picture: some View {
+        let shown = revealed || reduceMotion
+        return WhatsNewScenePicture(scene: highlight.scene)
+            // Right pictures turn counterclockwise, left ones clockwise.
+            .rotationEffect(.degrees(pictureTrailing ? -3 : 3))
+            .background { WhatsNewGlow().padding(-50) }
+            .offset(x: shown ? 0 : (pictureTrailing ? Self.slide : -Self.slide))
+            .opacity(shown ? 1 : 0)
+            .frame(width: WhatsNewScenePicture.slotWidth)
+            .modifier(WhatsNewRevealTrigger(action: reveal))
+    }
+
+    private func reveal() {
+        guard !revealed else { return }
+        guard !reduceMotion else {
+            revealed = true
+            return
+        }
+        // Motion token `settle`.
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8).delay(revealClock.delay())) {
+            revealed = true
+        }
+    }
+}
+
+/// Runs the slide-in the first time the picture scrolls into view. Before
+/// iOS 18 it runs when the sheet opens.
+private struct WhatsNewRevealTrigger: ViewModifier {
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollVisibilityChange(threshold: 0.25) { visible in
+                if visible { action() }
+            }
+        } else {
+            content.onAppear(perform: action)
+        }
+    }
+}
+
+/// The slide-in clock of one sheet opening: pictures that come into view
+/// together start 60 ms apart, top first.
+@MainActor
+final class WhatsNewRevealClock {
+    static let stagger: TimeInterval = 0.06
+    private var last: Date = .distantPast
+    private var burst = 0
+
+    /// The delay of a picture that comes into view now.
+    func delay(now: Date = .now) -> TimeInterval {
+        burst = now.timeIntervalSince(last) < 0.1 ? burst + 1 : 0
+        last = now
+        return Double(burst) * Self.stagger
+    }
+}
+
+/// The brand glow behind a picture: full strength under it, then a soft
+/// fall-off to clear 50 pt past its edge. 0.08 in light (a section glow),
+/// 0.12 in dark (token `glow`).
+private struct WhatsNewGlow: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let alpha = colorScheme == .dark ? 0.12 : 0.08
+        EllipticalGradient(stops: [
+            .init(color: .brand.opacity(alpha), location: 0.4),
+            .init(color: .brand.opacity(alpha * 0.75), location: 0.58),
+            .init(color: .brand.opacity(alpha * 0.42), location: 0.74),
+            .init(color: .brand.opacity(alpha * 0.15), location: 0.88),
+            .init(color: .brand.opacity(0), location: 1),
+        ])
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

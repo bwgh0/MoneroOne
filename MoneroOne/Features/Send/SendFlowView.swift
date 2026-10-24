@@ -407,7 +407,7 @@ struct SendFlowView: View {
                 recipientReady: !isTransfer || transferTarget != nil,
                 unlockedBalance: walletManager.displayUnlockedBalance,
                 priceService: priceService,
-                amountPrefill: amountPrefill,
+                amountPrefill: $amountPrefill,
                 paymentRequest: shownPaymentRequest,
                 isLinkMode: isLinkMode,
                 linkNamePlaceholder: EnvelopeRecord.linkName(EnvelopeStore.shared.nextNumber),

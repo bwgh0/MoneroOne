@@ -770,6 +770,22 @@ final class SendAmountStartUnitTests: XCTestCase {
         XCTAssertTrue(SendAmountStep.startsInFiat(fiatMode: true, price: price, amount: ""))
     }
 
+    // The note "Amount pre-filled from …" shows until the user first edits the amount.
+
+    func testAnEditHidesThePrefilledNote() {
+        for edit in [SendAmountStep.AmountEdit.key, .paste, .max] {
+            XCTAssertNil(SendAmountStep.prefill(.paymentLink, after: edit))
+            XCTAssertNil(SendAmountStep.prefill(.qrCode, after: edit))
+        }
+    }
+
+    func testAUnitSwapKeepsThePrefilledNote() {
+        // The same amount in the other unit: still the link's.
+        XCTAssertEqual(SendAmountStep.prefill(.paymentLink, after: .unitSwap), .paymentLink)
+        XCTAssertEqual(SendAmountStep.prefill(.qrCode, after: .unitSwap), .qrCode)
+        XCTAssertNil(SendAmountStep.prefill(nil, after: .unitSwap))
+    }
+
     func testNoUsablePriceRestoresNothing() {
         XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "0.302260911618", price: nil))
         XCTAssertNil(SendAmountStep.restoredFiat(typed, amount: "0.302260911618", price: .nan))

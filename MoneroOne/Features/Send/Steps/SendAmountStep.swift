@@ -20,8 +20,9 @@ struct SendAmountStep: View {
     var recipientReady = true
     let unlockedBalance: Decimal
     let priceService: PriceService
-    /// Where a filled-in amount came from; the step says so above the amount.
-    var amountPrefill: AmountPrefill? = nil
+    /// Where a filled-in amount came from; the step says so above the amount
+    /// until the user first edits it.
+    @Binding var amountPrefill: AmountPrefill?
     /// The `monero:` link that filled the flow last. A new one while this
     /// step shows can fill in another amount.
     var paymentRequest: WalletManager.PaymentRequest? = nil
@@ -35,6 +36,16 @@ struct SendAmountStep: View {
     enum AmountPrefill {
         case qrCode
         case paymentLink
+    }
+
+    /// What changed the amount on this step.
+    enum AmountEdit {
+        /// A keypad or hardware key: a digit, the decimal point or delete.
+        case key
+        case paste
+        case max
+        /// XMR to fiat or back: the same amount in the other unit.
+        case unitSwap
     }
 
     /// A fiat amount as the user typed it, and the XMR amount it made.
@@ -82,7 +93,7 @@ struct SendAmountStep: View {
                         ZStack {
                             // Hidden input for hardware keyboard support (no software keyboard)
                             HardwareKeyboardInput(
-                                text: isFiatMode ? $fiatString : $amountString,
+                                text: keyedAmount,
                                 filter: isFiatMode ? filterFiatInput : filterDecimalInput
                             )
                             .id(isFiatMode ? "fiat" : "xmr")
@@ -187,6 +198,7 @@ struct SendAmountStep: View {
                             isSendingAll = true
                             amountString = "\(unlockedBalance)"
                             fiatString = ""
+                            noteEdit(.max)
                             HapticFeedback.shared.softTick()
                         }
                         .font(.caption.weight(.semibold))
@@ -248,7 +260,7 @@ struct SendAmountStep: View {
             // Keypad + continue
             VStack(spacing: 12) {
                 if !softwareKeyboardVisible {
-                    NumericKeypad(text: isFiatMode ? $fiatString : $amountString,
+                    NumericKeypad(text: keyedAmount,
                                   maxDecimalPlaces: isFiatMode ? 2 : 12)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -379,7 +391,38 @@ struct SendAmountStep: View {
         guard let clipboard = UIPasteboard.general.string,
               let amount = Self.pastedAmount(clipboard) else { return }
         amountString = filterDecimalInput(amount)
+        noteEdit(.paste)
         HapticFeedback.shared.softTick()
+    }
+
+    /// The amount in the shown unit, as the keypad and a hardware keyboard
+    /// edit it. An edit there that changes the amount is the user's own.
+    private var keyedAmount: Binding<String> {
+        let text = isFiatMode ? $fiatString : $amountString
+        return Binding(
+            get: { text.wrappedValue },
+            set: { newValue in
+                guard newValue != text.wrappedValue else { return }
+                text.wrappedValue = newValue
+                noteEdit(.key)
+            }
+        )
+    }
+
+    private func noteEdit(_ edit: AmountEdit) {
+        let prefill = Self.prefill(amountPrefill, after: edit)
+        guard prefill != amountPrefill else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            amountPrefill = prefill
+        }
+    }
+
+    /// The note "Amount pre-filled from …" after an edit. It shows while the
+    /// amount is still the one that came in: the user's own edit (a key,
+    /// delete, Paste, Max) hides it; a unit swap shows the same amount, so it
+    /// stays. A new link with an amount shows it again.
+    static func prefill(_ prefill: AmountPrefill?, after edit: AmountEdit) -> AmountPrefill? {
+        edit == .unitSwap ? prefill : nil
     }
 
     /// Pasted text as an amount, with "." as the separator. Nil unless the whole text, trimmed, is one

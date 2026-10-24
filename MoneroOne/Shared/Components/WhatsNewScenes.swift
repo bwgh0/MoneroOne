@@ -5,11 +5,16 @@ import SwiftUI
 // sample data, laid out at the default text size and scaled as one
 // picture. No scene runs wallet logic or reads a store.
 
-/// The part fills of the pictures. They resolve at the sheet's own level,
-/// as any view in a sheet does: white in light, #2C2C2E in dark on the
-/// #1C1C1E sheet. The hairline keeps a white part's edge on the white sheet.
+/// The part fills of the pictures, as on a wallet home: white in light,
+/// #1C1C1E in dark. They resolve at the base level, so in dark they stay
+/// darker than the card's #2C2C2E cell fill in the sheet. The hairline
+/// keeps a white part's edge on the light card.
 enum WhatsNewSceneColor {
-    static let part = Color(uiColor: .secondarySystemGroupedBackground)
+    static let part = Color(uiColor: UIColor { traits in
+        UIColor.secondarySystemGroupedBackground.resolvedColor(
+            with: traits.modifyingTraits { $0.userInterfaceLevel = .base }
+        )
+    })
     static let hairline = Color(uiColor: .separator)
 }
 
@@ -73,9 +78,14 @@ private struct ScaledPictureLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let subview = subviews.first else { return .zero }
-        let native = subview.sizeThatFits(ProposedViewSize(width: nativeWidth, height: nil))
-        let width = (proposal.width ?? nativeWidth) * fill
-        return CGSize(width: width, height: native.height * width / nativeWidth)
+        let native = CGSize(
+            width: nativeWidth,
+            height: subview.sizeThatFits(ProposedViewSize(width: nativeWidth, height: nil)).height
+        )
+        // Fits the proposed box: the card's inside, or only a width.
+        let box = CGSize(width: proposal.width ?? nativeWidth, height: proposal.height ?? .infinity)
+        let scale = WhatsNewFeatureLayout.pictureScale(native: native, fill: fill, in: box)
+        return CGSize(width: native.width * scale, height: native.height * scale)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -319,7 +329,24 @@ private struct NameScene: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            OpenAliasRecipientCard(summary: summary, onClear: {})
+            // `OpenAliasRecipientCard`'s look with the names in `Text`: the
+            // card's name is a UITextView, which grows with the system text
+            // size, and the picture stays at the default size.
+            HStack(spacing: 12) {
+                RecipientAvatar(summary: summary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: summary.recipientName ?? "")
+                        .font(.headline)
+                        .lineLimit(1)
+                    Text(verbatim: summary.name.display)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
                 .padding(.horizontal)
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)

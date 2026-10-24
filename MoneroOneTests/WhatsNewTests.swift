@@ -209,28 +209,54 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertEqual(notes?.improvements.count, 10)
     }
 
-    // MARK: - Feature rows
+    // MARK: - Feature cards (Flighty layout)
 
-    func testEachPictureTakes70PercentOfTheContentWidth() {
+    func testEachCardIsTheContentWidthAt16To10WithRadius20() {
         // A 402 pt phone: 354 pt of content inside the 24 pt margins.
-        XCTAssertEqual(WhatsNewFeatureLayout.pictureWidth(contentWidth: 354), 247.8, accuracy: 0.001)
+        XCTAssertEqual(WhatsNewFeatureLayout.cardHeight(width: 354), 221.25, accuracy: 0.001)
         // The readable column caps the content at 480 - 48.
-        XCTAssertEqual(WhatsNewFeatureLayout.pictureWidth(contentWidth: 432), 302.4, accuracy: 0.001)
+        XCTAssertEqual(WhatsNewFeatureLayout.cardHeight(width: 432), 270, accuracy: 0.001)
+        XCTAssertEqual(WhatsNewFeatureLayout.cardCornerRadius, 20)
     }
 
-    func testPicturesAlternateEdgesTrailingFirst() {
-        XCTAssertEqual((0..<5).map(WhatsNewFeatureLayout.pictureTrailing(row:)), [true, false, true, false, true])
+    func testThePictureFitsInsideTheCardWithItsPadding() {
+        let card = CGSize(width: 354, height: WhatsNewFeatureLayout.cardHeight(width: 354))
+        let p = WhatsNewFeatureLayout.cardPadding
+        let box = CGSize(width: card.width - 2 * p, height: card.height - 2 * p)
+        // A tall picture is held by the height.
+        let tall = WhatsNewFeatureLayout.pictureScale(native: CGSize(width: 370, height: 260), fill: 1, in: box)
+        XCTAssertEqual(tall, box.height / 260, accuracy: 0.0001)
+        // A wide picture is held by the width share.
+        let wide = WhatsNewFeatureLayout.pictureScale(native: CGSize(width: 300, height: 60), fill: 0.5, in: box)
+        XCTAssertEqual(wide, box.width * 0.5 / 300, accuracy: 0.0001)
+        // Only a width: the picture takes its share of it.
+        let open = WhatsNewFeatureLayout.pictureScale(
+            native: CGSize(width: 300, height: 200), fill: 1, in: CGSize(width: 150, height: CGFloat.infinity)
+        )
+        XCTAssertEqual(open, 0.5, accuracy: 0.0001)
     }
 
-    func testEachPictureTiltsTowardTheNextOneByAnAngleThatVaries() {
-        let tilts = (0..<5).map(WhatsNewFeatureLayout.tilt(row:))
-        XCTAssertEqual(tilts, [-4, 3, -2, 4, -3])
-        for row in 0..<5 {
-            // Trailing pictures turn counterclockwise, leading ones clockwise.
-            XCTAssertEqual(tilts[row] < 0, WhatsNewFeatureLayout.pictureTrailing(row: row))
-            XCTAssertTrue((2...4).contains(abs(tilts[row])))
-        }
-        // No two rows in a row share an angle.
-        XCTAssertTrue(zip(tilts, tilts.dropFirst()).allSatisfy { abs($0) != abs($1) })
+    func testTheTextLinesUpWithTheCardsInnerEdgeAndTheRhythmIsEven() {
+        XCTAssertEqual(WhatsNewFeatureLayout.textInset, 12)
+        XCTAssertEqual(WhatsNewFeatureLayout.cardToText, 16)
+        XCTAssertEqual(WhatsNewFeatureLayout.rowSpacing, 40)
+    }
+
+    func testTheXIsA44PointTargetAtTheTopTrailingCorner() {
+        XCTAssertEqual(WhatsNewFeatureLayout.closeSize, 44)
+        XCTAssertEqual(WhatsNewFeatureLayout.closeInset, 16)
+    }
+
+    // MARK: - Links
+
+    func testShareWithFriendsSharesTheWebsite() {
+        XCTAssertEqual(WhatsNewLinks.share.absoluteString, "https://monero.one/download")
+    }
+
+    func testRateOpensTheAppStoreWriteReviewPage() {
+        XCTAssertEqual(
+            WhatsNewLinks.rate.absoluteString,
+            "https://apps.apple.com/app/id6757898541?action=write-review"
+        )
     }
 }

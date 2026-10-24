@@ -99,8 +99,22 @@ extension View {
 
 // MARK: - Sheet
 
-/// Apple's "What's New in Pages" pattern: a large centered title, the
-/// version, the highlight rows, Other Improvements, one Continue button.
+/// The links at the end of the sheet.
+enum WhatsNewLinks {
+    /// Share with Friends: the download page, which sends each device to
+    /// its store (friends may use Android).
+    static let share = URL(string: "https://monero.one/download")!
+    /// Rate on the App Store: the write-review page, as Settings > Rate
+    /// Monero One. Apple's review prompt may show nothing, so it is not used.
+    static let rate = URL(string: "https://apps.apple.com/app/id6757898541?action=write-review")!
+}
+
+/// Flighty's What's New layout: the app icon and the version in a small
+/// row, a large leading title, one full-width card per feature with its
+/// title and line under it, Other Improvements, then Share with Friends
+/// and Rate on the App Store. The X at the top right stays in place while
+/// the sheet scrolls and closes it, as Continue did (the sheet's
+/// `onDismiss` keeps the "seen" bookkeeping).
 struct WhatsNewSheet: View {
     let entry: WhatsNewEntry
     @Environment(\.dismiss) private var dismiss
@@ -117,20 +131,18 @@ struct WhatsNewSheet: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+
                 Text(title)
                     .font(.largeTitle.bold())
-                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
-
-                Text("Version \(entry.version.description)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 8)
+                    .padding(.top, 24)
 
                 VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 24 : WhatsNewFeatureLayout.rowSpacing) {
-                    ForEach(Array(entry.highlights.enumerated()), id: \.element.systemImage) { index, highlight in
-                        WhatsNewFeatureRow(highlight: highlight, row: index)
+                    ForEach(entry.highlights, id: \.systemImage) { highlight in
+                        WhatsNewFeatureRow(highlight: highlight)
                     }
                 }
                 .padding(.top, 32)
@@ -159,84 +171,157 @@ struct WhatsNewSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 40)
                 }
+
+                links
+                    .padding(.top, 40)
             }
             .padding(.horizontal, 24)
-            .padding(.top, 40)
+            .padding(.top, WhatsNewFeatureLayout.closeInset)
             .padding(.bottom, 24)
             .readableColumn()
         }
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                dismiss()
-            } label: {
-                Text("Continue")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.brand)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
-            .glassButtonStyle()
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-            .readableColumn()
-            .accessibilityIdentifier("whatsNew.continue")
+        .overlay(alignment: .topTrailing) {
+            WhatsNewCloseButton { dismiss() }
+                .padding(.top, WhatsNewFeatureLayout.closeInset)
+                .padding(.trailing, WhatsNewFeatureLayout.closeInset)
         }
         .closesForPaymentLink()
     }
+
+    /// The app icon and "Version 1.1", lined up with the X while the sheet
+    /// is at its top. The trailing room keeps a wrapped version clear of it.
+    private var header: some View {
+        HStack(spacing: 12) {
+            Image("MoneroSymbol")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+                .accessibilityHidden(true)
+            Text("Version \(entry.version.description)")
+                .font(.body.weight(.medium))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(minHeight: WhatsNewFeatureLayout.closeSize)
+        .padding(.trailing, WhatsNewFeatureLayout.closeSize)
+    }
+
+    /// Two centered text buttons, no background, as at the end of Flighty's
+    /// What's New.
+    private var links: some View {
+        VStack(spacing: 4) {
+            ShareLink(item: WhatsNewLinks.share) {
+                linkLabel("Share with Friends", systemImage: "paperplane.fill")
+            }
+            .accessibilityIdentifier("whatsNew.share")
+
+            Link(destination: WhatsNewLinks.rate) {
+                linkLabel("Rate on the App Store", systemImage: "star.fill")
+            }
+            .accessibilityIdentifier("whatsNew.rate")
+            // The person rated here: the app never asks for Apple's review
+            // prompt after a send (as Settings > Rate Monero One).
+            .environment(\.openURL, OpenURLAction { _ in
+                ReviewPromptGate().ratedFromSettings()
+                return .systemAction
+            })
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func linkLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(.brand)
+            .multilineTextAlignment(.center)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+    }
 }
 
-/// The layout of the feature rows: each picture on its own line, 70% of
-/// the content width, at the trailing edge for row 1, the leading edge for
-/// row 2, and so on. Each tilts a little, by a different angle on each
-/// row, and slopes down toward the next picture. The title and the line
-/// sit under the picture at the full content width.
+/// The sheet's X: a 44 pt glass circle (a material circle before iOS 26).
+private struct WhatsNewCloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: WhatsNewFeatureLayout.closeSize, height: WhatsNewFeatureLayout.closeSize)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .modifier(WhatsNewCloseSurface())
+        .accessibilityLabel("Close")
+        .accessibilityIdentifier("whatsNew.sheetClose")
+    }
+}
+
+private struct WhatsNewCloseSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            content.background(.regularMaterial, in: Circle())
+        }
+    }
+}
+
+/// The layout of the sheet and its feature cards (Flighty's What's New):
+/// each feature is a full-width card with its picture centered and
+/// straight, then the title and the line, inset to line up with the
+/// card's inner edge.
 enum WhatsNewFeatureLayout {
-    /// The picture's share of the content width.
-    static let pictureShare: CGFloat = 0.7
-    /// The space between a picture and its title.
-    static let pictureToText: CGFloat = 20
-    /// The space between two rows (24 at the accessibility text sizes,
-    /// where the pictures hide).
+    /// The card's width to its height. 16:10, a little taller than 16:9,
+    /// so the taller pictures (Transfer, Contacts) stay readable.
+    static let cardAspectRatio: CGFloat = 16.0 / 10.0
+    static let cardCornerRadius: CGFloat = 20
+    /// The room around the picture inside the card.
+    static let cardPadding: CGFloat = 16
+    /// The space between a card and its title.
+    static let cardToText: CGFloat = 16
+    /// The title and the line start this far in, at the card's inner edge.
+    static let textInset: CGFloat = 12
+    /// The space between two features (24 at the accessibility text sizes,
+    /// where the cards hide).
     static let rowSpacing: CGFloat = 40
-    /// The tilt of each row's picture in degrees, row 1 first. A trailing
-    /// picture turns counterclockwise (negative) and a leading one
-    /// clockwise, so each slopes down toward the next one.
-    static let tilts: [Double] = [-4, 3, -2, 4, -3]
+    /// The X: its size, and its distance from the top and the trailing edge.
+    static let closeSize: CGFloat = 44
+    static let closeInset: CGFloat = 16
+    /// The blurred copy of the picture behind it: how much larger, how
+    /// soft and how faint.
+    static let blurScale: CGFloat = 1.6
+    static let blurRadius: CGFloat = 28
+    static let blurOpacity: Double = 0.6
 
-    /// Row 1 (index 0) puts its picture at the trailing edge.
-    static func pictureTrailing(row: Int) -> Bool {
-        row.isMultiple(of: 2)
+    static func cardHeight(width: CGFloat) -> CGFloat {
+        width / cardAspectRatio
     }
 
-    static func tilt(row: Int) -> Double {
-        tilts[row % tilts.count]
-    }
-
-    static func pictureWidth(contentWidth: CGFloat) -> CGFloat {
-        contentWidth * pictureShare
+    /// The scale that fits a picture of `native` size into `box`, with
+    /// `fill` of the box's width at most.
+    static func pictureScale(native: CGSize, fill: CGFloat, in box: CGSize) -> CGFloat {
+        guard native.width > 0, native.height > 0 else { return 1 }
+        return min(box.width * fill / native.width, box.height / native.height)
     }
 }
 
-/// One feature row, nothing behind it (the rows of Apple's What's New in
-/// Pages): the picture on its own line on one soft brand glow, then the
-/// title and the line. `WhatsNewFeatureLayout` sets the picture's width,
-/// edge and tilt. Everything is in place when the sheet opens, with no
-/// entrance motion. At the accessibility text sizes the picture hides.
-/// One VoiceOver element: the title, then the line; the picture is hidden
-/// from VoiceOver.
+/// One feature: the card, then the title and the line. At the
+/// accessibility text sizes the card hides. One VoiceOver element: the
+/// title, then the line; the card is hidden from VoiceOver.
 private struct WhatsNewFeatureRow: View {
     let highlight: WhatsNewEntry.Highlight
-    /// The row's place in the list, from 0.
-    let row: Int
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
             text
         } else {
-            VStack(alignment: .leading, spacing: WhatsNewFeatureLayout.pictureToText) {
-                picture
+            VStack(alignment: .leading, spacing: WhatsNewFeatureLayout.cardToText) {
+                WhatsNewFeatureCard(scene: highlight.scene)
                 text
+                    .padding(.horizontal, WhatsNewFeatureLayout.textInset)
             }
         }
     }
@@ -244,56 +329,45 @@ private struct WhatsNewFeatureRow: View {
     private var text: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(highlight.title)
-                .font(.headline)
+                .font(.title3.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
             Text(highlight.detail)
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
+}
 
-    private var picture: some View {
-        WhatsNewPictureSlot(trailing: WhatsNewFeatureLayout.pictureTrailing(row: row)) {
-            WhatsNewScenePicture(scene: highlight.scene)
-                .rotationEffect(.degrees(WhatsNewFeatureLayout.tilt(row: row)))
-                .background { WhatsNewGlow().padding(-50) }
-        }
+/// A feature's card: the cell fill, the one brand glow, the picture blurred
+/// large and faint, and the sharp picture centered on top, straight.
+private struct WhatsNewFeatureCard: View {
+    let scene: WhatsNewScene
+
+    var body: some View {
+        Color(uiColor: .secondarySystemBackground)
+            .aspectRatio(WhatsNewFeatureLayout.cardAspectRatio, contentMode: .fit)
+            .overlay { WhatsNewGlow() }
+            .overlay {
+                WhatsNewScenePicture(scene: scene)
+                    .scaleEffect(WhatsNewFeatureLayout.blurScale)
+                    .blur(radius: WhatsNewFeatureLayout.blurRadius)
+                    .opacity(WhatsNewFeatureLayout.blurOpacity)
+            }
+            .overlay {
+                WhatsNewScenePicture(scene: scene)
+                    .padding(WhatsNewFeatureLayout.cardPadding)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: WhatsNewFeatureLayout.cardCornerRadius, style: .continuous))
+            .accessibilityHidden(true)
     }
 }
 
-/// Takes the full content width, offers the picture its share of it and
-/// puts it at the leading or the trailing edge.
-private struct WhatsNewPictureSlot: Layout {
-    let trailing: Bool
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let picture = subviews.first else { return .zero }
-        let size = picture.sizeThatFits(pictureProposal(proposal.width))
-        return CGSize(width: proposal.width ?? size.width, height: size.height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard let picture = subviews.first else { return }
-        let pictureProposal = pictureProposal(bounds.width)
-        let width = picture.sizeThatFits(pictureProposal).width
-        picture.place(
-            at: CGPoint(x: trailing ? bounds.maxX - width : bounds.minX, y: bounds.minY),
-            anchor: .topLeading,
-            proposal: pictureProposal
-        )
-    }
-
-    private func pictureProposal(_ width: CGFloat?) -> ProposedViewSize {
-        ProposedViewSize(width: width.map(WhatsNewFeatureLayout.pictureWidth(contentWidth:)), height: nil)
-    }
-}
-
-/// The brand glow behind a picture: full strength under it, then a soft
-/// fall-off to clear 50 pt past its edge. 0.08 in light (a section glow),
-/// 0.12 in dark (token `glow`).
+/// The brand glow in a card: full strength in the middle, then a soft
+/// fall-off to clear at the edge. 0.08 in light (a section glow), 0.12 in
+/// dark (token `glow`).
 private struct WhatsNewGlow: View {
     @Environment(\.colorScheme) private var colorScheme
 

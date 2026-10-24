@@ -746,15 +746,12 @@ final class SendAmountStartUnitTests: XCTestCase {
 
     // A monero: link opened while the step shows fiat.
 
-    /// What the flow keeps of the typed fiat after the link.
-    private func kept(afterLinkAmount amount: String?) -> SendAmountStep.TypedFiat? {
-        SendAmountStep.linkKeepsFiat(amount: amount) ? typed : nil
-    }
+    // The flow drops the typed fiat on any link, so nothing is kept.
 
     func testALinkWithAnAmountShowsItInXMR() {
         XCTAssertFalse(SendAmountStep.linkKeepsFiat(amount: "0.01"))
         // Back to the recipient and on again: still the link's amount, in XMR.
-        XCTAssertNil(SendAmountStep.restoredFiat(kept(afterLinkAmount: "0.01"), amount: "0.01", price: price))
+        XCTAssertNil(SendAmountStep.restoredFiat(nil, amount: "0.01", price: price))
         XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: true, price: price, amount: "0.01"))
     }
 
@@ -762,12 +759,15 @@ final class SendAmountStartUnitTests: XCTestCase {
         // The link's amount equals the XMR the typed fiat made: the old fiat
         // must not come back either.
         let amount = typed.xmr
-        XCTAssertNil(SendAmountStep.restoredFiat(kept(afterLinkAmount: amount), amount: amount, price: price))
+        XCTAssertNil(SendAmountStep.restoredFiat(nil, amount: amount, price: price))
     }
 
-    func testALinkWithNoAmountKeepsTheUnit() {
+    func testALinkWithNoAmountClearsTheAmountInFiat() {
+        // The unit stays fiat; the amount starts over, empty.
         XCTAssertTrue(SendAmountStep.linkKeepsFiat(amount: nil))
-        XCTAssertEqual(kept(afterLinkAmount: nil), typed)
+        // Back to the recipient and on again: a fresh Send, empty, in fiat.
+        XCTAssertNil(SendAmountStep.restoredFiat(nil, amount: "", price: price))
+        XCTAssertTrue(SendAmountStep.startsInFiat(fiatMode: true, price: price, amount: ""))
     }
 
     func testNoUsablePriceRestoresNothing() {

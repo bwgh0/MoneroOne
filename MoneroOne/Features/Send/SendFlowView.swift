@@ -793,9 +793,9 @@ struct SendFlowView: View {
         aliasSummary = nil
         amountString = request.amount ?? ""
         amountPrefill = request.amount == nil ? nil : .paymentLink
-        if !SendAmountStep.linkKeepsFiat(amount: request.amount) {
-            typedFiat = nil
-        }
+        // Any link drops the fiat typed before: a link with an amount shows
+        // it in XMR, and one with no amount starts the amount over.
+        typedFiat = nil
         isSendingAll = false
         discardPreparedSend()
 

@@ -308,10 +308,16 @@ struct SendAmountStep: View {
             }
         }
         .onChange(of: paymentRequest) { _, request in
-            // The link's amount shows in XMR, as it came, not the old fiat.
-            guard let request, isFiatMode, !Self.linkKeepsFiat(amount: request.amount) else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isFiatMode = false
+            guard let request, isFiatMode else { return }
+            if Self.linkKeepsFiat(amount: request.amount) {
+                // No amount: the amount starts over, still in fiat, as on a
+                // fresh Send.
+                fiatString = ""
+            } else {
+                // The link's amount shows in XMR, as it came, not the old fiat.
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isFiatMode = false
+                }
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: softwareKeyboardVisible)
@@ -445,10 +451,10 @@ struct SendAmountStep: View {
     }
 
     /// A `monero:` link filled the flow. A link with an amount shows that
-    /// amount in XMR, as it came (like any filled-in amount), and the fiat
-    /// the user typed before is dropped, so a later return does not bring
-    /// it back. A link with no amount leaves the unit and the typed fiat
-    /// as they are.
+    /// amount in XMR, as it came (like any filled-in amount). A link with no
+    /// amount keeps the unit and starts the amount over (empty), as a fresh
+    /// Send. Either way the fiat the user typed before is dropped, so a
+    /// later return does not bring it back.
     static func linkKeepsFiat(amount: String?) -> Bool {
         amount == nil
     }

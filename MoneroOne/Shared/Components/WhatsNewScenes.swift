@@ -476,16 +476,27 @@ private struct SceneWalletRow: View {
 
 // MARK: - Send XMR as a link
 
-/// The envelope's loop: the stamp of the real send (`PaymentLinkSendHero`,
-/// its beats from 2.10 to 3.10, at its pace, with its springs and curves).
-/// A drop of wax on the closed envelope; the stamp comes in, presses the
+/// The envelope's loop: the real send (`PaymentLinkSendHero`, its beats
+/// from 1.10 to 3.10, at its pace, with its springs and curves), without
+/// the success check. The note; the open envelope comes up around it; the
+/// note slides in; the flap folds down and the envelope lifts to the
+/// middle. Then the stamp: a drop of wax, the stamp comes in, presses the
 /// seal on and lifts away; one light sweep shows the amount in foil. A rest
 /// on the sealed envelope, then the picture fades out and comes back at the
 /// start. No haptics.
 enum WhatsNewLinkLoop {
     enum Step: CaseIterable {
-        /// The closed envelope, with no seal and no foil. It fades back in.
+        /// The note alone, where the send's check turns into it. It fades
+        /// back in.
         case start
+        /// The open envelope comes up around the note.
+        case arrive
+        /// The note slides into the envelope.
+        case noteIn
+        /// The flap folds down; the envelope lifts to the middle.
+        case close
+        /// The flap passes 90 degrees: its outside shows.
+        case flapOver
         /// A plain drop of wax.
         case drop
         /// The stamp comes in from the upper right and hovers over the wax.
@@ -512,14 +523,19 @@ enum WhatsNewLinkLoop {
 
     /// The fade out and back in (crossFade).
     static let fadeDuration = 0.35
-    /// The rest on the closed envelope before the wax.
-    static let restBeforeDrop = 0.6
+    /// The rest on the note before the envelope comes up.
+    static let restOnNote = 0.6
     /// The hero's light sweep. Its time is not paced.
     static let sweepDuration = 1.2
     /// The rest on the sealed envelope before the fade.
     static let restOnResult = 2.0
     /// The hero's wax starts at this scale.
     static let dropStartScale: CGFloat = 0.3
+    /// The hero's places, in the envelope's units: the open envelope sits
+    /// this much lower than the sealed one, and comes up from this much
+    /// lower again.
+    static let openDrop: CGFloat = PaymentLinkSendHero.drop / PaymentLinkSendHero.unit
+    static let arrival: CGFloat = PaymentLinkSendHero.arrival / PaymentLinkSendHero.unit
 
     /// The time from the begin of the step before to the begin of `step`:
     /// the fade-in and a rest, the hero's beats (its times at pace 1, times
@@ -528,7 +544,11 @@ enum WhatsNewLinkLoop {
         let pace = PaymentLinkSendHero.pace
         return switch step {
         case .start: 0
-        case .drop: fadeDuration + restBeforeDrop
+        case .arrive: fadeDuration + restOnNote
+        case .noteIn: 0.3 * pace
+        case .close: 0.35 * pace
+        case .flapOver: 0.12 * pace
+        case .drop: 0.23 * pace
         case .hover: 0.15 * pace
         case .press: 0.4 * pace
         case .contact: 0.09 * pace
@@ -562,8 +582,16 @@ enum WhatsNewLinkLoop {
         return Step.allCases.last { begin(of: $0) <= time } ?? .start
     }
 
-    /// The values of the hero's animated parts. The defaults are the start.
+    /// The values of the hero's animated parts, in the envelope's units.
+    /// The defaults are the start.
     struct Frame: Equatable {
+        /// The note's place in the envelope, and the place of its layer.
+        var noteShift: CGFloat = -Envelope.cardRise
+        var noteY: CGFloat = WhatsNewLinkLoop.openDrop
+        var envelopeShown: Double = 0
+        var envelopeY: CGFloat = WhatsNewLinkLoop.openDrop + WhatsNewLinkLoop.arrival
+        var flapAngle: Double = 180
+        var flapLifted = true
         var sealShown: Double = 0
         var sealScale: CGFloat = WhatsNewLinkLoop.dropStartScale
         var sealMark: Double = 0
@@ -585,6 +613,17 @@ enum WhatsNewLinkLoop {
             switch move {
             case .start:
                 break
+            case .arrive:
+                frame.envelopeShown = 1
+                frame.envelopeY = openDrop
+            case .noteIn:
+                frame.noteShift = 0
+            case .close:
+                frame.flapAngle = 0
+                frame.envelopeY = 0
+                frame.noteY = 0
+            case .flapOver:
+                frame.flapLifted = false
             case .drop:
                 frame.sealShown = 1
                 frame.sealScale = hero.dropScale
@@ -618,16 +657,17 @@ enum WhatsNewLinkLoop {
     }
 }
 
-/// The sealed envelope of the Link ready step with "0.5000 XMR" in foil,
-/// 178 pt wide, with room above and below for the stamp. On its card it
-/// plays the stamp loop; with Reduce Motion it shows the sealed envelope,
-/// still.
-private struct LinkScene: View {
+/// The envelope of the Link ready step with "0.5000 XMR" in foil, 178 pt
+/// wide, with room above and below for the note, the open envelope and the
+/// stamp. On its card it plays the send's loop; with Reduce Motion it
+/// shows the sealed envelope, still.
+struct LinkScene: View {
     static let width: CGFloat = 178
-    /// Room above and below the envelope (its units). The stamp hovers 72
-    /// above the envelope's top: with this room it stays inside the card,
-    /// and the envelope stays in the middle.
-    static let headroom: CGFloat = 40
+    /// Room above and below the sealed envelope (its units). The note rises
+    /// 145 above the sealed envelope's top and the open envelope's bottom
+    /// sits 178 below its bottom (the hero's places): with this room they
+    /// stay inside the card, and the sealed envelope stays in the middle.
+    static let headroom: CGFloat = 140
 
     let isAnimated: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -669,6 +709,12 @@ private struct LinkSceneLoop: View {
 /// hero's own curve, at its pace.
 private struct LinkSceneStamp: View {
     let step: WhatsNewLinkLoop.Step
+    @State private var noteShift = WhatsNewLinkLoop.Frame().noteShift
+    @State private var noteY = WhatsNewLinkLoop.Frame().noteY
+    @State private var envelopeShown = WhatsNewLinkLoop.Frame().envelopeShown
+    @State private var envelopeY = WhatsNewLinkLoop.Frame().envelopeY
+    @State private var flapAngle = WhatsNewLinkLoop.Frame().flapAngle
+    @State private var flapLifted = WhatsNewLinkLoop.Frame().flapLifted
     @State private var sealShown = WhatsNewLinkLoop.Frame().sealShown
     @State private var sealScale = WhatsNewLinkLoop.Frame().sealScale
     @State private var sealMark = WhatsNewLinkLoop.Frame().sealMark
@@ -682,6 +728,12 @@ private struct LinkSceneStamp: View {
 
     var body: some View {
         LinkSceneFrame(frame: WhatsNewLinkLoop.Frame(
+            noteShift: noteShift,
+            noteY: noteY,
+            envelopeShown: envelopeShown,
+            envelopeY: envelopeY,
+            flapAngle: flapAngle,
+            flapLifted: flapLifted,
             sealShown: sealShown,
             sealScale: sealScale,
             sealMark: sealMark,
@@ -702,6 +754,20 @@ private struct LinkSceneStamp: View {
         switch step {
         case .start, .fade:
             withAnimation(.easeInOut(duration: WhatsNewLinkLoop.fadeDuration)) { opacity = target.opacity }
+        case .arrive:
+            paced(.easeOut(duration: 0.3)) { envelopeShown = target.envelopeShown }
+            paced(hero.settle) { envelopeY = target.envelopeY }
+        case .noteIn:
+            paced(hero.settle) { noteShift = target.noteShift }
+        case .close:
+            paced(hero.stepBack) {
+                flapAngle = target.flapAngle
+                envelopeY = target.envelopeY
+                noteY = target.noteY
+            }
+        case .flapOver:
+            // At once, as in the hero.
+            flapLifted = target.flapLifted
         case .drop:
             paced(.linear(duration: 0.09)) { sealShown = target.sealShown }
             paced(hero.settle) { sealScale = target.sealScale }
@@ -739,6 +805,12 @@ private struct LinkSceneStamp: View {
     /// part a skipped step left behind (after the app was in the
     /// background). A part already on its way there is left alone.
     private func catchUp(to target: WhatsNewLinkLoop.Frame) {
+        if noteShift != target.noteShift { noteShift = target.noteShift }
+        if noteY != target.noteY { noteY = target.noteY }
+        if envelopeShown != target.envelopeShown { envelopeShown = target.envelopeShown }
+        if envelopeY != target.envelopeY { envelopeY = target.envelopeY }
+        if flapAngle != target.flapAngle { flapAngle = target.flapAngle }
+        if flapLifted != target.flapLifted { flapLifted = target.flapLifted }
         if sealShown != target.sealShown { sealShown = target.sealShown }
         if sealScale != target.sealScale { sealScale = target.sealScale }
         if sealMark != target.sealMark { sealMark = target.sealMark }
@@ -757,38 +829,76 @@ private struct LinkSceneStamp: View {
     }
 }
 
-/// One frame of the envelope picture, in the envelope's units: the
-/// envelope, its seal and foil, and the stamp placed on the seal as in the
-/// hero.
+/// One frame of the envelope picture, in the envelope's units, drawn as the
+/// hero draws it: the envelope's back, the note in its pocket mask, the
+/// front with its seal and foil, and the stamp placed on the seal. The
+/// layers sit on a tall canvas, so the note, the open flap and the rising
+/// envelope always draw inside it; the layout keeps only the sealed
+/// envelope and its headroom.
 private struct LinkSceneFrame: View {
     let frame: WhatsNewLinkLoop.Frame
     private static let unit: CGFloat = LinkScene.width / Envelope.width
+    /// The canvas's room above and below the sealed envelope: more than the
+    /// envelope's rise (`openDrop` + `arrival`) and its shadow.
+    private static let reach: CGFloat = 420
+    private static let canvasHeight = Envelope.height + 2 * reach
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
-                EnvelopeBack()
-                EnvelopeFront(
-                    sweep: frame.sweep,
-                    sealOpacity: frame.sealShown,
-                    sealScale: frame.sealScale,
-                    sealMark: frame.sealMark,
-                    sealDome: frame.sealDome
-                ) {
-                    PaymentLinkCardFoil(amount: PaymentLinkCard.foil("0.5000", showsUnit: true), showsUnit: true)
-                        .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
-                        .mask(alignment: .topLeading) { EnvelopeFoilReveal(sweep: frame.sweep) }
-                }
+                layer(EnvelopeBack(flapAngle: frame.flapAngle, flapLifted: frame.flapLifted), y: frame.envelopeY)
+                    .opacity(frame.envelopeShown)
+                layer(note, y: frame.noteY)
+                    .mask(alignment: .topLeading) { pocketMask }
+                layer(front, y: frame.envelopeY)
+                    .opacity(frame.envelopeShown)
             }
-            // One layer, so the fade never shows the back through the front.
+            // One layer, so the fades never show the back or the note
+            // through the front.
             .compositingGroup()
             tool
         }
-        .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
+        .frame(width: Envelope.width, height: Self.canvasHeight, alignment: .topLeading)
         .scaleEffect(Self.unit, anchor: .topLeading)
-        .frame(width: Envelope.width * Self.unit, height: Envelope.height * Self.unit, alignment: .topLeading)
-        .padding(.vertical, LinkScene.headroom * Self.unit)
+        .frame(width: Envelope.width * Self.unit, height: Self.canvasHeight * Self.unit, alignment: .topLeading)
+        // The layout: the sealed envelope and its headroom. The canvas
+        // reaches past it evenly above and below.
+        .frame(height: (Envelope.height + 2 * LinkScene.headroom) * Self.unit)
         .opacity(frame.opacity)
+    }
+
+    /// While the pocket fades in, the note below its edge fades out at the
+    /// same rate, so the note never shows through the pocket (the hero's
+    /// `pocketMask`).
+    private var pocketMask: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .frame(height: Self.reach + frame.envelopeY)
+            Rectangle()
+                .opacity(1 - frame.envelopeShown)
+        }
+        .frame(width: Envelope.width, height: Self.canvasHeight, alignment: .top)
+    }
+
+    private var note: some View {
+        EnvelopePaperCard(amount: EnvelopeCardAmount(text: "0.5000", showsUnit: true), sweep: frame.sweep)
+            .offset(x: Envelope.cardOrigin.x, y: Envelope.cardOrigin.y + frame.noteShift)
+    }
+
+    private var front: some View {
+        EnvelopeFront(
+            flapAngle: frame.flapAngle,
+            flapLifted: frame.flapLifted,
+            sweep: frame.sweep,
+            sealOpacity: frame.sealShown,
+            sealScale: frame.sealScale,
+            sealMark: frame.sealMark,
+            sealDome: frame.sealDome
+        ) {
+            PaymentLinkCardFoil(amount: PaymentLinkCard.foil("0.5000", showsUnit: true), showsUnit: true)
+                .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
+                .mask(alignment: .topLeading) { EnvelopeFoilReveal(sweep: frame.sweep) }
+        }
     }
 
     /// The stamp, its face's middle on the seal's middle, moved by the
@@ -800,8 +910,17 @@ private struct LinkSceneFrame: View {
         return EnvelopeStampTool(height: frame.toolHeight)
             .rotationEffect(.degrees(frame.toolTilt), anchor: UnitPoint(x: contact.x / size.width, y: contact.y / size.height))
             .offset(x: frame.toolOffset.width, y: frame.toolOffset.height)
-            .offset(x: seal.x - contact.x, y: seal.y - contact.y)
+            .offset(x: seal.x - contact.x, y: Self.reach + frame.envelopeY + seal.y - contact.y)
             .opacity(frame.toolShown)
+    }
+
+    /// One layer of the envelope at `y` below the sealed envelope's place,
+    /// on the canvas (the hero's `layer`).
+    private func layer(_ content: some View, y: CGFloat) -> some View {
+        content
+            .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
+            .offset(y: Self.reach + y)
+            .frame(width: Envelope.width, height: Self.canvasHeight, alignment: .topLeading)
     }
 }
 

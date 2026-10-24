@@ -1138,12 +1138,12 @@ struct PaymentLinkSendHero: View {
 
     static let size = CGSize(width: 338, height: 280)
     /// Points per design unit, as in the claim sheet's hero.
-    private static let unit: CGFloat = 0.8 * 0.338
+    static let unit: CGFloat = 0.8 * 0.338
     private static let origin = CGPoint(x: 33.8, y: 48.06)
     /// The open envelope sits this much lower, so its flap stays in the frame.
-    private static let drop: CGFloat = 48.06
+    static let drop: CGFloat = 48.06
     /// The envelope comes up from this much lower.
-    private static let arrival: CGFloat = 50.02
+    static let arrival: CGFloat = 50.02
     /// The spinner's 160 pt slot, at the bottom of the frame.
     private static let checkOrigin = CGPoint(x: 89, y: 120)
     private static let checkRise: CGFloat = 110

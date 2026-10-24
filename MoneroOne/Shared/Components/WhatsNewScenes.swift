@@ -23,7 +23,7 @@ enum WhatsNewSceneColor {
 /// takes 96% of it). It keeps that size at every text size.
 struct WhatsNewScenePicture: View {
     let scene: WhatsNewScene
-    /// Plays the scene's loop. Only Transfer, the top card, has one; the
+    /// Plays the scene's loop. Only the envelope and Transfer have one; the
     /// blurred copy behind a card stays still.
     var isAnimated = false
 
@@ -46,7 +46,7 @@ struct WhatsNewScenePicture: View {
     private var content: some View {
         switch scene {
         case .transfer: TransferScene(isAnimated: isAnimated)
-        case .link: LinkScene()
+        case .link: LinkScene(isAnimated: isAnimated)
         case .contacts: ContactsScene()
         case .name: NameScene()
         case .seed: SeedScene()
@@ -280,7 +280,11 @@ private struct TransferSceneLoop: View {
     @State private var start = Date.now
 
     var body: some View {
-        TimelineView(TransferLoopSchedule(start: start)) { context in
+        TimelineView(SceneLoopSchedule(
+            start: start,
+            begins: WhatsNewTransferLoop.Step.allCases.map(WhatsNewTransferLoop.begin(of:)),
+            cycle: WhatsNewTransferLoop.cycleDuration
+        )) { context in
             let step = WhatsNewTransferLoop.step(at: context.date.timeIntervalSince(start))
             TransferSceneFrame(step: step)
                 .animation(WhatsNewTransferLoop.animation(to: step), value: step)
@@ -288,13 +292,14 @@ private struct TransferSceneLoop: View {
     }
 }
 
-/// The dates the steps begin, cycle after cycle.
-private struct TransferLoopSchedule: TimelineSchedule {
+/// The dates a loop's steps begin, cycle after cycle.
+private struct SceneLoopSchedule: TimelineSchedule {
     let start: Date
+    /// Each step's begin, from the start of a cycle, in order.
+    let begins: [Double]
+    let cycle: Double
 
     func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
-        let cycle = WhatsNewTransferLoop.cycleDuration
-        let begins = WhatsNewTransferLoop.Step.allCases.map(WhatsNewTransferLoop.begin(of:))
         let cyclesDone = (max(0, startDate.timeIntervalSince(start)) / cycle).rounded(.down)
         var cycleStart = start.addingTimeInterval(cyclesDone * cycle)
         var index = 0
@@ -471,23 +476,332 @@ private struct SceneWalletRow: View {
 
 // MARK: - Send XMR as a link
 
+/// The envelope's loop: the stamp of the real send (`PaymentLinkSendHero`,
+/// its beats from 2.10 to 3.10, at its pace, with its springs and curves).
+/// A drop of wax on the closed envelope; the stamp comes in, presses the
+/// seal on and lifts away; one light sweep shows the amount in foil. A rest
+/// on the sealed envelope, then the picture fades out and comes back at the
+/// start. No haptics.
+enum WhatsNewLinkLoop {
+    enum Step: CaseIterable {
+        /// The closed envelope, with no seal and no foil. It fades back in.
+        case start
+        /// A plain drop of wax.
+        case drop
+        /// The stamp comes in from the upper right and hovers over the wax.
+        case hover
+        /// It presses in.
+        case press
+        /// It meets the wax: the wax spreads.
+        case contact
+        /// It lifts.
+        case lift
+        /// The ring and the mark show in the wax.
+        case mark
+        /// It goes up and to the right, and fades.
+        case away
+        /// One light sweep: the foil shows where it has passed.
+        case sweep
+        /// The picture fades out, so everything goes back unseen.
+        case fade
+    }
+
+    /// The frame that stands still with Reduce Motion: the sealed envelope
+    /// with its foil, the last frame before the fade.
+    static let stillStep: Step = .sweep
+
+    /// The fade out and back in (crossFade).
+    static let fadeDuration = 0.35
+    /// The rest on the closed envelope before the wax.
+    static let restBeforeDrop = 0.6
+    /// The hero's light sweep. Its time is not paced.
+    static let sweepDuration = 1.2
+    /// The rest on the sealed envelope before the fade.
+    static let restOnResult = 2.0
+    /// The hero's wax starts at this scale.
+    static let dropStartScale: CGFloat = 0.3
+
+    /// The time from the begin of the step before to the begin of `step`:
+    /// the fade-in and a rest, the hero's beats (its times at pace 1, times
+    /// its pace), then the sweep and a rest.
+    static func wait(before step: Step) -> Double {
+        let pace = PaymentLinkSendHero.pace
+        return switch step {
+        case .start: 0
+        case .drop: fadeDuration + restBeforeDrop
+        case .hover: 0.15 * pace
+        case .press: 0.4 * pace
+        case .contact: 0.09 * pace
+        case .lift: 0.16 * pace
+        case .mark: 0.03 * pace
+        case .away: 0.07 * pace
+        case .sweep: 0.1 * pace
+        case .fade: sweepDuration + restOnResult
+        }
+    }
+
+    /// When `step` begins, from the start of a cycle.
+    static func begin(of step: Step) -> Double {
+        var time = 0.0
+        for earlier in Step.allCases {
+            time += wait(before: earlier)
+            if earlier == step { break }
+        }
+        return time
+    }
+
+    /// One cycle, rests included: it ends when the fade has finished.
+    static var cycleDuration: Double {
+        begin(of: .fade) + fadeDuration
+    }
+
+    /// The step shown `elapsed` seconds after the loop began. A time on a
+    /// step's begin shows that step.
+    static func step(at elapsed: Double) -> Step {
+        let time = (max(0, elapsed) + 1e-6).truncatingRemainder(dividingBy: cycleDuration)
+        return Step.allCases.last { begin(of: $0) <= time } ?? .start
+    }
+
+    /// The values of the hero's animated parts. The defaults are the start.
+    struct Frame: Equatable {
+        var sealShown: Double = 0
+        var sealScale: CGFloat = WhatsNewLinkLoop.dropStartScale
+        var sealMark: Double = 0
+        var sealDome: Double = 1
+        var toolShown: Double = 0
+        var toolOffset: CGSize = PaymentLinkSendHero.toolAway
+        var toolTilt: Double = PaymentLinkSendHero.toolTilt
+        var toolHeight: CGFloat = 1
+        var sweep: CGFloat = Envelope.sweepStart
+        var opacity: Double = 1
+    }
+
+    /// The frame once the moves up to `step` have finished: each step sets
+    /// what the hero sets at that beat.
+    static func frame(at step: Step) -> Frame {
+        let hero = PaymentLinkSendHero.self
+        var frame = Frame()
+        for move in Step.allCases {
+            switch move {
+            case .start:
+                break
+            case .drop:
+                frame.sealShown = 1
+                frame.sealScale = hero.dropScale
+            case .hover:
+                frame.toolShown = 1
+                frame.toolOffset = CGSize(width: 0, height: hero.toolHover)
+                frame.toolTilt = 0
+            case .press:
+                frame.toolOffset.height = hero.toolSink
+                frame.toolHeight = 0
+            case .contact:
+                frame.sealScale = 1
+                frame.sealDome = 0
+            case .lift:
+                frame.toolOffset.height = hero.toolSink - hero.toolLift
+                frame.toolHeight = 1
+            case .mark:
+                frame.sealMark = 1
+            case .away:
+                frame.toolShown = 0
+                frame.toolOffset = hero.toolAway
+                frame.toolTilt = hero.toolTilt
+            case .sweep:
+                frame.sweep = Envelope.sweepEnd
+            case .fade:
+                frame.opacity = 0
+            }
+            if move == step { break }
+        }
+        return frame
+    }
+}
+
 /// The sealed envelope of the Link ready step with "0.5000 XMR" in foil,
-/// 178 pt wide.
+/// 178 pt wide, with room above and below for the stamp. On its card it
+/// plays the stamp loop; with Reduce Motion it shows the sealed envelope,
+/// still.
 private struct LinkScene: View {
     static let width: CGFloat = 178
-    private static let unit: CGFloat = width / Envelope.width
+    /// Room above and below the envelope (its units). The stamp hovers 72
+    /// above the envelope's top: with this room it stays inside the card,
+    /// and the envelope stays in the middle.
+    static let headroom: CGFloat = 40
+
+    let isAnimated: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isOnScreen = true
+
+    var body: some View {
+        Group {
+            if !isAnimated || reduceMotion {
+                LinkSceneFrame(frame: WhatsNewLinkLoop.frame(at: WhatsNewLinkLoop.stillStep))
+            } else if isOnScreen {
+                LinkSceneLoop()
+            } else {
+                // Off screen: the loop stops on its first frame and starts
+                // again from there, without a jump.
+                LinkSceneFrame(frame: WhatsNewLinkLoop.frame(at: .start))
+            }
+        }
+        .onScreenChange(isAnimated: isAnimated) { isOnScreen = $0 }
+    }
+}
+
+/// The loop: one redraw at each step's begin. It ends when the sheet
+/// closes.
+private struct LinkSceneLoop: View {
+    @State private var start = Date.now
+
+    var body: some View {
+        TimelineView(SceneLoopSchedule(
+            start: start,
+            begins: WhatsNewLinkLoop.Step.allCases.map(WhatsNewLinkLoop.begin(of:)),
+            cycle: WhatsNewLinkLoop.cycleDuration
+        )) { context in
+            LinkSceneStamp(step: WhatsNewLinkLoop.step(at: context.date.timeIntervalSince(start)))
+        }
+    }
+}
+
+/// Moves to each step as the hero's `play()` does: each part with the
+/// hero's own curve, at its pace.
+private struct LinkSceneStamp: View {
+    let step: WhatsNewLinkLoop.Step
+    @State private var sealShown = WhatsNewLinkLoop.Frame().sealShown
+    @State private var sealScale = WhatsNewLinkLoop.Frame().sealScale
+    @State private var sealMark = WhatsNewLinkLoop.Frame().sealMark
+    @State private var sealDome = WhatsNewLinkLoop.Frame().sealDome
+    @State private var toolShown = WhatsNewLinkLoop.Frame().toolShown
+    @State private var toolOffset = WhatsNewLinkLoop.Frame().toolOffset
+    @State private var toolTilt = WhatsNewLinkLoop.Frame().toolTilt
+    @State private var toolHeight = WhatsNewLinkLoop.Frame().toolHeight
+    @State private var sweep = WhatsNewLinkLoop.Frame().sweep
+    @State private var opacity = WhatsNewLinkLoop.Frame().opacity
+
+    var body: some View {
+        LinkSceneFrame(frame: WhatsNewLinkLoop.Frame(
+            sealShown: sealShown,
+            sealScale: sealScale,
+            sealMark: sealMark,
+            sealDome: sealDome,
+            toolShown: toolShown,
+            toolOffset: toolOffset,
+            toolTilt: toolTilt,
+            toolHeight: toolHeight,
+            sweep: sweep,
+            opacity: opacity
+        ))
+        .onChange(of: step) { _, step in show(step) }
+    }
+
+    private func show(_ step: WhatsNewLinkLoop.Step) {
+        let hero = PaymentLinkSendHero.self
+        let target = WhatsNewLinkLoop.frame(at: step)
+        switch step {
+        case .start, .fade:
+            withAnimation(.easeInOut(duration: WhatsNewLinkLoop.fadeDuration)) { opacity = target.opacity }
+        case .drop:
+            paced(.linear(duration: 0.09)) { sealShown = target.sealShown }
+            paced(hero.settle) { sealScale = target.sealScale }
+        case .hover:
+            paced(.linear(duration: 0.15)) { toolShown = target.toolShown }
+            paced(hero.stepBack) {
+                toolOffset = target.toolOffset
+                toolTilt = target.toolTilt
+            }
+        case .press, .lift:
+            paced(.easeIn(duration: 0.1)) {
+                toolOffset = target.toolOffset
+                toolHeight = target.toolHeight
+            }
+        case .contact:
+            paced(.easeOut(duration: 0.16)) {
+                sealScale = target.sealScale
+                sealDome = target.sealDome
+            }
+        case .mark:
+            paced(.easeOut(duration: 0.12)) { sealMark = target.sealMark }
+        case .away:
+            paced(hero.stepBack) {
+                toolOffset = target.toolOffset
+                toolTilt = target.toolTilt
+            }
+            paced(.easeIn(duration: 0.25)) { toolShown = target.toolShown }
+        case .sweep:
+            withAnimation(.easeInOut(duration: WhatsNewLinkLoop.sweepDuration)) { sweep = target.sweep }
+        }
+        catchUp(to: target)
+    }
+
+    /// At once: the parts that go back while the picture is clear, and any
+    /// part a skipped step left behind (after the app was in the
+    /// background). A part already on its way there is left alone.
+    private func catchUp(to target: WhatsNewLinkLoop.Frame) {
+        if sealShown != target.sealShown { sealShown = target.sealShown }
+        if sealScale != target.sealScale { sealScale = target.sealScale }
+        if sealMark != target.sealMark { sealMark = target.sealMark }
+        if sealDome != target.sealDome { sealDome = target.sealDome }
+        if toolShown != target.toolShown { toolShown = target.toolShown }
+        if toolOffset != target.toolOffset { toolOffset = target.toolOffset }
+        if toolTilt != target.toolTilt { toolTilt = target.toolTilt }
+        if toolHeight != target.toolHeight { toolHeight = target.toolHeight }
+        if sweep != target.sweep { sweep = target.sweep }
+        if opacity != target.opacity { opacity = target.opacity }
+    }
+
+    /// An animation of the hero's `play()`, at its pace.
+    private func paced(_ animation: Animation, _ body: () -> Void) {
+        withAnimation(animation.speed(1 / PaymentLinkSendHero.pace), body)
+    }
+}
+
+/// One frame of the envelope picture, in the envelope's units: the
+/// envelope, its seal and foil, and the stamp placed on the seal as in the
+/// hero.
+private struct LinkSceneFrame: View {
+    let frame: WhatsNewLinkLoop.Frame
+    private static let unit: CGFloat = LinkScene.width / Envelope.width
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            EnvelopeBack()
-            EnvelopeFront(sweep: Envelope.sweepEnd) {
-                PaymentLinkCardFoil(amount: PaymentLinkCard.foil("0.5000", showsUnit: true), showsUnit: true)
-                    .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
+            ZStack(alignment: .topLeading) {
+                EnvelopeBack()
+                EnvelopeFront(
+                    sweep: frame.sweep,
+                    sealOpacity: frame.sealShown,
+                    sealScale: frame.sealScale,
+                    sealMark: frame.sealMark,
+                    sealDome: frame.sealDome
+                ) {
+                    PaymentLinkCardFoil(amount: PaymentLinkCard.foil("0.5000", showsUnit: true), showsUnit: true)
+                        .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
+                        .mask(alignment: .topLeading) { EnvelopeFoilReveal(sweep: frame.sweep) }
+                }
             }
+            // One layer, so the fade never shows the back through the front.
+            .compositingGroup()
+            tool
         }
         .frame(width: Envelope.width, height: Envelope.height, alignment: .topLeading)
         .scaleEffect(Self.unit, anchor: .topLeading)
         .frame(width: Envelope.width * Self.unit, height: Envelope.height * Self.unit, alignment: .topLeading)
+        .padding(.vertical, LinkScene.headroom * Self.unit)
+        .opacity(frame.opacity)
+    }
+
+    /// The stamp, its face's middle on the seal's middle, moved by the
+    /// frame's offset and tilted about that point (the hero's `tool`).
+    private var tool: some View {
+        let size = EnvelopeStampTool.size
+        let contact = EnvelopeStampTool.contact
+        let seal = PaymentLinkSendHero.sealCenter
+        return EnvelopeStampTool(height: frame.toolHeight)
+            .rotationEffect(.degrees(frame.toolTilt), anchor: UnitPoint(x: contact.x / size.width, y: contact.y / size.height))
+            .offset(x: frame.toolOffset.width, y: frame.toolOffset.height)
+            .offset(x: seal.x - contact.x, y: seal.y - contact.y)
+            .opacity(frame.toolShown)
     }
 }
 

@@ -371,7 +371,8 @@ private struct WhatsNewFeatureCard: View {
                     .opacity(colorScheme == .dark ? WhatsNewFeatureLayout.blurOpacity : 0)
             }
             .overlay {
-                // The sharp picture plays its loop (only Transfer has one).
+                // The sharp picture plays its loop (the envelope and
+                // Transfer have one).
                 WhatsNewScenePicture(scene: scene, isAnimated: true)
                     .padding(WhatsNewFeatureLayout.cardPadding)
             }

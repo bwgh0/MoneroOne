@@ -315,6 +315,102 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertEqual(Loop.toBalance(at: Loop.stillStep), Loop.toBalance + Loop.amount)
     }
 
+    // MARK: - The envelope loop (the send's stamp)
+
+    func testTheEnvelopeLoopPlaysTheSendsStampInOrder() {
+        typealias Loop = WhatsNewLinkLoop
+        let hero = PaymentLinkSendHero.self
+        XCTAssertEqual(Loop.Step.allCases, [.start, .drop, .hover, .press, .contact, .lift, .mark, .away, .sweep, .fade])
+        // The start: the closed envelope, no seal, no stamp, no foil.
+        let start = Loop.frame(at: .start)
+        XCTAssertEqual(start, Loop.Frame())
+        XCTAssertEqual(start.sealShown, 0)
+        XCTAssertEqual(start.sealScale, Loop.dropStartScale)
+        XCTAssertEqual(start.toolShown, 0)
+        XCTAssertEqual(start.toolOffset, hero.toolAway)
+        XCTAssertEqual(start.sweep, Envelope.sweepStart)
+        XCTAssertEqual(start.opacity, 1)
+        // Each step changes only what the hero changes at that beat.
+        var expected = start
+        expected.sealShown = 1
+        expected.sealScale = hero.dropScale
+        XCTAssertEqual(Loop.frame(at: .drop), expected)
+        expected.toolShown = 1
+        expected.toolOffset = CGSize(width: 0, height: hero.toolHover)
+        expected.toolTilt = 0
+        XCTAssertEqual(Loop.frame(at: .hover), expected)
+        expected.toolOffset.height = hero.toolSink
+        expected.toolHeight = 0
+        XCTAssertEqual(Loop.frame(at: .press), expected)
+        expected.sealScale = 1
+        expected.sealDome = 0
+        XCTAssertEqual(Loop.frame(at: .contact), expected)
+        expected.toolOffset.height = hero.toolSink - hero.toolLift
+        expected.toolHeight = 1
+        XCTAssertEqual(Loop.frame(at: .lift), expected)
+        expected.sealMark = 1
+        XCTAssertEqual(Loop.frame(at: .mark), expected)
+        expected.toolShown = 0
+        expected.toolOffset = hero.toolAway
+        expected.toolTilt = hero.toolTilt
+        XCTAssertEqual(Loop.frame(at: .away), expected)
+        expected.sweep = Envelope.sweepEnd
+        XCTAssertEqual(Loop.frame(at: .sweep), expected)
+        expected.opacity = 0
+        XCTAssertEqual(Loop.frame(at: .fade), expected)
+        // The stamp shows from the hover until it goes; the picture is
+        // clear only on the fade.
+        XCTAssertEqual(Loop.Step.allCases.map { Loop.frame(at: $0).toolShown }, [0, 0, 1, 1, 1, 1, 1, 0, 0, 0])
+        XCTAssertEqual(Loop.Step.allCases.map { Loop.frame(at: $0).opacity }, [1, 1, 1, 1, 1, 1, 1, 1, 1, 0])
+    }
+
+    func testTheEnvelopeLoopKeepsTheHerosTimingWithRests() {
+        typealias Loop = WhatsNewLinkLoop
+        XCTAssertEqual(PaymentLinkSendHero.pace, 1.3)
+        // The hero's beats from the wax to the sweep (pace 1), at its pace.
+        let beats: [(Loop.Step, Double)] = [
+            (.drop, 2.10), (.hover, 2.25), (.press, 2.65), (.contact, 2.74),
+            (.lift, 2.90), (.mark, 2.93), (.away, 3.00), (.sweep, 3.10),
+        ]
+        for (step, beat) in beats {
+            XCTAssertEqual(Loop.begin(of: step) - Loop.begin(of: .drop), (beat - 2.10) * 1.3, accuracy: 0.0001)
+        }
+        // The fade-in and a rest before the wax; the sweep and a rest on the
+        // sealed envelope before the fade; one cycle of 5.8 s.
+        XCTAssertEqual(Loop.begin(of: .drop), 0.35 + 0.6, accuracy: 0.0001)
+        XCTAssertEqual(Loop.begin(of: .fade) - Loop.begin(of: .sweep), 1.2 + 2.0, accuracy: 0.0001)
+        XCTAssertEqual(Loop.cycleDuration, 5.8, accuracy: 0.001)
+        XCTAssertTrue((4...6).contains(Loop.cycleDuration))
+        let begins = Loop.Step.allCases.map(Loop.begin(of:))
+        XCTAssertEqual(begins, begins.sorted())
+        XCTAssertEqual(Set(begins).count, begins.count)
+        // The step at a time: on a begin it is that step; the cycle wraps.
+        XCTAssertEqual(Loop.step(at: 0), .start)
+        XCTAssertEqual(Loop.step(at: 0.95), .drop)
+        XCTAssertEqual(Loop.step(at: Loop.begin(of: .press)), .press)
+        XCTAssertEqual(Loop.step(at: Loop.begin(of: .contact)), .contact)
+        XCTAssertEqual(Loop.step(at: 5.5), .fade)
+        XCTAssertEqual(Loop.step(at: Loop.cycleDuration), .start)
+        XCTAssertEqual(Loop.step(at: Loop.cycleDuration + 0.95), .drop)
+    }
+
+    func testReduceMotionShowsTheSealedEnvelopeStill() {
+        typealias Loop = WhatsNewLinkLoop
+        // The hero's end, the last frame before the fade: the seal pressed
+        // with its ring and mark, the foil shown, the stamp gone.
+        XCTAssertEqual(Loop.stillStep, .sweep)
+        let order = Loop.Step.allCases
+        XCTAssertEqual(order.firstIndex(of: .fade), order.firstIndex(of: Loop.stillStep).map { $0 + 1 })
+        let still = Loop.frame(at: Loop.stillStep)
+        XCTAssertEqual(still.sealShown, 1)
+        XCTAssertEqual(still.sealScale, 1)
+        XCTAssertEqual(still.sealMark, 1)
+        XCTAssertEqual(still.sealDome, 0)
+        XCTAssertEqual(still.toolShown, 0)
+        XCTAssertEqual(still.sweep, Envelope.sweepEnd)
+        XCTAssertEqual(still.opacity, 1)
+    }
+
     // MARK: - Links
 
     func testShareWithFriendsSharesTheWebsite() {

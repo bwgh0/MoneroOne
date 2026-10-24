@@ -1152,23 +1152,23 @@ struct PaymentLinkSendHero: View {
     private static let seedScale = CGSize(width: 0.324, height: 0.475)
     private static let seedShift: CGFloat = 43.8
     /// The brand springs (tokens `motion.springs`).
-    private static let settle = Animation.spring(response: 0.4, dampingFraction: 0.8)
-    private static let stepBack = Animation.spring(response: 0.5, dampingFraction: 0.8)
+    static let settle = Animation.spring(response: 0.4, dampingFraction: 0.8)
+    static let stepBack = Animation.spring(response: 0.5, dampingFraction: 0.8)
     /// Every beat and motion of `play()` takes this many times its time
     /// there (the times are at pace 1), all but the light sweep.
-    private static let pace: Double = 1.3
+    static let pace: Double = 1.3
     /// The seal's middle on the envelope (design units).
-    private static let sealCenter = CGPoint(x: 500, y: 305)
+    static let sealCenter = CGPoint(x: 500, y: 305)
     /// The wax as a plain drop, before the stamp spreads it.
-    private static let dropScale: CGFloat = 0.86
+    static let dropScale: CGFloat = 0.86
     /// The stamp, from its contact with the wax (design units): where it
     /// comes in and goes, its tilt there, its hover, how far it sinks into
     /// the wax and how far it lifts.
-    private static let toolAway = CGSize(width: 60, height: -260)
-    private static let toolTilt: Double = 10
-    private static let toolHover: CGFloat = -24
-    private static let toolSink: CGFloat = 5
-    private static let toolLift: CGFloat = 30
+    static let toolAway = CGSize(width: 60, height: -260)
+    static let toolTilt: Double = 10
+    static let toolHover: CGFloat = -24
+    static let toolSink: CGFloat = 5
+    static let toolLift: CGFloat = 30
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasPlayed = false

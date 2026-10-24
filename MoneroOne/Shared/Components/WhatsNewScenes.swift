@@ -272,8 +272,9 @@ private struct SceneContactRow: View {
 // MARK: - Send to a name
 
 /// The Send step with a resolved name: "Recipient", the field as
-/// `OpenAliasRecipientCard`, the DNSSEC line with the 8…8 address, and
-/// Continue. Change 2 of the spec: it fills the picture like the others.
+/// `OpenAliasRecipientCard` and the DNSSEC line with the 8…8 address.
+/// No Continue capsule: it sat above the sheet's real Continue and read
+/// as a button.
 private struct NameScene: View {
     private let summary = OpenAliasSummary(
         name: OpenAliasName(display: "ana@example.com", query: "ana.example.com"),
@@ -284,35 +285,20 @@ private struct NameScene: View {
     )
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Recipient")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Recipient")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
-                OpenAliasRecipientCard(summary: summary, onClear: {})
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 54)
-                    .background(WhatsNewSceneColor.part, in: RoundedRectangle(cornerRadius: 12))
-                    .sceneShadow()
+            OpenAliasRecipientCard(summary: summary, onClear: {})
+                .padding(.horizontal)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 54)
+                .background(WhatsNewSceneColor.part, in: RoundedRectangle(cornerRadius: 12))
+                .sceneShadow()
 
-                OpenAliasResolvedLines(summary: summary)
-            }
-
-            // The step's Continue, enabled.
-            HStack(spacing: 8) {
-                Text("Continue")
-                    .font(.callout.weight(.semibold))
-                Image(systemName: "arrow.right")
-                    .font(.callout.weight(.semibold))
-            }
-            .foregroundStyle(.brand)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(WhatsNewSceneColor.part, in: Capsule())
-            .sceneShadow()
+            OpenAliasResolvedLines(summary: summary)
         }
     }
 }

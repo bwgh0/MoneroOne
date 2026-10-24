@@ -547,6 +547,22 @@ final class UsernameTests: XCTestCase {
     XCTAssertEqual(failure(result), UsernameFailure.retry.localizedDescription)
     XCTAssertTrue(none.isEmpty)
   }
+  func testDebugURLIsThisMachineOrATailscaleHTTPSName() {
+    for raw in ["http://localhost:8787", "https://localhost:8787", "https://mac.example-tailnet.ts.net",
+      "https://Mac.Example-Tailnet.TS.NET/oah"]
+    {
+      XCTAssertTrue(UsernameConfiguration.isDebugURL(URL(string: raw)!), raw)
+    }
+    for raw in [
+      "http://mac.example-tailnet.ts.net", "https://ts.net", "https://.ts.net", "https://x.ts.net.example.com",
+      "https://example.com", "https://xts.net", "ftp://localhost", "https://user@mac.example-tailnet.ts.net",
+      "https://user:secret@mac.example-tailnet.ts.net", "http://user@localhost:8787",
+      "https://mac.example-tailnet.ts.net?debug=1", "https://mac.example-tailnet.ts.net#top",
+      "http://localhost:8787?debug=1",
+    ] {
+      XCTAssertFalse(UsernameConfiguration.isDebugURL(URL(string: raw)!), raw)
+    }
+  }
 }
 
 private struct FakeDeviceTokens: UsernameDeviceTokens {

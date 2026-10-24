@@ -92,8 +92,7 @@ struct UsernameResolutionConfiguration {
       let env = ProcessInfo.processInfo.environment
       guard let registry = UsernameConfiguration.current,
         let raw = env["USERNAME_MIRROR_URL"], let mirror = URL(string: raw),
-        mirror.host == "localhost", ["http", "https"].contains(mirror.scheme ?? ""),
-        mirror.user == nil, mirror.password == nil, mirror.query == nil, mirror.fragment == nil,
+        UsernameConfiguration.isDebugURL(mirror),
         mirror != registry.url,
         let root = env["USERNAME_GENESIS_ROOT"], root.count == 64,
         root.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })

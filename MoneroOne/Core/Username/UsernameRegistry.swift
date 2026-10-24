@@ -35,9 +35,7 @@ struct UsernameConfiguration {
   static var current: UsernameConfiguration? {
     #if DEBUG
       let env = ProcessInfo.processInfo.environment
-      guard let raw = env["USERNAME_REGISTRY_URL"], let url = URL(string: raw),
-        url.host == "localhost", ["http", "https"].contains(url.scheme ?? ""),
-        url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+      guard let raw = env["USERNAME_REGISTRY_URL"], let url = URL(string: raw), isDebugURL(url),
         let key = env["USERNAME_REGISTRAR_KEY"], key.count == 64,
         let rules = env["USERNAME_RULES_HASH"], rules.count == 64
       else { return nil }
@@ -45,6 +43,19 @@ struct UsernameConfiguration {
     #else
       return nil
     #endif
+  }
+  /// Debug builds talk to a registry on this machine, or to one on the developer's
+  /// private Tailscale network over HTTPS, for tests on a real phone.
+  static func isDebugURL(_ url: URL) -> Bool {
+    guard url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+      let scheme = url.scheme, let host = url.host
+    else { return false }
+    if host == "localhost" { return ["http", "https"].contains(scheme) }
+    let labels = host.lowercased().split(separator: ".", omittingEmptySubsequences: false)
+    return scheme == "https" && labels.count >= 3 && labels.suffix(2) == ["ts", "net"]
+      && labels.allSatisfy { label in
+        !label.isEmpty && label.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 45 }
+      }
   }
 }
 

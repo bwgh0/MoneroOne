@@ -120,5 +120,7 @@ Local testing additionally requires a separate mirror serving the registry's
 public objects plus a pinned genesis epoch root. iOS reads `USERNAME_MIRROR_URL`
 and `USERNAME_GENESIS_ROOT`; Android reads the Gradle properties
 `usernameMirrorUrl` and `usernameGenesisRoot`. Both are development-only and
-restricted to localhost, alongside the existing registrar/rules pins. Run a
-separate local HTTP server for `var/objects`; do not use the API as its own mirror.
+restricted to localhost, alongside the existing registrar/rules pins. iOS debug
+builds also accept an HTTPS `*.ts.net` (Tailscale) address, for tests on a real
+phone. Run a separate local HTTP server for `var/objects`; do not use the API as
+its own mirror.

@@ -387,10 +387,7 @@ struct ContactEditor: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            TextField("", text: $destination, axis: .vertical)
-            .font(isName ? .body : .system(.callout, design: .monospaced))
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
+            CodeTextField(text: $destination, style: isName ? .body : .callout, monospaced: !isName)
             .padding(16)
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
             .accessibilityLabel("Address or OpenAlias")

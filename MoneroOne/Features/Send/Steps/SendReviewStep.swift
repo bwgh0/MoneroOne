@@ -136,9 +136,7 @@ struct SendReviewStep: View {
                                 Text("All Funds")
                                     .font(.title.weight(.bold))
                                 if let fee = estimatedFee {
-                                    let sendAmount = preparedSend.map { SendReviewFee.xmr($0.amount) }
-                                        ?? walletManager.displayUnlockedBalance - fee
-                                    let sent = lines(sendAmount)
+                                    let sent = lines(shownAmount(fee: fee))
                                     Text(verbatim: sent.primary)
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
@@ -310,8 +308,20 @@ struct SendReviewStep: View {
     /// shows the fee it pays for the inputs it really spends. A hardware
     /// wallet would need the device to build it, so it keeps wallet2's
     /// estimate, which counts one input.
+    /// The amount on the screen once the fee is in, which VoiceOver reads
+    /// too: All Funds shows what the sweep sends, else the amount.
+    private func shownAmount(fee: Decimal) -> Decimal {
+        guard isSendingAll || upgradedToSendAll else { return amount }
+        return SendReviewFee.sweepAmount(prepared: preparedSend?.amount,
+                                         unlockedBalance: walletManager.displayUnlockedBalance,
+                                         fee: fee)
+    }
+
     private var sendHint: Text {
-        if estimatedFee != nil { return Text(verbatim: SendReviewFee.sendHint(amount: amount, lines: lines(amount))) }
+        if let fee = estimatedFee {
+            let shown = shownAmount(fee: fee)
+            return Text(verbatim: SendReviewFee.sendHint(amount: shown, lines: lines(shown)))
+        }
         return isWaitingForSync ? Text("Waiting for your wallet to sync", comment: "VoiceOver hint on the gray Send button while Review waits for the wallet to sync") : Text("Waiting for fee estimate")
     }
 
@@ -545,6 +555,12 @@ enum SendReviewFee {
 
     static func xmr(_ piconero: UInt64) -> Decimal {
         Decimal(piconero) / 1_000_000_000_000
+    }
+
+    /// What a sweep sends, as All Funds shows it: the built transaction's
+    /// amount, else the unlocked balance less the fee.
+    static func sweepAmount(prepared: UInt64?, unlockedBalance: Decimal, fee: Decimal) -> Decimal {
+        prepared.map(xmr) ?? unlockedBalance - fee
     }
 
     /// What leaves the wallet: the amount sent and its fee. For a sweep

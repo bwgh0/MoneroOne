@@ -879,6 +879,24 @@ final class ReviewAmountLinesTests: XCTestCase {
                        "Double tap to send 0.004181066248 XMR")
     }
 
+    // All Funds: the screen shows what the sweep sends, and the hint reads it.
+
+    func testAllFundsSendsTheBuiltTransactionsAmount() {
+        // 0.5 XMR built, of a 0.50003152 balance: the built amount, not the balance.
+        XCTAssertEqual(SendReviewFee.sweepAmount(prepared: 500_000_000_000,
+                                                 unlockedBalance: Decimal(string: "0.50003152")!,
+                                                 fee: fee),
+                       Decimal(string: "0.5")!)
+    }
+
+    func testAllFundsWithNoBuiltTransactionSendsTheBalanceLessTheFee() {
+        // A hardware wallet keeps the estimate.
+        let shown = SendReviewFee.sweepAmount(prepared: nil, unlockedBalance: Decimal(string: "0.50003152")!, fee: fee)
+        XCTAssertEqual(shown, Decimal(string: "0.5")!)
+        XCTAssertEqual(SendReviewFee.sendHint(amount: shown, lines: ReviewAmountLines(xmr: shown, fiat: "$82.71", fiatFirst: false)),
+                       "Double tap to send 0.5000 XMR")
+    }
+
     func testLinkFundHintReadsFiatFirstInFiatModeWithAPrice() {
         XCTAssertEqual(PaymentLinkReviewStep.fundHint(amount: sent, lines: sentLines(fiatMode: true, price: price)),
                        "Double tap to fund the link with $2.50, 0.004181066248 XMR")

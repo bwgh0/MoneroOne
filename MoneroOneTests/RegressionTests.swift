@@ -698,6 +698,35 @@ final class AmountPasteTests: XCTestCase {
     }
 }
 
+// MARK: - Send Amount Start Unit Tests
+
+/// With Fiat Mode on, the Send amount started in XMR. Every amount follows Fiat Mode, so it starts in
+/// fiat, except with no usable price or an amount that is already filled in.
+final class SendAmountStartUnitTests: XCTestCase {
+
+    private let price = 165.42
+
+    func testFiatModeOnStartsInFiat() {
+        XCTAssertTrue(SendAmountStep.startsInFiat(fiatMode: true, price: price, amount: ""))
+    }
+
+    func testFiatModeOffStartsInXMR() {
+        XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: false, price: price, amount: ""))
+        XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: false, price: nil, amount: ""))
+    }
+
+    func testNoPriceStartsInXMR() {
+        XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: true, price: nil, amount: ""))
+        XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: true, price: 0, amount: ""))
+        XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: true, price: .nan, amount: ""))
+    }
+
+    func testAFilledInAmountStartsInXMR() {
+        XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: true, price: price, amount: "1.5"))
+        XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: false, price: price, amount: "1.5"))
+    }
+}
+
 // MARK: - Connection Stage Regression Tests
 
 final class ConnectionStageRegressionTests: XCTestCase {

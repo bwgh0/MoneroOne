@@ -301,6 +301,11 @@ struct SendAmountStep: View {
                 showContent = true
             }
             if !memo.isEmpty { showMemo = true }
+            if Self.startsInFiat(fiatMode: priceService.showFiatFirst,
+                                 price: priceService.xmrPrice,
+                                 amount: amountString) {
+                isFiatMode = true
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             softwareKeyboardVisible = true
@@ -391,6 +396,15 @@ struct SendAmountStep: View {
         }
 
         return result
+    }
+
+    /// The unit the amount starts in. Fiat when Fiat Mode is on, like every amount in the app.
+    /// XMR when there is no usable price (a fiat amount needs one to convert), and when an amount
+    /// is already filled in (a QR code, a `monero:` link, the way back from Review): it stays as it
+    /// came, with no rounding through fiat.
+    static func startsInFiat(fiatMode: Bool, price: Double?, amount: String) -> Bool {
+        guard fiatMode, let price, PriceService.isPlausiblePrice(price) else { return false }
+        return amount.isEmpty
     }
 
     private func toggleFiatMode() {

@@ -217,6 +217,16 @@ final class SendRecordStoreTests: XCTestCase {
         XCTAssertNil(SendWalletRecipient.wallet(transferTarget: nil, matched: nil, isTransfer: false, isLinkMode: false))
     }
 
+    /// Transfer to This Wallet, or a Send to this wallet's own address:
+    /// Review names To "This Wallet" and drops the Total row.
+    func testTransferBackToThisWalletIsToSelf() {
+        let spending = wallet("Spending", address: "4spending")
+        let savings = wallet("Savings", address: "4savings")
+
+        XCTAssertTrue(TransferParties(from: spending, fromAddress: "4spending", to: spending).isToSelf)
+        XCTAssertFalse(TransferParties(from: spending, fromAddress: "4spending", to: savings).isToSelf)
+    }
+
     /// Follow-up 3: History search finds a row by the name it shows.
     func testSearchFindsARowByItsWalletName() {
         let me = UUID()

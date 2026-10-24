@@ -62,7 +62,12 @@ struct SendReviewStep: View {
                         if let transfer {
                             walletRow(transfer.from, address: transfer.fromAddress, label: String(localized: "From", comment: "Transfer review: the wallet that sends"))
                             Divider().padding(.horizontal)
-                            walletRow(transfer.to, address: recipientAddress, label: String(localized: "To", comment: "Transfer review: the wallet that receives"))
+                            walletRow(
+                                transfer.to,
+                                address: recipientAddress,
+                                label: String(localized: "To", comment: "Transfer review: the wallet that receives"),
+                                name: transfer.isToSelf ? String(localized: "This Wallet", comment: "Transfer: the current wallet as a destination") : nil
+                            )
                         } else if let contact, aliasSummary == nil {
                             contactRow(contact)
                         } else {
@@ -177,29 +182,33 @@ struct SendReviewStep: View {
                         .accessibilityLabel(estimatedFee.map { String(localized: "Network fee: \(XMRFormatter.format($0)) XMR") } ?? String(localized: "Network fee: loading"))
 
                         // Total. Its row holds its place until the value is known.
-                        Divider().padding(.horizontal)
+                        // A send back to this wallet has no total: only the
+                        // fee leaves it.
+                        if transfer?.isToSelf != true {
+                            Divider().padding(.horizontal)
 
-                        HStack {
-                            Text("Total")
-                                .fontWeight(.semibold)
-                            Spacer()
-                            if let total = total {
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text("\(XMRFormatter.format(total)) XMR")
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(.brand)
-                                    if let fiatTotal = priceService.formatFiatValue(total) {
-                                        Text("≈ \(fiatTotal)")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                            HStack {
+                                Text("Total")
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                if let total = total {
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text("\(XMRFormatter.format(total)) XMR")
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(.brand)
+                                        if let fiatTotal = priceService.formatFiatValue(total) {
+                                            Text("≈ \(fiatTotal)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
+                                } else {
+                                    ReviewValuePlaceholder(sample: amount > 0 ? amount : walletManager.displayUnlockedBalance, priceService: priceService, weight: .semibold)
                                 }
-                            } else {
-                                ReviewValuePlaceholder(sample: amount > 0 ? amount : walletManager.displayUnlockedBalance, priceService: priceService, weight: .semibold)
                             }
+                            .font(.subheadline)
+                            .padding()
                         }
-                        .font(.subheadline)
-                        .padding()
 
                         // The description in the OpenAlias record.
                         if let txDescription = aliasSummary?.txDescription {
@@ -407,8 +416,9 @@ struct SendReviewStep: View {
     }
 
     /// One of your wallets on a transfer's review: its emoji, "From" or
-    /// "To", its name and its 8…8 address.
-    private func walletRow(_ wallet: WalletInfo, address: String, label: String) -> some View {
+    /// "To", its name ("This Wallet" for a send back to it) and its 8…8
+    /// address.
+    private func walletRow(_ wallet: WalletInfo, address: String, label: String, name: String? = nil) -> some View {
         HStack(spacing: 12) {
             Text(wallet.emoji)
                 .font(.system(size: 22))
@@ -421,7 +431,7 @@ struct SendReviewStep: View {
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(wallet.name)
+                Text(name ?? wallet.name)
                     .font(.headline)
                     .lineLimit(1)
                 CodeText(formatAddress(address), color: .label)
@@ -431,7 +441,7 @@ struct SendReviewStep: View {
         }
         .padding()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: "\(label): \(wallet.name), \(formatAddress(address))"))
+        .accessibilityLabel(Text(verbatim: "\(label): \(name ?? wallet.name), \(formatAddress(address))"))
     }
 }
 
@@ -440,6 +450,9 @@ struct TransferParties {
     let from: WalletInfo
     let fromAddress: String
     let to: WalletInfo
+
+    /// A send back to the wallet it leaves (This Wallet).
+    var isToSelf: Bool { from.id == to.id }
 }
 
 /// The review's fee rules, apart from the view so tests can pin them.

@@ -281,18 +281,27 @@ private struct WhatsNewRevealTrigger: ViewModifier {
 }
 
 /// The slide-in clock of one sheet opening: pictures that come into view
-/// together start 60 ms apart, top first.
+/// together start 60 ms apart, top first. The pictures that show when the
+/// sheet opens wait until it has finished rising.
 @MainActor
 final class WhatsNewRevealClock {
     static let stagger: TimeInterval = 0.06
+    /// The time the sheet takes to rise.
+    static let sheetRise: TimeInterval = 0.4
+    private let opened: Date
     private var last: Date = .distantPast
     private var burst = 0
+
+    init(opened: Date = .now) {
+        self.opened = opened
+    }
 
     /// The delay of a picture that comes into view now.
     func delay(now: Date = .now) -> TimeInterval {
         burst = now.timeIntervalSince(last) < 0.1 ? burst + 1 : 0
         last = now
-        return Double(burst) * Self.stagger
+        let rising = max(0, Self.sheetRise - now.timeIntervalSince(opened))
+        return rising + Double(burst) * Self.stagger
     }
 }
 

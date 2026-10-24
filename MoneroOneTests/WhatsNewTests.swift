@@ -212,8 +212,17 @@ final class WhatsNewTests: XCTestCase {
     // MARK: - Slide-in
 
     @MainActor
+    func testPicturesShownWhenTheSheetOpensWaitForItToRise() {
+        let clock = WhatsNewRevealClock(opened: start)
+        XCTAssertEqual(clock.delay(now: start), 0.4, accuracy: 0.0001)
+        XCTAssertEqual(clock.delay(now: start), 0.46, accuracy: 0.0001)
+        // Each one still starts 60 ms after the one above it.
+        XCTAssertEqual(clock.delay(now: start.addingTimeInterval(0.01)), 0.51, accuracy: 0.0001)
+    }
+
+    @MainActor
     func testPicturesThatComeIntoViewTogetherStart60msApart() {
-        let clock = WhatsNewRevealClock()
+        let clock = WhatsNewRevealClock(opened: start.addingTimeInterval(-1))
         XCTAssertEqual(clock.delay(now: start), 0)
         XCTAssertEqual(clock.delay(now: start), 0.06, accuracy: 0.0001)
         XCTAssertEqual(clock.delay(now: start.addingTimeInterval(0.01)), 0.12, accuracy: 0.0001)
@@ -221,7 +230,7 @@ final class WhatsNewTests: XCTestCase {
 
     @MainActor
     func testAPictureScrolledIntoViewLaterStartsAtOnce() {
-        let clock = WhatsNewRevealClock()
+        let clock = WhatsNewRevealClock(opened: start)
         _ = clock.delay(now: start)
         _ = clock.delay(now: start)
         XCTAssertEqual(clock.delay(now: start.addingTimeInterval(1)), 0)

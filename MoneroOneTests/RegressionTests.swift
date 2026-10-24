@@ -825,6 +825,68 @@ final class ReviewAmountLinesTests: XCTestCase {
                        "Network Fee: 0.00003152 XMR")
     }
 
+    // MARK: VoiceOver (I3d): the Send hint reads the amount as the screen
+    // shows it, and a loading fee row reads "loading" in the app language.
+
+    private let sent = Decimal(string: "0.004181066248")!
+
+    /// The amount's lines as the Reviews build them: Fiat Mode and the price
+    /// pick the order, and with no price there is no fiat value.
+    private func sentLines(fiatMode: Bool, price: Double?) -> ReviewAmountLines {
+        ReviewAmountLines(xmr: sent, fiat: price == nil ? nil : "$2.50",
+                          fiatFirst: ReviewAmountLines.fiatFirst(fiatMode: fiatMode, price: price))
+    }
+
+    func testSendHintReadsFiatFirstInFiatModeWithAPrice() {
+        XCTAssertEqual(SendReviewFee.sendHint(amount: sent, lines: sentLines(fiatMode: true, price: price)),
+                       "Double tap to send $2.50, 0.004181066248 XMR")
+        XCTAssertEqual(SendReviewFee.sendHint(amount: sent, lines: sentLines(fiatMode: false, price: price)),
+                       "Double tap to send 0.004181066248 XMR")
+    }
+
+    func testSendHintKeepsXMRWithNoUsablePrice() {
+        for fiatMode in [true, false] {
+            XCTAssertEqual(SendReviewFee.sendHint(amount: sent, lines: sentLines(fiatMode: fiatMode, price: nil)),
+                           "Double tap to send 0.004181066248 XMR")
+        }
+        XCTAssertEqual(SendReviewFee.sendHint(amount: sent, lines: sentLines(fiatMode: true, price: 0)),
+                       "Double tap to send 0.004181066248 XMR")
+    }
+
+    func testLinkFundHintReadsFiatFirstInFiatModeWithAPrice() {
+        XCTAssertEqual(PaymentLinkReviewStep.fundHint(amount: sent, lines: sentLines(fiatMode: true, price: price)),
+                       "Double tap to fund the link with $2.50, 0.004181066248 XMR")
+        XCTAssertEqual(PaymentLinkReviewStep.fundHint(amount: sent, lines: sentLines(fiatMode: false, price: price)),
+                       "Double tap to fund the link with 0.004181066248 XMR")
+    }
+
+    func testLinkFundHintKeepsXMRWithNoUsablePrice() {
+        for fiatMode in [true, false] {
+            XCTAssertEqual(PaymentLinkReviewStep.fundHint(amount: sent, lines: sentLines(fiatMode: fiatMode, price: nil)),
+                           "Double tap to fund the link with 0.004181066248 XMR")
+        }
+        XCTAssertEqual(PaymentLinkReviewStep.fundHint(amount: sent, lines: sentLines(fiatMode: true, price: .infinity)),
+                       "Double tap to fund the link with 0.004181066248 XMR")
+    }
+
+    func testLinkFeeRowLoadingLabelIsLocalized() throws {
+        XCTAssertEqual(PaymentLinkReviewStep.loadingLabel(title: "Network Fee"), "Network Fee: loading")
+        let de = try XCTUnwrap(Bundle.main.path(forResource: "de", ofType: "lproj").flatMap(Bundle.init(path:)))
+        XCTAssertEqual(PaymentLinkReviewStep.loadingLabel(title: "Netzwerkgebühr", bundle: de),
+                       "Netzwerkgebühr: wird geladen")
+        let fr = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj").flatMap(Bundle.init(path:)))
+        XCTAssertEqual(PaymentLinkReviewStep.loadingLabel(title: "Frais de réseau", bundle: fr),
+                       "Frais de réseau\u{00A0}: chargement")
+    }
+
+    func testFiatFirstHintsAreTranslated() throws {
+        let de = try XCTUnwrap(Bundle.main.path(forResource: "de", ofType: "lproj").flatMap(Bundle.init(path:)))
+        XCTAssertEqual(de.localizedString(forKey: "Double tap to send %@", value: nil, table: nil),
+                       "Doppeltippen, um %@ zu senden")
+        XCTAssertEqual(de.localizedString(forKey: "Double tap to fund the link with %@", value: nil, table: nil),
+                       "Doppeltippen, um den Link mit %@ zu füllen")
+    }
+
     @MainActor
     func testPriceServiceOrderNeedsFiatModeAndAPlausiblePrice() {
         let service = PriceService()

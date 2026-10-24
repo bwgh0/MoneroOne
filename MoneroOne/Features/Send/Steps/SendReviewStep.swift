@@ -311,7 +311,7 @@ struct SendReviewStep: View {
     /// wallet would need the device to build it, so it keeps wallet2's
     /// estimate, which counts one input.
     private var sendHint: Text {
-        if estimatedFee != nil { return Text("Double tap to send \(XMRFormatter.format(amount)) XMR") }
+        if estimatedFee != nil { return Text(verbatim: SendReviewFee.sendHint(amount: amount, lines: lines(amount))) }
         return isWaitingForSync ? Text("Waiting for your wallet to sync", comment: "VoiceOver hint on the gray Send button while Review waits for the wallet to sync") : Text("Waiting for fee estimate")
     }
 
@@ -531,6 +531,16 @@ enum SendReviewFee {
             return String(localized: "Network fee: \(spoken)", comment: "VoiceOver, Review in Fiat Mode: the network fee in fiat, then the exact XMR, e.g. \"$0.01, 0.00003152 XMR\"")
         }
         return String(localized: "Network fee: \(XMRFormatter.format(fee)) XMR")
+    }
+
+    /// VoiceOver's hint on Send once the fee is in, in the order of the
+    /// screen: in Fiat Mode the fiat value, then the exact XMR. Otherwise
+    /// the XMR alone.
+    static func sendHint(amount: Decimal, lines: ReviewAmountLines) -> String {
+        if let spoken = lines.spokenFiatFirst {
+            return String(localized: "Double tap to send \(spoken)", comment: "VoiceOver hint on Send, Review in Fiat Mode: the amount in fiat, then the exact XMR, e.g. \"$2.50, 0.004181066248 XMR\"")
+        }
+        return String(localized: "Double tap to send \(XMRFormatter.format(amount)) XMR")
     }
 
     static func xmr(_ piconero: UInt64) -> Decimal {

@@ -386,6 +386,22 @@ struct PaymentLinkReviewStep: View {
         "\(title): \(lines.spokenFiatFirst ?? "\(XMRFormatter.format(value)) XMR")"
     }
 
+    /// VoiceOver's label for a fee row while its value loads, in the app's
+    /// language (tests pass a language's bundle).
+    static func loadingLabel(title: String, bundle: Bundle = .main) -> String {
+        String(localized: "\(title): loading", bundle: bundle, comment: "VoiceOver, Send with a Link Review: a fee row while its value loads. %@ is the row's title, e.g. \"Network Fee\" or \"Claim fee reserve\"")
+    }
+
+    /// VoiceOver's hint on Send once the link is built, in the order of the
+    /// screen: in Fiat Mode the fiat value, then the exact XMR. Otherwise
+    /// the XMR alone.
+    static func fundHint(amount: Decimal, lines: ReviewAmountLines) -> String {
+        if let spoken = lines.spokenFiatFirst {
+            return String(localized: "Double tap to fund the link with \(spoken)", comment: "VoiceOver hint on Send, Send with a Link Review in Fiat Mode: the amount in fiat, then the exact XMR, e.g. \"$2.50, 0.004181066248 XMR\"")
+        }
+        return String(localized: "Double tap to fund the link with \(XMRFormatter.format(amount)) XMR")
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -501,7 +517,7 @@ struct PaymentLinkReviewStep: View {
     }
 
     private var sendHint: Text {
-        if draft != nil { return Text("Double tap to fund the link with \(XMRFormatter.format(amount)) XMR") }
+        if draft != nil { return Text(verbatim: Self.fundHint(amount: amount, lines: lines(amount))) }
         return isWaitingForSync ? Text("Waiting for your wallet to sync", comment: "VoiceOver hint on the gray Send button while Review waits for the wallet to sync") : Text("Preparing the link")
     }
 
@@ -623,7 +639,7 @@ struct PaymentLinkReviewStep: View {
         .font(.subheadline)
         .padding()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(value.map { Self.valueLabel(title: title, value: $0, lines: lines($0)) } ?? "\(title): loading")
+        .accessibilityLabel(value.map { Self.valueLabel(title: title, value: $0, lines: lines($0)) } ?? Self.loadingLabel(title: title))
     }
 
     private func totalRow(_ total: Decimal?) -> some View {

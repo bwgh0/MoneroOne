@@ -174,6 +174,12 @@ struct ReceiveView: View {
                 Text("Please wait until the wallet finishes syncing and try again.")
             }
             .onAppear {
+                // The request amount starts in fiat with Fiat Mode on, as
+                // Send's amount does.
+                if Self.startsInFiat(fiatMode: priceService.showFiatFirst, price: priceService.xmrPrice,
+                                     amount: requestAmount, fiatAmount: requestFiatAmount) {
+                    isFiatMode = true
+                }
                 walletManager.reconcileReceiveAddress()
                 // Rotation off: reset to the main address if the selected
                 // subaddress doesn't exist. With rotation on the manager
@@ -569,6 +575,12 @@ struct ReceiveView: View {
         // "Loading..." is a sentinel inside currentAddress; translate it only here.
         if currentAddress == "Loading..." { return String(localized: "Loading...") }
         return ReceiveAddressLogic.shortAddress(currentAddress)
+    }
+
+    /// Send's rule (Fiat Mode on, a usable price, nothing typed yet), with
+    /// an empty fiat field too.
+    static func startsInFiat(fiatMode: Bool, price: Double?, amount: String, fiatAmount: String) -> Bool {
+        fiatAmount.isEmpty && SendAmountStep.startsInFiat(fiatMode: fiatMode, price: price, amount: amount)
     }
 
     private func toggleReceiveFiatMode() {

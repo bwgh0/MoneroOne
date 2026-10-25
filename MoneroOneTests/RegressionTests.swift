@@ -726,6 +726,16 @@ final class SendAmountStartUnitTests: XCTestCase {
         XCTAssertFalse(SendAmountStep.startsInFiat(fiatMode: false, price: price, amount: "1.5"))
     }
 
+    // Receive's request amount follows the same rule.
+
+    func testReceiveRequestStartsInFiatWithFiatMode() {
+        XCTAssertTrue(ReceiveView.startsInFiat(fiatMode: true, price: price, amount: "", fiatAmount: ""))
+        XCTAssertFalse(ReceiveView.startsInFiat(fiatMode: false, price: price, amount: "", fiatAmount: ""))
+        XCTAssertFalse(ReceiveView.startsInFiat(fiatMode: true, price: nil, amount: "", fiatAmount: ""))
+        XCTAssertFalse(ReceiveView.startsInFiat(fiatMode: true, price: price, amount: "0.5", fiatAmount: ""))
+        XCTAssertFalse(ReceiveView.startsInFiat(fiatMode: true, price: price, amount: "", fiatAmount: "20"))
+    }
+
     // Back to the recipient and on again: an amount typed in fiat stays in fiat.
 
     private let typed = SendAmountStep.TypedFiat(fiat: "50", xmr: "0.302260911618")

@@ -3,12 +3,6 @@ import SwiftUI
 struct NumericKeypad: View {
     @Binding var text: String
     var maxDecimalPlaces: Int = 12
-    /// The height of a row of keys, glass included, on a short screen. Nil:
-    /// the 60pt iPhone keys.
-    var rowHeight: CGFloat? = nil
-
-    /// Shorter keys sit closer together.
-    private var spacing: CGFloat { rowHeight == nil ? 12 : 8 }
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
 
@@ -20,16 +14,15 @@ struct NumericKeypad: View {
     ]
 
     var body: some View {
-        VStack(spacing: spacing) {
+        VStack(spacing: 12) {
             ForEach(keys, id: \.self) { row in
-                HStack(spacing: spacing) {
+                HStack(spacing: 12) {
                     ForEach(row, id: \.self) { key in
-                        KeypadButton(key: key, isCompact: rowHeight != nil) {
+                        KeypadButton(key: key) {
                             handleKey(key)
                         }
                     }
                 }
-                .frame(height: rowHeight)
             }
         }
     }
@@ -74,8 +67,6 @@ struct NumericKeypad: View {
 
 private struct KeypadButton: View {
     let key: String
-    /// The key fills its row: the row sets the height, the digit is smaller.
-    var isCompact = false
     let action: () -> Void
 
     var body: some View {
@@ -83,15 +74,15 @@ private struct KeypadButton: View {
             Group {
                 if key == "⌫" {
                     Image(systemName: "delete.left")
-                        .font(isCompact ? .title3 : .title2)
+                        .font(.title2)
                 } else {
                     Text(key)
-                        .font((isCompact ? Font.title2 : .title).weight(.medium).monospacedDigit())
+                        .font(.title.weight(.medium).monospacedDigit())
                 }
             }
             .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, maxHeight: isCompact ? .infinity : nil)
-            .frame(height: isCompact ? nil : 60)
+            .frame(maxWidth: .infinity)
+            .frame(height: 60)
         }
         .glassButtonStyle()
         .accessibilityLabel(key == "⌫" ? String(localized: "Delete") : key == "." ? String(localized: "Decimal point") : key)

@@ -14,6 +14,16 @@ struct ReceiveView: View {
     /// New Address's result until the kit lists it (one main-queue hop
     /// later), so the card never shows the main address in between.
     @State private var created: MoneroKit.SubAddress?
+    /// The sheet is wider than the widest phone sheet (the open iPhone Duo,
+    /// iPad): the code and the rest sit side by side. A size class does not
+    /// tell: this sheet can be compact on the open Duo.
+    @State private var isWideSheet = false
+    /// The wide layout's visible height and its Copy and Share row's height.
+    @State private var wideViewportHeight: CGFloat = 0
+    @State private var actionButtonsHeight: CGFloat = 0
+    /// The widest phone sheet: the iPhone Duo cover. Up to this width
+    /// Receive is one column, as before.
+    private static let phoneSheetWidth: CGFloat = 466
     @AppStorage(WalletManager.rotateReceiveAddressKey) private var rotateReceiveAddress: Bool = true
     @EnvironmentObject var priceService: PriceService
 
@@ -137,6 +147,11 @@ struct ReceiveView: View {
             QRFocusContainer { focus in
                 content(focus: focus)
             }
+            .onGeometryChange(for: Bool.self) { proxy in
+                proxy.size.width > Self.phoneSheetWidth
+            } action: { wide in
+                isWideSheet = wide
+            }
             // An inline title like Send's, so the code, the amount, the
             // address block and its footer fit above Copy and Share.
             .navigationTitle("Receive XMR")
@@ -171,166 +186,24 @@ struct ReceiveView: View {
         }
     }
 
+    @ViewBuilder
     private func content(focus: QRFocus) -> some View {
+        if isWideSheet {
+            wideContent(focus: focus)
+        } else {
+            phoneContent(focus: focus)
+        }
+    }
+
+    /// A phone and the iPhone Duo cover: one column that scrolls.
+    private func phoneContent(focus: QRFocus) -> some View {
         // Copy and Share stay under the scrolling content, 16pt above the
         // home indicator, like Continue in Send.
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 24) {
-                    // QR Code
-                    if keysUnavailable {
-                        VStack(spacing: 12) {
-                            Image(systemName: "exclamationmark.octagon.fill")
-                                .font(.largeTitle)
-                                .foregroundColor(.red)
-                            Text("Wallet keys unavailable")
-                                .font(.headline)
-                            Text("The wallet couldn't load its keys, so no receive address can be shown. Do not send funds to any address from this app until this is resolved. Force-quit and reopen the app; if this persists, restore the wallet from its seed.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 8)
-                        }
-                        .frame(width: 280, height: 280)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(20)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Wallet keys unavailable. No receive address can be shown.")
-                    } else if !currentAddress.isEmpty && currentAddress != "Loading..." {
-                        // A tap grows the code into focus mode.
-                        FocusableQRPlate(
-                            item: QRFocusItem(
-                                content: qrContent,
-                                title: addressLabel,
-                                // The same lenient read as the code: "1,5" is 1.5.
-                                amount: requestedXMR.flatMap { $0 > 0 ? $0 : nil }
-                            ),
-                            side: 280,
-                            focus: focus,
-                            label: String(localized: "QR code for receiving Monero")
-                        )
-                        // A new address (New, or rotation after a
-                        // payment) cross-fades the code in place.
-                        .animation(.easeInOut(duration: 0.25), value: currentAddress)
-                        .contextMenu {
-                            Button {
-                                saveQRToPhotos()
-                            } label: {
-                                Label("Save to Photos", systemImage: "square.and.arrow.down")
-                            }
-                            if let image = QRCodeRenderer.renderToImage(content: qrContent) {
-                                ShareLink(
-                                    item: Image(uiImage: image),
-                                    preview: SharePreview("Monero receive QR code", image: Image(uiImage: image))
-                                ) {
-                                    Label("Share QR Code", systemImage: "square.and.arrow.up")
-                                }
-                            }
-                        }
-                        // After the plate's own accessibility element:
-                        // set before it, the id sat on an ignored child
-                        // and UI tests could not find the code.
-                        .accessibilityIdentifier("receive.qrCode")
-                        .accessibilityHint("Shows the code full screen. Actions available: save to Photos, or share")
-                        .accessibilityAction(named: "Save to Photos") {
-                            saveQRToPhotos()
-                        }
-                    } else {
-                        Rectangle()
-                            .fill(Color(.secondarySystemBackground))
-                            .frame(width: 280, height: 280)
-                            .cornerRadius(20)
-                            .overlay {
-                                ProgressView()
-                            }
-                    }
-
-                    // Request Amount (Optional)
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Request Amount (optional)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-
-                            Spacer()
-
-                            if priceService.xmrPrice != nil {
-                                Button {
-                                    toggleReceiveFiatMode()
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "arrow.up.arrow.down")
-                                            .font(.caption2.weight(.semibold))
-                                        Text(isFiatMode ? "XMR" : priceService.selectedCurrency.uppercased())
-                                            .font(.caption.weight(.semibold))
-                                    }
-                                    .foregroundStyle(.brand)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.brand.opacity(0.15))
-                                    .clipShape(Capsule())
-                                }
-                                .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
-                            }
-                        }
-
-                        HStack {
-                            if isFiatMode {
-                                Text(priceService.currencySymbol)
-                                    .foregroundColor(.secondary)
-                                TextField("0.00", text: $requestFiatAmount)
-                                    .font(.system(.body, design: .rounded))
-                                    .keyboardType(.decimalPad)
-                                    .accessibilityLabel("Request amount in \(priceService.selectedCurrency.uppercased())")
-                                    .onChange(of: requestFiatAmount) { _ in
-                                        syncReceiveXMRFromFiat()
-                                    }
-                            } else {
-                                TextField("0.0", text: $requestAmount)
-                                    .font(.system(.body, design: .rounded))
-                                    .keyboardType(.decimalPad)
-                                    .accessibilityLabel("Request amount in XMR")
-                                    .accessibilityHint("Enter an optional amount to embed in the QR code")
-
-                                Text("XMR")
-                                    .foregroundColor(.secondary)
-                                    .accessibilityHidden(true)
-                            }
-                        }
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-
-                        // Show converted amount
-                        if isFiatMode {
-                            if !requestAmount.isEmpty, let amt = requestedXMR, amt > 0 {
-                                Text("≈ \(requestAmount) XMR")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 4)
-                            }
-                        } else if let amt = requestedXMR, amt > 0,
-                                  let fiat = priceService.formatFiatValue(amt) {
-                            Text("≈ \(fiat)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 4)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .qrFocusRecede(focus, toward: .bottom)
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            Button("Done") {
-                                UIApplication.shared.sendAction(
-                                    #selector(UIResponder.resignFirstResponder),
-                                    to: nil, from: nil, for: nil
-                                )
-                            }
-                        }
-                    }
-
+                    qrCode(focus: focus)
+                    requestAmount(focus: focus)
                     addressBlock(focus: focus)
                 }
                 .padding(.top, 24)
@@ -339,6 +212,212 @@ struct ReceiveView: View {
 
             actionButtons
                 .qrFocusRecede(focus, toward: .bottom)
+        }
+    }
+
+    /// A wide sheet (the open iPhone Duo, iPad): two even columns. The code
+    /// on the left; the request amount and the address on the right, on the
+    /// code's center line, with Copy and Share at the bottom of the column.
+    /// It scrolls only when it does not fit (large text, the keyboard).
+    private func wideContent(focus: QRFocus) -> some View {
+        ScrollView {
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 16)
+                    qrCode(focus: focus)
+                    Spacer(minLength: 16)
+                    // As tall as Copy and Share, so the code and the column
+                    // beside it share one center line.
+                    Color.clear
+                        .frame(height: actionButtonsHeight)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: 16)
+                    VStack(spacing: 24) {
+                        requestAmount(focus: focus)
+                        addressBlock(focus: focus)
+                    }
+                    Spacer(minLength: 16)
+                    actionButtons
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { height in
+                            actionButtonsHeight = height
+                        }
+                        .qrFocusRecede(focus, toward: .bottom)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            // Proposes the visible height, so the spacers fill it; taller
+            // content still grows and scrolls.
+            .frame(idealHeight: wideViewportHeight)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { height in
+            wideViewportHeight = height
+        }
+    }
+
+    /// The code, a stand-in while the address loads, or the keys error.
+    @ViewBuilder
+    private func qrCode(focus: QRFocus) -> some View {
+        if keysUnavailable {
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.octagon.fill")
+                    .font(.largeTitle)
+                    .foregroundColor(.red)
+                Text("Wallet keys unavailable")
+                    .font(.headline)
+                Text("The wallet couldn't load its keys, so no receive address can be shown. Do not send funds to any address from this app until this is resolved. Force-quit and reopen the app; if this persists, restore the wallet from its seed.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+            }
+            .frame(width: 280, height: 280)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(20)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Wallet keys unavailable. No receive address can be shown.")
+        } else if !currentAddress.isEmpty && currentAddress != "Loading..." {
+            // A tap grows the code into focus mode.
+            FocusableQRPlate(
+                item: QRFocusItem(
+                    content: qrContent,
+                    title: addressLabel,
+                    // The same lenient read as the code: "1,5" is 1.5.
+                    amount: requestedXMR.flatMap { $0 > 0 ? $0 : nil }
+                ),
+                side: 280,
+                focus: focus,
+                label: String(localized: "QR code for receiving Monero")
+            )
+            // A new address (New, or rotation after a
+            // payment) cross-fades the code in place.
+            .animation(.easeInOut(duration: 0.25), value: currentAddress)
+            .contextMenu {
+                Button {
+                    saveQRToPhotos()
+                } label: {
+                    Label("Save to Photos", systemImage: "square.and.arrow.down")
+                }
+                if let image = QRCodeRenderer.renderToImage(content: qrContent) {
+                    ShareLink(
+                        item: Image(uiImage: image),
+                        preview: SharePreview("Monero receive QR code", image: Image(uiImage: image))
+                    ) {
+                        Label("Share QR Code", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+            // After the plate's own accessibility element:
+            // set before it, the id sat on an ignored child
+            // and UI tests could not find the code.
+            .accessibilityIdentifier("receive.qrCode")
+            .accessibilityHint("Shows the code full screen. Actions available: save to Photos, or share")
+            .accessibilityAction(named: "Save to Photos") {
+                saveQRToPhotos()
+            }
+        } else {
+            Rectangle()
+                .fill(Color(.secondarySystemBackground))
+                .frame(width: 280, height: 280)
+                .cornerRadius(20)
+                .overlay {
+                    ProgressView()
+                }
+        }
+    }
+
+    /// The optional amount the code asks for, in XMR or fiat.
+    private func requestAmount(focus: QRFocus) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Request Amount (optional)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                if priceService.xmrPrice != nil {
+                    Button {
+                        toggleReceiveFiatMode()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.caption2.weight(.semibold))
+                            Text(isFiatMode ? "XMR" : priceService.selectedCurrency.uppercased())
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(.brand)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.brand.opacity(0.15))
+                        .clipShape(Capsule())
+                    }
+                    .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
+                }
+            }
+
+            HStack {
+                if isFiatMode {
+                    Text(priceService.currencySymbol)
+                        .foregroundColor(.secondary)
+                    TextField("0.00", text: $requestFiatAmount)
+                        .font(.system(.body, design: .rounded))
+                        .keyboardType(.decimalPad)
+                        .accessibilityLabel("Request amount in \(priceService.selectedCurrency.uppercased())")
+                        .onChange(of: requestFiatAmount) { _ in
+                            syncReceiveXMRFromFiat()
+                        }
+                } else {
+                    TextField("0.0", text: $requestAmount)
+                        .font(.system(.body, design: .rounded))
+                        .keyboardType(.decimalPad)
+                        .accessibilityLabel("Request amount in XMR")
+                        .accessibilityHint("Enter an optional amount to embed in the QR code")
+
+                    Text("XMR")
+                        .foregroundColor(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding()
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+
+            // Show converted amount
+            if isFiatMode {
+                if !requestAmount.isEmpty, let amt = requestedXMR, amt > 0 {
+                    Text("≈ \(requestAmount) XMR")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 4)
+                }
+            } else if let amt = requestedXMR, amt > 0,
+                      let fiat = priceService.formatFiatValue(amt) {
+                Text("≈ \(fiat)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 4)
+            }
+        }
+        .padding(.horizontal)
+        .qrFocusRecede(focus, toward: .bottom)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
+            }
         }
     }
 

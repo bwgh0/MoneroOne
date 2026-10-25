@@ -1096,9 +1096,8 @@ extension View {
     }
 
     /// Receive and Send. On a window wider than the iPhone Duo cover (the
-    /// open Duo, iPad) the app hides behind a plain page while the sheet is
-    /// open, so the dimmed dashboard, and the balance on it, never shows
-    /// beside the sheet.
+    /// open Duo, iPad) the app blurs behind the sheet while it is open, so
+    /// the balance beside the sheet cannot be read.
     func walletTaskSheet<Task: View>(
         isPresented: Binding<Bool>,
         @ViewBuilder content: @escaping () -> Task
@@ -1106,8 +1105,8 @@ extension View {
         modifier(WalletTaskSheet(isPresented: isPresented, task: content))
     }
 
-    /// For the app's root view: the plain page that hides the app behind
-    /// Receive and Send on a wide window.
+    /// For the app's root view: the blur that hides the app behind Receive
+    /// and Send on a wide window.
     func hidesBehindWalletTasks() -> some View {
         modifier(WalletTaskShieldCover())
     }
@@ -1143,7 +1142,11 @@ private struct WalletTaskShieldCover: ViewModifier {
             .overlay {
                 ZStack {
                     if hidesApp {
-                        Color(.systemGroupedBackground)
+                        // The dashboard shows as soft shapes; no digit of
+                        // the balance stays readable (checked in light and
+                        // dark). The thicker materials read as a plain page.
+                        Rectangle()
+                            .fill(.regularMaterial)
                             .ignoresSafeArea()
                             .transition(.opacity)
                             .accessibilityHidden(true)

@@ -1093,6 +1093,72 @@ extension View {
     func closesForPaymentLink() -> some View {
         modifier(ClosesForPaymentLink())
     }
+
+    /// Receive and Send. A sheet on a phone and the iPhone Duo cover; full
+    /// screen on a wider window (the open Duo, iPad), so the dimmed
+    /// dashboard, and the balance on it, never shows beside them.
+    func walletTaskSheet<Task: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Task
+    ) -> some View {
+        modifier(WalletTaskSheet(isPresented: isPresented, task: content))
+    }
+
+    /// For the app's root view: tells Receive and Send how wide the window is.
+    func readsWideWindow() -> some View {
+        modifier(WideWindowReader())
+    }
+}
+
+extension EnvironmentValues {
+    /// The window is wider than the widest phone sheet, the iPhone Duo cover
+    /// (466pt): the open Duo, iPad. A size class does not tell: the open Duo
+    /// can be compact.
+    @Entry var isWideWindow = false
+}
+
+private struct WideWindowReader: ViewModifier {
+    @State private var isWideWindow = false
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.isWideWindow, isWideWindow)
+            .onGeometryChange(for: Bool.self) { proxy in
+                // The root's size stops at the safe area: add the side insets
+                // (the Duo's vertical bar) back for the window's width.
+                proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing > 466
+            } action: { isWide in
+                isWideWindow = isWide
+            }
+    }
+}
+
+private struct WalletTaskSheet<Task: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    let task: () -> Task
+    @Environment(\.isWideWindow) private var isWideWindow
+    /// Set while the task is open: folding or unfolding the Duo keeps the
+    /// presentation it opened with, so the task never closes and loses what
+    /// was typed.
+    @State private var openedFullScreen: Bool?
+
+    private var isFullScreen: Bool { openedFullScreen ?? isWideWindow }
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: presented(fullScreen: false), content: task)
+            .fullScreenCover(isPresented: presented(fullScreen: true), content: task)
+            .onChange(of: isPresented, initial: true) { _, shown in
+                openedFullScreen = shown ? isFullScreen : nil
+            }
+    }
+
+    private func presented(fullScreen: Bool) -> Binding<Bool> {
+        Binding(
+            get: { isPresented && isFullScreen == fullScreen },
+            set: { if !$0 { isPresented = false } }
+        )
+    }
 }
 
 #Preview {

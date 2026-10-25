@@ -187,13 +187,13 @@ struct WalletView: View {
                 await walletManager.refresh()
                 await priceService.fetchPrice()
             }
-            .sheet(isPresented: $showReceive) {
+            .walletTaskSheet(isPresented: $showReceive) {
                 ReceiveView()
                     .environmentObject(walletManager)
                     .environmentObject(priceService)
                     .closesForPaymentLink()
             }
-            .sheet(isPresented: $showSend) {
+            .walletTaskSheet(isPresented: $showSend) {
                 SendFlowView()
                     .environmentObject(walletManager)
                     .environmentObject(priceService)

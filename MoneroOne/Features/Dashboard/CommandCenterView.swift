@@ -72,11 +72,11 @@ struct CommandCenterView: View {
         .onChange(of: showSend) { _, isPresented in
             if isPresented { selectedHistoryPoint = nil }
         }
-        .sheet(isPresented: $showReceive) {
+        .walletTaskSheet(isPresented: $showReceive) {
             ReceiveView()
                 .closesForPaymentLink()
         }
-        .sheet(isPresented: $showSend) {
+        .walletTaskSheet(isPresented: $showSend) {
             SendFlowView()
         }
         // Donate and `monero:` links ask for Send through the manager. Without

@@ -6,18 +6,49 @@ struct PriceChartView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var priceService: PriceService
     @Binding var selectedTimeRange: ChartTimeRange
+    /// Two even columns: the price and its chart on the left, Statistics
+    /// on the right (the open iPhone Duo, iPad).
+    var isWide = false
     /// The sample under the finger, in the selected currency.
     @State private var selectedPoint: PriceDataPoint?
+    /// Wide: the left column's width, the most the chart card may grow
+    /// to in height (a tall, narrow plot would stretch every move).
+    @State private var columnWidth: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 24) {
-            priceHeader
-            timeRangeSelector
-            chartSection
-            statsSection
-        }
-        .onChange(of: selectedTimeRange) { _, _ in
-            selectedPoint = nil
+        content
+            .onChange(of: selectedTimeRange) { _, _ in
+                selectedPoint = nil
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isWide {
+            HStack(spacing: 24) {
+                VStack(spacing: 24) {
+                    priceHeader
+                    timeRangeSelector
+                    chartSection
+                }
+                .frame(maxWidth: .infinity)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { width in
+                    columnWidth = width
+                }
+
+                // On the left column's center line.
+                statsSection
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        } else {
+            VStack(spacing: 24) {
+                priceHeader
+                timeRangeSelector
+                chartSection
+                statsSection
+            }
         }
     }
 
@@ -113,10 +144,15 @@ struct PriceChartView: View {
                 .equatable()
                 // Not clipped: an axis label on a gridline at the plot's top
                 // edge stands half above it, in the card's padding.
-                .frame(height: 240)
+                // Wide: the plot fills the card, 20pt clear above and
+                // below as on the phone.
+                .frame(height: isWide ? nil : 240)
+                .frame(maxHeight: isWide ? .infinity : nil)
+                .padding(.vertical, isWide ? 20 : 0)
             }
         }
-        .frame(height: 280)
+        .frame(height: isWide ? nil : 280)
+        .frame(minHeight: isWide ? 240 : nil, maxHeight: isWide ? max(240, columnWidth - 32) : nil)
         .padding()
         .dashboardCard()
     }

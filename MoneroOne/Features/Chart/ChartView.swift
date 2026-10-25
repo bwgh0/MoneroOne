@@ -6,6 +6,12 @@ struct ChartView: View {
     @EnvironmentObject private var priceAlertService: PriceAlertService
     @Binding var path: [Destination]
     @State private var selectedTimeRange: ChartTimeRange = .week
+    /// Wider than a phone (the open iPhone Duo, iPad): Statistics beside
+    /// the chart. Width, not size class: the Duo cover is 466pt wide.
+    @State private var isWide = false
+    @State private var viewportHeight: CGFloat = 0
+
+    private static let phoneWidth: CGFloat = 466
 
     enum Destination: Hashable {
         case priceAlerts
@@ -14,8 +20,19 @@ struct ChartView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                PriceChartView(selectedTimeRange: $selectedTimeRange)
+                PriceChartView(selectedTimeRange: $selectedTimeRange, isWide: isWide)
                     .padding()
+                    // Wide: proposes the visible height, so the chart fills
+                    // the column and nothing scrolls; taller content (large
+                    // text) still grows and scrolls.
+                    .frame(idealHeight: isWide ? viewportHeight : nil)
+            }
+            .onGeometryChange(for: CGSize.self) { proxy in
+                proxy.size
+            } action: { size in
+                // A layout pass can report 466.0000000000001 for the cover.
+                isWide = size.width > Self.phoneWidth + 1
+                viewportHeight = size.height
             }
             .navigationTitle("Price")
             .navigationBarTitleDisplayMode(.inline)

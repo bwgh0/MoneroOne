@@ -18,7 +18,8 @@ struct CommandCenterView: View {
     @State private var hardwareSheetIntent: HardwareSessionSheet.Intent? = nil
     @State private var whatsNewEntry: WhatsNewEntry?
 
-    @State private var isHistoryExpanded = false
+    /// The chart card's selected point: the balance card and Activity show
+    /// that moment while it is set.
     @State private var selectedHistoryPoint: PortfolioDataPoint?
     @State private var selectedHistoryRange: ChartTimeRange = .week
     @State private var historyModel = BalanceHistoryModel()
@@ -26,7 +27,7 @@ struct CommandCenterView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let columnHeight = max(geometry.size.height - 32, isHistoryExpanded ? 760 : 600)
+            let columnHeight = max(geometry.size.height - 32, 600)
 
             ScrollView {
                 twoColumnLayout
@@ -35,26 +36,21 @@ struct CommandCenterView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
             }
-            // Lets the wallet rows' swipe-to-delete work outside a List (iOS 27).
-            .safeAreaInset(edge: .top, spacing: 0) {
-                bannerSection
-            }
             .refreshable {
                 await walletManager.refresh()
                 await priceService.fetchPrice()
             }
             // Looks at sent links on new blocks, so a claimed link leaves
-            // the balance card's line. Never during History or a sheet.
-            .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil && !isHistoryExpanded
+            // the balance card's line. Never on a past point or a sheet.
+            .checksOpenPaymentLinks(isActive: selectedHistoryPoint == nil
                                     && !showSend && !showReceive && !showAllTransactions && !showWalletManager)
             .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
-                                     && !isHistoryExpanded && !showSend && !showReceive
+                                     && !showSend && !showReceive
                                      && !showAllTransactions && !showWalletManager && hardwareSheetIntent == nil)
         }
         .onChange(of: walletManager.walletSessionId) { _, _ in
             selectedHistoryPoint = nil
             historyModel = BalanceHistoryModel()
-            isHistoryExpanded = false
         }
         .onChange(of: showSend) { _, isPresented in
             if isPresented { selectedHistoryPoint = nil }
@@ -89,23 +85,25 @@ struct CommandCenterView: View {
     /// The header spans both columns, so the wallet switcher sits at the top
     /// trailing corner (beside the vertical bar on the unfolded iPhone Duo),
     /// and its rows open right below it, in place of Activity, while the
-    /// balance column stays.
+    /// balance column stays. The balance history chart fills the rest of
+    /// that column, so both columns end on one line.
     ///
     /// Equal columns so the gutter sits on the fold when the Duo is half
     /// open in book pose (HIG: even column counts, nothing straddles the
     /// division region).
     private var twoColumnLayout: some View {
-        VStack(spacing: 16) {
-            greetingHeader
+        // The first card sits 12 under the header, as on iPhone.
+        VStack(spacing: 12) {
+            header
 
             HStack(alignment: .top, spacing: 16) {
-                // Wallet balance, its history and actions share one column.
+                // Wallet balance, actions and history share one column.
                 VStack(spacing: 16) {
                     balanceCard
                     quickActions
-                    Spacer(minLength: 0)
+                    historyCard
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // Column 2: Activity, or the wallet rows under the switcher.
                 VStack(spacing: 0) {
@@ -126,14 +124,31 @@ struct CommandCenterView: View {
 
     /// The greeting and the chip stay put whether the list is open or not;
     /// only the content below the chip swaps, and that is what shows the
-    /// open state. The row spans the whole dashboard width.
-    private var greetingHeader: some View {
-        HStack(spacing: 0) {
-            DynamicGreeting()
-            Spacer(minLength: 12)
-            WalletSwitcherButton(isExpanded: $showWalletManager)
-                .environmentObject(walletManager)
+    /// open state. The row spans the whole dashboard width. Banners stack
+    /// under it 8 apart, as on iPhone.
+    private var header: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 0) {
+                DynamicGreeting()
+                Spacer(minLength: 12)
+                WalletSwitcherButton(isExpanded: $showWalletManager, isInline: true)
+                    .environmentObject(walletManager)
+            }
+
+            if walletManager.isTestnet {
+                TestnetBanner()
+                    .accessibilityLabel("Testnet mode active")
+            }
+            OfflineBanner()
+            SyncErrorBanner(syncState: walletManager.syncState) {
+                Task {
+                    await walletManager.refresh()
+                }
+            }
+            WhatsNewBannerSlot(presented: $whatsNewEntry)
         }
+        .animation(.easeInOut, value: walletManager.syncState)
+        .whatsNewHome(presented: $whatsNewEntry)
     }
 
     private var walletRows: some View {
@@ -156,7 +171,7 @@ struct CommandCenterView: View {
             hardwareDeviceName: walletManager.hardwareDisplayName,
             hardwareLastSentSyncAt: walletManager.lastHardwareSentSyncAt,
             isHardwareDeviceWarm: walletManager.isHardwareDeviceWarm,
-            isHistoryExpanded: $isHistoryExpanded,
+            hasInlineHistory: false,
             selectedHistoryPoint: $selectedHistoryPoint,
             selectedHistoryRange: $selectedHistoryRange,
             historyModel: historyModel,
@@ -182,6 +197,29 @@ struct CommandCenterView: View {
         .id(walletManager.walletSessionId)
     }
 
+    /// The balance history, open on regular width: the chart the balance
+    /// card's History button shows on iPhone, in a card of its own that
+    /// fills the column. A scrub shows that moment in the balance card and
+    /// in Activity, as on iPhone.
+    private var historyCard: some View {
+        BalanceHistoryChart(
+            balance: walletManager.displayBalance,
+            isActive: true,
+            model: historyModel,
+            priceService: priceService,
+            selectedTimeRange: $selectedHistoryRange,
+            selectedPoint: $selectedHistoryPoint,
+            fillsHeight: true
+        )
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 20)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .dashboardCard()
+        // A new wallet gets a new chart, so it loads that wallet's ledger.
+        .id(walletManager.walletSessionId)
+    }
+
     private var quickActions: some View {
         QuickActionsCard(
             onSend: { selectedHistoryPoint = nil; showSend = true },
@@ -198,7 +236,7 @@ struct CommandCenterView: View {
                 allTransactionsFilter = .all
                 showAllTransactions = true
             },
-            isHistoryOpen: isHistoryExpanded,
+            isHistoryOpen: selectedHistoryPoint != nil,
             asOf: selectedHistoryPoint?.timestamp,
             historyTransactions: pastTransactions
         )
@@ -209,28 +247,6 @@ struct CommandCenterView: View {
     /// loading history does not redraw the panel at Now.
     private var pastTransactions: [MoneroTransaction]? {
         selectedHistoryPoint == nil ? nil : historyModel.ledger?.transactions
-    }
-
-    // MARK: - Banners
-
-    @ViewBuilder
-    private var bannerSection: some View {
-        VStack(spacing: 8) {
-            if walletManager.isTestnet {
-                TestnetBanner()
-                    .accessibilityLabel("Testnet mode active")
-            }
-            OfflineBanner()
-            SyncErrorBanner(syncState: walletManager.syncState) {
-                Task {
-                    await walletManager.refresh()
-                }
-            }
-            WhatsNewBannerSlot(presented: $whatsNewEntry)
-        }
-        .padding(.horizontal)
-        .animation(.easeInOut, value: walletManager.syncState)
-        .whatsNewHome(presented: $whatsNewEntry)
     }
 }
 

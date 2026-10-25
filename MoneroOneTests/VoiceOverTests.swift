@@ -256,6 +256,23 @@ final class VoiceOverTests: XCTestCase {
         XCTAssertEqual(opened, [true], "Show history opens History")
     }
 
+    /// Regular width: the chart has a card of its own, so the balance card
+    /// has no History button and no Show history action.
+    func testBalanceWithoutInlineHistoryHasNoHistoryControls() throws {
+        let card = BalanceCard(
+            balance: 1.25, unlockedBalance: 1.25, syncState: .synced, connectionStage: .synced,
+            priceService: PriceService(),
+            hasInlineHistory: false
+        )
+        .environmentObject(WalletManager())
+
+        let elements = accessibilityElements(in: host(card, height: 400))
+        XCTAssertNotNil(elements.first { $0.accessibilityLabel?.hasPrefix("Balance:") == true })
+        XCTAssertFalse(elements.contains { $0.accessibilityLabel == "Balance history" }, "no History button")
+        let actions = elements.flatMap { $0.accessibilityCustomActions ?? [] }.map(\.name)
+        XCTAssertEqual(actions, [], "no history action")
+    }
+
     // MARK: - QR focus mode
 
     /// The Receive QR is a button: VoiceOver's double tap grows it into

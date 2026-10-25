@@ -16,6 +16,10 @@ struct BalanceCard: View {
     var trustedLocationName: String? = nil
     var isTrustedLocationEnabled: Bool = false
     var isHistoryExpanded: Binding<Bool> = .constant(false)
+    /// False: no History button, card tap or chart in the card. The
+    /// regular-width dashboard shows the chart in a card of its own, which
+    /// drives the same selected point.
+    var hasInlineHistory = true
     var selectedHistoryPoint: Binding<PortfolioDataPoint?> = .constant(nil)
     var selectedHistoryRange: Binding<ChartTimeRange> = .constant(.week)
     var historyModel = BalanceHistoryModel()
@@ -159,13 +163,15 @@ struct BalanceCard: View {
                     }
                 }
 
-                historyToggle
+                if hasInlineHistory {
+                    historyToggle
+                }
             }
 
             VStack(spacing: 0) {
                 balanceRow
 
-                if isHistoryMounted || isHistoryExpanded.wrappedValue {
+                if hasInlineHistory && (isHistoryMounted || isHistoryExpanded.wrappedValue) {
                     historyChart
                 }
             }
@@ -295,6 +301,7 @@ struct BalanceCard: View {
         // History keeps its taps and scrub, and a drag still scrolls.
         .contentShape(RoundedRectangle(cornerRadius: 20))
         .onTapGesture(coordinateSpace: .named(Self.cardSpace)) { location in
+            guard hasInlineHistory else { return }
             if isHistoryExpanded.wrappedValue && historyFrame.contains(location) { return }
             toggleHistory()
         }
@@ -493,8 +500,14 @@ struct BalanceCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(balanceAccessibilityLabel)
         .accessibilityIdentifier("wallet.balanceValue")
-        .accessibilityAction(named: isHistoryExpanded.wrappedValue ? "Hide history" : "Show history") {
-            toggleHistory()
+        .accessibilityActions {
+            if hasInlineHistory {
+                Button {
+                    toggleHistory()
+                } label: {
+                    isHistoryExpanded.wrappedValue ? Text("Hide history") : Text("Show history")
+                }
+            }
         }
     }
 

@@ -249,7 +249,13 @@ struct EmojiPickerSheet: View {
 /// chip, so the list never reshuffles on a switch.
 struct WalletSwitcherButton: View {
     @Binding var isExpanded: Bool
+    /// Emoji beside the name, on one line: the regular-width header (iPad,
+    /// the unfolded iPhone Duo), which has the width for the whole name.
+    var isInline = false
     @EnvironmentObject var walletManager: WalletManager
+
+    private var emoji: String { walletManager.activeWallet?.emoji ?? "\u{1F4B0}" }
+    private var name: String { walletManager.activeWallet?.name ?? String(localized: "Wallet") }
 
     var body: some View {
         Button {
@@ -257,16 +263,32 @@ struct WalletSwitcherButton: View {
                 isExpanded.toggle()
             }
         } label: {
-            VStack(spacing: 2) {
-                Text(walletManager.activeWallet?.emoji ?? "\u{1F4B0}")
-                    .font(.system(size: 22))
-                Text(walletManager.activeWallet?.name ?? String(localized: "Wallet"))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: 66)
+            if isInline {
+                HStack(spacing: 8) {
+                    Text(emoji)
+                        .font(.system(size: 20))
+                    Text(name)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        // The whole name, cut off only past this width.
+                        .frame(maxWidth: 240, alignment: .leading)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .padding(.horizontal, 4)
+                .frame(minHeight: 32)
+            } else {
+                VStack(spacing: 2) {
+                    Text(emoji)
+                        .font(.system(size: 22))
+                    Text(name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: 66)
+                }
+                .frame(width: 74)
             }
-            .frame(width: 74)
         }
         .glassButtonStyle()
         .accessibilityIdentifier("wallet.switcher")

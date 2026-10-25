@@ -399,7 +399,12 @@ struct BalanceHistoryChart: View {
     @EnvironmentObject private var walletManager: WalletManager
     @Binding var selectedTimeRange: ChartTimeRange
     @Binding var selectedPoint: PortfolioDataPoint?
+    /// True: the plot takes the height the parent gives it, down to
+    /// `minFillHeight` (the regular-width dashboard's chart card fills its
+    /// column). False: the balance card's fixed height.
+    var fillsHeight = false
     @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 152
+    @ScaledMetric(relativeTo: .caption) private var minFillHeight: CGFloat = 96
 
     /// Drawn, hidden, before the first series is built.
     private static let placeholder = BalanceHistoryModel.Series(
@@ -462,7 +467,11 @@ struct BalanceHistoryChart: View {
                 chart(shown ?? Self.placeholder, isLive: isCurrent && shown?.isDrawable == true)
                 chartOverlay(shown, isCurrent: isCurrent)
             }
-            .frame(height: chartHeight)
+            .frame(
+                minHeight: fillsHeight ? minFillHeight : chartHeight,
+                idealHeight: fillsHeight ? minFillHeight : chartHeight,
+                maxHeight: fillsHeight ? .infinity : chartHeight
+            )
 
             GlassSegmentedPicker(selection: $selectedTimeRange, accessibilityLabel: { range in
                 (ChartTimeAxis(rawValue: range.apiRange) ?? .week).spokenName

@@ -17764,97 +17764,97 @@
         }
       }
     },
-    "Available balance: %@. Some funds locked until recent transactions confirm." : {
+    "Available balance: %@. Locked transactions need 10 confirmations." : {
       "comment" : "VoiceOver: spendable balance while some funds are locked; %@ is the amount",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verfügbares Guthaben: %@. Ein Teil ist gesperrt, bis neue Transaktionen bestätigt sind."
+            "value" : "Verfügbares Guthaben: %@. Gesperrte Transaktionen benötigen 10 Bestätigungen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saldo disponible: %@. Parte de los fondos está bloqueada hasta que se confirmen las transacciones recientes."
+            "value" : "Saldo disponible: %@. Las transacciones bloqueadas necesitan 10 confirmaciones."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solde disponible : %@. Une partie des fonds est verrouillée jusqu’à la confirmation des transactions récentes."
+            "value" : "Solde disponible : %@. Les transactions verrouillées nécessitent 10 confirmations."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saldo disponibile: %@. Parte dei fondi è bloccata finché le transazioni recenti non vengono confermate."
+            "value" : "Saldo disponibile: %@. Le transazioni bloccate richiedono 10 conferme."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "利用可能残高：%@。最近のトランザクションが承認されるまで、一部の資金はロックされています。"
+            "value" : "利用可能残高：%@。ロック中のトランザクションには10回の承認が必要です。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "사용 가능 잔액: %@. 최근 거래가 확인될 때까지 일부 자금이 잠겨 있습니다."
+            "value" : "사용 가능 잔액: %@. 잠긴 거래는 10회 확인이 필요합니다."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Beschikbaar saldo: %@. Een deel is vergrendeld tot recente transacties zijn bevestigd."
+            "value" : "Beschikbaar saldo: %@. Vergrendelde transacties hebben 10 bevestigingen nodig."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dostępne saldo: %@. Część środków jest zablokowana do potwierdzenia ostatnich transakcji."
+            "value" : "Dostępne saldo: %@. Zablokowane transakcje wymagają 10 potwierdzeń."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saldo disponível: %@. Parte dos fundos está bloqueada até as transações recentes serem confirmadas."
+            "value" : "Saldo disponível: %@. Transações bloqueadas precisam de 10 confirmações."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sold disponibil: %@. Unele fonduri sunt blocate până la confirmarea tranzacțiilor recente."
+            "value" : "Sold disponibil: %@. Tranzacțiile blocate necesită 10 confirmări."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Доступный баланс: %@. Часть средств заблокирована до подтверждения последних транзакций."
+            "value" : "Доступный баланс: %@. Заблокированным транзакциям нужно 10 подтверждений."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kullanılabilir bakiye: %@. Son işlemler onaylanana kadar bazı fonlar kilitli."
+            "value" : "Kullanılabilir bakiye: %@. Kilitli işlemler 10 onay gerektirir."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Доступний баланс: %@. Частину коштів заблоковано, доки нові транзакції не буде підтверджено."
+            "value" : "Доступний баланс: %@. Заблокованим транзакціям потрібно 10 підтверджень."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "可用余额：%@。部分资金已锁定，待最近的交易确认后解锁。"
+            "value" : "可用余额：%@。锁定中的交易需要 10 次确认。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "可用餘額：%@。部分資金已鎖定，待最近的交易確認後解鎖。"
+            "value" : "可用餘額：%@。鎖定中的交易需要 10 次確認。"
           }
         }
       }
@@ -54408,96 +54408,96 @@
         }
       }
     },
-    "Locked until recent transactions confirm" : {
+    "Locked transactions need 10 confirmations" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gesperrt, bis neue Transaktionen bestätigt sind"
+            "value" : "Gesperrte Transaktionen benötigen 10 Bestätigungen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bloqueado hasta que se confirmen las transacciones recientes"
+            "value" : "Las transacciones bloqueadas necesitan 10 confirmaciones"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verrouillé jusqu’à la confirmation des transactions récentes"
+            "value" : "Les transactions verrouillées nécessitent 10 confirmations"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bloccato finché le transazioni recenti non vengono confermate"
+            "value" : "Le transazioni bloccate richiedono 10 conferme"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最近のトランザクションが承認されるまでロック中"
+            "value" : "ロック中のトランザクションには10回の承認が必要です"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "최근 거래가 확인될 때까지 잠김"
+            "value" : "잠긴 거래는 10회 확인이 필요합니다"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vergrendeld tot recente transacties zijn bevestigd"
+            "value" : "Vergrendelde transacties hebben 10 bevestigingen nodig"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zablokowane do potwierdzenia ostatnich transakcji"
+            "value" : "Zablokowane transakcje wymagają 10 potwierdzeń"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bloqueado até as transações recentes serem confirmadas"
+            "value" : "Transações bloqueadas precisam de 10 confirmações"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Blocat până la confirmarea tranzacțiilor recente"
+            "value" : "Tranzacțiile blocate necesită 10 confirmări"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Заблокировано до подтверждения последних транзакций"
+            "value" : "Заблокированным транзакциям нужно 10 подтверждений"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Son işlemler onaylanana kadar kilitli"
+            "value" : "Kilitli işlemler 10 onay gerektirir"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Заблоковано, доки нові транзакції не буде підтверджено"
+            "value" : "Заблокованим транзакціям потрібно 10 підтверджень"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "锁定中，待最近的交易确认后解锁"
+            "value" : "锁定中的交易需要 10 次确认"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "鎖定中，待最近的交易確認後解鎖"
+            "value" : "鎖定中的交易需要 10 次確認"
           }
         }
       }

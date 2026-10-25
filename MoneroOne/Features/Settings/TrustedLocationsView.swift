@@ -78,11 +78,16 @@ struct TrustedLocationsView: View {
                     .padding(.vertical, 20)
                 } else {
                     ForEach(locationsManager.trustedLocations) { location in
-                        TrustedLocationRow(location: location)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                editingLocation = location
-                            }
+                        // A Button with the default style, so the row gets
+                        // the standard highlight on press. The name keeps
+                        // the label color instead of the button tint.
+                        Button {
+                            editingLocation = location
+                        } label: {
+                            TrustedLocationRow(location: location)
+                                .foregroundStyle(.primary)
+                                .contentShape(Rectangle())
+                        }
                     }
                     .onDelete(perform: deleteLocations)
                 }

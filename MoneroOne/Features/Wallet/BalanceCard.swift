@@ -132,7 +132,7 @@ struct BalanceCard: View {
         } else {
             amounts = "\(xmr) XMR" + (fiat.map { String(localized: ", approximately \($0)", comment: "VoiceOver: fiat value after an XMR amount") } ?? "")
         }
-        return String(localized: "Available balance: \(amounts). Some funds locked until recent transactions confirm.", comment: "VoiceOver: spendable balance while some funds are locked; %@ is the amount")
+        return String(localized: "Available balance: \(amounts). Locked transactions need 10 confirmations.", comment: "VoiceOver: spendable balance while some funds are locked; %@ is the amount")
     }
 
     var body: some View {
@@ -715,7 +715,7 @@ struct BalanceCard: View {
                 Image(systemName: "clock")
                     .font(.caption2)
                     .accessibilityHidden(true)
-                Text("Locked until recent transactions confirm")
+                Text("Locked transactions need 10 confirmations")
                     .font(.caption2)
             }
             .foregroundColor(.brand)

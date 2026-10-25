@@ -27,11 +27,19 @@ struct CommandCenterView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let columnHeight = max(geometry.size.height - 32, 600)
+            // The visible height under the 16pt padding above and below.
+            let columnHeight = max(geometry.size.height - 32, 0)
 
             ScrollView {
+                // The scroll view offers no height, so this one goes to the
+                // columns: Activity scrolls inside it and the chart takes
+                // the rest of the left column, and both end on one line at
+                // the bottom of the screen. A minHeight frame passed no
+                // height on: Activity grew to its whole list, and the chart
+                // stretched with it past the screen. When the left column
+                // needs more (large text, a short window), the page scrolls.
                 twoColumnLayout
-                    .frame(minHeight: columnHeight)
+                    .frame(idealHeight: columnHeight, alignment: .top)
                     .frame(maxWidth: 1280)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -240,7 +248,6 @@ struct CommandCenterView: View {
             asOf: selectedHistoryPoint?.timestamp,
             historyTransactions: pastTransactions
         )
-        .dashboardCard()
     }
 
     /// The full history behind a past point. Read only in the past, so

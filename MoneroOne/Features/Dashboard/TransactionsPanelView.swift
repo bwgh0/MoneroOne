@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// Full-height scrollable transaction panel for iPad Command Center
+/// Full-height scrollable transaction panel for iPad Command Center. No
+/// card around it: the header and the rows sit on the page, as Recent
+/// Activity does on iPhone.
 struct TransactionsPanelView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var selectedTransaction: MoneroTransaction?
@@ -52,14 +54,13 @@ struct TransactionsPanelView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
 
             // Transaction list
             if activity.isEmpty {
+                // A card, as the empty state on iPhone, filling the column.
                 emptyState
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.bottom, 16)
+                    .dashboardCard()
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
@@ -69,9 +70,12 @@ struct TransactionsPanelView: View {
                             }
                         }
                     }
+                    // The rows line up with the column; the scroll view
+                    // reaches 16 past each side, so it does not cut the
+                    // glass rows' edges.
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
                 }
+                .padding(.horizontal, -16)
                 .scrollContentBackground(.hidden)
             }
         }

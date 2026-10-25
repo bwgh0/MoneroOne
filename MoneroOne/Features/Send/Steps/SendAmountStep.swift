@@ -32,8 +32,7 @@ struct SendAmountStep: View {
     /// Link mode: the name the link gets without a note ("Link 9").
     var linkNamePlaceholder = ""
     /// The sheet is wider than a phone's (the open iPhone Duo, iPad): the
-    /// flow caps every step at a phone column, and the keys get a 16pt gap
-    /// above them.
+    /// amount and the keys sit in two columns.
     var isWideSheet = false
     let onContinue: () -> Void
 
@@ -69,231 +68,19 @@ struct SendAmountStep: View {
     /// The fiat a swap from XMR showed, and that XMR. Showing it is not an
     /// edit: the XMR stays exact.
     @State private var swappedFiat: TypedFiat?
-    /// A short screen (window under 720pt: iPhone SE, the iPhone Duo). The
-    /// amount area is tighter; see `scrollsKeypad` and `squatRowHeight`.
+    /// A short screen (window under 720pt: iPhone SE, the iPhone Duo): the
+    /// amount area is tighter, and on a phone the keys scroll with it.
     @State private var isSquat = false
-    /// The step's height, the amount area's height and Continue's height:
-    /// on the open iPhone Duo the keys get what is left.
-    @State private var stepHeight: CGFloat = 0
-    @State private var contentHeight: CGFloat = 0
-    @State private var continueHeight: CGFloat = 0
-
-    /// An iPhone 17 Pro key: (402 - 2 x 16 - 2 x 12) / 3 = 115pt wide, 60pt
-    /// plus the glass insets = 74pt tall. The open Duo's keys keep this shape.
-    private static let keyAspect: CGFloat = 115 / 74
-    /// The smallest key row: the 44pt hit target.
-    private static let minRowHeight: CGFloat = 44
+    /// The amount column's height on a wide sheet: the amount sits in its
+    /// middle.
+    @State private var amountColumnHeight: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 0) {
-                    VStack(spacing: isSquat ? 8 : 16) {
-                        if let header {
-                            header
-                                .padding(.top, 4)
-                                .padding(.bottom, -8)
-                        } else {
-                            Spacer(minLength: isSquat ? 4 : 12)
-                        }
-
-                        if let amountPrefill {
-                            HStack(spacing: 4) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.yellow)
-                                    .font(.caption2)
-                                switch amountPrefill {
-                                case .qrCode:
-                                    Text("Amount pre-filled from QR code")
-                                case .paymentLink:
-                                    Text("Amount pre-filled from payment link")
-                                }
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-
-                        // Amount display
-                        VStack(spacing: 4) {
-                            ZStack {
-                                // Hidden input for hardware keyboard support (no software keyboard)
-                                HardwareKeyboardInput(
-                                    text: keyedAmount,
-                                    filter: isFiatMode ? filterFiatInput : filterDecimalInput
-                                )
-                                .id(isFiatMode ? "fiat" : "xmr")
-                                .frame(width: 1, height: 1)
-                                .opacity(0.01)
-
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                    if isFiatMode {
-                                        Text(priceService.currencySymbol)
-                                            .font(.title2.weight(.medium))
-                                            .foregroundStyle(.secondary)
-                                        Text(fiatString.isEmpty ? "0" : fiatString)
-                                            .font(.system(size: 56, weight: .bold, design: .rounded))
-                                            .monospacedDigit()
-                                            .contentTransition(.numericText())
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.4)
-                                    } else {
-                                        Text(amountString.isEmpty ? "0" : amountString)
-                                            .font(.system(size: 56, weight: .bold, design: .rounded))
-                                            .monospacedDigit()
-                                            .contentTransition(.numericText())
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.4)
-
-                                        Text("XMR")
-                                            .font(.title2.weight(.medium))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .accessibilityElement(children: .combine)
-                                .accessibilityLabel(isFiatMode
-                                    ? "\(fiatString.isEmpty ? "0" : fiatString) \(priceService.selectedCurrency.uppercased())"
-                                    : "\(amountString.isEmpty ? "0" : amountString) XMR")
-                            }
-
-                            // Secondary amount + swap button
-                            Button {
-                                toggleFiatMode()
-                            } label: {
-                                HStack(spacing: 6) {
-                                    if isFiatMode {
-                                        Text("≈ \(amountString.isEmpty || amountString == "0" ? "0" : amountString) XMR")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                            .contentTransition(.numericText())
-                                    } else if let amountDecimal = Decimal(string: amountString),
-                                              amountDecimal > 0,
-                                              let fiat = priceService.formatFiatValue(amountDecimal) {
-                                        Text("≈ \(fiat)")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                            .contentTransition(.numericText())
-                                    } else {
-                                        Text("≈ \(priceService.currencySymbol)0")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Image(systemName: "arrow.up.arrow.down")
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.brand)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.brand.opacity(0.15))
-                                .clipShape(Capsule())
-                            }
-                            .disabled(priceService.xmrPrice == nil)
-                            .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, isSquat ? 4 : 8)
-
-                        // Balance row with Paste + Max buttons
-                        HStack {
-                            Text("Available: \(XMRFormatter.format(unlockedBalance)) XMR")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            Spacer()
-
-                            Button {
-                                pasteAmount()
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "doc.on.clipboard")
-                                        .font(.caption2)
-                                    Text("Paste")
-                                }
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.brand)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.brand.opacity(0.15))
-                                .clipShape(Capsule())
-                            }
-                            .accessibilityLabel("Paste amount from clipboard")
-
-                            Button("Max") {
-                                isFiatMode = false
-                                isSendingAll = true
-                                amountString = "\(unlockedBalance)"
-                                fiatString = ""
-                                noteEdit(.max)
-                                HapticFeedback.shared.softTick()
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.brand)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.brand.opacity(0.15))
-                            .clipShape(Capsule())
-                            .accessibilityLabel("Send maximum amount")
-                            .removedInLinkMode(isLinkMode)
-                        }
-                        .padding(.horizontal, 4)
-
-                        // Memo field (collapsible)
-                        VStack(spacing: 8) {
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    showMemo.toggle()
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "note.text")
-                                    Text(memoToggleTitle)
-                                        .font(.caption)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .font(.caption2)
-                                        .rotationEffect(.degrees(showMemo ? 180 : 0))
-                                }
-                                .foregroundStyle(.secondary)
-                            }
-
-                            if showMemo {
-                                TextField(isLinkMode ? linkNamePlaceholder : String(localized: "Add a note"), text: $memo)
-                                    .font(.subheadline)
-                                    .padding(12)
-                                    .background(Color(.secondarySystemBackground))
-                                    .cornerRadius(12)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
-                                    .accessibilityLabel(isLinkMode ? Text("Note") : Text("Add a note"))
-                                    .accessibilityHint(isLinkMode ? Text("Only this iPhone keeps the note.") : Text(""))
-                                    .onChange(of: memo) { newValue in
-                                        // A link's note is a short name.
-                                        if isLinkMode, newValue.count > EnvelopeRecord.noteLimit {
-                                            memo = String(newValue.prefix(EnvelopeRecord.noteLimit))
-                                        }
-                                    }
-                            }
-                        }
-                        .padding(.horizontal, 4)
-                        .padding(.bottom, 8)
-                    }
-                    .padding(.horizontal)
-                    .onGeometryChange(for: CGFloat.self) { proxy in
-                        proxy.size.height
-                    } action: { height in
-                        contentHeight = height
-                    }
-                    .opacity(showContent ? 1 : 0)
-                    .offset(y: showContent ? 0 : 20)
-
-                    if scrollsKeypad {
-                        keypadSection
-                    }
-                }
-            }
-            .scrollDismissesKeyboard(.immediately)
-
-            if !scrollsKeypad {
-                keypadSection
+        Group {
+            if isWideSheet {
+                wideLayout
+            } else {
+                phoneLayout
             }
         }
         .navigationTitle(navigationTitle)
@@ -367,11 +154,6 @@ struct SendAmountStep: View {
             }
         }
         .detectSquatScreen($isSquat)
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.height
-        } action: { height in
-            stepHeight = height
-        }
         .onDisappear {
             typedFiat = isFiatMode ? TypedFiat(fiat: fiatString, xmr: amountString) : nil
         }
@@ -383,15 +165,257 @@ struct SendAmountStep: View {
         }
     }
 
-    /// The keys and Continue. On a short phone screen they scroll with the
-    /// amount, so the amount and its swap button never sit under the keys.
+    /// A phone: the amount on top, the keys and Continue under it. On a short
+    /// phone screen (iPhone SE, the iPhone Duo cover) the keys scroll with
+    /// the amount, so the amount and its swap button never sit under them.
+    private var phoneLayout: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 0) {
+                    amountContent
+
+                    if isSquat {
+                        keypadSection
+                    }
+                }
+            }
+            .scrollDismissesKeyboard(.immediately)
+
+            if !isSquat {
+                keypadSection
+            }
+        }
+    }
+
+    /// A wide sheet (the open iPhone Duo, iPad): two even columns. The
+    /// amount and everything about it on the left, in the middle of the
+    /// column; the iPhone-size keys and Continue on the right, at the bottom.
+    private var wideLayout: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ScrollView {
+                amountContent
+                    .frame(minHeight: amountColumnHeight, alignment: .center)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.immediately)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { height in
+                amountColumnHeight = height
+            }
+            .frame(maxWidth: .infinity)
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                keypadSection
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// The amount, its swap button, Available with Paste and Max, and the
+    /// note; on Transfer, From and To above them.
+    private var amountContent: some View {
+        VStack(spacing: isTight ? 8 : 16) {
+            if let header {
+                header
+                    .padding(.top, 4)
+                    .padding(.bottom, -8)
+            } else if !isWideSheet {
+                // On a wide sheet the column centers the amount instead.
+                Spacer(minLength: isTight ? 4 : 12)
+            }
+
+            if let amountPrefill {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.caption2)
+                    switch amountPrefill {
+                    case .qrCode:
+                        Text("Amount pre-filled from QR code")
+                    case .paymentLink:
+                        Text("Amount pre-filled from payment link")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            // Amount display
+            VStack(spacing: 4) {
+                ZStack {
+                    // Hidden input for hardware keyboard support (no software keyboard)
+                    HardwareKeyboardInput(
+                        text: keyedAmount,
+                        filter: isFiatMode ? filterFiatInput : filterDecimalInput
+                    )
+                    .id(isFiatMode ? "fiat" : "xmr")
+                    .frame(width: 1, height: 1)
+                    .opacity(0.01)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if isFiatMode {
+                            Text(priceService.currencySymbol)
+                                .font(.title2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Text(fiatString.isEmpty ? "0" : fiatString)
+                                .font(.system(size: 56, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .contentTransition(.numericText())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.4)
+                        } else {
+                            Text(amountString.isEmpty ? "0" : amountString)
+                                .font(.system(size: 56, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .contentTransition(.numericText())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.4)
+
+                            Text("XMR")
+                                .font(.title2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(isFiatMode
+                        ? "\(fiatString.isEmpty ? "0" : fiatString) \(priceService.selectedCurrency.uppercased())"
+                        : "\(amountString.isEmpty ? "0" : amountString) XMR")
+                }
+
+                // Secondary amount + swap button
+                Button {
+                    toggleFiatMode()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isFiatMode {
+                            Text("≈ \(amountString.isEmpty || amountString == "0" ? "0" : amountString) XMR")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .contentTransition(.numericText())
+                        } else if let amountDecimal = Decimal(string: amountString),
+                                  amountDecimal > 0,
+                                  let fiat = priceService.formatFiatValue(amountDecimal) {
+                            Text("≈ \(fiat)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .contentTransition(.numericText())
+                        } else {
+                            Text("≈ \(priceService.currencySymbol)0")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.brand)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.brand.opacity(0.15))
+                    .clipShape(Capsule())
+                }
+                .disabled(priceService.xmrPrice == nil)
+                .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, isTight ? 4 : 8)
+
+            // Balance row with Paste + Max buttons
+            HStack {
+                Text("Available: \(XMRFormatter.format(unlockedBalance)) XMR")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    pasteAmount()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.caption2)
+                        Text("Paste")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.brand)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.brand.opacity(0.15))
+                    .clipShape(Capsule())
+                }
+                .accessibilityLabel("Paste amount from clipboard")
+
+                Button("Max") {
+                    isFiatMode = false
+                    isSendingAll = true
+                    amountString = "\(unlockedBalance)"
+                    fiatString = ""
+                    noteEdit(.max)
+                    HapticFeedback.shared.softTick()
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.brand)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.brand.opacity(0.15))
+                .clipShape(Capsule())
+                .accessibilityLabel("Send maximum amount")
+                .removedInLinkMode(isLinkMode)
+            }
+            .padding(.horizontal, 4)
+
+            // Memo field (collapsible)
+            VStack(spacing: 8) {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMemo.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "note.text")
+                        Text(memoToggleTitle)
+                            .font(.caption)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                            .rotationEffect(.degrees(showMemo ? 180 : 0))
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
+                if showMemo {
+                    TextField(isLinkMode ? linkNamePlaceholder : String(localized: "Add a note"), text: $memo)
+                        .font(.subheadline)
+                        .padding(12)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .accessibilityLabel(isLinkMode ? Text("Note") : Text("Add a note"))
+                        .accessibilityHint(isLinkMode ? Text("Only this iPhone keeps the note.") : Text(""))
+                        .onChange(of: memo) { newValue in
+                            // A link's note is a short name.
+                            if isLinkMode, newValue.count > EnvelopeRecord.noteLimit {
+                                memo = String(newValue.prefix(EnvelopeRecord.noteLimit))
+                            }
+                        }
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 8)
+        }
+        .padding(.horizontal)
+        .opacity(showContent ? 1 : 0)
+        .offset(y: showContent ? 0 : 20)
+    }
+
+    /// The 60pt iPhone keys and Continue.
     private var keypadSection: some View {
         VStack(spacing: 12) {
             if !softwareKeyboardVisible {
                 NumericKeypad(text: keyedAmount,
-                              maxDecimalPlaces: isFiatMode ? 2 : 12,
-                              rowHeight: squatRowHeight)
-                    .frame(maxWidth: squatRowHeight.map { 3 * $0 * Self.keyAspect + 2 * 8 })
+                              maxDecimalPlaces: isFiatMode ? 2 : 12)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -407,35 +431,17 @@ struct SendAmountStep: View {
                 .padding(.vertical, 16)
             }
             .glassButtonStyle()
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { height in
-                continueHeight = height
-            }
             .disabled(!canContinue)
             .accessibilityLabel("Continue")
             .accessibilityHint(continueHint)
         }
         .padding(.horizontal)
-        .padding(.top, isWideSheet ? 16 : 0)
         .padding(.bottom, 8)
     }
 
-    /// A short phone screen (iPhone SE, the iPhone Duo cover): the keys keep
-    /// the iPhone size and scroll with the amount.
-    private var scrollsKeypad: Bool { isSquat && !isWideSheet }
-
-    /// On the open iPhone Duo (short and wide): the height of a key row, so
-    /// the amount area, the keys and Continue all fit. Nil on other screens
-    /// (60pt keys).
-    private var squatRowHeight: CGFloat? {
-        guard isSquat, isWideSheet, stepHeight > 0, contentHeight > 0 else { return nil }
-        // The gap above the keys (16), the keypad VStack's spacing (12) and
-        // its bottom padding (8).
-        let keypadHeight = stepHeight - contentHeight - 16 - 12 - continueHeight - 8
-        let row = (keypadHeight - 3 * 8) / 4
-        return min(max(row, Self.minRowHeight), 74).rounded(.down)
-    }
+    /// A short phone screen: the amount area is tighter. Two columns on a
+    /// wide sheet leave it room.
+    private var isTight: Bool { isSquat && !isWideSheet }
 
     private var navigationTitle: String {
         title ?? (isLinkMode ? String(localized: "Send with a Link") : String(localized: "Send to \(recipientDisplayName ?? formatAddress(recipientAddress))"))
@@ -729,4 +735,52 @@ private struct HardwareKeyboardInput: UIViewRepresentable {
             return false
         }
     }
+}
+
+// MARK: - Previews (the open iPhone Duo's sheet and the Duo cover)
+
+private struct SendAmountStepPreview: View {
+    var isWideSheet: Bool
+    var isTransfer = false
+    @State private var amount = "0.25"
+    @State private var memo = ""
+    @State private var isSendingAll = false
+    @State private var typedFiat: SendAmountStep.TypedFiat?
+    @State private var prefill: SendAmountStep.AmountPrefill?
+
+    var body: some View {
+        NavigationStack {
+            SendAmountStep(
+                amountString: $amount,
+                memo: $memo,
+                isSendingAll: $isSendingAll,
+                typedFiat: $typedFiat,
+                recipientAddress: "4AdUndXHHZ6cfufTMvppY6JwXNouMBzSkbLYfpAV5Usx3skxNgYeYTRj5UzqtReoS44qo9mtmXCqY45DJ852K5Jv2684Rge",
+                title: isTransfer ? "Transfer" : nil,
+                subtitle: isTransfer ? "From Alpha" : nil,
+                header: isTransfer ? TransferPartiesCard(selected: nil, onSelect: { _, _ in }) : nil,
+                recipientReady: !isTransfer,
+                unlockedBalance: Decimal(string: "0.899048750115")!,
+                priceService: PriceService(),
+                amountPrefill: $prefill,
+                isWideSheet: isWideSheet,
+                onContinue: {}
+            )
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") {} } }
+        }
+        .environmentObject(WalletManager())
+        .environmentObject(PriceService())
+    }
+}
+
+#Preview("Open Duo", traits: .fixedLayout(width: 651, height: 659)) {
+    SendAmountStepPreview(isWideSheet: true)
+}
+
+#Preview("Open Duo, Transfer", traits: .fixedLayout(width: 651, height: 659)) {
+    SendAmountStepPreview(isWideSheet: true, isTransfer: true)
+}
+
+#Preview("Duo cover", traits: .fixedLayout(width: 466, height: 678)) {
+    SendAmountStepPreview(isWideSheet: false)
 }

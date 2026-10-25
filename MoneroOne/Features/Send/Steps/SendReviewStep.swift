@@ -23,6 +23,9 @@ struct SendReviewStep: View {
     let priceService: PriceService
     let walletManager: WalletManager
     let sendInProgress: Bool
+    /// The sheet is wider than a phone's (the open iPhone Duo, iPad): the
+    /// review lays out in two columns.
+    var isWideSheet = false
     let onConfirm: () -> Void
 
     @State private var feeError: String?
@@ -57,239 +60,12 @@ struct SendReviewStep: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 20) {
-                    Spacer(minLength: 16)
-
-                    // Transaction card
-                    VStack(spacing: 0) {
-                        if let transfer {
-                            walletRow(transfer.from, address: transfer.fromAddress, label: String(localized: "From", comment: "Transfer review: the wallet that sends"))
-                            Divider().padding(.horizontal)
-                            walletRow(
-                                transfer.to,
-                                address: recipientAddress,
-                                label: String(localized: "To", comment: "Transfer review: the wallet that receives"),
-                                name: transfer.isToSelf ? String(localized: "This Wallet", comment: "Transfer: the current wallet as a destination") : nil
-                            )
-                        } else if let contact, aliasSummary == nil {
-                            contactRow(contact)
-                        } else {
-                        // Recipient. A name shows its picture, the name,
-                        // the OpenAlias name and every character of the address.
-                        HStack(alignment: aliasSummary == nil ? .center : .top, spacing: 12) {
-                            if let aliasSummary {
-                                RecipientAvatar(summary: aliasSummary, diameter: 40)
-                            } else {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.brand.opacity(0.15))
-                                        .frame(width: 40, height: 40)
-                                    Image(systemName: "person.fill")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(.brand)
-                                }
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Recipient")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                if let aliasSummary {
-                                    if let recipientName = contact?.name ?? aliasSummary.recipientName {
-                                        Text(verbatim: recipientName)
-                                            .font(.headline)
-                                        OpenAliasNameText(name: aliasSummary.name.display)
-                                    } else {
-                                        OpenAliasNameText(name: aliasSummary.name.display, style: .headline, weight: .semibold, color: .label)
-                                    }
-                                    CodeText(recipientAddress, color: .label)
-                                        .padding(.top, 4)
-                                } else {
-                                    CodeText(formatAddress(recipientAddress), color: .label)
-                                }
-                            }
-
-                            Spacer()
-                        }
-                        .padding(aliasSummary == nil ? .all : [.horizontal, .top])
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel(recipientLabel)
-
-                        if let aliasSummary {
-                            // Under the text column: the 16 pt padding, the
-                            // 40 pt icon disc and the 12 pt spacing of the row.
-                            OpenAliasReviewNotes(summary: aliasSummary)
-                                .padding(.leading, 68)
-                                .padding(.trailing)
-                                .padding(.top, 8)
-                                .padding(.bottom)
-                        }
-                        }
-
-                        Divider().padding(.horizontal)
-
-                        // Amount
-                        VStack(spacing: 4) {
-                            if isSendingAll || upgradedToSendAll {
-                                Text("All Funds")
-                                    .font(.title.weight(.bold))
-                                if let fee = estimatedFee {
-                                    let sent = lines(shownAmount(fee: fee))
-                                    Text(verbatim: sent.primary)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                    if let secondary = sent.secondary {
-                                        Text(verbatim: secondary)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            } else {
-                                let sent = lines(amount)
-                                Text(verbatim: sent.primary)
-                                    .font(.title.weight(.bold))
-                                if let secondary = sent.secondary {
-                                    Text(verbatim: secondary)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-
-                        Divider().padding(.horizontal)
-
-                        // Fee
-                        HStack {
-                            Text("Network Fee")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            if let fee = estimatedFee {
-                                let feeLines = lines(fee)
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text(verbatim: feeLines.primary)
-                                        .fontWeight(.medium)
-                                    if let secondary = feeLines.secondary {
-                                        Text(verbatim: secondary)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            } else {
-                                ReviewValuePlaceholder(lines: lines(ReviewValuePlaceholder.feeSample))
-                            }
-                        }
-                        .font(.subheadline)
-                        .padding()
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel(estimatedFee.map { SendReviewFee.accessibilityLabel(fee: $0, lines: lines($0)) } ?? String(localized: "Network fee: loading"))
-
-                        // Total. Its row holds its place until the value is known.
-                        // A send back to this wallet has no total: only the
-                        // fee leaves it.
-                        if transfer?.isToSelf != true {
-                            Divider().padding(.horizontal)
-
-                            HStack {
-                                Text("Total")
-                                    .fontWeight(.semibold)
-                                Spacer()
-                                if let total = total {
-                                    let totalLines = lines(total)
-                                    VStack(alignment: .trailing, spacing: 2) {
-                                        Text(verbatim: totalLines.primary)
-                                            .fontWeight(.semibold)
-                                            .foregroundStyle(.brand)
-                                        if let secondary = totalLines.secondary {
-                                            Text(verbatim: secondary)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                } else {
-                                    ReviewValuePlaceholder(lines: lines(amount > 0 ? amount : walletManager.displayUnlockedBalance), weight: .semibold)
-                                }
-                            }
-                            .font(.subheadline)
-                            .padding()
-                        }
-
-                        // The description in the OpenAlias record.
-                        if let txDescription = aliasSummary?.txDescription {
-                            Divider().padding(.horizontal)
-
-                            OpenAliasDescriptionRow(text: txDescription)
-                                .padding()
-                        }
-
-                        // Memo
-                        if !memo.isEmpty {
-                            Divider().padding(.horizontal)
-
-                            HStack {
-                                Image(systemName: "note.text")
-                                    .foregroundStyle(.secondary)
-                                Text(memo)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            .padding()
-                        }
-                    }
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(16)
-
-                    // A send back to this wallet: what it does, 8 pt under
-                    // the card.
-                    if transfer?.isToSelf == true {
-                        Text("Sends XMR back to this wallet as a new payment. You can spend it again in about 20 minutes.", comment: "Transfer: the footer under From and To when the XMR goes back to the same wallet")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16)
-                            .padding(.top, -12)
-                    }
-                }
-                .padding()
-                .opacity(showContent ? 1 : 0)
-                .offset(y: showContent ? 0 : 20)
+        Group {
+            if isWideSheet {
+                wideLayout
+            } else {
+                phoneLayout
             }
-
-            // Send button, with the wallet's status or a failed build above it
-            VStack(spacing: 10) {
-                SendWaitStatus(
-                    walletManager: walletManager,
-                    failure: feeError,
-                    failureCanRetry: feeErrorCanRetry,
-                    isWaitShown: isWaitShown,
-                    onRetry: {
-                        // A failed build builds again; a wait asks the node again.
-                        if feeError != nil { retry += 1 } else { Task { await walletManager.refresh() } }
-                    }
-                )
-
-                Button(action: onConfirm) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.callout.weight(.semibold))
-                        Text("Send")
-                            .font(.callout.weight(.semibold))
-                    }
-                    .foregroundStyle(estimatedFee != nil && !sendInProgress ? .brand : .gray)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                }
-                .glassButtonStyle()
-                .disabled(estimatedFee == nil || sendInProgress)
-                .accessibilityLabel("Send transaction")
-                .accessibilityHint(sendHint)
-            }
-            .padding()
         }
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
@@ -301,6 +77,322 @@ struct SendReviewStep: View {
             withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
                 showContent = true
             }
+        }
+    }
+
+    /// A phone: one card, Send under it.
+    private var phoneLayout: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    Spacer(minLength: 16)
+
+                    // Transaction card
+                    VStack(spacing: 0) {
+                        partiesSection
+
+                        Divider().padding(.horizontal)
+
+                        amountSection
+
+                        Divider().padding(.horizontal)
+
+                        feeRow
+                        totalRow
+                        notesRows
+                    }
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(16)
+
+                    toSelfFooter
+                }
+                .padding()
+                .opacity(showContent ? 1 : 0)
+                .offset(y: showContent ? 0 : 20)
+            }
+
+            sendSection
+                .padding()
+        }
+    }
+
+    /// A wide sheet (the open iPhone Duo, iPad): two even columns. Who gets
+    /// it and how much on the left; the fee, the total and Send on the right.
+    private var wideLayout: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    VStack(spacing: 0) {
+                        partiesSection
+
+                        Divider().padding(.horizontal)
+
+                        amountSection
+                        notesRows
+                    }
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(16)
+
+                    toSelfFooter
+                }
+                .padding()
+                .padding(.top, 16)
+                .opacity(showContent ? 1 : 0)
+                .offset(y: showContent ? 0 : 20)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxWidth: .infinity)
+
+            VStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    feeRow
+                    totalRow
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(16)
+                .padding()
+                .padding(.top, 16)
+                .opacity(showContent ? 1 : 0)
+                .offset(y: showContent ? 0 : 20)
+
+                Spacer(minLength: 0)
+
+                sendSection
+                    .padding()
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// The recipient, a contact, or From over To on a transfer.
+    @ViewBuilder
+    private var partiesSection: some View {
+        if let transfer {
+            walletRow(transfer.from, address: transfer.fromAddress, label: String(localized: "From", comment: "Transfer review: the wallet that sends"))
+            Divider().padding(.horizontal)
+            walletRow(
+                transfer.to,
+                address: recipientAddress,
+                label: String(localized: "To", comment: "Transfer review: the wallet that receives"),
+                name: transfer.isToSelf ? String(localized: "This Wallet", comment: "Transfer: the current wallet as a destination") : nil
+            )
+        } else if let contact, aliasSummary == nil {
+            contactRow(contact)
+        } else {
+        // Recipient. A name shows its picture, the name,
+        // the OpenAlias name and every character of the address.
+        HStack(alignment: aliasSummary == nil ? .center : .top, spacing: 12) {
+            if let aliasSummary {
+                RecipientAvatar(summary: aliasSummary, diameter: 40)
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(Color.brand.opacity(0.15))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.brand)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Recipient")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let aliasSummary {
+                    if let recipientName = contact?.name ?? aliasSummary.recipientName {
+                        Text(verbatim: recipientName)
+                            .font(.headline)
+                        OpenAliasNameText(name: aliasSummary.name.display)
+                    } else {
+                        OpenAliasNameText(name: aliasSummary.name.display, style: .headline, weight: .semibold, color: .label)
+                    }
+                    CodeText(recipientAddress, color: .label)
+                        .padding(.top, 4)
+                } else {
+                    CodeText(formatAddress(recipientAddress), color: .label)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(aliasSummary == nil ? .all : [.horizontal, .top])
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(recipientLabel)
+
+        if let aliasSummary {
+            // Under the text column: the 16 pt padding, the
+            // 40 pt icon disc and the 12 pt spacing of the row.
+            OpenAliasReviewNotes(summary: aliasSummary)
+                .padding(.leading, 68)
+                .padding(.trailing)
+                .padding(.top, 8)
+                .padding(.bottom)
+        }
+        }
+    }
+
+    private var amountSection: some View {
+        VStack(spacing: 4) {
+            if isSendingAll || upgradedToSendAll {
+                Text("All Funds")
+                    .font(.title.weight(.bold))
+                if let fee = estimatedFee {
+                    let sent = lines(shownAmount(fee: fee))
+                    Text(verbatim: sent.primary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if let secondary = sent.secondary {
+                        Text(verbatim: secondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                let sent = lines(amount)
+                Text(verbatim: sent.primary)
+                    .font(.title.weight(.bold))
+                if let secondary = sent.secondary {
+                    Text(verbatim: secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+
+    private var feeRow: some View {
+        HStack {
+            Text("Network Fee")
+                .foregroundStyle(.secondary)
+            Spacer()
+            if let fee = estimatedFee {
+                let feeLines = lines(fee)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(verbatim: feeLines.primary)
+                        .fontWeight(.medium)
+                    if let secondary = feeLines.secondary {
+                        Text(verbatim: secondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                ReviewValuePlaceholder(lines: lines(ReviewValuePlaceholder.feeSample))
+            }
+        }
+        .font(.subheadline)
+        .padding()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(estimatedFee.map { SendReviewFee.accessibilityLabel(fee: $0, lines: lines($0)) } ?? String(localized: "Network fee: loading"))
+    }
+
+    @ViewBuilder
+    private var totalRow: some View {
+        // Total. Its row holds its place until the value is known.
+        // A send back to this wallet has no total: only the
+        // fee leaves it.
+        if transfer?.isToSelf != true {
+            Divider().padding(.horizontal)
+
+            HStack {
+                Text("Total")
+                    .fontWeight(.semibold)
+                Spacer()
+                if let total = total {
+                    let totalLines = lines(total)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(verbatim: totalLines.primary)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.brand)
+                        if let secondary = totalLines.secondary {
+                            Text(verbatim: secondary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    ReviewValuePlaceholder(lines: lines(amount > 0 ? amount : walletManager.displayUnlockedBalance), weight: .semibold)
+                }
+            }
+            .font(.subheadline)
+            .padding()
+        }
+    }
+
+    /// The OpenAlias description and the memo, each under a divider.
+    @ViewBuilder
+    private var notesRows: some View {
+        // The description in the OpenAlias record.
+        if let txDescription = aliasSummary?.txDescription {
+            Divider().padding(.horizontal)
+
+            OpenAliasDescriptionRow(text: txDescription)
+                .padding()
+        }
+
+        // Memo
+        if !memo.isEmpty {
+            Divider().padding(.horizontal)
+
+            HStack {
+                Image(systemName: "note.text")
+                    .foregroundStyle(.secondary)
+                Text(memo)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var toSelfFooter: some View {
+        // A send back to this wallet: what it does, 8 pt under
+        // the card.
+        if transfer?.isToSelf == true {
+            Text("Sends XMR back to this wallet as a new payment. You can spend it again in about 20 minutes.", comment: "Transfer: the footer under From and To when the XMR goes back to the same wallet")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.top, -12)
+        }
+    }
+
+    /// Send button, with the wallet's status or a failed build above it.
+    private var sendSection: some View {
+        VStack(spacing: 10) {
+            SendWaitStatus(
+                walletManager: walletManager,
+                failure: feeError,
+                failureCanRetry: feeErrorCanRetry,
+                isWaitShown: isWaitShown,
+                onRetry: {
+                    // A failed build builds again; a wait asks the node again.
+                    if feeError != nil { retry += 1 } else { Task { await walletManager.refresh() } }
+                }
+            )
+
+            Button(action: onConfirm) {
+                HStack(spacing: 8) {
+                    Image(systemName: "paperplane.fill")
+                        .font(.callout.weight(.semibold))
+                    Text("Send")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(estimatedFee != nil && !sendInProgress ? .brand : .gray)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            }
+            .glassButtonStyle()
+            .disabled(estimatedFee == nil || sendInProgress)
+            .accessibilityLabel("Send transaction")
+            .accessibilityHint(sendHint)
         }
     }
 
@@ -753,4 +845,40 @@ struct ReviewValuePlaceholder: View {
         .redacted(reason: .placeholder)
         .accessibilityHidden(true)
     }
+}
+
+// MARK: - Previews (the open iPhone Duo's sheet and the Duo cover)
+
+private struct SendReviewStepPreview: View {
+    var isWideSheet: Bool
+    @StateObject private var walletManager = WalletManager()
+    @StateObject private var priceService = PriceService()
+
+    var body: some View {
+        NavigationStack {
+            SendReviewStep(
+                recipientAddress: "4AdUndXHHZ6cfufTMvppY6JwXNouMBzSkbLYfpAV5Usx3skxNgYeYTRj5UzqtReoS44qo9mtmXCqY45DJ852K5Jv2684Rge",
+                amountString: "0.25",
+                memo: "Rent",
+                isSendingAll: false,
+                estimatedFee: .constant(Decimal(string: "0.0000312")),
+                preparedSend: .constant(nil),
+                priceService: priceService,
+                walletManager: walletManager,
+                sendInProgress: false,
+                isWideSheet: isWideSheet,
+                onConfirm: {}
+            )
+        }
+        .environmentObject(walletManager)
+        .environmentObject(priceService)
+    }
+}
+
+#Preview("Open Duo", traits: .fixedLayout(width: 651, height: 659)) {
+    SendReviewStepPreview(isWideSheet: true)
+}
+
+#Preview("Duo cover", traits: .fixedLayout(width: 466, height: 678)) {
+    SendReviewStepPreview(isWideSheet: false)
 }

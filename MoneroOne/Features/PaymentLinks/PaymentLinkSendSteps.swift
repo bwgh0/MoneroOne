@@ -358,6 +358,9 @@ struct PaymentLinkReviewStep: View {
     /// A new value builds the funding transaction again: the one built
     /// here is gone (the wallet closed since).
     var rebuild = 0
+    /// The sheet is wider than a phone's (the open iPhone Duo, iPad): the
+    /// review lays out in two columns.
+    var isWideSheet = false
     let onConfirm: () -> Void
 
     @State private var errorMessage: String?
@@ -401,105 +404,12 @@ struct PaymentLinkReviewStep: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 20) {
-                    Spacer(minLength: 16)
-
-                    VStack(spacing: 0) {
-                        recipientRow
-                        Divider().padding(.horizontal)
-                        amountRow
-                        Divider().padding(.horizontal)
-                        feeRow(
-                            title: String(localized: "Network Fee"),
-                            value: draft?.networkFee,
-                            note: nil
-                        )
-                        Divider().padding(.horizontal)
-                        feeRow(
-                            title: String(localized: "Claim fee reserve"),
-                            value: draft?.reserve,
-                            note: String(localized: "Covers the recipient's claim fee.")
-                        )
-                        // Total and Expires hold their places until the
-                        // link is built.
-                        Divider().padding(.horizontal)
-                        totalRow(draft.map { $0.fundingAmount + $0.networkFee })
-                        Divider().padding(.horizontal)
-                        HStack {
-                            Text("Expires")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            if let draft {
-                                Text(draft.expiryDate.formatted(date: .abbreviated, time: .omitted))
-                                    .fontWeight(.medium)
-                            } else {
-                                Text(Date(timeIntervalSinceNow: EnvelopeLink.defaultLifetime).formatted(date: .abbreviated, time: .omitted))
-                                    .fontWeight(.medium)
-                                    .redacted(reason: .placeholder)
-                                    .accessibilityHidden(true)
-                            }
-                        }
-                        .font(.subheadline)
-                        .padding()
-                        .accessibilityElement(children: .combine)
-                        // The note, as Send's review shows a memo.
-                        if !note.isEmpty {
-                            Divider().padding(.horizontal)
-                            HStack {
-                                Image(systemName: "note.text")
-                                    .foregroundStyle(.secondary)
-                                Text(note)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            .padding()
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(Text("Note, \(note)"))
-                        }
-                    }
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(16)
-
-                    bearerWarning
-                }
-                .padding()
-                .opacity(showContent ? 1 : 0)
-                .offset(y: showContent ? 0 : 20)
+        Group {
+            if isWideSheet {
+                wideLayout
+            } else {
+                phoneLayout
             }
-
-            // Send, with the wallet's status or a failed build above it.
-            VStack(spacing: 10) {
-                SendWaitStatus(
-                    walletManager: walletManager,
-                    failure: errorMessage,
-                    failureCanRetry: errorCanRetry,
-                    isWaitShown: isWaitShown,
-                    onRetry: {
-                        // A failed build builds again; a wait asks the node again.
-                        if errorMessage != nil { retry += 1 } else { Task { await walletManager.refresh() } }
-                    }
-                )
-
-                Button(action: onConfirm) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.callout.weight(.semibold))
-                        Text("Send")
-                            .font(.callout.weight(.semibold))
-                    }
-                    .foregroundStyle(draft != nil && !sendInProgress ? .brand : .gray)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                }
-                .glassButtonStyle()
-                .disabled(draft == nil || sendInProgress)
-                .accessibilityLabel("Send with a link")
-                .accessibilityHint(sendHint)
-            }
-            .padding()
         }
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
@@ -511,6 +421,169 @@ struct PaymentLinkReviewStep: View {
             withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
                 showContent = true
             }
+        }
+    }
+
+    /// A phone: one card, the warning and Send under it.
+    private var phoneLayout: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    Spacer(minLength: 16)
+
+                    VStack(spacing: 0) {
+                        recipientRow
+                        Divider().padding(.horizontal)
+                        amountRow
+                        Divider().padding(.horizontal)
+                        feeRows
+                        noteRow
+                    }
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(16)
+
+                    bearerWarning
+                }
+                .padding()
+                .opacity(showContent ? 1 : 0)
+                .offset(y: showContent ? 0 : 20)
+            }
+
+            sendSection
+                .padding()
+        }
+    }
+
+    /// A wide sheet (the open iPhone Duo, iPad): two even columns. The link
+    /// and its amount on the left; the fees, the total and Send on the right.
+    private var wideLayout: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    VStack(spacing: 0) {
+                        recipientRow
+                        Divider().padding(.horizontal)
+                        amountRow
+                        noteRow
+                    }
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(16)
+
+                    bearerWarning
+                }
+                .padding()
+                .padding(.top, 16)
+                .opacity(showContent ? 1 : 0)
+                .offset(y: showContent ? 0 : 20)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxWidth: .infinity)
+
+            VStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    feeRows
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(16)
+                .padding()
+                .padding(.top, 16)
+                .opacity(showContent ? 1 : 0)
+                .offset(y: showContent ? 0 : 20)
+
+                Spacer(minLength: 0)
+
+                sendSection
+                    .padding()
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Network Fee, the claim fee reserve, Total and Expires. Total and
+    /// Expires hold their places until the link is built.
+    @ViewBuilder
+    private var feeRows: some View {
+        feeRow(
+            title: String(localized: "Network Fee"),
+            value: draft?.networkFee,
+            note: nil
+        )
+        Divider().padding(.horizontal)
+        feeRow(
+            title: String(localized: "Claim fee reserve"),
+            value: draft?.reserve,
+            note: String(localized: "Covers the recipient's claim fee.")
+        )
+        Divider().padding(.horizontal)
+        totalRow(draft.map { $0.fundingAmount + $0.networkFee })
+        Divider().padding(.horizontal)
+        HStack {
+            Text("Expires")
+                .foregroundStyle(.secondary)
+            Spacer()
+            if let draft {
+                Text(draft.expiryDate.formatted(date: .abbreviated, time: .omitted))
+                    .fontWeight(.medium)
+            } else {
+                Text(Date(timeIntervalSinceNow: EnvelopeLink.defaultLifetime).formatted(date: .abbreviated, time: .omitted))
+                    .fontWeight(.medium)
+                    .redacted(reason: .placeholder)
+                    .accessibilityHidden(true)
+            }
+        }
+        .font(.subheadline)
+        .padding()
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var noteRow: some View {
+        // The note, as Send's review shows a memo.
+        if !note.isEmpty {
+            Divider().padding(.horizontal)
+            HStack {
+                Image(systemName: "note.text")
+                    .foregroundStyle(.secondary)
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Note, \(note)"))
+        }
+    }
+
+    /// Send, with the wallet's status or a failed build above it.
+    private var sendSection: some View {
+        VStack(spacing: 10) {
+            SendWaitStatus(
+                walletManager: walletManager,
+                failure: errorMessage,
+                failureCanRetry: errorCanRetry,
+                isWaitShown: isWaitShown,
+                onRetry: {
+                    // A failed build builds again; a wait asks the node again.
+                    if errorMessage != nil { retry += 1 } else { Task { await walletManager.refresh() } }
+                }
+            )
+
+            Button(action: onConfirm) {
+                HStack(spacing: 8) {
+                    Image(systemName: "paperplane.fill")
+                        .font(.callout.weight(.semibold))
+                    Text("Send")
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(draft != nil && !sendInProgress ? .brand : .gray)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            }
+            .glassButtonStyle()
+            .disabled(draft == nil || sendInProgress)
+            .accessibilityLabel("Send with a link")
+            .accessibilityHint(sendHint)
         }
     }
 
@@ -682,6 +755,39 @@ struct PaymentLinkReviewStep: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Warning: Anyone who has this link can claim the money. Send it to one person in a private chat. You can take the money back until someone claims it.")
     }
+}
+
+// MARK: - Previews (the open iPhone Duo's sheet and the Duo cover)
+
+private struct PaymentLinkReviewStepPreview: View {
+    var isWideSheet: Bool
+    @StateObject private var walletManager = WalletManager()
+    @StateObject private var priceService = PriceService()
+
+    var body: some View {
+        NavigationStack {
+            PaymentLinkReviewStep(
+                amountString: "0.25",
+                draft: .constant(nil),
+                note: "Lunch",
+                priceService: priceService,
+                walletManager: walletManager,
+                sendInProgress: false,
+                isWideSheet: isWideSheet,
+                onConfirm: {}
+            )
+        }
+        .environmentObject(walletManager)
+        .environmentObject(priceService)
+    }
+}
+
+#Preview("Link review, open Duo", traits: .fixedLayout(width: 651, height: 659)) {
+    PaymentLinkReviewStepPreview(isWideSheet: true)
+}
+
+#Preview("Link review, Duo cover", traits: .fixedLayout(width: 466, height: 678)) {
+    PaymentLinkReviewStepPreview(isWideSheet: false)
 }
 
 // MARK: - Link ready

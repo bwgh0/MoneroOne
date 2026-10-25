@@ -377,11 +377,16 @@ struct SendFlowView: View {
 
     // MARK: - Phase Content
 
-    /// Every step, in one phone-width column on a wide sheet.
+    /// On a wide sheet the amount and the review lay out in two columns
+    /// across the sheet; every other step keeps one phone-width column.
     private func phaseContent(_ shown: SendFlowPhase) -> some View {
         stepContent(shown)
-            .frame(maxWidth: isWideSheet ? Self.wideColumnWidth : .infinity)
+            .frame(maxWidth: isWideSheet && !Self.usesTwoColumns(shown) ? Self.wideColumnWidth : .infinity)
             .frame(maxWidth: .infinity)
+    }
+
+    private static func usesTwoColumns(_ phase: SendFlowPhase) -> Bool {
+        phase == .amount || phase == .review
     }
 
     @ViewBuilder
@@ -450,6 +455,7 @@ struct SendFlowView: View {
                 walletManager: walletManager,
                 sendInProgress: sendInProgress,
                 rebuild: linkFundingRebuild,
+                isWideSheet: isWideSheet,
                 onConfirm: confirmLink
             )
 
@@ -479,6 +485,7 @@ struct SendFlowView: View {
                 priceService: priceService,
                 walletManager: walletManager,
                 sendInProgress: sendInProgress,
+                isWideSheet: isWideSheet,
                 onConfirm: {
                     guard !sendInProgress else { return }
                     sendInProgress = true

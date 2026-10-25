@@ -280,13 +280,25 @@ struct RestoreHeightSheet: View {
         NavigationStack {
             List {
                 Section {
+                    // An inline calendar, not the compact pop-up: the pop-up
+                    // stays open after a day pick and eats the next tap, so the
+                    // first tap on Update Restore Height did nothing.
+                    HStack {
+                        Text("Wallet Birthday")
+                        Spacer()
+                        Text(selectedDate.formatted(date: .abbreviated, time: .omitted))
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                    .accessibilityElement(children: .combine)
                     DatePicker(
                         "Wallet Birthday",
                         selection: $selectedDate,
                         in: Self.genesisDate...Date(),
                         displayedComponents: [.date]
                     )
-                    .datePickerStyle(.compact)
+                    .datePickerStyle(.graphical)
+                    .tint(.brand)
                     HStack {
                         Text("Current Block Height")
                         Spacer()

@@ -94,7 +94,7 @@ struct MoneroOneApp: App {
                     ContentView()
                 }
             }
-                .readsWideWindow()
+                .hidesBehindWalletTasks()
                 .environmentObject(walletManager)
                 .environmentObject(priceService)
                 .environmentObject(priceHistoryService)

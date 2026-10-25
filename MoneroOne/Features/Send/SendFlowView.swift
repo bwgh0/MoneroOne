@@ -1095,9 +1095,10 @@ extension View {
         modifier(ClosesForPaymentLink())
     }
 
-    /// Receive and Send. A sheet on a phone and the iPhone Duo cover; full
-    /// screen on a wider window (the open Duo, iPad), so the dimmed
-    /// dashboard, and the balance on it, never shows beside them.
+    /// Receive and Send. On a window wider than the iPhone Duo cover (the
+    /// open Duo, iPad) the app hides behind a plain page while the sheet is
+    /// open, so the dimmed dashboard, and the balance on it, never shows
+    /// beside the sheet.
     func walletTaskSheet<Task: View>(
         isPresented: Binding<Bool>,
         @ViewBuilder content: @escaping () -> Task
@@ -1105,25 +1106,51 @@ extension View {
         modifier(WalletTaskSheet(isPresented: isPresented, task: content))
     }
 
-    /// For the app's root view: tells Receive and Send how wide the window is.
-    func readsWideWindow() -> some View {
-        modifier(WideWindowReader())
+    /// For the app's root view: the plain page that hides the app behind
+    /// Receive and Send on a wide window.
+    func hidesBehindWalletTasks() -> some View {
+        modifier(WalletTaskShieldCover())
     }
 }
 
-extension EnvironmentValues {
-    /// The window is wider than the widest phone sheet, the iPhone Duo cover
-    /// (466pt): the open Duo, iPad. A size class does not tell: the open Duo
-    /// can be compact.
-    @Entry var isWideWindow = false
+/// The Receive and Send sheets that are open now.
+@MainActor @Observable
+final class WalletTaskShield {
+    static let shared = WalletTaskShield()
+    private(set) var openTasks: Set<UUID> = []
+
+    func setOpen(_ isOpen: Bool, id: UUID) {
+        guard openTasks.contains(id) != isOpen else { return }
+        if isOpen {
+            openTasks.insert(id)
+        } else {
+            openTasks.remove(id)
+        }
+    }
 }
 
-private struct WideWindowReader: ViewModifier {
+/// A sheet, not a full-screen cover: the iPhone allows portrait only, and
+/// on the open Duo a full-screen presentation turned the screen upright.
+/// The inner display ignores that limit only for the app's root.
+private struct WalletTaskShieldCover: ViewModifier {
+    /// Wider than the widest phone sheet, the Duo cover (466pt). A size
+    /// class does not tell: the open Duo can be compact.
     @State private var isWideWindow = false
 
     func body(content: Content) -> some View {
+        let hidesApp = isWideWindow && !WalletTaskShield.shared.openTasks.isEmpty
         content
-            .environment(\.isWideWindow, isWideWindow)
+            .overlay {
+                ZStack {
+                    if hidesApp {
+                        Color(.systemGroupedBackground)
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.35), value: hidesApp)
+            }
             .onGeometryChange(for: Bool.self) { proxy in
                 // The root's size stops at the safe area: add the side insets
                 // (the Duo's vertical bar) back for the window's width. A
@@ -1138,28 +1165,17 @@ private struct WideWindowReader: ViewModifier {
 private struct WalletTaskSheet<Task: View>: ViewModifier {
     @Binding var isPresented: Bool
     let task: () -> Task
-    @Environment(\.isWideWindow) private var isWideWindow
-    /// Set while the task is open: folding or unfolding the Duo keeps the
-    /// presentation it opened with, so the task never closes and loses what
-    /// was typed.
-    @State private var openedFullScreen: Bool?
-
-    private var isFullScreen: Bool { openedFullScreen ?? isWideWindow }
+    @State private var id = UUID()
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: presented(fullScreen: false), content: task)
-            .fullScreenCover(isPresented: presented(fullScreen: true), content: task)
+            .sheet(isPresented: $isPresented, content: task)
             .onChange(of: isPresented, initial: true) { _, shown in
-                openedFullScreen = shown ? isFullScreen : nil
+                WalletTaskShield.shared.setOpen(shown, id: id)
             }
-    }
-
-    private func presented(fullScreen: Bool) -> Binding<Bool> {
-        Binding(
-            get: { isPresented && isFullScreen == fullScreen },
-            set: { if !$0 { isPresented = false } }
-        )
+            .onDisappear {
+                WalletTaskShield.shared.setOpen(false, id: id)
+            }
     }
 }
 

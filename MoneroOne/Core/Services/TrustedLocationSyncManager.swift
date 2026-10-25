@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import Combine
+import UIKit
 
 /// Manages wallet sync within trusted location zones
 /// Uses geofenced locations to determine when sync is safe to run
@@ -28,6 +29,25 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
     // Timer-based polling for when stationary (location updates won't trigger)
     private var pollTimer: Timer?
     private let pollInterval: TimeInterval = 120 // 2 minutes
+
+    /// Keeps the app running in the background while Trusted Locations is
+    /// on. Without it, iOS suspended the app soon after it left the screen:
+    /// the poll timer and the location updates stopped, and no sync ran
+    /// until the user opened the app again. Created in the foreground.
+    private var backgroundSession: CLBackgroundActivitySession?
+
+    /// One "sync end" line in the diagnostic log per background sync.
+    private var backgroundSyncEndLogged = true
+
+    private var isInBackground: Bool {
+        UIApplication.shared.applicationState == .background
+    }
+
+    /// Zone state for the diagnostic log. No place names, no coordinates.
+    private var zoneDescription: String {
+        guard trustedLocationsManager.hasTrustedLocations else { return "no trusted zones" }
+        return trustedLocationsManager.isInTrustedZone ? "inside a trusted zone" : "outside the trusted zones"
+    }
 
     private override init() {
         super.init()
@@ -114,7 +134,11 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         locationManager?.desiredAccuracy = kCLLocationAccuracyThreeKilometers // Low accuracy = less battery
         locationManager?.distanceFilter = 500 // Only update every 500m
         locationManager?.pausesLocationUpdatesAutomatically = false
-        locationManager?.showsBackgroundLocationIndicator = false
+        // Since iOS 16.4, iOS can suspend a background location session
+        // with a low accuracy and a distance filter, unless the location
+        // indicator shows (Apple's guidance). The low accuracy keeps the
+        // battery cost small, so the indicator shows.
+        locationManager?.showsBackgroundLocationIndicator = true
 
         // Request always authorization for trusted zone monitoring
         // Background updates will be enabled in the authorization callback
@@ -126,7 +150,10 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         locationManager?.stopUpdatingLocation()
         locationManager?.stopMonitoringSignificantLocationChanges()
         locationManager = nil
+        backgroundSession?.invalidate()
+        backgroundSession = nil
         isSyncing = false
+        DiagnosticLog.shared.log("Trusted Locations: stopped")
     }
 
     /// Recompute sync state in response to settings changes (mode, zone, locations)
@@ -174,7 +201,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
             NSLog("[TrustedSync] UNBLOCKING sync — resuming wallet")
             #endif
             wallet.resumeSync()
-            performSync()
+            performSync(reason: "zone change")
         } else {
             // Not blocked before or after — just update location info on live activity
             if #available(iOS 16.2, *), isEnabled {
@@ -210,8 +237,16 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         }
     }
 
-    private func performSync() {
-        guard let wallet = walletManager, wallet.isUnlocked else { return }
+    /// `reason` names the wake for the diagnostic log: "timer", "location",
+    /// "location error" or "zone change".
+    private func performSync(reason: String) {
+        let inBackground = isInBackground
+        guard let wallet = walletManager, wallet.isUnlocked else {
+            if inBackground {
+                DiagnosticLog.shared.log("Trusted Locations: \(reason) in the background, wallet locked, no sync")
+            }
+            return
+        }
 
         // Update trusted location status
         let outsideZone = trustedLocationsManager.hasTrustedLocations && !trustedLocationsManager.isInTrustedZone
@@ -219,6 +254,9 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
 
         // Check if sync should be blocked based on trusted location settings
         if trustedLocationsManager.shouldBlockSync() {
+            if !isSyncBlocked {
+                DiagnosticLog.shared.log("Trusted Locations: sync blocked (\(reason), outside the trusted zones, Block Sync)")
+            }
             // In block mode and outside trusted zone - pause sync engine and block
             wallet.pauseSync()
             isSyncBlocked = true
@@ -235,6 +273,11 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         }
         isSyncBlocked = false
         isSyncing = true
+
+        if inBackground {
+            DiagnosticLog.shared.log("Trusted Locations: sync start (\(reason), background, \(zoneDescription))")
+            backgroundSyncEndLogged = false
+        }
 
         // Check trusted location status and warn if needed (for warn-only mode)
         currentTrustedLocationName = trustedLocationsManager.checkAndWarnIfNeeded()
@@ -265,9 +308,17 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         stopPollTimer()
         pollTimer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.performSync()
+                self?.performSync(reason: "timer")
             }
         }
+    }
+
+    /// One line when a background sync ends, so the log shows what the
+    /// background time did.
+    private func logBackgroundSyncEnd(_ outcome: String) {
+        guard !backgroundSyncEndLogged, isInBackground else { return }
+        backgroundSyncEndLogged = true
+        DiagnosticLog.shared.log("Trusted Locations: sync end (\(outcome))")
     }
 
     private func stopPollTimer() {
@@ -293,6 +344,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         case .synced:
             isSyncing = false
             lastSyncTime = Date()
+            logBackgroundSyncEnd("synced")
             guard isEnabled else { return }
             if #available(iOS 16.2, *) {
                 SyncActivityManager.shared.markSynced(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
@@ -300,7 +352,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
 
         case .error:
             isSyncing = false
-            break
+            logBackgroundSyncEnd("error")
 
         case .connecting:
             isSyncing = true
@@ -346,12 +398,21 @@ extension TrustedLocationSyncManager: CLLocationManagerDelegate {
                 // Now we can safely enable background updates
                 locationManager?.allowsBackgroundLocationUpdates = true
                 locationManager?.startUpdatingLocation()
+                // The session keeps the app running in the background, so
+                // the poll timer and location updates keep the wallet
+                // synced. iOS needs it made in the foreground.
+                if backgroundSession == nil {
+                    backgroundSession = CLBackgroundActivitySession()
+                }
                 // Start timed polling for when stationary
                 startPollTimer()
+                DiagnosticLog.shared.log("Trusted Locations: started (permission Always, precise \(accuracy == .fullAccuracy ? "on" : "off"))")
             case .authorizedWhenInUse:
+                DiagnosticLog.shared.log("Trusted Locations: permission While Using, background sync needs Always")
                 // Need "Always" for trusted zone monitoring - prompt upgrade
                 locationManager?.requestAlwaysAuthorization()
             case .denied, .restricted:
+                DiagnosticLog.shared.log("Trusted Locations: location permission denied, turned off")
                 // User denied - disable feature
                 setEnabled(false)
             case .notDetermined:
@@ -369,14 +430,14 @@ extension TrustedLocationSyncManager: CLLocationManagerDelegate {
             if let location = locations.last {
                 trustedLocationsManager.updateZoneStatus(for: location)
             }
-            performSync()
+            performSync(reason: "location")
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // Location failed - still try to sync if we can
         Task { @MainActor in
-            performSync()
+            performSync(reason: "location error")
         }
     }
 }

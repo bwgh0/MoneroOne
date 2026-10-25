@@ -171,24 +171,15 @@ struct MoneroOneApp: App {
             } else if walletManager.isUnlocked && autoLockMinutes > 0 {
                 // Store time for delayed lock check
                 backgroundTime = Date()
-                // Pause wallet2's refresh thread under a background-task
-                // assertion so iOS doesn't suspend us mid-HTTP-fetch and
-                // leave wallet2's asio state torn (which crashes when the
-                // app resumes and the async op completes against freed
-                // memory). Use `pauseSyncAsync` so the bg-task assertion
-                // is held until wallet2 has actually stopped scanning,
-                // not just until the dispatch was queued.
-                let app = UIApplication.shared
-                var taskId: UIBackgroundTaskIdentifier = .invalid
-                taskId = app.beginBackgroundTask(withName: "PauseWalletSync") {
-                    app.endBackgroundTask(taskId)
-                    taskId = .invalid
-                }
-                Task {
-                    await walletManager.pauseSyncAsync()
-                    if taskId != .invalid {
-                        app.endBackgroundTask(taskId)
-                    }
+                // Trusted Locations on, Always permission and sync allowed
+                // here: iOS keeps the app running, so the sync goes on at
+                // once (no pause) and the Live Activity shows the real
+                // state. Before, the pause held the sync until the poll
+                // timer (up to 2 minutes). The timer resumes wallet2 in the
+                // background anyway, so this adds no new time in which a
+                // suspension could tear a fetch.
+                if !TrustedLocationSyncManager.shared.appDidEnterBackground() {
+                    pauseSyncForBackground()
                 }
             }
             // Schedule next price check when going to background.
@@ -230,6 +221,27 @@ struct MoneroOneApp: App {
             }
         @unknown default:
             break
+        }
+    }
+
+    /// Pause wallet2's refresh thread under a background-task assertion so
+    /// iOS doesn't suspend us mid-HTTP-fetch and leave wallet2's asio state
+    /// torn (which crashes when the app resumes and the async op completes
+    /// against freed memory). Use `pauseSyncAsync` so the bg-task assertion
+    /// is held until wallet2 has actually stopped scanning, not just until
+    /// the dispatch was queued.
+    private func pauseSyncForBackground() {
+        let app = UIApplication.shared
+        var taskId: UIBackgroundTaskIdentifier = .invalid
+        taskId = app.beginBackgroundTask(withName: "PauseWalletSync") {
+            app.endBackgroundTask(taskId)
+            taskId = .invalid
+        }
+        Task {
+            await walletManager.pauseSyncAsync()
+            if taskId != .invalid {
+                app.endBackgroundTask(taskId)
+            }
         }
     }
 

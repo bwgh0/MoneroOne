@@ -343,11 +343,6 @@ struct ActivitySplitView: View {
         } detail: {
             NavigationStack {
                 detail
-                    // One bar layout for every row. A transaction's detail
-                    // keeps horizontal bars on the Duo and a link's detail
-                    // did not, so each switch between them moved the status
-                    // bar and the tab bar and resized both columns.
-                    .horizontalBarsOnDuo()
             }
             // A new selection starts the column at its root, as Mail does.
             .id(selection)
@@ -359,7 +354,11 @@ struct ActivitySplitView: View {
     private var detail: some View {
         switch selectedItem {
         case .transaction(let transaction):
-            ActivityDetailView(transaction: transaction)
+            // One bar layout for every row, as on the dashboard: a
+            // transaction's detail turned the Duo's vertical bar off and a
+            // link's did not, so each switch moved the status bar and the
+            // tab bar and resized both columns.
+            ActivityDetailView(transaction: transaction, horizontalBarsOnDuo: false)
         case .openSent(let record):
             PaymentLinkDetailView(recordId: record.id, role: .sent)
         case .linkToClaim, nil:

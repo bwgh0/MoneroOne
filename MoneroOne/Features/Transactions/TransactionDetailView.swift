@@ -12,9 +12,12 @@ struct TransactionDetailView: View {
     @AppStorage("isTestnet") private var isTestnet = false
     /// A payment link transaction takes the link's title.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    /// False in the open Duo's Activity split, which keeps the vertical bar.
+    private let horizontalBarsOnDuo: Bool
 
-    init(transaction: MoneroTransaction) {
+    init(transaction: MoneroTransaction, horizontalBarsOnDuo: Bool = true) {
         openedTransaction = transaction
+        self.horizontalBarsOnDuo = horizontalBarsOnDuo
     }
 
     /// Matches the direction too: a send to self has an incoming and an
@@ -331,7 +334,7 @@ struct TransactionDetailView: View {
             transfer: transferName
         ))
         .navigationBarTitleDisplayMode(.inline)
-        .horizontalBarsOnDuo()
+        .horizontalBarsOnDuo(horizontalBarsOnDuo)
         .task {
             guard transaction.type == .outgoing, !txKeyLookedUp else { return }
             txKey = walletManager.getTxKey(txId: transaction.id)

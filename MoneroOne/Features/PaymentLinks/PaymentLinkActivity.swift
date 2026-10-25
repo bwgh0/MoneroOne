@@ -336,13 +336,16 @@ struct ActivityRowText {
 /// link transaction, else the transaction.
 struct ActivityDetailView: View {
     let transaction: MoneroTransaction
+    /// False in the open Duo's Activity split: every detail there keeps the
+    /// vertical bar, as a link's detail does.
+    var horizontalBarsOnDuo = true
     @ObservedObject private var store = EnvelopeStore.shared
 
     var body: some View {
         if let link = PaymentLinkActivity.match(transaction, store: store) {
             PaymentLinkDetailView(recordId: link.record.id, role: link.record.role)
         } else {
-            TransactionDetailView(transaction: transaction)
+            TransactionDetailView(transaction: transaction, horizontalBarsOnDuo: horizontalBarsOnDuo)
         }
     }
 }

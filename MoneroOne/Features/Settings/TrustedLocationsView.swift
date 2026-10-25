@@ -85,7 +85,7 @@ struct TrustedLocationsView: View {
                             editingLocation = location
                         } label: {
                             TrustedLocationRow(location: location)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(Color.primary)
                                 .contentShape(Rectangle())
                         }
                     }

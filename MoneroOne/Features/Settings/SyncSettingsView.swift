@@ -91,7 +91,9 @@ struct SyncSettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                .buttonStyle(.plain)
+                // The default style, not .plain: in a List it makes the
+                // whole row the tap target, with the row highlight. With
+                // .plain the gap the Spacer leaves took no tap at all.
             } header: {
                 Text("Scan Range")
             }

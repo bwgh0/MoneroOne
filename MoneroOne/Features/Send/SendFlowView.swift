@@ -1105,8 +1105,8 @@ extension View {
         modifier(WalletTaskSheet(isPresented: isPresented, task: content))
     }
 
-    /// For the app's root view: the blur that hides the app behind Receive
-    /// and Send on a wide window.
+    /// For the app's root view: the blur that hides the balance behind
+    /// Receive and Send on a wide window.
     func hidesBehindWalletTasks() -> some View {
         modifier(WalletTaskShieldCover())
     }
@@ -1139,20 +1139,12 @@ private struct WalletTaskShieldCover: ViewModifier {
     func body(content: Content) -> some View {
         let hidesApp = isWideWindow && !WalletTaskShield.shared.openTasks.isEmpty
         content
-            .overlay {
-                ZStack {
-                    if hidesApp {
-                        // The dashboard shows as soft shapes; no digit of
-                        // the balance stays readable (checked in light and
-                        // dark). The thicker materials read as a plain page.
-                        Rectangle()
-                            .fill(.regularMaterial)
-                            .ignoresSafeArea()
-                            .transition(.opacity)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.35), value: hidesApp)
+            // The dashboard shows through as soft shapes; no digit of the
+            // balance stays readable at radius 16 (checked in light and dark
+            // on a 40pt bold balance). Every system material blurred it to
+            // a plain page.
+            .animation(.easeInOut(duration: 0.35)) {
+                $0.blur(radius: hidesApp ? 16 : 0)
             }
             .onGeometryChange(for: Bool.self) { proxy in
                 // The root's size stops at the safe area: add the side insets

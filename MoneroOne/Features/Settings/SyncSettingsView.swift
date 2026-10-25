@@ -339,7 +339,11 @@ struct RestoreHeightSheet: View {
             }
             .navigationTitle("Restore Height")
             .navigationBarTitleDisplayMode(.inline)
-            .horizontalBarsOnDuo()
+            // No .horizontalBarsOnDuo() here. On the iPhone Duo the date
+            // pop-up gets the default (vertical) bar; a sheet with
+            // horizontal bars made the bar mode switch as the pop-up
+            // opened, the screen regions changed, and UIKit closed the
+            // pop-up at once (_UIDatePickerContainerView _sceneRegionsDidChange).
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

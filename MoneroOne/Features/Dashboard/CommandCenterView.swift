@@ -343,6 +343,11 @@ struct ActivitySplitView: View {
         } detail: {
             NavigationStack {
                 detail
+                    // One bar layout for every row. A transaction's detail
+                    // keeps horizontal bars on the Duo and a link's detail
+                    // did not, so each switch between them moved the status
+                    // bar and the tab bar and resized both columns.
+                    .horizontalBarsOnDuo()
             }
             // A new selection starts the column at its root, as Mail does.
             .id(selection)

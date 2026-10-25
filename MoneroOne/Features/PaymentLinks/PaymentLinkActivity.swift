@@ -336,8 +336,8 @@ struct ActivityRowText {
 /// link transaction, else the transaction.
 struct ActivityDetailView: View {
     let transaction: MoneroTransaction
-    /// False in the open Duo's Activity split: every detail there keeps the
-    /// vertical bar, as a link's detail does.
+    /// False in the open Duo's Activity split: the dashboard sets the bars
+    /// for every detail there, as for a link's detail.
     var horizontalBarsOnDuo = true
     @ObservedObject private var store = EnvelopeStore.shared
 

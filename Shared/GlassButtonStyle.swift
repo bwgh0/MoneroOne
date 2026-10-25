@@ -91,8 +91,8 @@ extension View {
     /// `toolbarVerticalBehavior` exists only in the iOS 27.1 SDK (Xcode 27.1,
     /// Swift 6.4). CI still builds with Xcode 26.x, where the symbol does not
     /// exist at all, so the call is gated on the toolchain, not just at runtime.
-    /// `isEnabled` false keeps the system default: a screen inside the open
-    /// Duo's Activity split keeps the vertical bar, as the dashboard does.
+    /// `isEnabled` false leaves the bars to an ancestor: the dashboard sets
+    /// them for the open Duo's Activity split.
     @ViewBuilder
     func horizontalBarsOnDuo(_ isEnabled: Bool = true) -> some View {
         #if compiler(>=6.4)

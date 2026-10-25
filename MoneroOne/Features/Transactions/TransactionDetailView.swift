@@ -12,7 +12,7 @@ struct TransactionDetailView: View {
     @AppStorage("isTestnet") private var isTestnet = false
     /// A payment link transaction takes the link's title.
     @ObservedObject private var paymentLinks = EnvelopeStore.shared
-    /// False in the open Duo's Activity split, which keeps the vertical bar.
+    /// False in the open Duo's Activity split, where the dashboard sets the bars.
     private let horizontalBarsOnDuo: Bool
 
     init(transaction: MoneroTransaction, horizontalBarsOnDuo: Bool = true) {

@@ -15,6 +15,13 @@ struct CommandCenterView: View {
     /// How far the edge swipe has dragged the Activity split toward the
     /// trailing edge (0 = fully open).
     @State private var backSwipeOffset: CGFloat = 0
+    /// Horizontal bars on the open iPhone Duo while the Activity split
+    /// shows, set here and never inside the split. With the vertical bar the
+    /// sliding split crossed it, its side inset changed on every frame and
+    /// both columns were laid out again each frame (lag and jitter). Set at
+    /// the open, cleared once the close slide ends, so the dashboard gets
+    /// its vertical bar back.
+    @State private var splitHasHorizontalBars = false
     /// All Transactions opens on this filter: Links from the balance
     /// card's open-link lines, else All.
     @State private var allTransactionsFilter: TransactionListView.FilterType = .all
@@ -65,6 +72,7 @@ struct CommandCenterView: View {
                 }
             }
         }
+        .horizontalBarsOnDuo(splitHasHorizontalBars)
         .onChange(of: walletManager.walletSessionId) { _, _ in
             selectedHistoryPoint = nil
             historyModel = BalanceHistoryModel()
@@ -94,10 +102,15 @@ struct CommandCenterView: View {
     /// Opens All Transactions as a split (list beside the selected payment,
     /// as Mail), or brings the dashboard back. The slide reads as a push.
     private func setActivityOpen(_ isOpen: Bool, selecting id: String? = nil) {
-        if isOpen { activitySelection = id }
+        if isOpen {
+            activitySelection = id
+            splitHasHorizontalBars = true
+        }
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.35)) {
             showAllTransactions = isOpen
             backSwipeOffset = 0
+        } completion: {
+            if !showAllTransactions { splitHasHorizontalBars = false }
         }
     }
 
@@ -354,7 +367,7 @@ struct ActivitySplitView: View {
     private var detail: some View {
         switch selectedItem {
         case .transaction(let transaction):
-            // One bar layout for every row, as on the dashboard: a
+            // One bar layout for every row, set by the dashboard: a
             // transaction's detail turned the Duo's vertical bar off and a
             // link's did not, so each switch moved the status bar and the
             // tab bar and resized both columns.

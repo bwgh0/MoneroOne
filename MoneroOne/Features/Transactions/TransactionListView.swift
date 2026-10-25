@@ -169,9 +169,8 @@ struct TransactionListView: View {
         .animation(.easeInOut(duration: 0.25), value: items.isEmpty)
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
-        // The split keeps the Duo's vertical bar: turning it off moved the
-        // status bar and the tab bar, and the dashboard kept horizontal
-        // bars after the split closed.
+        // In the split the dashboard sets the bars: set here, they stayed
+        // horizontal on the dashboard after the split closed.
         .horizontalBarsOnDuo(selection == nil)
         .searchable(text: $searchText, prompt: "Search by ID, address, or memo")
         .toolbar {

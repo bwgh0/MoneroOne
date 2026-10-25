@@ -237,10 +237,73 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         }
     }
 
+    /// Whether the wallet keeps syncing while the app is in the background:
+    /// Trusted Locations is on, the background session runs (Always
+    /// permission), and sync is allowed at this place. iOS then keeps the
+    /// app running, so the background pause is not needed.
+    nonisolated static func keepsSyncingInBackground(isEnabled: Bool, hasBackgroundSession: Bool, isSyncBlocked: Bool) -> Bool {
+        isEnabled && hasBackgroundSession && !isSyncBlocked
+    }
+
+    /// The app went to the background. When the wallet keeps syncing in
+    /// the background, this runs a sync at once and returns true; the
+    /// caller then skips its pause. Before, the pause stopped the sync and
+    /// nothing ran until the poll timer (up to 2 minutes), while the Live
+    /// Activity kept its last state. Returns false when the caller must
+    /// pause the sync.
+    func appDidEnterBackground() -> Bool {
+        guard let wallet = walletManager, wallet.isUnlocked,
+              Self.keepsSyncingInBackground(
+                  isEnabled: isEnabled,
+                  hasBackgroundSession: backgroundSession != nil,
+                  isSyncBlocked: trustedLocationsManager.shouldBlockSync()
+              ) else { return false }
+        performSync(reason: "background", inBackground: true)
+        return true
+    }
+
+    /// What the Live Activity shows for a wallet sync state. nil keeps
+    /// what it shows now.
+    enum LiveActivityContent: Equatable {
+        case connecting
+        case syncing(progress: Double, remaining: Int?)
+        case synced
+    }
+
+    /// "Connecting" only while the wallet has no node connection (no
+    /// daemon height yet). A wallet with a connection keeps its "Synced"
+    /// or its %.
+    nonisolated static func liveActivityContent(for state: WalletManager.SyncState, hasDaemonConnection: Bool) -> LiveActivityContent? {
+        switch state {
+        case .idle, .connecting: return hasDaemonConnection ? nil : .connecting
+        case .syncing(let progress, let remaining): return .syncing(progress: progress, remaining: remaining)
+        case .synced: return .synced
+        case .error: return nil
+        }
+    }
+
+    /// Shows the wallet's real sync state on the Live Activity.
+    private func showOnLiveActivity(_ wallet: WalletManager) {
+        guard isEnabled else { return }
+        let manager = SyncActivityManager.shared
+        switch Self.liveActivityContent(for: wallet.syncState, hasDaemonConnection: wallet.daemonHeight > 0) {
+        case .connecting:
+            manager.markConnecting(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
+        case .syncing(let progress, let remaining):
+            manager.updateProgress(progress, blocksRemaining: remaining, locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
+        case .synced:
+            manager.markSynced(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
+        case nil:
+            break
+        }
+    }
+
     /// `reason` names the wake for the diagnostic log: "timer", "location",
-    /// "location error" or "zone change".
-    private func performSync(reason: String) {
-        let inBackground = isInBackground
+    /// "location error", "zone change" or "background" (the app went to
+    /// the background). `inBackground` overrides the app state check, which
+    /// can still read "inactive" while the scene goes to the background.
+    private func performSync(reason: String, inBackground: Bool? = nil) {
+        let inBackground = inBackground ?? isInBackground
         guard let wallet = walletManager, wallet.isUnlocked else {
             if inBackground {
                 DiagnosticLog.shared.log("Trusted Locations: \(reason) in the background, wallet locked, no sync")
@@ -283,7 +346,7 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         currentTrustedLocationName = trustedLocationsManager.checkAndWarnIfNeeded()
 
         Task {
-            // 1. Start/reset Live Activity and show connecting
+            // 1. Start the Live Activity, or take the running one as it is
             if #available(iOS 16.2, *), isEnabled {
                 await SyncActivityManager.shared.startActivity(locationName: currentTrustedLocationName, isUntrusted: outsideZone)
             }
@@ -291,16 +354,19 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
             // 2. Restart sync state checking to detect new blocks
             wallet.startSync()
 
-            // 3. Wait for refresh to complete
+            // 3. Start the refresh. It returns before wallet2 has synced.
             await wallet.refresh()
 
-            // 4. Directly mark as synced (bypasses race conditions from Combine subscription)
-            if #available(iOS 16.2, *), isEnabled {
-                SyncActivityManager.shared.markSynced(locationName: currentTrustedLocationName, isUntrusted: outsideZone)
-            }
+            // 4. Show the wallet's real state; the sync state observer
+            // shows each later change. Before, this always marked the
+            // activity "Synced", so a wake during a long sync showed
+            // "Synced" and then the % again.
+            showOnLiveActivity(wallet)
 
-            isSyncing = false
-            lastSyncTime = Date()
+            if wallet.syncState == .synced {
+                isSyncing = false
+                lastSyncTime = Date()
+            }
         }
     }
 
@@ -334,7 +400,12 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         case .syncing(let progress, let remaining):
             isSyncing = true
             guard isEnabled else { return }
-            if #available(iOS 16.2, *) {
+            // A running activity takes the % at once. Before, each tick
+            // restarted it, which first set "connecting" at 0 % and then
+            // the %, two updates for each tick.
+            if SyncActivityManager.shared.hasActivity {
+                SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining, locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
+            } else {
                 Task {
                     await SyncActivityManager.shared.startActivity(locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)
                     SyncActivityManager.shared.updateProgress(progress, blocksRemaining: remaining, locationName: currentTrustedLocationName, isUntrusted: isOutsideTrustedZone)

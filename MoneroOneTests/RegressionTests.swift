@@ -1205,6 +1205,48 @@ final class TrustedLocationRegressionTests: XCTestCase {
     }
 }
 
+// MARK: - Trusted Locations Background Sync Tests
+
+/// iPhone Duo, build 22: the background pause held the sync until the
+/// 2-minute poll timer, each wake marked the Live Activity "Synced" before
+/// wallet2 had synced (then the % again), and each wake set "Connecting"
+/// on a wallet that was connected.
+@MainActor
+final class TrustedLocationBackgroundSyncTests: XCTestCase {
+
+    func testKeepsSyncingInBackgroundOnlyWhenOnWithSessionAndAllowed() {
+        typealias M = TrustedLocationSyncManager
+        XCTAssertTrue(M.keepsSyncingInBackground(isEnabled: true, hasBackgroundSession: true, isSyncBlocked: false))
+        // Trusted Locations off: pause as before.
+        XCTAssertFalse(M.keepsSyncingInBackground(isEnabled: false, hasBackgroundSession: true, isSyncBlocked: false))
+        // No background session (no Always permission): iOS suspends the app, so pause.
+        XCTAssertFalse(M.keepsSyncingInBackground(isEnabled: true, hasBackgroundSession: false, isSyncBlocked: false))
+        // Block Sync outside the trusted zones: pause.
+        XCTAssertFalse(M.keepsSyncingInBackground(isEnabled: true, hasBackgroundSession: true, isSyncBlocked: true))
+    }
+
+    func testLiveActivityShowsTheRealPercentNotSyncedWhileSyncing() {
+        let content = TrustedLocationSyncManager.liveActivityContent(
+            for: .syncing(progress: 17, remaining: 159_268), hasDaemonConnection: true)
+        XCTAssertEqual(content, .syncing(progress: 17, remaining: 159_268))
+        XCTAssertNotEqual(content, .synced)
+    }
+
+    func testLiveActivityShowsSyncedOnlyWhenSynced() {
+        XCTAssertEqual(TrustedLocationSyncManager.liveActivityContent(for: .synced, hasDaemonConnection: true), .synced)
+    }
+
+    func testLiveActivityShowsConnectingOnlyWithoutANodeConnection() {
+        typealias M = TrustedLocationSyncManager
+        XCTAssertEqual(M.liveActivityContent(for: .connecting, hasDaemonConnection: false), .connecting)
+        XCTAssertEqual(M.liveActivityContent(for: .idle, hasDaemonConnection: false), .connecting)
+        // A wake on a connected wallet keeps the % or "Synced" it shows.
+        XCTAssertNil(M.liveActivityContent(for: .connecting, hasDaemonConnection: true))
+        XCTAssertNil(M.liveActivityContent(for: .idle, hasDaemonConnection: true))
+        XCTAssertNil(M.liveActivityContent(for: .error("Node unreachable"), hasDaemonConnection: false))
+    }
+}
+
 // MARK: - Node Manager Regression Tests
 
 @MainActor

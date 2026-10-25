@@ -17,6 +17,9 @@ class SyncActivityManager: ObservableObject {
 
     private init() {}
 
+    /// True while this app holds a Live Activity to update.
+    var hasActivity: Bool { currentActivity != nil }
+
     /// Start a new Live Activity for sync progress
     func startActivity(locationName: String? = nil, isUntrusted: Bool = false) async {
         // Prevent concurrent calls
@@ -37,20 +40,10 @@ class SyncActivityManager: ObservableObject {
             isActivityRunning = true
             isSynced = false  // Reset sync state for new sync cycle
 
-            // Update activity to show connecting state (not stale "Synced" from previous cycle)
-            let state = SyncActivityAttributes.ContentState(
-                progress: 0,
-                blocksRemaining: nil,
-                isSynced: false,
-                isConnecting: true,
-                lastUpdated: Date(),
-                trustedLocationName: locationName,
-                isUntrustedLocation: isUntrusted
-            )
-            Task {
-                await existing.update(ActivityContent(state: state, staleDate: nil))
-            }
-
+            // The content stays as it is: each caller shows the wallet's
+            // real state next. Before, this set "Connecting" at 0 %, so
+            // each Trusted Locations wake (every 2 minutes) flashed
+            // "Connecting" on a wallet that was connected.
             startRefreshTimer()
             return
         }

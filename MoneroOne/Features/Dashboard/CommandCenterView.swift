@@ -7,7 +7,11 @@ struct CommandCenterView: View {
     @EnvironmentObject var priceService: PriceService
     @State private var showReceive = false
     @State private var showSend = false
+    /// All Transactions open: the Activity split takes the dashboard's place.
     @State private var showAllTransactions = false
+    /// The split's selected row (`ActivityListItem.id`); nil opens it on
+    /// the newest row.
+    @State private var activitySelection: String?
     /// All Transactions opens on this filter: Links from the balance
     /// card's open-link lines, else All.
     @State private var allTransactionsFilter: TransactionListView.FilterType = .all
@@ -26,6 +30,57 @@ struct CommandCenterView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        ZStack {
+            if showAllTransactions {
+                ActivitySplitView(
+                    selection: $activitySelection,
+                    asOf: selectedHistoryPoint?.timestamp,
+                    historyTransactions: pastTransactions,
+                    initialFilter: allTransactionsFilter,
+                    onBack: { setActivityOpen(false) }
+                )
+                .transition(.move(edge: .trailing))
+            } else {
+                dashboard
+                    .transition(.move(edge: .leading))
+            }
+        }
+        .onChange(of: walletManager.walletSessionId) { _, _ in
+            selectedHistoryPoint = nil
+            historyModel = BalanceHistoryModel()
+        }
+        .onChange(of: showSend) { _, isPresented in
+            if isPresented { selectedHistoryPoint = nil }
+        }
+        .sheet(isPresented: $showReceive) {
+            ReceiveView()
+                .closesForPaymentLink()
+        }
+        .sheet(isPresented: $showSend) {
+            SendFlowView()
+        }
+        // Donate and `monero:` links ask for Send through the manager. Without
+        // this they did nothing on iPad and the unfolded iPhone Duo.
+        .presentsSendRequests(from: walletManager, showSend: $showSend)
+        .sheet(item: $hardwareSheetIntent) { intent in
+            HardwareSessionSheet(
+                intent: intent,
+                trezorManager: walletManager.trezorManager
+            )
+            .environmentObject(walletManager)
+        }
+    }
+
+    /// Opens All Transactions as a split (list beside the selected payment,
+    /// as Mail), or brings the dashboard back. The slide reads as a push.
+    private func setActivityOpen(_ isOpen: Bool, selecting id: String? = nil) {
+        if isOpen { activitySelection = id }
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.35)) {
+            showAllTransactions = isOpen
+        }
+    }
+
+    private var dashboard: some View {
         GeometryReader { geometry in
             // The visible height under the 16pt padding above and below.
             let columnHeight = max(geometry.size.height - 32, 0)
@@ -55,36 +110,6 @@ struct CommandCenterView: View {
             .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
                                      && !showSend && !showReceive
                                      && !showAllTransactions && !showWalletManager && hardwareSheetIntent == nil)
-        }
-        .onChange(of: walletManager.walletSessionId) { _, _ in
-            selectedHistoryPoint = nil
-            historyModel = BalanceHistoryModel()
-        }
-        .onChange(of: showSend) { _, isPresented in
-            if isPresented { selectedHistoryPoint = nil }
-        }
-        .sheet(isPresented: $showReceive) {
-            ReceiveView()
-                .closesForPaymentLink()
-        }
-        .sheet(isPresented: $showSend) {
-            SendFlowView()
-        }
-        // Donate and `monero:` links ask for Send through the manager. Without
-        // this they did nothing on iPad and the unfolded iPhone Duo.
-        .presentsSendRequests(from: walletManager, showSend: $showSend)
-        .sheet(isPresented: $showAllTransactions) {
-            NavigationStack {
-                TransactionListView(asOf: selectedHistoryPoint?.timestamp, historyTransactions: pastTransactions, initialFilter: allTransactionsFilter)
-            }
-            .closesForPaymentLink()
-        }
-        .sheet(item: $hardwareSheetIntent) { intent in
-            HardwareSessionSheet(
-                intent: intent,
-                trezorManager: walletManager.trezorManager
-            )
-            .environmentObject(walletManager)
         }
     }
 
@@ -190,7 +215,7 @@ struct CommandCenterView: View {
             ),
             onOpenLinks: {
                 allTransactionsFilter = .links
-                showAllTransactions = true
+                setActivityOpen(true)
             },
             onHardwareSyncTap: {
                 // Clear a finished run's .complete/.failed state so the sheet
@@ -242,7 +267,11 @@ struct CommandCenterView: View {
         TransactionsPanelView(
             onSeeAll: {
                 allTransactionsFilter = .all
-                showAllTransactions = true
+                setActivityOpen(true)
+            },
+            onSelect: { transaction in
+                allTransactionsFilter = .all
+                setActivityOpen(true, selecting: ActivityListItem.transaction(transaction).id)
             },
             isHistoryOpen: selectedHistoryPoint != nil,
             asOf: selectedHistoryPoint?.timestamp,
@@ -254,6 +283,78 @@ struct CommandCenterView: View {
     /// loading history does not redraw the panel at Now.
     private var pastTransactions: [MoneroTransaction]? {
         selectedHistoryPoint == nil ? nil : historyModel.ledger?.transactions
+    }
+}
+
+// MARK: - Activity split
+
+/// All Transactions on regular width (iPad, the open iPhone Duo): the list
+/// beside the selected payment, as Mail shows a mailbox beside a message.
+/// The list column keeps its search, filter and summary; the detail column
+/// shows what a row pushes on iPhone. The back glyph brings the dashboard
+/// back.
+struct ActivitySplitView: View {
+    @EnvironmentObject var walletManager: WalletManager
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    @Binding var selection: String?
+    let asOf: Date?
+    let historyTransactions: [MoneroTransaction]?
+    let initialFilter: TransactionListView.FilterType
+    let onBack: () -> Void
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            TransactionListView(
+                asOf: asOf,
+                historyTransactions: historyTransactions,
+                initialFilter: initialFilter,
+                selection: $selection
+            )
+            .toolbar(removing: .sidebarToggle)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onBack) {
+                        Label("Back", systemImage: "chevron.backward")
+                    }
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 480)
+        } detail: {
+            NavigationStack {
+                detail
+            }
+            // A new selection starts the column at its root, as Mail does.
+            .id(selection)
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch selectedItem {
+        case .transaction(let transaction):
+            ActivityDetailView(transaction: transaction)
+        case .openSent(let record):
+            PaymentLinkDetailView(recordId: record.id, role: .sent)
+        case .linkToClaim, nil:
+            // Nothing selected (an empty list): a blank column.
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+        }
+    }
+
+    /// The selected row, read from the live list so a new confirmation
+    /// shows in the detail column.
+    private var selectedItem: ActivityListItem? {
+        guard let selection else { return nil }
+        let source = asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
+        if let transaction = source.first(where: { ActivityListItem.transaction($0).id == selection }) {
+            return .transaction(transaction)
+        }
+        if let record = paymentLinks.records.first(where: { ActivityListItem.openSent($0).id == selection }) {
+            return .openSent(record)
+        }
+        return nil
     }
 }
 

@@ -31,6 +31,10 @@ struct SendAmountStep: View {
     var isLinkMode = false
     /// Link mode: the name the link gets without a note ("Link 9").
     var linkNamePlaceholder = ""
+    /// The sheet is wider than a phone's (the open iPhone Duo, iPad): the
+    /// flow caps every step at a phone column, and the keys get a 16pt gap
+    /// above them.
+    var isWideSheet = false
     let onContinue: () -> Void
 
     enum AmountPrefill {
@@ -65,17 +69,31 @@ struct SendAmountStep: View {
     /// The fiat a swap from XMR showed, and that XMR. Showing it is not an
     /// edit: the XMR stays exact.
     @State private var swappedFiat: TypedFiat?
+    /// A short screen (iPhone SE, the iPhone Duo): the keys shrink so the
+    /// whole step fits with no scrolling.
+    @State private var isSquat = false
+    /// The step's height, the amount area's height and Continue's height:
+    /// on a short screen the keys get what is left.
+    @State private var stepHeight: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
+    @State private var continueHeight: CGFloat = 0
+
+    /// An iPhone 17 Pro key: (402 - 2 x 16 - 2 x 12) / 3 = 115pt wide, 60pt
+    /// plus the glass insets = 74pt tall. Short-screen keys keep this shape.
+    private static let keyAspect: CGFloat = 115 / 74
+    /// The smallest key row: the 44pt hit target.
+    private static let minRowHeight: CGFloat = 44
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: isSquat ? 8 : 16) {
                     if let header {
                         header
                             .padding(.top, 4)
                             .padding(.bottom, -8)
                     } else {
-                        Spacer(minLength: 12)
+                        Spacer(minLength: isSquat ? 4 : 12)
                     }
 
                     if let amountPrefill {
@@ -172,7 +190,7 @@ struct SendAmountStep: View {
                         .accessibilityLabel("Switch between XMR and \(priceService.selectedCurrency.uppercased()) input")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, isSquat ? 4 : 8)
 
                     // Balance row with Paste + Max buttons
                     HStack {
@@ -258,6 +276,11 @@ struct SendAmountStep: View {
                     .padding(.bottom, 8)
                 }
                 .padding(.horizontal)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { height in
+                    contentHeight = height
+                }
                 .opacity(showContent ? 1 : 0)
                 .offset(y: showContent ? 0 : 20)
             }
@@ -267,7 +290,9 @@ struct SendAmountStep: View {
             VStack(spacing: 12) {
                 if !softwareKeyboardVisible {
                     NumericKeypad(text: keyedAmount,
-                                  maxDecimalPlaces: isFiatMode ? 2 : 12)
+                                  maxDecimalPlaces: isFiatMode ? 2 : 12,
+                                  rowHeight: squatRowHeight)
+                        .frame(maxWidth: squatRowHeight.map { 3 * $0 * Self.keyAspect + 2 * 8 })
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
@@ -283,11 +308,17 @@ struct SendAmountStep: View {
                     .padding(.vertical, 16)
                 }
                 .glassButtonStyle()
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { height in
+                    continueHeight = height
+                }
                 .disabled(!canContinue)
                 .accessibilityLabel("Continue")
                 .accessibilityHint(continueHint)
             }
             .padding(.horizontal)
+            .padding(.top, isWideSheet ? 16 : 0)
             .padding(.bottom, 8)
         }
         .navigationTitle(navigationTitle)
@@ -360,6 +391,12 @@ struct SendAmountStep: View {
                 isFiatMode = true
             }
         }
+        .detectSquatScreen($isSquat)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { height in
+            stepHeight = height
+        }
         .onDisappear {
             typedFiat = isFiatMode ? TypedFiat(fiat: fiatString, xmr: amountString) : nil
         }
@@ -369,6 +406,17 @@ struct SendAmountStep: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             softwareKeyboardVisible = false
         }
+    }
+
+    /// On a short screen: the height of a key row, so the amount area, the
+    /// keys and Continue all fit. Nil on other screens (60pt keys).
+    private var squatRowHeight: CGFloat? {
+        guard isSquat, stepHeight > 0, contentHeight > 0 else { return nil }
+        let keypadTopGap: CGFloat = isWideSheet ? 16 : 0
+        // The keypad VStack's spacing (12) and bottom padding (8).
+        let keypadHeight = stepHeight - contentHeight - keypadTopGap - 12 - continueHeight - 8
+        let row = (keypadHeight - 3 * 8) / 4
+        return min(max(row, Self.minRowHeight), 74).rounded(.down)
     }
 
     private var navigationTitle: String {

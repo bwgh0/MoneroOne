@@ -95,6 +95,17 @@ struct SendFlowView: View {
     /// The link's note: a name that stays on this iPhone, never in the link
     /// or the funding transaction's memo.
     @State private var linkNote = ""
+    /// The sheet is wider than the widest phone sheet (the open iPhone Duo,
+    /// iPad). A size class does not tell: this sheet can be compact on the
+    /// open Duo.
+    @State private var isWideSheet = false
+
+    /// The widest phone sheet: the iPhone Duo cover. Up to this width the
+    /// steps fill the sheet, as before.
+    private static let phoneSheetWidth: CGFloat = 466
+    /// On a wider sheet every step keeps a phone column: 400 + 2 x 16 margins,
+    /// centered.
+    private static let wideColumnWidth: CGFloat = 432
 
     /// Link as the recipient. It clears Send All: a link holds the amount
     /// typed in.
@@ -241,6 +252,11 @@ struct SendFlowView: View {
             guard let shownPaymentRequest else { return }
             walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: false)
         }
+        .onGeometryChange(for: Bool.self) { proxy in
+            proxy.size.width > Self.phoneSheetWidth
+        } action: { wide in
+            isWideSheet = wide
+        }
         .sheet(item: $hardwareSheetIntent, onDismiss: handleHardwareSheetDismiss) { intent in
             HardwareSessionSheet(
                 intent: intent,
@@ -361,8 +377,15 @@ struct SendFlowView: View {
 
     // MARK: - Phase Content
 
-    @ViewBuilder
+    /// Every step, in one phone-width column on a wide sheet.
     private func phaseContent(_ shown: SendFlowPhase) -> some View {
+        stepContent(shown)
+            .frame(maxWidth: isWideSheet ? Self.wideColumnWidth : .infinity)
+            .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func stepContent(_ shown: SendFlowPhase) -> some View {
         switch shown {
         case .address:
             SendAddressStep(
@@ -411,6 +434,7 @@ struct SendFlowView: View {
                 paymentRequest: shownPaymentRequest,
                 isLinkMode: isLinkMode,
                 linkNamePlaceholder: EnvelopeRecord.linkName(EnvelopeStore.shared.nextNumber),
+                isWideSheet: isWideSheet,
                 onContinue: {
                     HapticFeedback.shared.buttonPress()
                     goForward(to: .review)

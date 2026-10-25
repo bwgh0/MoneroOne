@@ -105,7 +105,7 @@ enum WhatsNewNotes {
                 "Reorder your wallets with the handle on the left.",
                 "Rounded QR codes.",
                 "Fixes for custom node logins.",
-                "With Tor on, all app traffic goes through your Tor proxy.",
+                "With Tor on, wallet sync, prices and name lookups go through your Tor proxy.",
                 "Face ID now turns on for Trezor and view-only wallets.",
                 "Your history shows as soon as a wallet opens, even on a slow node.",
                 "Fixed a slow first sync for new wallets with some region settings.",

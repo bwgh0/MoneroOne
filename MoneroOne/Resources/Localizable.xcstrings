@@ -114750,97 +114750,97 @@
         }
       }
     },
-    "With Tor on, all app traffic goes through your Tor proxy." : {
+    "With Tor on, wallet sync, prices and name lookups go through your Tor proxy." : {
       "comment" : "What's New bullet.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mit aktiviertem Tor läuft der gesamte Datenverkehr der App über deinen Tor-Proxy."
+            "value" : "Mit aktiviertem Tor laufen Wallet-Sync, Preise und Namensabfragen über deinen Tor-Proxy."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Con Tor activado, todo el tráfico de la app pasa por tu proxy Tor."
+            "value" : "Con Tor activado, la sincronización de la cartera, los precios y las búsquedas de nombres pasan por tu proxy Tor."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avec Tor activé, tout le trafic de l’app passe par votre proxy Tor."
+            "value" : "Avec Tor activé, la synchronisation du portefeuille, les prix et les recherches de noms passent par votre proxy Tor."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Con Tor attivo, tutto il traffico dell’app passa dal tuo proxy Tor."
+            "value" : "Con Tor attivo, la sincronizzazione del portafoglio, i prezzi e le ricerche dei nomi passano dal tuo proxy Tor."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tor をオンにすると、アプリのすべての通信が Tor プロキシを経由します。"
+            "value" : "Tor をオンにすると、ウォレットの同期、価格、名前の検索が Tor プロキシを経由します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tor를 켜면 앱의 모든 트래픽이 Tor 프록시를 거칩니다."
+            "value" : "Tor를 켜면 지갑 동기화, 가격, 이름 조회가 Tor 프록시를 거칩니다."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Met Tor aan gaat al het verkeer van de app via je Tor-proxy."
+            "value" : "Met Tor aan lopen de synchronisatie van je portemonnee, prijzen en naamopzoekingen via je Tor-proxy."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gdy Tor jest włączony, cały ruch aplikacji idzie przez Twoje proxy Tor."
+            "value" : "Gdy Tor jest włączony, synchronizacja portfela, ceny i wyszukiwanie nazw idą przez Twoje proxy Tor."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Com o Tor ativado, todo o tráfego do app passa pelo seu proxy Tor."
+            "value" : "Com o Tor ativado, a sincronização da carteira, os preços e as buscas de nomes passam pelo seu proxy Tor."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cu Tor activat, tot traficul aplicației trece prin proxy-ul tău Tor."
+            "value" : "Cu Tor activat, sincronizarea portofelului, prețurile și căutările de nume trec prin proxy-ul tău Tor."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Когда Tor включён, весь трафик приложения идёт через ваш прокси Tor."
+            "value" : "Когда Tor включён, синхронизация кошелька, цены и поиск имён идут через ваш прокси Tor."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tor açıkken uygulamanın tüm trafiği Tor proxy'nizden geçer."
+            "value" : "Tor açıkken cüzdan eşzamanlama, fiyatlar ve ad aramaları Tor proxy'nizden geçer."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Коли Tor увімкнено, увесь трафік застосунку йде через ваш проксі Tor."
+            "value" : "Коли Tor увімкнено, синхронізація гаманця, ціни та пошук імен ідуть через ваш проксі Tor."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "开启 Tor 后，App 的所有流量都会通过你的 Tor 代理。"
+            "value" : "开启 Tor 后，钱包同步、价格和名称查询都会通过你的 Tor 代理。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開啟 Tor 後，App 的所有流量都會經過你的 Tor 代理伺服器。"
+            "value" : "開啟 Tor 後，錢包同步、價格和名稱查詢都會經過你的 Tor 代理伺服器。"
           }
         }
       }

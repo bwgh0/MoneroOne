@@ -110,7 +110,8 @@ final class OnboardingFlowTests: XCTestCase {
 
     func testBackNavigationFromRestore() {
         let app = UITestHelpers.launchCleanApp()
-        UITestHelpers.navigateToRestoreSeed(app: app)
+        UITestHelpers.navigateToWelcome(app: app)
+        app.buttons["welcome.restoreButton"].tap()
 
         // Tap back button
         let backButton = app.navigationBars.buttons.element(boundBy: 0)

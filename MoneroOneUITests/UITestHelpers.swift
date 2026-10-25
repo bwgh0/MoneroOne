@@ -56,5 +56,7 @@ enum UITestHelpers {
     static func navigateToRestoreSeed(app: XCUIApplication) {
         navigateToWelcome(app: app)
         app.buttons["welcome.restoreButton"].tap()
+        // Seed Phrase is the picker's default choice.
+        app.buttons["restorePicker.continueButton"].tap()
     }
 }

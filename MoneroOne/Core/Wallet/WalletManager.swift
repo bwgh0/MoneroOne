@@ -3559,6 +3559,12 @@ class WalletManager: ObservableObject {
     /// a `beginBackgroundTask` assertion to buy enough time. A restart in
     /// flight opens its wallet later and pauses it without waiting, so this
     /// waits for the restart first.
+    ///
+    /// The sync state stays as it was. The pause is for the time in the
+    /// background only, and the app resumes sync when it is active again.
+    /// Before, the pause set `.idle`: the status row then fell from
+    /// "Synced" to the step ladder, and on each return to the app the
+    /// ladder showed for 2 to 10 s until wallet2 sent "synced" again.
     func pauseSyncAsync() async {
         isSyncBlocked = true
         var waited: Task<Void, Never>?
@@ -3569,7 +3575,6 @@ class WalletManager: ObservableObject {
         // The app came back to the foreground while a restart ran.
         guard isSyncBlocked else { return }
         await moneroWallet?.pauseSyncAsync()
-        syncState = .idle
     }
 
     /// Resume sync capability (does not start sync, just unblocks it)

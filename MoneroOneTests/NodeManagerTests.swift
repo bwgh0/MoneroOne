@@ -1224,6 +1224,32 @@ final class NodeChangeRestartTests: XCTestCase {
         XCTAssertEqual(new.pauseCount, 0)
     }
 
+    /// Seen on the iPhone Duo: each trip to the background dropped the
+    /// status from "Synced" to the step ladder ("Stage: synced → syncing"
+    /// with the same daemon and wallet height), and on return the ladder
+    /// showed until wallet2 sent "synced" again.
+    func testABackgroundPauseKeepsSyncedThroughTheReturnToTheApp() async throws {
+        let info = wallet(.viewOnly)
+        let (manager, running) = await managerRunning(info, keys: .viewKeys(walletId: info.id, pin: pin))
+        running.syncState = .synced
+        // The height updates count once per 0.5 s; the open sent the first.
+        try await Task.sleep(nanoseconds: 600_000_000)
+        XCTAssertEqual(manager.syncState, .synced)
+        XCTAssertEqual(manager.connectionStage, .synced)
+
+        await manager.pauseSyncAsync()
+        XCTAssertEqual(manager.syncState, .synced, "The background pause keeps the sync state")
+
+        // wallet2 sends a last height after the pause.
+        running.daemonHeight = 100
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(manager.connectionStage, .synced, "The status row stays on Synced in the background")
+
+        manager.resumeSync()
+        XCTAssertEqual(manager.syncState, .synced, "The return to the app shows Synced, not the ladder")
+        XCTAssertEqual(manager.connectionStage, .synced)
+    }
+
     func testANodeChangeDuringASwitchRestartsTheWalletWhenTheSwitchEnds() async {
         let activeIdKey = "one.monero.walletStore.activeWalletId"
         let savedActiveId = UserDefaults.standard.string(forKey: activeIdKey)

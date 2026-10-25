@@ -134,11 +134,11 @@ class TrustedLocationSyncManager: NSObject, ObservableObject {
         locationManager?.desiredAccuracy = kCLLocationAccuracyThreeKilometers // Low accuracy = less battery
         locationManager?.distanceFilter = 500 // Only update every 500m
         locationManager?.pausesLocationUpdatesAutomatically = false
-        // Since iOS 16.4, iOS can suspend a background location session
-        // with a low accuracy and a distance filter, unless the location
-        // indicator shows (Apple's guidance). The low accuracy keeps the
-        // battery cost small, so the indicator shows.
-        locationManager?.showsBackgroundLocationIndicator = true
+        // No blue location indicator (user, build 23). The
+        // CLBackgroundActivitySession keeps the app running in the
+        // background; check the diagnostic log for "sync start
+        // (background, ...)" after each "App: background".
+        locationManager?.showsBackgroundLocationIndicator = false
 
         // Request always authorization for trusted zone monitoring
         // Background updates will be enabled in the authorization callback

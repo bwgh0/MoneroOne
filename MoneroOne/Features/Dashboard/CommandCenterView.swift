@@ -7,7 +7,14 @@ struct CommandCenterView: View {
     @EnvironmentObject var priceService: PriceService
     @State private var showReceive = false
     @State private var showSend = false
+    /// All Transactions open: the Activity split takes the dashboard's place.
     @State private var showAllTransactions = false
+    /// The split's selected row (`ActivityListItem.id`); nil opens it on
+    /// the newest row.
+    @State private var activitySelection: String?
+    /// How far the edge swipe has dragged the Activity split toward the
+    /// trailing edge (0 = fully open).
+    @State private var backSwipeOffset: CGFloat = 0
     /// All Transactions opens on this filter: Links from the balance
     /// card's open-link lines, else All.
     @State private var allTransactionsFilter: TransactionListView.FilterType = .all
@@ -26,6 +33,75 @@ struct CommandCenterView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            // How far the split is open: 1 while it shows, less while the
+            // edge swipe drags it back.
+            let openFraction = width > 0 ? 1 - min(max(backSwipeOffset / width, 0), 1) : 1
+            ZStack {
+                // The dashboard stays under the split, so back returns to it
+                // as it was. It moves a third of a screen aside, as the page
+                // under a navigation push does.
+                dashboard
+                    .offset(x: showAllTransactions ? -width * 0.3 * openFraction : 0)
+                    .allowsHitTesting(!showAllTransactions)
+                    .accessibilityHidden(showAllTransactions)
+                if showAllTransactions {
+                    ActivitySplitView(
+                        selection: $activitySelection,
+                        asOf: selectedHistoryPoint?.timestamp,
+                        historyTransactions: pastTransactions,
+                        initialFilter: allTransactionsFilter,
+                        onBack: { setActivityOpen(false) }
+                    )
+                    .offset(x: backSwipeOffset)
+                    .swipesBackFromLeadingEdge(
+                        offset: $backSwipeOffset,
+                        width: width,
+                        onBack: { setActivityOpen(false) }
+                    )
+                    .accessibilityAction(.escape) { setActivityOpen(false) }
+                    .transition(.move(edge: .trailing))
+                }
+            }
+        }
+        .onChange(of: walletManager.walletSessionId) { _, _ in
+            selectedHistoryPoint = nil
+            historyModel = BalanceHistoryModel()
+        }
+        .onChange(of: showSend) { _, isPresented in
+            if isPresented { selectedHistoryPoint = nil }
+        }
+        .sheet(isPresented: $showReceive) {
+            ReceiveView()
+                .closesForPaymentLink()
+        }
+        .sheet(isPresented: $showSend) {
+            SendFlowView()
+        }
+        // Donate and `monero:` links ask for Send through the manager. Without
+        // this they did nothing on iPad and the unfolded iPhone Duo.
+        .presentsSendRequests(from: walletManager, showSend: $showSend)
+        .sheet(item: $hardwareSheetIntent) { intent in
+            HardwareSessionSheet(
+                intent: intent,
+                trezorManager: walletManager.trezorManager
+            )
+            .environmentObject(walletManager)
+        }
+    }
+
+    /// Opens All Transactions as a split (list beside the selected payment,
+    /// as Mail), or brings the dashboard back. The slide reads as a push.
+    private func setActivityOpen(_ isOpen: Bool, selecting id: String? = nil) {
+        if isOpen { activitySelection = id }
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.35)) {
+            showAllTransactions = isOpen
+            backSwipeOffset = 0
+        }
+    }
+
+    private var dashboard: some View {
         GeometryReader { geometry in
             // The visible height under the 16pt padding above and below.
             let columnHeight = max(geometry.size.height - 32, 0)
@@ -55,36 +131,6 @@ struct CommandCenterView: View {
             .requestsReviewAfterSend(isIdle: walletManager.isUnlocked && selectedHistoryPoint == nil
                                      && !showSend && !showReceive
                                      && !showAllTransactions && !showWalletManager && hardwareSheetIntent == nil)
-        }
-        .onChange(of: walletManager.walletSessionId) { _, _ in
-            selectedHistoryPoint = nil
-            historyModel = BalanceHistoryModel()
-        }
-        .onChange(of: showSend) { _, isPresented in
-            if isPresented { selectedHistoryPoint = nil }
-        }
-        .sheet(isPresented: $showReceive) {
-            ReceiveView()
-                .closesForPaymentLink()
-        }
-        .sheet(isPresented: $showSend) {
-            SendFlowView()
-        }
-        // Donate and `monero:` links ask for Send through the manager. Without
-        // this they did nothing on iPad and the unfolded iPhone Duo.
-        .presentsSendRequests(from: walletManager, showSend: $showSend)
-        .sheet(isPresented: $showAllTransactions) {
-            NavigationStack {
-                TransactionListView(asOf: selectedHistoryPoint?.timestamp, historyTransactions: pastTransactions, initialFilter: allTransactionsFilter)
-            }
-            .closesForPaymentLink()
-        }
-        .sheet(item: $hardwareSheetIntent) { intent in
-            HardwareSessionSheet(
-                intent: intent,
-                trezorManager: walletManager.trezorManager
-            )
-            .environmentObject(walletManager)
         }
     }
 
@@ -190,7 +236,7 @@ struct CommandCenterView: View {
             ),
             onOpenLinks: {
                 allTransactionsFilter = .links
-                showAllTransactions = true
+                setActivityOpen(true)
             },
             onHardwareSyncTap: {
                 // Clear a finished run's .complete/.failed state so the sheet
@@ -242,7 +288,11 @@ struct CommandCenterView: View {
         TransactionsPanelView(
             onSeeAll: {
                 allTransactionsFilter = .all
-                showAllTransactions = true
+                setActivityOpen(true)
+            },
+            onSelect: { transaction in
+                allTransactionsFilter = .all
+                setActivityOpen(true, selecting: ActivityListItem.transaction(transaction).id)
             },
             isHistoryOpen: selectedHistoryPoint != nil,
             asOf: selectedHistoryPoint?.timestamp,
@@ -255,6 +305,129 @@ struct CommandCenterView: View {
     private var pastTransactions: [MoneroTransaction]? {
         selectedHistoryPoint == nil ? nil : historyModel.ledger?.transactions
     }
+}
+
+// MARK: - Activity split
+
+/// All Transactions on regular width (iPad, the open iPhone Duo): the list
+/// beside the selected payment, as Mail shows a mailbox beside a message.
+/// The list column keeps its search, filter and summary; the detail column
+/// shows what a row pushes on iPhone. The back glyph brings the dashboard
+/// back.
+struct ActivitySplitView: View {
+    @EnvironmentObject var walletManager: WalletManager
+    @ObservedObject private var paymentLinks = EnvelopeStore.shared
+    @Binding var selection: String?
+    let asOf: Date?
+    let historyTransactions: [MoneroTransaction]?
+    let initialFilter: TransactionListView.FilterType
+    let onBack: () -> Void
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            TransactionListView(
+                asOf: asOf,
+                historyTransactions: historyTransactions,
+                initialFilter: initialFilter,
+                selection: $selection
+            )
+            .toolbar(removing: .sidebarToggle)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onBack) {
+                        Label("Back", systemImage: "chevron.backward")
+                    }
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 480)
+        } detail: {
+            NavigationStack {
+                detail
+            }
+            // A new selection starts the column at its root, as Mail does.
+            .id(selection)
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch selectedItem {
+        case .transaction(let transaction):
+            ActivityDetailView(transaction: transaction)
+        case .openSent(let record):
+            PaymentLinkDetailView(recordId: record.id, role: .sent)
+        case .linkToClaim, nil:
+            // Nothing selected (an empty list): a blank column.
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+        }
+    }
+
+    /// The selected row, read from the live list so a new confirmation
+    /// shows in the detail column.
+    private var selectedItem: ActivityListItem? {
+        guard let selection else { return nil }
+        let source = asOf == nil ? walletManager.mergedTransactions : (historyTransactions ?? walletManager.mergedTransactions)
+        if let transaction = source.first(where: { ActivityListItem.transaction($0).id == selection }) {
+            return .transaction(transaction)
+        }
+        if let record = paymentLinks.records.first(where: { ActivityListItem.openSent($0).id == selection }) {
+            return .openSent(record)
+        }
+        return nil
+    }
+}
+
+// MARK: - Edge swipe back
+
+private extension View {
+    /// The back swipe for a screen that takes the dashboard's place without
+    /// a navigation push: a drag from the leading screen edge pulls it
+    /// toward the trailing edge, and a release past a third of the width
+    /// (or a flick) goes back, as a pushed screen does.
+    func swipesBackFromLeadingEdge(offset: Binding<CGFloat>, width: CGFloat, onBack: @escaping () -> Void) -> some View {
+        modifier(LeadingEdgeSwipeBack(offset: offset, width: width, onBack: onBack))
+    }
+}
+
+private struct LeadingEdgeSwipeBack: ViewModifier {
+    @Binding var offset: CGFloat
+    let width: CGFloat
+    let onBack: () -> Void
+    @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        // A thin strip over the leading edge catches the drag; it stays put
+        // while the screen moves, and it is narrower than the margin before
+        // the back button and the row icons.
+        content.overlay(alignment: .leading) {
+            Color.clear
+                .frame(width: 10)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                        .onChanged { value in
+                            offset = max(value.translation.width * sign, 0)
+                        }
+                        .onEnded { value in
+                            let travelled = value.translation.width * sign
+                            let projected = value.predictedEndTranslation.width * sign
+                            if travelled > width / 3 || projected > width / 2 {
+                                onBack()
+                            } else {
+                                withAnimation(reduceMotion ? nil : .snappy(duration: 0.35)) { offset = 0 }
+                            }
+                        }
+                )
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// Distance toward the trailing edge is positive in either direction.
+    private var sign: CGFloat { layoutDirection == .rightToLeft ? -1 : 1 }
 }
 
 // MARK: - Card chrome

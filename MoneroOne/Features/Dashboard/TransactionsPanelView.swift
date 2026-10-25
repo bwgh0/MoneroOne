@@ -5,8 +5,10 @@ import SwiftUI
 /// Activity does on iPhone.
 struct TransactionsPanelView: View {
     @EnvironmentObject var walletManager: WalletManager
-    @State private var selectedTransaction: MoneroTransaction?
     var onSeeAll: (() -> Void)?
+    /// A row opens the Activity split with that row selected (its detail
+    /// has one home on regular width: the split's detail column).
+    var onSelect: (MoneroTransaction) -> Void = { _ in }
     /// Shows the "As of" line for as long as History is open.
     var isHistoryOpen = false
     var asOf: Date? = nil
@@ -66,7 +68,7 @@ struct TransactionsPanelView: View {
                     LazyVStack(spacing: 8) {
                         ForEach(activity) { transaction in
                             TransactionPanelRow(transaction: transaction) {
-                                selectedTransaction = transaction
+                                onSelect(transaction)
                             }
                         }
                     }
@@ -78,14 +80,6 @@ struct TransactionsPanelView: View {
                 .padding(.horizontal, -16)
                 .scrollContentBackground(.hidden)
             }
-        }
-        .sheet(item: $selectedTransaction) { transaction in
-            NavigationStack {
-                ActivityDetailView(transaction: transaction)
-            }
-            .closesForPaymentLink()
-            .presentationDetents([.fraction(0.75), .large])
-            .presentationDragIndicator(.visible)
         }
     }
 

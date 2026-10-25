@@ -17,11 +17,16 @@ struct TransactionListView: View {
     @State private var receivingIndex: Int?
     var asOf: Date? = nil
     var historyTransactions: [MoneroTransaction]? = nil
+    /// The list column of the Activity split (regular width): a tap selects
+    /// a row (`ActivityListItem.id`) and the detail column shows it. Nil on
+    /// iPhone, where a row pushes its detail.
+    var selection: Binding<String?>? = nil
 
     /// `initialFilter`: Links when the balance card's open-link lines open it.
-    init(asOf: Date? = nil, historyTransactions: [MoneroTransaction]? = nil, initialFilter: FilterType = .all) {
+    init(asOf: Date? = nil, historyTransactions: [MoneroTransaction]? = nil, initialFilter: FilterType = .all, selection: Binding<String?>? = nil) {
         self.asOf = asOf
         self.historyTransactions = historyTransactions
+        self.selection = selection
         _filterType = State(initialValue: initialFilter)
     }
 
@@ -153,46 +158,14 @@ struct TransactionListView: View {
             : nil
 
         List {
-            if let asOf {
-                ActivityAsOfText(asOf: asOf)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-            if items.isEmpty {
-                emptyState
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            } else if filterType == .links {
-                // The card first, then the links that still hold money, then
-                // the rest.
-                let sections = TransactionListLogic.linkSections(items, records: paymentLinks.records)
-                summaryCard(
-                    totals,
-                    fiatTotals: fiatTotals,
-                    title: TransactionListLogic.linksSummaryTitle(items, openCount: sections.open.count, records: paymentLinks.records)
-                )
-                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                if !sections.open.isEmpty {
-                    sectionHeader(String(localized: "Open", comment: "Activity, Links filter: links that still hold money"))
-                    rows(sections.open)
-                }
-                if !sections.history.isEmpty {
-                    sectionHeader(String(localized: "History", comment: "Activity, Links filter: links that are done"))
-                    rows(sections.history)
-                }
-            } else {
-                summaryCard(totals, fiatTotals: fiatTotals)
-                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                rows(items)
-            }
+            listRows(items, totals: totals, fiatTotals: fiatTotals)
         }
         .listStyle(.plain)
+        // The split's list column would draw on the sidebar's gray material,
+        // which muddies the selected row's tint; the page background, as on
+        // iPhone.
+        .scrollContentBackground(selection == nil ? .automatic : .hidden)
+        .background(selection == nil ? Color.clear : Color(.systemBackground))
         .animation(.easeInOut(duration: 0.25), value: items.isEmpty)
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
@@ -212,6 +185,11 @@ struct TransactionListView: View {
             isOnScreen = true
             tidyPaymentLinks()
             checkLinksIfShown()
+            // The split opens on the newest row, as Mail opens on the
+            // newest message, unless a dashboard row chose one.
+            if let selection, selection.wrappedValue == nil {
+                selection.wrappedValue = shownOrder(items).first(where: \.opensDetail)?.id
+            }
         }
         .onDisappear {
             isOnScreen = false
@@ -225,6 +203,55 @@ struct TransactionListView: View {
         .onChange(of: unlockedPendingLinkCounts) { _, counts in
             guard !counts.isEmpty else { return }
             checkLinksIfShown()
+        }
+    }
+
+    /// The rows top to bottom: under Links, the open links come first.
+    private func shownOrder(_ items: [ActivityListItem]) -> [ActivityListItem] {
+        guard filterType == .links else { return items }
+        let sections = TransactionListLogic.linkSections(items, records: paymentLinks.records)
+        return sections.open + sections.history
+    }
+
+    @ViewBuilder
+    private func listRows(_ items: [ActivityListItem], totals: TransactionTotals, fiatTotals: FiatTotals?) -> some View {
+        if let asOf {
+            ActivityAsOfText(asOf: asOf)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
+        if items.isEmpty {
+            emptyState
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        } else if filterType == .links {
+            // The card first, then the links that still hold money, then
+            // the rest.
+            let sections = TransactionListLogic.linkSections(items, records: paymentLinks.records)
+            summaryCard(
+                totals,
+                fiatTotals: fiatTotals,
+                title: TransactionListLogic.linksSummaryTitle(items, openCount: sections.open.count, records: paymentLinks.records)
+            )
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            if !sections.open.isEmpty {
+                sectionHeader(String(localized: "Open", comment: "Activity, Links filter: links that still hold money"))
+                rows(sections.open)
+            }
+            if !sections.history.isEmpty {
+                sectionHeader(String(localized: "History", comment: "Activity, Links filter: links that are done"))
+                rows(sections.history)
+            }
+        } else {
+            summaryCard(totals, fiatTotals: fiatTotals)
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            rows(items)
         }
     }
 
@@ -331,21 +358,59 @@ struct TransactionListView: View {
     @ViewBuilder
     private func rows(_ items: [ActivityListItem]) -> some View {
         ForEach(items.map(ActivityListRow.init)) { row in
-            switch row.item {
-            case .transaction(let transaction):
-                NavigationLink {
-                    ActivityDetailView(transaction: transaction)
-                } label: {
+            if let selection, row.item.opensDetail {
+                selectableRow(row.item, isSelected: selection.wrappedValue == row.id)
+            } else {
+                pushRow(row.item)
+            }
+        }
+    }
+
+    /// A row of the split's list column: the detail column shows it, so the
+    /// row carries no chevron. The selected row gets the brand tint. A plain
+    /// button, not List selection: the list's selection style turned the
+    /// row title white on the tint and drew a square focus ring.
+    private func selectableRow(_ item: ActivityListItem, isSelected: Bool) -> some View {
+        Button {
+            selection?.wrappedValue = item.id
+        } label: {
+            Group {
+                switch item {
+                case .transaction(let transaction):
                     TransactionRow(transaction: transaction)
-                }
-            case .linkToClaim(let record):
-                PaymentLinkToClaimRow(record: record)
-            case .openSent(let record):
-                NavigationLink {
-                    PaymentLinkDetailView(recordId: record.id, role: .sent)
-                } label: {
+                case .openSent(let record):
                     PaymentLinkOpenSentRow(record: record)
+                case .linkToClaim(let record):
+                    PaymentLinkToClaimRow(record: record)
                 }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected ? Color.brand.opacity(0.15) : Color.clear)
+                .padding(.horizontal, 8)
+        )
+    }
+
+    @ViewBuilder
+    private func pushRow(_ item: ActivityListItem) -> some View {
+        switch item {
+        case .transaction(let transaction):
+            NavigationLink {
+                ActivityDetailView(transaction: transaction)
+            } label: {
+                TransactionRow(transaction: transaction)
+            }
+        case .linkToClaim(let record):
+            PaymentLinkToClaimRow(record: record)
+        case .openSent(let record):
+            NavigationLink {
+                PaymentLinkDetailView(recordId: record.id, role: .sent)
+            } label: {
+                PaymentLinkOpenSentRow(record: record)
             }
         }
     }
@@ -931,6 +996,13 @@ enum ActivityListItem: Identifiable, Equatable {
         case .linkToClaim(let record): return "link.\(record.id)"
         case .openSent(let record): return "sent.\(record.id)"
         }
+    }
+
+    /// A tap opens a detail page: a transaction, or one of our open links.
+    /// A link to claim opens its claim sheet instead.
+    var opensDetail: Bool {
+        if case .linkToClaim = self { return false }
+        return true
     }
 
     /// Where the row sits: the transaction's date, or when the link was

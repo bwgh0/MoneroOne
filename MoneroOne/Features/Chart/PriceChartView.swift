@@ -6,14 +6,15 @@ struct PriceChartView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var priceService: PriceService
     @Binding var selectedTimeRange: ChartTimeRange
-    /// Two even columns: the price and its chart on the left, Statistics
-    /// on the right (the open iPhone Duo, iPad).
+    /// The open iPhone Duo, iPad: High and Low beside the price, the
+    /// chart across the full width under the range picker.
     var isWide = false
+    /// Wide: the height to fill (the visible height less the margins).
+    var fillHeight: CGFloat = 0
     /// The sample under the finger, in the selected currency.
     @State private var selectedPoint: PriceDataPoint?
-    /// Wide: the left column's width, the most the chart card may grow
-    /// to in height (a tall, narrow plot would stretch every move).
-    @State private var columnWidth: CGFloat = 0
+    /// Wide: the price row and the range picker, measured.
+    @State private var headHeight: CGFloat = 0
 
     var body: some View {
         content
@@ -25,22 +26,9 @@ struct PriceChartView: View {
     @ViewBuilder
     private var content: some View {
         if isWide {
-            HStack(spacing: 24) {
-                VStack(spacing: 24) {
-                    priceHeader
-                    timeRangeSelector
-                    chartSection
-                }
-                .frame(maxWidth: .infinity)
-                .onGeometryChange(for: CGFloat.self) { proxy in
-                    proxy.size.width
-                } action: { width in
-                    columnWidth = width
-                }
-
-                // On the left column's center line.
-                statsSection
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 24) {
+                head
+                chartSection
             }
         } else {
             VStack(spacing: 24) {
@@ -50,6 +38,43 @@ struct PriceChartView: View {
                 statsSection
             }
         }
+    }
+
+    /// Wide: the price with High and Low on one row, the range picker under.
+    private var head: some View {
+        VStack(spacing: 24) {
+            // Large text: High and Low go under the price when the row
+            // no longer fits.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 24) {
+                    priceHeader
+                    Spacer(minLength: 0)
+                    statsSection
+                }
+                VStack(spacing: 8) {
+                    priceHeader
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    statsSection
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            // The readable column, under the price (a full-width
+            // capsule stretches each range to a wide slab).
+            timeRangeSelector
+                .frame(maxWidth: 480)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { height in
+            headHeight = height
+        }
+    }
+
+    /// Wide: the card content takes the height left under the head (the
+    /// card pads 16 above and below), never less than 240.
+    private var wideCardContentHeight: CGFloat {
+        max(240, (fillHeight - headHeight - 24 - 32).rounded(.down))
     }
 
     // MARK: - Price Header
@@ -74,7 +99,7 @@ struct PriceChartView: View {
     }
 
     private var priceHeader: some View {
-        ChartValueHeader {
+        ChartValueHeader(isInline: isWide) {
             if let price = displayPrice {
                 Text(formatPrice(price))
                     .contentTransition(.numericText())
@@ -84,7 +109,7 @@ struct PriceChartView: View {
                 ProgressView().scaleEffect(1.2)
             }
         } details: {
-            ZStack {
+            ZStack(alignment: isWide ? .leading : .center) {
                 HStack(spacing: 12) {
                     ChartChangeBadge(change: chartPriceChange, timeAxis: timeAxis, isLoading: priceService.isLoadingChart)
                     Text(selectedTimeRange.title)
@@ -151,8 +176,8 @@ struct PriceChartView: View {
                 .padding(.vertical, isWide ? 20 : 0)
             }
         }
-        .frame(height: isWide ? nil : 280)
-        .frame(minHeight: isWide ? 240 : nil, maxHeight: isWide ? max(240, columnWidth - 32) : nil)
+        // Wide: the card takes the full width and the rest of the height.
+        .frame(height: isWide ? wideCardContentHeight : 280)
         .padding()
         .dashboardCard()
     }
@@ -187,6 +212,7 @@ struct PriceChartView: View {
             range: priceService.priceRange,
             selectedTimeRange: selectedTimeRange,
             lastUpdated: priceService.lastUpdated,
+            isInline: isWide,
             formatValue: formatPrice
         )
     }

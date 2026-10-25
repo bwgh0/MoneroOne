@@ -6,12 +6,14 @@ struct ChartView: View {
     @EnvironmentObject private var priceAlertService: PriceAlertService
     @Binding var path: [Destination]
     @State private var selectedTimeRange: ChartTimeRange = .week
-    /// Wider than a phone (the open iPhone Duo, iPad): Statistics beside
-    /// the chart. Width, not size class: the Duo cover is 466pt wide.
+    /// Wider than a phone (the open iPhone Duo, iPad): High and Low beside
+    /// the price, the chart full width. Width, not size class: the Duo
+    /// cover is 466pt wide.
     @State private var isWide = false
     @State private var viewportHeight: CGFloat = 0
 
     private static let phoneWidth: CGFloat = 466
+    private static let margin: CGFloat = 16
 
     enum Destination: Hashable {
         case priceAlerts
@@ -20,12 +22,14 @@ struct ChartView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                PriceChartView(selectedTimeRange: $selectedTimeRange, isWide: isWide)
-                    .padding()
-                    // Wide: proposes the visible height, so the chart fills
-                    // the column and nothing scrolls; taller content (large
-                    // text) still grows and scrolls.
-                    .frame(idealHeight: isWide ? viewportHeight : nil)
+                // Wide: the chart fills the visible height, so nothing
+                // scrolls; taller content (large text) grows and scrolls.
+                PriceChartView(
+                    selectedTimeRange: $selectedTimeRange,
+                    isWide: isWide,
+                    fillHeight: isWide ? viewportHeight - 2 * Self.margin : 0
+                )
+                .padding(Self.margin)
             }
             .onGeometryChange(for: CGSize.self) { proxy in
                 proxy.size
@@ -85,32 +89,55 @@ enum ChartTimeRange: String, CaseIterable {
 struct ChartValueHeader<Value: View, Details: View>: View {
     @ScaledMetric(relativeTo: .largeTitle) private var valueSize: CGFloat = 42
     @ScaledMetric(relativeTo: .subheadline) private var detailsHeight: CGFloat = 34
+    /// Wide windows: the details beside the value, from the leading edge.
+    let isInline: Bool
     let value: Value
     let details: Details
 
-    init(@ViewBuilder value: () -> Value, @ViewBuilder details: () -> Details) {
+    init(isInline: Bool = false, @ViewBuilder value: () -> Value, @ViewBuilder details: () -> Details) {
+        self.isInline = isInline
         self.value = value()
         self.details = details()
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            value
-                .font(.system(size: valueSize, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .frame(maxWidth: .infinity)
-                .frame(height: valueSize * 1.25)
-
-            details
-                .font(.subheadline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity)
-                .frame(height: detailsHeight)
+        if isInline {
+            HStack(spacing: 16) {
+                styledValue
+                    .frame(height: valueSize * 1.25)
+                // The value shrinks first (large text); the range label
+                // keeps its width.
+                styledDetails
+                    .frame(height: detailsHeight)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.vertical, 8)
+        } else {
+            VStack(spacing: 8) {
+                styledValue
+                    .frame(maxWidth: .infinity)
+                    .frame(height: valueSize * 1.25)
+                styledDetails
+                    .frame(maxWidth: .infinity)
+                    .frame(height: detailsHeight)
+            }
+            .padding(.vertical, 8)
         }
-        .padding(.vertical, 8)
+    }
+
+    private var styledValue: some View {
+        value
+            .font(.system(size: valueSize, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+    }
+
+    private var styledDetails: some View {
+        details
+            .font(.subheadline)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
     }
 }
 
@@ -152,33 +179,81 @@ struct ChartStatistics: View {
     let range: (min: Double, max: Double)?
     let selectedTimeRange: ChartTimeRange
     let lastUpdated: Date?
+    /// Wide windows: High and Low as two plain pairs beside the price, no
+    /// title and no cards.
+    var isInline = false
     let formatValue: (Double) -> String
 
+    private var highTitle: String {
+        String(localized: "\(selectedTimeRange.title) High", comment: "Highest price in the chart range, e.g. 1W High")
+    }
+
+    private var lowTitle: String {
+        String(localized: "\(selectedTimeRange.title) Low", comment: "Lowest price in the chart range, e.g. 1W Low")
+    }
+
+    private var highValue: String { range.map { formatValue($0.max) } ?? "—" }
+    private var lowValue: String { range.map { formatValue($0.min) } ?? "—" }
+
     var body: some View {
-        VStack(spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                StatCard(
-                    title: String(localized: "\(selectedTimeRange.title) High", comment: "Highest price in the chart range, e.g. 1W High"),
-                    value: range.map { formatValue($0.max) } ?? "—",
-                    color: .green
-                )
-                StatCard(
-                    title: String(localized: "\(selectedTimeRange.title) Low", comment: "Lowest price in the chart range, e.g. 1W Low"),
-                    value: range.map { formatValue($0.min) } ?? "—",
-                    color: .red
-                )
+        if isInline {
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(alignment: .top, spacing: 24) {
+                    InlineStat(title: highTitle, value: highValue, color: .green)
+                    InlineStat(title: lowTitle, value: lowValue, color: .red)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                lastUpdatedLine
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
             }
+        } else {
+            VStack(spacing: 12) {
+                Text(title)
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let lastUpdated {
-                Text("Last updated \(lastUpdated, style: .relative) ago")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    StatCard(title: highTitle, value: highValue, color: .green)
+                    StatCard(title: lowTitle, value: lowValue, color: .red)
+                }
+
+                lastUpdatedLine
             }
         }
+    }
+
+    @ViewBuilder
+    private var lastUpdatedLine: some View {
+        if let lastUpdated {
+            Text("Last updated \(lastUpdated, style: .relative) ago")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+/// A StatCard's title and value without the card, trailing (wide header).
+private struct InlineStat: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+
+            Text(value)
+                .font(.headline)
+                .monospacedDigit()
+                .lineLimit(1)
+                .foregroundColor(color)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(value)")
     }
 }
 

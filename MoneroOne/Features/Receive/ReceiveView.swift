@@ -148,7 +148,8 @@ struct ReceiveView: View {
                 content(focus: focus)
             }
             .onGeometryChange(for: Bool.self) { proxy in
-                proxy.size.width > Self.phoneSheetWidth
+                // A layout pass can report 466.0000000000001 for the cover.
+                proxy.size.width > Self.phoneSheetWidth + 1
             } action: { wide in
                 isWideSheet = wide
             }

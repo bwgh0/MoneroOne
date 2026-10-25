@@ -253,7 +253,8 @@ struct SendFlowView: View {
             walletManager.releasePaymentRequest(shownPaymentRequest, confirmed: false)
         }
         .onGeometryChange(for: Bool.self) { proxy in
-            proxy.size.width > Self.phoneSheetWidth
+            // A layout pass can report 466.0000000000001 for the cover.
+            proxy.size.width > Self.phoneSheetWidth + 1
         } action: { wide in
             isWideSheet = wide
         }
@@ -1125,8 +1126,9 @@ private struct WideWindowReader: ViewModifier {
             .environment(\.isWideWindow, isWideWindow)
             .onGeometryChange(for: Bool.self) { proxy in
                 // The root's size stops at the safe area: add the side insets
-                // (the Duo's vertical bar) back for the window's width.
-                proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing > 466
+                // (the Duo's vertical bar) back for the window's width. A
+                // layout pass can report 466.0000000000001 for the cover.
+                proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing > 466 + 1
             } action: { isWide in
                 isWideWindow = isWide
             }

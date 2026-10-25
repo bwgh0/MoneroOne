@@ -5,6 +5,8 @@ import SwiftUI
 struct CommandCenterView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var priceService: PriceService
+    @EnvironmentObject var priceHistoryService: PriceHistoryService
+    @EnvironmentObject var priceAlertService: PriceAlertService
     @State private var showReceive = false
     @State private var showSend = false
     /// All Transactions open: the Activity split takes the dashboard's place.
@@ -15,13 +17,9 @@ struct CommandCenterView: View {
     /// How far the edge swipe has dragged the Activity split toward the
     /// trailing edge (0 = fully open).
     @State private var backSwipeOffset: CGFloat = 0
-    /// Horizontal bars on the open iPhone Duo while the Activity split
-    /// shows, set here and never inside the split. With the vertical bar the
-    /// sliding split crossed it, its side inset changed on every frame and
-    /// both columns were laid out again each frame (lag and jitter). Set at
-    /// the open, cleared once the close slide ends, so the dashboard gets
-    /// its vertical bar back.
-    @State private var splitHasHorizontalBars = false
+    /// The Activity split is in the hierarchy: from the open until its
+    /// close slide ends.
+    @State private var isActivityMounted = false
     /// All Transactions opens on this filter: Links from the balance
     /// card's open-link lines, else All.
     @State private var allTransactionsFilter: TransactionListView.FilterType = .all
@@ -45,6 +43,8 @@ struct CommandCenterView: View {
             // How far the split is open: 1 while it shows, less while the
             // edge swipe drags it back.
             let openFraction = width > 0 ? 1 - min(max(backSwipeOffset / width, 0), 1) : 1
+            // Past the trailing edge of the window, the Duo's side bar too.
+            let hiddenOffset = width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing
             ZStack {
                 // The dashboard stays under the split, so back returns to it
                 // as it was. It moves a third of a screen aside, as the page
@@ -53,26 +53,27 @@ struct CommandCenterView: View {
                     .offset(x: showAllTransactions ? -width * 0.3 * openFraction : 0)
                     .allowsHitTesting(!showAllTransactions)
                     .accessibilityHidden(showAllTransactions)
-                if showAllTransactions {
-                    ActivitySplitView(
-                        selection: $activitySelection,
-                        asOf: selectedHistoryPoint?.timestamp,
-                        historyTransactions: pastTransactions,
-                        initialFilter: allTransactionsFilter,
-                        onBack: { setActivityOpen(false) }
+                if isActivityMounted {
+                    // The window keeps one bar layout the whole time (the
+                    // Duo's vertical bar, as on the dashboard and in
+                    // Settings): nothing here or in the split sets it.
+                    SlidingHost(
+                        content: activitySplit,
+                        trailingOffset: showAllTransactions ? backSwipeOffset : hiddenOffset,
+                        hiddenOffset: hiddenOffset,
+                        selection: activitySelection
                     )
-                    .offset(x: backSwipeOffset)
+                    .ignoresSafeArea()
                     .swipesBackFromLeadingEdge(
                         offset: $backSwipeOffset,
                         width: width,
                         onBack: { setActivityOpen(false) }
                     )
-                    .accessibilityAction(.escape) { setActivityOpen(false) }
-                    .transition(.move(edge: .trailing))
+                    .allowsHitTesting(showAllTransactions)
+                    .transition(.identity)
                 }
             }
         }
-        .horizontalBarsOnDuo(splitHasHorizontalBars)
         .onChange(of: walletManager.walletSessionId) { _, _ in
             selectedHistoryPoint = nil
             historyModel = BalanceHistoryModel()
@@ -104,14 +105,30 @@ struct CommandCenterView: View {
     private func setActivityOpen(_ isOpen: Bool, selecting id: String? = nil) {
         if isOpen {
             activitySelection = id
-            splitHasHorizontalBars = true
+            isActivityMounted = true
         }
-        withAnimation(reduceMotion ? nil : .snappy(duration: 0.35)) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.35), completionCriteria: .removed) {
             showAllTransactions = isOpen
             backSwipeOffset = 0
         } completion: {
-            if !showAllTransactions { splitHasHorizontalBars = false }
+            if !showAllTransactions { isActivityMounted = false }
         }
+    }
+
+    /// The split, with what its own hosting controller does not inherit.
+    private var activitySplit: some View {
+        ActivitySplitView(
+            selection: $activitySelection,
+            asOf: selectedHistoryPoint?.timestamp,
+            historyTransactions: pastTransactions,
+            initialFilter: allTransactionsFilter,
+            onBack: { setActivityOpen(false) }
+        )
+        .accessibilityAction(.escape) { setActivityOpen(false) }
+        .environmentObject(walletManager)
+        .environmentObject(priceService)
+        .environmentObject(priceHistoryService)
+        .environmentObject(priceAlertService)
     }
 
     private var dashboard: some View {
@@ -393,6 +410,109 @@ struct ActivitySplitView: View {
             return .openSent(record)
         }
         return nil
+    }
+}
+
+// MARK: - Sliding host
+
+/// Holds a screen in its own hosting controller, laid out once at its final
+/// frame, and slides it with a layer transform only. SwiftUI moves a
+/// UIKit-backed view by its frame (offset, visualEffect and transformEffect
+/// alike), so the split crossed the Duo's vertical bar frame by frame and
+/// both columns were laid out again on each frame. A layer transform is
+/// drawing only: UIKit lays the split out once, at the open.
+private struct SlidingHost<Content: View>: UIViewControllerRepresentable {
+    let content: Content
+    /// How far the screen sits toward the trailing edge; 0 = in place.
+    let trailingOffset: CGFloat
+    /// Out of sight past the trailing edge: where the open starts.
+    let hiddenOffset: CGFloat
+    /// Read so a new selection reaches the hosted screen.
+    let selection: String?
+
+    func makeUIViewController(context: Context) -> SlidingHostController<Content> {
+        let controller = SlidingHostController(rootView: content)
+        // It comes in from the trailing edge, as a pushed screen does.
+        controller.slide(to: physical(hiddenOffset, context), animated: false)
+        return controller
+    }
+
+    func updateUIViewController(_ controller: SlidingHostController<Content>, context: Context) {
+        controller.host.rootView = content
+        let transaction = context.transaction
+        let animates = !context.environment.accessibilityReduceMotion
+            && (controller.isFirstUpdate || (transaction.animation != nil && !transaction.disablesAnimations))
+        controller.isFirstUpdate = false
+        controller.slide(to: physical(trailingOffset, context), animated: animates)
+    }
+
+    private func edgeSign(_ context: Context) -> CGFloat {
+        context.environment.layoutDirection == .rightToLeft ? -1 : 1
+    }
+
+    private func physical(_ trailing: CGFloat, _ context: Context) -> CGFloat {
+        trailing * edgeSign(context)
+    }
+}
+
+private final class SlidingHostController<Content: View>: UIViewController {
+    let host: UIHostingController<Content>
+    var isFirstUpdate = true
+
+    init(rootView: Content) {
+        host = UIHostingController(rootView: rootView)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func loadView() {
+        view = PassThroughView()
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        addChild(host)
+        // Under a column that stops below the bars: the split's own page
+        // color, as in Settings.
+        host.view.backgroundColor = .systemGroupedBackground
+        view.addSubview(host.view)
+        host.didMove(toParent: self)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Bounds and center, not frame: the frame of a transformed view is
+        // undefined.
+        host.view.bounds = CGRect(origin: .zero, size: view.bounds.size)
+        host.view.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+    }
+
+    /// Moves the hosted screen by `x` points with a layer transform, with
+    /// the dashboard's spring (snappy, 0.35 s) when `animated`.
+    func slide(to x: CGFloat, animated: Bool) {
+        let layer = host.view.layer
+        let target = CATransform3DMakeTranslation(x, 0, 0)
+        guard !CATransform3DEqualToTransform(layer.transform, target) else { return }
+        let from = layer.presentation()?.transform ?? layer.transform
+        layer.removeAnimation(forKey: "slide")
+        layer.transform = target
+        guard animated else { return }
+        let spring = CASpringAnimation(perceptualDuration: 0.35, bounce: 0.15)
+        spring.keyPath = "transform"
+        spring.fromValue = NSValue(caTransform3D: from)
+        spring.toValue = NSValue(caTransform3D: target)
+        spring.duration = spring.settlingDuration
+        layer.add(spring, forKey: "slide")
+    }
+}
+
+/// Lets touches through where the hosted screen is not.
+private final class PassThroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
     }
 }
 

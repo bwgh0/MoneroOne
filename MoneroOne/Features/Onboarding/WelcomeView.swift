@@ -18,7 +18,7 @@ struct WelcomeView: View {
                     tallLayout
                 }
             }
-            .readableColumn()
+            .phoneColumn()
             .detectSquatScreen($isSquat)
             .navigationDestination(isPresented: $showCreate) {
                 CreateWalletView()

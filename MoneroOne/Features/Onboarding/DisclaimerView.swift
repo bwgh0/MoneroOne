@@ -35,7 +35,7 @@ struct DisclaimerView: View {
                 .padding(.horizontal)
                 .padding(.top, 16)
                 .padding(.bottom, 12)
-                .readableColumn()
+                .phoneColumn()
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.shield.fill")
@@ -105,7 +105,7 @@ struct DisclaimerView: View {
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 100)
-                .readableColumn()
+                .phoneColumn()
             }
 
             // Bottom button
@@ -129,7 +129,7 @@ struct DisclaimerView: View {
                 .disabled(!allChecked)
                 .padding(.horizontal)
                 .padding(.bottom)
-                .readableColumn()
+                .phoneColumn()
                 .accessibilityIdentifier("disclaimer.acceptButton")
             }
             .background(Color(.systemBackground))

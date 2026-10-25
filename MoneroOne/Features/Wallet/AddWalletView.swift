@@ -63,6 +63,7 @@ struct AddWalletView: View {
                     .glassButtonStyle()
                 }
                 .padding(.horizontal)
+                .phoneColumn()
                 .padding(.bottom, 32)
             }
             .navigationBarTitleDisplayMode(.inline)

@@ -136,6 +136,31 @@ extension View {
             .frame(maxWidth: maxWidth)
             .frame(maxWidth: .infinity)
     }
+
+    /// Caps a screen's content at `maxWidth`, centered, once the container
+    /// is wider than the iPhone Duo's cover (466pt): by default the Send
+    /// sheet's phone column, 400pt plus 16pt margins. iPhones and the cover
+    /// keep their full width.
+    func phoneColumn(maxWidth: CGFloat = 432) -> some View {
+        modifier(PhoneColumnModifier(maxWidth: maxWidth))
+    }
+}
+
+private struct PhoneColumnModifier: ViewModifier {
+    let maxWidth: CGFloat
+    @State private var isWide = false
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: isWide ? maxWidth : .infinity)
+            .frame(maxWidth: .infinity)
+            .onGeometryChange(for: Bool.self) { proxy in
+                // A layout pass can report 466.0000000000001 for the cover.
+                proxy.size.width > 466 + 1
+            } action: { wide in
+                isWide = wide
+            }
+    }
 }
 
 /// View extension to apply glass button style with iOS version compatibility

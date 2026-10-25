@@ -81,7 +81,7 @@ struct RestorePickerView: View {
             .padding(.bottom, 24)
             .accessibilityIdentifier("restorePicker.continueButton")
         }
-        .readableColumn()
+        .phoneColumn()
         .navigationTitle("Restore")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $navigateToSeed) {

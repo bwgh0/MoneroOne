@@ -117,7 +117,7 @@ struct RestoreWalletView: View {
             }
         }
         .padding()
-        .readableColumn(maxWidth: step == .enterSeed ? Self.seedColumnWidth : 480)
+        .phoneColumn(maxWidth: step == .enterSeed ? Self.seedColumnWidth : 432)
         .overlay(alignment: .bottom) {
             if step == .enterSeed {
                 seedContinueButton

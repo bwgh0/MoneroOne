@@ -224,7 +224,8 @@ struct TransactionDetailView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        // Default style, not .plain: in a List it gives the
+                        // row the standard highlight on press.
                         .accessibilityIdentifier("transaction.addToContacts")
                     }
                 }
@@ -314,7 +315,8 @@ struct TransactionDetailView: View {
                         // Make the whole row clickable.
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    // Default style, not .plain: in a List it gives the
+                    // row the standard highlight on press.
                     .accessibilityLabel("View in block explorer\(isTestnet ? String(localized: ", testnet") : "")")
                     .accessibilityHint("Opens the transaction in an in-app browser")
                 }
@@ -396,7 +398,8 @@ struct TransactionDetailView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // Default style, not .plain: in a List it gives the row the
+        // standard highlight on press.
         .accessibilityIdentifier("transaction.copyAllButton")
         .accessibilityLabel(copied ? "All details copied" : "Copy all details")
         .accessibilityHint("Copies every field of this transaction as text")

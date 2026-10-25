@@ -122,11 +122,31 @@ struct SettingsView: View {
     }
 
     /// A row that opens a page: in the right column on regular width,
-    /// pushed on iPhone.
+    /// pushed on iPhone. On regular width the open page's row gets the
+    /// brand tint inside its card, as the Activity split's rows do (List
+    /// selection drew a solid orange capsule with a white title).
     @ViewBuilder
     private func pageLink<Label: View>(_ page: SettingsPage, @ViewBuilder label: () -> Label) -> some View {
         if isSplit {
-            NavigationLink(value: page, label: label)
+            let isSelected = splitPage == page
+            Button {
+                splitPage = page
+            } label: {
+                label()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .listRowBackground(
+                ZStack {
+                    Color(.secondarySystemGroupedBackground)
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.brand.opacity(isSelected ? 0.15 : 0))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                }
+            )
         } else {
             NavigationLink(destination: { destination(page) }, label: label)
         }
@@ -160,17 +180,15 @@ struct SettingsView: View {
     }
 
     private var settingsList: some View {
-        Group {
-            if isSplit {
-                List(selection: $splitPage) {
-                    listSections
-                }
-            } else {
-                List {
-                    listSections
-                }
-            }
+        List {
+            listSections
+                // The split's list column draws rows on the sidebar's gray
+                // material; white cards on the grouped gray, as on iPhone.
+                .listRowBackground(isSplit ? Color(.secondarySystemGroupedBackground) : nil)
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(isSplit ? .hidden : .automatic)
+        .background(isSplit ? Color(.systemGroupedBackground) : .clear)
         .navigationTitle("Settings")
         .alert("Reset Sync Data?", isPresented: $showResetSyncConfirmation) {
             Button("Cancel", role: .cancel) { }

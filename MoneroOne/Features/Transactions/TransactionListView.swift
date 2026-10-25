@@ -157,18 +157,15 @@ struct TransactionListView: View {
             ? TransactionListLogic.fiatTotals(of: filtered, priceAt: priceHistoryService.price(at:))
             : nil
 
-        Group {
-            if let selection {
-                List(selection: selection) {
-                    listRows(items, totals: totals, fiatTotals: fiatTotals)
-                }
-            } else {
-                List {
-                    listRows(items, totals: totals, fiatTotals: fiatTotals)
-                }
-            }
+        List {
+            listRows(items, totals: totals, fiatTotals: fiatTotals)
         }
         .listStyle(.plain)
+        // The split's list column would draw on the sidebar's gray material,
+        // which muddies the selected row's tint; the page background, as on
+        // iPhone.
+        .scrollContentBackground(selection == nil ? .automatic : .hidden)
+        .background(selection == nil ? Color.clear : Color(.systemBackground))
         .animation(.easeInOut(duration: 0.25), value: items.isEmpty)
         .navigationTitle("All Transactions")
         .navigationBarTitleDisplayMode(.inline)
@@ -370,20 +367,27 @@ struct TransactionListView: View {
     }
 
     /// A row of the split's list column: the detail column shows it, so the
-    /// row carries no chevron. The selected row gets the brand tint.
-    @ViewBuilder
+    /// row carries no chevron. The selected row gets the brand tint. A plain
+    /// button, not List selection: the list's selection style turned the
+    /// row title white on the tint and drew a square focus ring.
     private func selectableRow(_ item: ActivityListItem, isSelected: Bool) -> some View {
-        Group {
-            switch item {
-            case .transaction(let transaction):
-                TransactionRow(transaction: transaction)
-            case .openSent(let record):
-                PaymentLinkOpenSentRow(record: record)
-            case .linkToClaim(let record):
-                PaymentLinkToClaimRow(record: record)
+        Button {
+            selection?.wrappedValue = item.id
+        } label: {
+            Group {
+                switch item {
+                case .transaction(let transaction):
+                    TransactionRow(transaction: transaction)
+                case .openSent(let record):
+                    PaymentLinkOpenSentRow(record: record)
+                case .linkToClaim(let record):
+                    PaymentLinkToClaimRow(record: record)
+                }
             }
+            .contentShape(Rectangle())
         }
-        .tag(item.id)
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .listRowBackground(
             RoundedRectangle(cornerRadius: 12)
                 .fill(isSelected ? Color.brand.opacity(0.15) : Color.clear)

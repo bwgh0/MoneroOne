@@ -164,6 +164,8 @@ struct MoneroOneApp: App {
                 walletManager.lock()
             }
         case .background:
+            // Marks the start of each background gap in the diagnostic log.
+            DiagnosticLog.shared.log("App: background (wallet \(walletManager.isUnlocked ? "unlocked" : "locked"), Trusted Locations \(TrustedLocationSyncManager.shared.isEnabled ? "on" : "off"))")
             if walletManager.isUnlocked && autoLockMinutes == 0 && !suppressLock {
                 // Lock immediately (backup in case inactive didn't trigger)
                 walletManager.lock()
@@ -196,6 +198,9 @@ struct MoneroOneApp: App {
                 schedulePriceCheck()
             }
         case .active:
+            if backgroundTime != nil {
+                DiagnosticLog.shared.log("App: active")
+            }
             // A chart left open across a long background is stale; the live
             // tip would draw one long straight segment out to "now".
             if walletManager.hasWallet {

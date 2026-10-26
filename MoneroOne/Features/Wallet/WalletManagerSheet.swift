@@ -1497,7 +1497,7 @@ private struct RowGestureHost: UIViewRepresentable {
 /// A display link that asks for the display's top rate while it runs. It
 /// draws nothing: only its rate request counts.
 @MainActor
-private final class TopFrameRate: NSObject {
+final class TopFrameRate: NSObject {
     /// The drop and the swipe settle are 0.25-0.3 s springs; the rate holds
     /// a little past them.
     static let settleTime: TimeInterval = 0.4

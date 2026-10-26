@@ -17,6 +17,9 @@ struct CommandCenterView: View {
     /// The Activity split is in the hierarchy: from the open until its
     /// close slide ends.
     @State private var isActivityMounted = false
+    /// Where the back swipe holds All Transactions and the dashboard
+    /// (1 = the split in place); nil when no finger holds them.
+    @State private var swipeProgress: CGFloat?
     /// All Transactions opens on this filter: Links from the balance
     /// card's open-link lines, else All.
     @State private var allTransactionsFilter: TransactionListView.FilterType = .all
@@ -42,30 +45,18 @@ struct CommandCenterView: View {
             let width = geometry.size.width
             // Past the trailing edge of the window, the Duo's side bar too.
             let hiddenOffset = width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing
-            ZStack {
-                // The dashboard stays under the split, so back returns to it
-                // as it was. It moves a third of a screen aside, as the page
-                // under a navigation push does.
-                dashboard
-                    .offset(x: showAllTransactions ? -width * 0.3 : 0)
-                    .allowsHitTesting(!showAllTransactions)
-                    .accessibilityHidden(showAllTransactions)
-                if isActivityMounted {
-                    // The window keeps one bar layout the whole time (the
-                    // Duo's vertical bar, as on the dashboard and in
-                    // Settings): nothing here or in the split sets it.
-                    SlidingHost(
-                        content: activitySplit,
-                        trailingOffset: showAllTransactions ? 0 : hiddenOffset,
-                        hiddenOffset: hiddenOffset,
-                        selection: activitySelection,
-                        onBack: { setActivityOpen(false) }
-                    )
-                    .ignoresSafeArea()
-                    .allowsHitTesting(showAllTransactions)
-                    .transition(.identity)
-                }
-            }
+            ActivitySlide(
+                progress: swipeProgress ?? (showAllTransactions ? 1 : 0),
+                isOpen: showAllTransactions,
+                isMounted: isActivityMounted,
+                width: width,
+                hiddenOffset: hiddenOffset,
+                selection: activitySelection,
+                onSwipe: followSwipe,
+                onSwipeEnd: endSwipe,
+                dashboard: dashboard,
+                split: activitySplit
+            )
         }
         .modifier(SteadyTrailingInset(inset: steadyTrailingInset))
         .background(SteadyTrailingReader { steadyTrailingInset = $0 })
@@ -100,10 +91,41 @@ struct CommandCenterView: View {
     private func setActivityOpen(_ isOpen: Bool, selecting id: String? = nil) {
         if isOpen {
             activitySelection = id
-            isActivityMounted = true
+            if !isActivityMounted {
+                // The split is laid out first, out of sight; the slide starts
+                // on the next turn, so its first frame is not the slow one.
+                isActivityMounted = true
+                DispatchQueue.main.async { animateActivity(open: true) }
+                return
+            }
         }
+        animateActivity(open: isOpen)
+    }
+
+    private func animateActivity(open isOpen: Bool) {
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.35), completionCriteria: .removed) {
             showAllTransactions = isOpen
+        } completion: {
+            if !showAllTransactions { isActivityMounted = false }
+        }
+    }
+
+    /// The back swipe moves both screens with the finger, as under a
+    /// navigation pop: the dashboard comes back from a third of a screen
+    /// aside as the split goes. Before, the dashboard waited for the
+    /// release, and a long swipe showed black between the two.
+    private func followSwipe(_ progress: CGFloat) {
+        withTransaction(\.disablesAnimations, true) {
+            swipeProgress = progress
+        }
+    }
+
+    /// At the release both screens go on from where the finger left them,
+    /// on one spring: back to the dashboard, or back in place.
+    private func endSwipe(goesBack: Bool) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.35), completionCriteria: .removed) {
+            swipeProgress = nil
+            if goesBack { showAllTransactions = false }
         } completion: {
             if !showAllTransactions { isActivityMounted = false }
         }
@@ -469,6 +491,61 @@ private struct SteadyTrailingReader: UIViewRepresentable {
 
 // MARK: - Sliding host
 
+/// The dashboard and All Transactions, moved by one animated value: 0 is the
+/// dashboard, 1 the split in place. Each frame both take their place from
+/// the same number, so they move together. Before, the split slid by its
+/// own Core Animation spring, which does not wait for the main thread: after
+/// a slow first frame it left while the dashboard still sat a third of a
+/// screen aside, and the screen showed black beside it.
+private struct ActivitySlide<Dashboard: View, Split: View>: View, Animatable {
+    var progress: CGFloat
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+    /// Where the slide goes.
+    let isOpen: Bool
+    let isMounted: Bool
+    let width: CGFloat
+    /// Past the trailing edge of the window, the Duo's side bar too.
+    let hiddenOffset: CGFloat
+    let selection: String?
+    /// The back swipe: the progress under the finger, then the release.
+    let onSwipe: (CGFloat) -> Void
+    let onSwipeEnd: (_ goesBack: Bool) -> Void
+    let dashboard: Dashboard
+    let split: Split
+
+    var body: some View {
+        ZStack {
+            // The dashboard stays under the split, so back returns to it
+            // as it was. It moves a third of a screen aside, as the page
+            // under a navigation push does.
+            dashboard
+                .offset(x: -width * 0.3 * progress)
+                .allowsHitTesting(!isOpen)
+                .accessibilityHidden(isOpen)
+            if isMounted {
+                // The window keeps one bar layout the whole time (the
+                // Duo's vertical bar, as on the dashboard and in
+                // Settings): nothing here or in the split sets it.
+                SlidingHost(
+                    content: split,
+                    trailingOffset: hiddenOffset * (1 - progress),
+                    isOpen: isOpen,
+                    hiddenOffset: hiddenOffset,
+                    selection: selection,
+                    onSwipe: onSwipe,
+                    onSwipeEnd: onSwipeEnd
+                )
+                .ignoresSafeArea()
+                .allowsHitTesting(isOpen)
+                .transition(.identity)
+            }
+        }
+    }
+}
+
 /// Holds a screen in its own hosting controller, laid out once at its final
 /// frame, and slides it with a layer transform only. SwiftUI moves a
 /// UIKit-backed view by its frame (offset, visualEffect and transformEffect
@@ -477,33 +554,45 @@ private struct SteadyTrailingReader: UIViewRepresentable {
 /// drawing only: UIKit lays the split out once, at the open.
 private struct SlidingHost<Content: View>: UIViewControllerRepresentable {
     let content: Content
-    /// How far the screen sits toward the trailing edge; 0 = in place.
+    /// How far the screen sits toward the trailing edge on this frame;
+    /// 0 = in place.
     let trailingOffset: CGFloat
+    /// Where the slide goes: in place, or out past the trailing edge.
+    let isOpen: Bool
     /// Out of sight past the trailing edge: where the open starts.
     let hiddenOffset: CGFloat
     /// Read so a new selection reaches the hosted screen.
     let selection: String?
-    /// A back swipe released past its threshold.
-    let onBack: () -> Void
+    /// The back swipe: the progress under the finger (1 = in place).
+    let onSwipe: (CGFloat) -> Void
+    /// The back swipe let go: true when it goes back to the dashboard.
+    let onSwipeEnd: (_ goesBack: Bool) -> Void
 
     func makeUIViewController(context: Context) -> SlidingHostController<Content> {
         let controller = SlidingHostController(rootView: content)
         controller.edgeSign = edgeSign(context)
         // It comes in from the trailing edge, as a pushed screen does.
-        controller.slide(to: physical(hiddenOffset, context), animated: false)
+        controller.place(at: physical(hiddenOffset, context))
         return controller
     }
 
     func updateUIViewController(_ controller: SlidingHostController<Content>, context: Context) {
-        controller.setRootView(content)
-        controller.onBack = onBack
-        controller.isOpen = trailingOffset == 0
+        let isInPlace = isOpen && trailingOffset == 0
+        // The screen updates only while it is in place: a new root view
+        // lays the whole split out again, which stalled the first frame
+        // of the close.
+        if isInPlace && !controller.isDragging {
+            controller.setRootView(content)
+        }
+        controller.setSliding(trailingOffset != (isOpen ? 0 : hiddenOffset))
+        let hiddenOffset = max(hiddenOffset, 1)
+        let onSwipe = onSwipe
+        controller.onSwipe = { travelled in onSwipe(1 - min(travelled / hiddenOffset, 1)) }
+        controller.onSwipeEnd = onSwipeEnd
         controller.edgeSign = edgeSign(context)
-        let transaction = context.transaction
-        let animates = !context.environment.accessibilityReduceMotion
-            && (controller.isFirstUpdate || (transaction.animation != nil && !transaction.disablesAnimations))
-        controller.isFirstUpdate = false
-        controller.slide(to: physical(trailingOffset, context), animated: animates)
+        // The back swipe starts once the screen is in place.
+        controller.isOpen = isInPlace
+        controller.place(at: physical(trailingOffset, context))
     }
 
     private func edgeSign(_ context: Context) -> CGFloat {
@@ -517,22 +606,23 @@ private struct SlidingHost<Content: View>: UIViewControllerRepresentable {
 
 private final class SlidingHostController<Content: View>: UIViewController, UIGestureRecognizerDelegate {
     let host: UIHostingController<Content>
-    var isFirstUpdate = true
     /// The screen is in place: the back swipe may start.
     var isOpen = false
-    var onBack: (() -> Void)?
+    /// The back swipe: points travelled toward the trailing edge.
+    var onSwipe: ((CGFloat) -> Void)?
+    /// The back swipe let go: true when it goes back to the dashboard.
+    var onSwipeEnd: ((Bool) -> Void)?
     /// 1 when the trailing edge is on the right, -1 in right-to-left.
     var edgeSign: CGFloat = 1 {
         didSet { backSwipe.edges = edgeSign < 0 ? .right : .left }
     }
-    /// The finger holds the screen: updates from SwiftUI leave it there.
-    private var isDragging = false
-    /// A new screen that came in during the drag: applied at the release,
-    /// so nothing in the split lays out while the finger moves it.
-    private var pendingRootView: Content?
-    /// The finger's speed at the release (points per second, physical),
-    /// for the spring that takes over from it.
-    private var releaseVelocity: CGFloat = 0
+    /// The finger holds the screen: updates from SwiftUI leave it there,
+    /// and nothing in the split lays out while the finger moves it.
+    private(set) var isDragging = false
+    /// The display's top rate (120 Hz) while the screen slides or the
+    /// finger holds it: the slide ran at 60 Hz.
+    private let frameRate = TopFrameRate()
+    private var isSliding = false
     /// The system's back swipe, as a navigation controller has it: a drag
     /// that starts at the leading screen edge.
     private lazy var backSwipe = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleBackSwipe(_:)))
@@ -571,81 +661,62 @@ private final class SlidingHostController<Content: View>: UIViewController, UIGe
     }
 
     func setRootView(_ rootView: Content) {
-        if isDragging {
-            pendingRootView = rootView
+        host.rootView = rootView
+    }
+
+    func setSliding(_ sliding: Bool) {
+        guard sliding != isSliding else { return }
+        isSliding = sliding
+        if sliding {
+            frameRate.start()
         } else {
-            host.rootView = rootView
+            frameRate.stop(after: TopFrameRate.settleTime)
         }
     }
 
-    /// Moves the hosted screen by `x` points with a layer transform, with
-    /// the dashboard's spring (snappy, 0.35 s) when `animated`. After a
-    /// back swipe the spring starts at the finger's speed.
-    func slide(to x: CGFloat, animated: Bool) {
+    /// Puts the screen at `x` (physical) with a layer transform and no
+    /// animation of its own: the slide's frames come from SwiftUI, on the
+    /// dashboard's clock.
+    func place(at x: CGFloat) {
         guard !isDragging else { return }
-        let velocity = releaseVelocity
-        releaseVelocity = 0
         let layer = host.view.layer
         let target = CATransform3DMakeTranslation(x, 0, 0)
         guard !CATransform3DEqualToTransform(layer.transform, target) else { return }
-        let from = layer.presentation()?.transform ?? layer.transform
-        layer.removeAnimation(forKey: "slide")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         layer.transform = target
-        guard animated else { return }
-        let spring = CASpringAnimation(perceptualDuration: 0.35, bounce: 0.15)
-        spring.keyPath = "transform"
-        spring.fromValue = NSValue(caTransform3D: from)
-        spring.toValue = NSValue(caTransform3D: target)
-        // The spring's initial velocity is a share of its distance per second.
-        let distance = x - from.m41
-        if abs(distance) > 0.5 {
-            spring.initialVelocity = velocity / distance
-        }
-        spring.duration = spring.settlingDuration
-        layer.add(spring, forKey: "slide")
+        CATransaction.commit()
     }
 
     // MARK: Back swipe
 
     /// The screen follows the finger toward the trailing edge, one to one:
-    /// a drag step moves only its layer, with no SwiftUI update and no
-    /// layout. A release past a third of the width (or a flick) goes back
-    /// with the close spring, as a pushed screen does; else the screen
-    /// springs back in place.
+    /// a drag step moves its layer, and the dashboard comes along through
+    /// `onSwipe`; nothing in the split lays out. A release past a third of
+    /// the width (or a flick) goes back with the close spring, as a pushed
+    /// screen does; else both screens spring back in place.
     @objc private func handleBackSwipe(_ gesture: UIScreenEdgePanGestureRecognizer) {
         // Toward the trailing edge is positive in either direction.
         let travelled = max(gesture.translation(in: view).x * edgeSign, 0)
         switch gesture.state {
         case .began, .changed:
+            if gesture.state == .began { setSliding(true) }
             isDragging = true
             let layer = host.view.layer
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            layer.removeAnimation(forKey: "slide")
             layer.transform = CATransform3DMakeTranslation(travelled * edgeSign, 0, 0)
             CATransaction.commit()
+            onSwipe?(travelled)
         case .ended:
             let velocity = gesture.velocity(in: view).x * edgeSign
             let width = max(view.bounds.width, 1)
             let goesBack = travelled > width / 3 || (velocity > 0 && travelled + velocity * 0.2 > width / 2)
-            endDrag(velocity: velocity)
-            if goesBack {
-                onBack?()
-            } else {
-                slide(to: 0, animated: !UIAccessibility.isReduceMotionEnabled)
-            }
+            isDragging = false
+            onSwipeEnd?(goesBack)
         default:
-            endDrag(velocity: 0)
-            slide(to: 0, animated: !UIAccessibility.isReduceMotionEnabled)
-        }
-    }
-
-    private func endDrag(velocity: CGFloat) {
-        isDragging = false
-        releaseVelocity = velocity * edgeSign
-        if let pendingRootView {
-            host.rootView = pendingRootView
-            self.pendingRootView = nil
+            isDragging = false
+            onSwipeEnd?(false)
         }
     }
 

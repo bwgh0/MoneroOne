@@ -33,6 +33,9 @@ struct CommandCenterView: View {
     @State private var selectedHistoryRange: ChartTimeRange = .week
     @State private var historyModel = BalanceHistoryModel()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The root's trailing inset: the window's side bar, which a closing
+    /// sheet leaves alone.
+    @State private var steadyTrailingInset: CGFloat?
 
     var body: some View {
         GeometryReader { geometry in
@@ -64,6 +67,8 @@ struct CommandCenterView: View {
                 }
             }
         }
+        .modifier(SteadyTrailingInset(inset: steadyTrailingInset))
+        .background(SteadyTrailingReader { steadyTrailingInset = $0 })
         .onChange(of: walletManager.walletSessionId) { _, _ in
             selectedHistoryPoint = nil
             historyModel = BalanceHistoryModel()
@@ -399,6 +404,66 @@ struct ActivitySplitView: View {
             return .openSent(record)
         }
         return nil
+    }
+}
+
+// MARK: - Steady trailing inset
+
+/// Keeps the dashboard's trailing inset on the root's value. After Send or
+/// Receive closed, the tab content got 12 more for up to 2 s, and the
+/// dashboard narrowed and widened again.
+private struct SteadyTrailingInset: ViewModifier {
+    let inset: CGFloat?
+
+    func body(content: Content) -> some View {
+        // One view either way, so the dashboard keeps its state.
+        content
+            .safeAreaPadding(.trailing, inset ?? 0)
+            .ignoresSafeArea(.container, edges: inset == nil ? [] : .trailing)
+    }
+}
+
+/// Reads the root view controller's trailing safe area inset.
+private struct SteadyTrailingReader: UIViewRepresentable {
+    let onChange: (CGFloat) -> Void
+
+    func makeUIView(context: Context) -> ReaderView {
+        let view = ReaderView()
+        view.isUserInteractionEnabled = false
+        view.onChange = onChange
+        return view
+    }
+
+    func updateUIView(_ uiView: ReaderView, context: Context) {
+        uiView.onChange = onChange
+    }
+
+    final class ReaderView: UIView {
+        var onChange: ((CGFloat) -> Void)?
+        private var reported: CGFloat?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            report()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            report()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            report()
+        }
+
+        private func report() {
+            guard let root = window?.rootViewController else { return }
+            let inset = root.view.safeAreaInsets.right
+            guard inset != reported else { return }
+            reported = inset
+            DispatchQueue.main.async { [weak self] in self?.onChange?(inset) }
+        }
     }
 }
 

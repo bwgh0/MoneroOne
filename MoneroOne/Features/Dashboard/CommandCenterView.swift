@@ -20,6 +20,7 @@ struct CommandCenterView: View {
     /// Where the back swipe holds All Transactions and the dashboard
     /// (1 = the split in place); nil when no finger holds them.
     @State private var swipeProgress: CGFloat?
+    @State private var slideClock = SlideFrameClock()
     /// All Transactions opens on this filter: Links from the balance
     /// card's open-link lines, else All.
     @State private var allTransactionsFilter: TransactionListView.FilterType = .all
@@ -49,11 +50,13 @@ struct CommandCenterView: View {
                 progress: swipeProgress ?? (showAllTransactions ? 1 : 0),
                 isOpen: showAllTransactions,
                 isMounted: isActivityMounted,
+                clock: slideClock,
                 width: width,
                 hiddenOffset: hiddenOffset,
                 selection: activitySelection,
                 onSwipe: followSwipe,
                 onSwipeEnd: endSwipe,
+                onSplitLaidOut: { slideClock.release() },
                 dashboard: dashboard,
                 split: activitySplit
             )
@@ -91,22 +94,57 @@ struct CommandCenterView: View {
     private func setActivityOpen(_ isOpen: Bool, selecting id: String? = nil) {
         if isOpen {
             activitySelection = id
-            if !isActivityMounted {
-                // The split is laid out first, out of sight; the slide starts
-                // on the next turn, so its first frame is not the slow one.
-                isActivityMounted = true
-                DispatchQueue.main.async { animateActivity(open: true) }
+            if !isActivityMounted && !reduceMotion {
+                // The split comes into the hierarchy out of sight, and the
+                // dashboard gives up taps and VoiceOver at the same time.
+                // The slide waits until the split has laid out: that turn
+                // is the slow one, and in the slide it held the third frame
+                // for 130 ms.
+                withTransaction(\.disablesAnimations, true) {
+                    swipeProgress = nil
+                    isActivityMounted = true
+                    showAllTransactions = true
+                }
+                slideClock.prepare(from: 0, to: 1) {}
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    // In case the split never reports its layout.
+                    slideClock.release()
+                }
                 return
             }
         }
         animateActivity(open: isOpen)
     }
 
+    /// The slide runs on its own frame clock at the display's top rate:
+    /// each frame sets the progress, as the finger does in the back swipe.
+    /// SwiftUI's own animation clock gave the slide 60 frames a second.
+    ///
+    /// All Transactions stays open until the back slide ends: the dashboard
+    /// takes taps and VoiceOver, and starts its checks, once the split is
+    /// out of sight. Done at the tap, that work held the first frame for
+    /// 80 ms on the iPhone Duo, and the slide skipped half its way.
     private func animateActivity(open isOpen: Bool) {
-        withAnimation(reduceMotion ? nil : .snappy(duration: 0.35), completionCriteria: .removed) {
+        guard !reduceMotion else {
+            slideClock.stop()
+            swipeProgress = nil
             showAllTransactions = isOpen
-        } completion: {
-            if !showAllTransactions { isActivityMounted = false }
+            isActivityMounted = isOpen
+            return
+        }
+        // A second tap while the split lays out: the open is on its way.
+        if isOpen && slideClock.isWaiting { return }
+        let from = slideClock.progress ?? swipeProgress ?? (showAllTransactions ? 1 : 0)
+        withTransaction(\.disablesAnimations, true) {
+            swipeProgress = nil
+            if isOpen { showAllTransactions = true }
+        }
+        slideClock.run(from: from, to: isOpen ? 1 : 0) {
+            guard !isOpen else { return }
+            withTransaction(\.disablesAnimations, true) {
+                showAllTransactions = false
+                isActivityMounted = false
+            }
         }
     }
 
@@ -116,6 +154,8 @@ struct CommandCenterView: View {
     /// release, and a long swipe showed black between the two.
     private func followSwipe(_ progress: CGFloat) {
         withTransaction(\.disablesAnimations, true) {
+            // The swipe starts in place, where the open's run ended.
+            slideClock.stop()
             swipeProgress = progress
         }
     }
@@ -506,6 +546,8 @@ private struct ActivitySlide<Dashboard: View, Split: View>: View, Animatable {
     /// Where the slide goes.
     let isOpen: Bool
     let isMounted: Bool
+    /// Holds both screens while it runs, in place of `progress`.
+    let clock: SlideFrameClock
     let width: CGFloat
     /// Past the trailing edge of the window, the Duo's side bar too.
     let hiddenOffset: CGFloat
@@ -513,16 +555,20 @@ private struct ActivitySlide<Dashboard: View, Split: View>: View, Animatable {
     /// The back swipe: the progress under the finger, then the release.
     let onSwipe: (CGFloat) -> Void
     let onSwipeEnd: (_ goesBack: Bool) -> Void
+    /// The split has laid out for the first time: the open may start.
+    let onSplitLaidOut: () -> Void
     let dashboard: Dashboard
     let split: Split
 
     var body: some View {
+        // Read here, so a frame of the clock updates this view alone.
+        let shown = clock.progress ?? progress
         ZStack {
             // The dashboard stays under the split, so back returns to it
             // as it was. It moves a third of a screen aside, as the page
             // under a navigation push does.
             dashboard
-                .offset(x: -width * 0.3 * progress)
+                .offset(x: -width * 0.3 * shown)
                 .allowsHitTesting(!isOpen)
                 .accessibilityHidden(isOpen)
             if isMounted {
@@ -531,12 +577,13 @@ private struct ActivitySlide<Dashboard: View, Split: View>: View, Animatable {
                 // Settings): nothing here or in the split sets it.
                 SlidingHost(
                     content: split,
-                    trailingOffset: hiddenOffset * (1 - progress),
+                    trailingOffset: hiddenOffset * (1 - shown),
                     isOpen: isOpen,
                     hiddenOffset: hiddenOffset,
                     selection: selection,
                     onSwipe: onSwipe,
-                    onSwipeEnd: onSwipeEnd
+                    onSwipeEnd: onSwipeEnd,
+                    onLaidOut: onSplitLaidOut
                 )
                 .ignoresSafeArea()
                 .allowsHitTesting(isOpen)
@@ -567,9 +614,12 @@ private struct SlidingHost<Content: View>: UIViewControllerRepresentable {
     let onSwipe: (CGFloat) -> Void
     /// The back swipe let go: true when it goes back to the dashboard.
     let onSwipeEnd: (_ goesBack: Bool) -> Void
+    /// The screen has laid out for the first time.
+    let onLaidOut: () -> Void
 
     func makeUIViewController(context: Context) -> SlidingHostController<Content> {
         let controller = SlidingHostController(rootView: content)
+        controller.onLaidOut = onLaidOut
         controller.edgeSign = edgeSign(context)
         // It comes in from the trailing edge, as a pushed screen does.
         controller.place(at: physical(hiddenOffset, context))
@@ -590,7 +640,9 @@ private struct SlidingHost<Content: View>: UIViewControllerRepresentable {
         controller.onSwipe = { travelled in onSwipe(1 - min(travelled / hiddenOffset, 1)) }
         controller.onSwipeEnd = onSwipeEnd
         controller.edgeSign = edgeSign(context)
-        // The back swipe starts once the screen is in place.
+        // The back swipe starts once the screen is in place, and the
+        // screen takes taps only there: not while it slides in or out, as
+        // under a navigation push or pop.
         controller.isOpen = isInPlace
         controller.place(at: physical(trailingOffset, context))
     }
@@ -605,9 +657,16 @@ private struct SlidingHost<Content: View>: UIViewControllerRepresentable {
 }
 
 private final class SlidingHostController<Content: View>: UIViewController, UIGestureRecognizerDelegate {
-    let host: UIHostingController<Content>
-    /// The screen is in place: the back swipe may start.
-    var isOpen = false
+    let host: LayoutReportingHost<Content>
+    /// The screen is in place: the back swipe may start, and it takes taps.
+    var isOpen = false {
+        didSet { (viewIfLoaded as? PassThroughView)?.takesTouches = isOpen }
+    }
+    /// The screen has laid out for the first time.
+    var onLaidOut: (() -> Void)? {
+        get { host.onFirstLayout }
+        set { host.onFirstLayout = newValue }
+    }
     /// The back swipe: points travelled toward the trailing edge.
     var onSwipe: ((CGFloat) -> Void)?
     /// The back swipe let go: true when it goes back to the dashboard.
@@ -628,7 +687,7 @@ private final class SlidingHostController<Content: View>: UIViewController, UIGe
     private lazy var backSwipe = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleBackSwipe(_:)))
 
     init(rootView: Content) {
-        host = UIHostingController(rootView: rootView)
+        host = LayoutReportingHost(rootView: rootView)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -636,7 +695,9 @@ private final class SlidingHostController<Content: View>: UIViewController, UIGe
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override func loadView() {
-        view = PassThroughView()
+        let view = PassThroughView()
+        view.takesTouches = isOpen
+        self.view = view
     }
 
     override func viewDidLoad() {
@@ -734,9 +795,135 @@ private final class SlidingHostController<Content: View>: UIViewController, UIGe
     }
 }
 
+/// Steps a slide along the open and close spring, one display frame at a
+/// time, at the display's top rate. SwiftUI's own animation of the slide
+/// ran at 60 Hz. Only the view that reads `progress` updates per frame.
+@Observable
+private final class SlideFrameClock {
+    /// Where the slide is on this frame, or where its last run ended;
+    /// nil once stopped.
+    private(set) var progress: CGFloat?
+    @ObservationIgnored private let spring = Spring.snappy(duration: 0.35)
+    @ObservationIgnored private var link: CADisplayLink?
+    @ObservationIgnored private var start: CFTimeInterval?
+    @ObservationIgnored private var lastFrame: CFTimeInterval?
+    @ObservationIgnored private var from: CGFloat = 0
+    @ObservationIgnored private var to: CGFloat = 0
+    @ObservationIgnored private var onEnd: (() -> Void)?
+
+    /// A prepared run holds its start until `release()`.
+    @ObservationIgnored private(set) var isWaiting = false
+
+    /// Starts from `from` with no speed. A run already going stops where
+    /// it is, and its end does not run.
+    func run(from: CGFloat, to: CGFloat, onEnd: @escaping () -> Void) {
+        prepare(from: from, to: to, onEnd: onEnd)
+        release()
+    }
+
+    /// Holds the slide at `from` until `release()`, then runs it as `run`
+    /// does.
+    func prepare(from: CGFloat, to: CGFloat, onEnd: @escaping () -> Void) {
+        link?.invalidate()
+        link = nil
+        self.from = from
+        self.to = to
+        self.onEnd = onEnd
+        start = nil
+        lastFrame = nil
+        isWaiting = true
+        progress = from
+    }
+
+    /// Starts the prepared run; nothing when none waits.
+    func release() {
+        guard isWaiting else { return }
+        isWaiting = false
+        let target = DisplayLinkTarget { [weak self] in self?.step($0) }
+        let link = CADisplayLink(target: target, selector: #selector(DisplayLinkTarget.frame(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    /// Lets go of the slide, and the end does not run.
+    func stop() {
+        link?.invalidate()
+        link = nil
+        onEnd = nil
+        isWaiting = false
+        if progress != nil { progress = nil }
+    }
+
+    private func step(_ link: CADisplayLink) {
+        // Time 0 is the frame before the first one the link gets: a slow
+        // turn before it delays the slide and skips none of it.
+        var start = start ?? link.timestamp
+        // A slow turn during the slide holds it too: it goes on one frame
+        // further, and skips none of its way.
+        let frame = link.targetTimestamp - link.timestamp
+        if let lastFrame, link.timestamp - lastFrame > frame * 1.5 {
+            start += link.timestamp - lastFrame - frame
+        }
+        self.start = start
+        lastFrame = link.timestamp
+        // Where the slide is when this frame shows.
+        let time = link.targetTimestamp - start
+        // At rest when the spring is within a point of the end: its last
+        // tenths of a second move nothing.
+        let isAtRest = time >= spring.settlingDuration
+            || (time > spring.duration
+                && abs(spring.value(target: 1.0, time: time) - 1) < 0.0005
+                && abs(spring.velocity(target: 1.0, time: time)) < 0.01)
+        if isAtRest {
+            link.invalidate()
+            self.link = nil
+            // It holds the end: cleared, the slide would show where the
+            // state says, and an update can read the state from before
+            // the end.
+            progress = to
+            let onEnd = onEnd
+            self.onEnd = nil
+            onEnd?()
+        } else {
+            progress = from + (to - from) * CGFloat(spring.value(target: 1.0, time: time))
+        }
+    }
+}
+
+/// Reports the first layout of its screen, once it is in a window: SwiftUI
+/// draws the screen in that pass, the slow one of the open.
+private final class LayoutReportingHost<Content: View>: UIHostingController<Content> {
+    var onFirstLayout: (() -> Void)?
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard view.window != nil, !view.bounds.isEmpty, let onFirstLayout else { return }
+        self.onFirstLayout = nil
+        onFirstLayout()
+    }
+}
+
+/// A display link's target: the link holds it, not the clock.
+private final class DisplayLinkTarget: NSObject {
+    let onFrame: (CADisplayLink) -> Void
+
+    init(_ onFrame: @escaping (CADisplayLink) -> Void) {
+        self.onFrame = onFrame
+    }
+
+    @objc func frame(_ link: CADisplayLink) {
+        onFrame(link)
+    }
+}
+
 /// Lets touches through where the hosted screen is not.
 private final class PassThroughView: UIView {
+    /// False while the screen slides: no touch reaches it.
+    var takesTouches = true
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard takesTouches else { return nil }
         let hit = super.hitTest(point, with: event)
         return hit === self ? nil : hit
     }

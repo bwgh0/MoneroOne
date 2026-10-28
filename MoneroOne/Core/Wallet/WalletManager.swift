@@ -1511,6 +1511,7 @@ class WalletManager: ObservableObject {
         guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
         let dir = appSupport.appendingPathComponent("MoneroKit").appendingPathComponent(walletId)
         try? fm.removeItem(at: dir)
+        keychain.deleteWalletFilePassword(cacheId: walletId, folder: dir)
     }
 
     private func cleanOrphanedWalletCaches() {
@@ -1531,7 +1532,9 @@ class WalletManager: ObservableObject {
             allWalletIdsKnown: allIdsKnown
         )
         for name in doomed {
-            try? fileManager.removeItem(at: moneroKitDir.appendingPathComponent(name))
+            let dir = moneroKitDir.appendingPathComponent(name)
+            try? fileManager.removeItem(at: dir)
+            keychain.deleteWalletFilePassword(cacheId: name, folder: dir)
         }
     }
 
@@ -3976,6 +3979,7 @@ class WalletManager: ObservableObject {
                 .appendingPathComponent("MoneroKit")
                 .appendingPathComponent(walletCacheId)
             try? fileManager.removeItem(at: walletCacheDir)
+            keychain.deleteWalletFilePassword(cacheId: walletCacheId, folder: walletCacheDir)
         }
 
         // Legacy junk locations from old builds — never held per-wallet

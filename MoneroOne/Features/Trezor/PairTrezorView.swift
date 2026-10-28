@@ -719,5 +719,6 @@ struct PairTrezorView: View {
         let path = appSupport.appendingPathComponent("MoneroKit/\(id)")
         guard fm.fileExists(atPath: path.path) else { return }
         try? fm.removeItem(at: path)
+        KeychainStorage().deleteWalletFilePassword(cacheId: id, folder: path)
     }
 }

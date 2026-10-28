@@ -445,6 +445,9 @@ final class EnvelopeRuntime: ObservableObject {
             guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
                 .appendingPathComponent("MoneroKit/envelopes", isDirectory: true) else { return }
             try? FileManager.default.removeItem(at: dir)
+            if !FileManager.default.fileExists(atPath: dir.path) {
+                KeychainStorage().deleteWalletFilePasswords(cacheIdPrefix: Self.cacheId(for: ""))
+            }
         }
     }
 
@@ -638,6 +641,7 @@ final class EnvelopeRuntime: ObservableObject {
     private static func removeFiles(id: String) {
         guard EnvelopeLink.isEnvelopeId(id), let dir = directory(for: id) else { return }
         try? FileManager.default.removeItem(at: dir)
+        KeychainStorage().deleteWalletFilePassword(cacheId: cacheId(for: id), folder: dir)
     }
 
     nonisolated static func directory(for id: String) -> URL? {

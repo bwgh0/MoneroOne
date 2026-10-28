@@ -2666,7 +2666,9 @@ final class StoredHistoryAtOpenRegressionTests: XCTestCase {
     override func tearDown() async throws {
         guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
         for id in walletIds {
-            try? FileManager.default.removeItem(at: support.appendingPathComponent("MoneroKit/\(id)"))
+            let dir = support.appendingPathComponent("MoneroKit/\(id)")
+            try? FileManager.default.removeItem(at: dir)
+            KeychainStorage().deleteWalletFilePassword(cacheId: id, folder: dir)
         }
     }
 
@@ -2697,6 +2699,7 @@ final class StoredHistoryAtOpenRegressionTests: XCTestCase {
             wallet: MoneroWallet.kitCredentials(for: seed),
             account: 0,
             walletId: walletId,
+            walletPassword: try KeychainStorage().walletFilePassword(cacheId: walletId),
             node: closedNode,
             networkType: .mainnet,
             reachabilityManager: ReachabilityManager(),

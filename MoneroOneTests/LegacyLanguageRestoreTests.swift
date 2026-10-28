@@ -158,6 +158,7 @@ final class LegacyLanguageRestoreTests: XCTestCase {
             account: 0,
             restoreHeight: 0,
             walletId: walletId,
+            walletPassword: try KeychainStorage.randomWalletFilePassword(),
             node: MoneroKit.Node(url: URL(string: "https://node.monero.one:443")!, isTrusted: false),
             networkType: .mainnet,
             reachabilityManager: ReachabilityManager(),

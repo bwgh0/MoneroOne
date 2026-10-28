@@ -21,6 +21,8 @@ struct WalletInfo: Identifiable, Codable, Equatable {
     /// to detect duplicate-seed adds without needing the PIN to decrypt.
     /// Optional for backwards compatibility: wallets created before this
     /// field existed have `nil` and get populated lazily on first unlock.
+    /// It names the cache folder only. The `.keys` password is a separate
+    /// Keychain secret (`KeychainStorage.walletFilePassword(cacheId:)`).
     var derivedWalletId: String?
 
     /// Sidecar wallet2 cache identifier for hardware-backed wallets.

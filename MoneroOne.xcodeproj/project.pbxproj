@@ -122,6 +122,7 @@
 		5AB0AD000000000000000B01 /* ReceiveAddressLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB0AD000000000000000F01 /* ReceiveAddressLogic.swift */; };
 		D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */; };
 		CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */; };
+		D1A7F11E5EC2E7000000B001 /* WalletFilePasswordTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A7F11E5EC2E7000000F001 /* WalletFilePasswordTests.swift */; };
 		CAC4E1D0000000000000D10T /* AuditRemediationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */; };
 		CAC4E1D0000000000000D30T /* GethashesDeviceDiagTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC4E1D0000000000000D40T /* GethashesDeviceDiagTests.swift */; };
 		D78301AFEE705847B38A55DD /* TrustedLocationSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB1E04CE3B83B39E5C3DF4B /* TrustedLocationSyncManager.swift */; };
@@ -361,6 +362,7 @@
 		D928C0A10000000000000002 /* ChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartView.swift; sourceTree = "<group>"; };
 		B003C65E30BA3A6A3A0334C3 /* AmountFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmountFormattingTests.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCacheIdTests.swift; sourceTree = "<group>"; };
+		D1A7F11E5EC2E7000000F001 /* WalletFilePasswordTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletFilePasswordTests.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000D20T /* AuditRemediationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRemediationTests.swift; sourceTree = "<group>"; };
 		CAC4E1D0000000000000D40T /* GethashesDeviceDiagTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GethashesDeviceDiagTests.swift; sourceTree = "<group>"; };
 		B03E2005118D429FE332C194 /* NodeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeSettingsView.swift; sourceTree = "<group>"; };
@@ -533,6 +535,7 @@
 				9698D5ECB87A0302392684C6 /* WalletIntegrationTests.swift */,
 				84E684EE43DA20220CE2D58B /* WalletManagerTests.swift */,
 				CAC4E1D0000000000000F11E /* WalletCacheIdTests.swift */,
+				D1A7F11E5EC2E7000000F001 /* WalletFilePasswordTests.swift */,
 				9A7E1C0D00FF00000000F0FF /* PaymentLinkTests.swift */,
 				9A7E1C0D00FE00000000F0FE /* PaymentLinkV2Tests.swift */,
 				9A7E1C0D00FD00000000F0FD /* PaymentLinkActivityTests.swift */,
@@ -1148,6 +1151,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				5E7D70000000000000000B03 /* SendRecordStoreTests.swift in Sources */,
 				5E7D70000000000000000B05 /* ContactStoreTests.swift in Sources */,
 				CAC4E1D0000000000000B01D /* WalletCacheIdTests.swift in Sources */,
+				D1A7F11E5EC2E7000000B001 /* WalletFilePasswordTests.swift in Sources */,
 				9A7E1C0D00FF00000000B0FF /* PaymentLinkTests.swift in Sources */,
 				9A7E1C0D00FE00000000B0FE /* PaymentLinkV2Tests.swift in Sources */,
 				9A7E1C0D00FD00000000B0FD /* PaymentLinkActivityTests.swift in Sources */,

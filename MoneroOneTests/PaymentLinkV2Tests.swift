@@ -348,6 +348,7 @@ final class PaymentLinkV2Tests: XCTestCase {
             .appendingPathComponent("MoneroKit", isDirectory: true)
             .appendingPathComponent(cacheId, isDirectory: true) {
             try? FileManager.default.removeItem(at: dir)
+            KeychainStorage().deleteWalletFilePassword(cacheId: cacheId, folder: dir)
         }
         return try XCTUnwrap(address.isEmpty ? nil : address, "the kit gave no address")
     }

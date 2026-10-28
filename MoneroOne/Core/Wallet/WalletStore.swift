@@ -1,7 +1,14 @@
 import Foundation
 
 /// Persists wallet list and active wallet ID in UserDefaults.
-/// Seeds stay in keychain — this only stores non-sensitive metadata.
+/// Seeds, view keys and wallet file passwords stay in the Keychain. This
+/// plist is readable by anyone with the app's container, and it is not
+/// free of sensitive data: `cachedPrimaryAddress` and `cachedBalance` link
+/// an address to a balance, and `derivedWalletId` / `deviceWalletId` name
+/// each wallet's MoneroKit folder. Builds before the wallet file password
+/// fix also used that id as the `.keys` password (see
+/// docs/wallet-keys-password.md); MoneroKit re-keys such a file to the
+/// Keychain password the first time it opens it.
 struct WalletStore {
     private static let walletsKey = "one.monero.walletStore.wallets"
     private static let activeWalletIdKey = "one.monero.walletStore.activeWalletId"

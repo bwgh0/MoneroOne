@@ -84,6 +84,7 @@ class MoneroWallet: ObservableObject {
                 account: 0,
                 restoreHeight: restoreHeight,
                 walletId: walletId,
+                walletPassword: try KeychainStorage().walletFilePassword(cacheId: walletId),
                 node: walletNode,
                 networkType: networkType,
                 reachabilityManager: reachability,
@@ -135,6 +136,7 @@ class MoneroWallet: ObservableObject {
                 account: 0,
                 restoreHeight: restoreHeight,
                 walletId: walletId,
+                walletPassword: try KeychainStorage().walletFilePassword(cacheId: walletId),
                 node: walletNode,
                 networkType: networkType,
                 reachabilityManager: reachability,
@@ -164,6 +166,7 @@ class MoneroWallet: ObservableObject {
                 account: 0,
                 restoreHeight: restoreHeight,
                 walletId: walletId,
+                walletPassword: try KeychainStorage().walletFilePassword(cacheId: walletId),
                 node: walletNode,
                 networkType: networkType,
                 reachabilityManager: reachability,
@@ -206,6 +209,9 @@ class MoneroWallet: ObservableObject {
                 account: 0,
                 restoreHeight: 0,
                 walletId: probeId,
+                // The probe's files are deleted below: a password that is
+                // never stored is enough.
+                walletPassword: try KeychainStorage.randomWalletFilePassword(),
                 node: walletNode,
                 networkType: networkType,
                 reachabilityManager: reachability,

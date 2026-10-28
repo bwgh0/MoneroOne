@@ -704,6 +704,124 @@ class KeychainStorage {
         }
     }
 
+    // MARK: - Wallet file passwords
+
+    /// One item per wallet2 file set: the account is its cache id, the
+    /// folder name under `Application Support/MoneroKit`.
+    static let walletFilePasswordService = "one.monero.MoneroOne.walletFilePassword"
+
+    /// The password of the wallet2 `.keys` file in `MoneroKit/<cacheId>`,
+    /// which holds the private spend key. It is 32 random bytes as 64 hex
+    /// characters and lives only here (ThisDeviceOnly, so no backup or
+    /// iCloud Keychain carries it). Older builds used the cache id itself,
+    /// which is the folder name and sits in UserDefaults; MoneroKit re-keys
+    /// such a file to this password when it opens it.
+    ///
+    /// Fails closed: when no stored password can be read back, this throws
+    /// and the wallet does not open. A locked Keychain (before the first
+    /// unlock after a restart) also throws, so a password that exists is
+    /// never replaced by a new one.
+    func walletFilePassword(cacheId: String) throws -> String {
+        switch readWalletFilePassword(cacheId: cacheId) {
+        case .found(let password):
+            return password
+        case .failed:
+            throw KeychainError.saveFailed
+        case .notFound:
+            break
+        }
+
+        let password = try Self.randomWalletFilePassword()
+        var query = walletFilePasswordQuery(cacheId: cacheId)
+        query[kSecValueData as String] = Data(password.utf8)
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess || status == errSecDuplicateItem else {
+            throw KeychainError.saveFailed
+        }
+        // Read it back, and use what the Keychain holds: a wallet file must
+        // never be encrypted with a password the Keychain does not have.
+        // After errSecDuplicateItem (another open saved one first) that is
+        // the other password.
+        guard case .found(let stored) = readWalletFilePassword(cacheId: cacheId) else {
+            throw KeychainError.saveFailed
+        }
+        return stored
+    }
+
+    /// 32 random bytes from `SecRandomCopyBytes` as 64 lowercase hex
+    /// characters. Throws when the system generator fails.
+    static func randomWalletFilePassword() throws -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        defer { bytes.withUnsafeMutableBytes { memset($0.baseAddress, 0, $0.count) } }
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
+            throw KeychainError.encryptionFailed
+        }
+        return bytes.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Delete the password of `cacheId` once its folder is gone. While any
+    /// file of it is still on disk, the password stays.
+    func deleteWalletFilePassword(cacheId: String, folder: URL) {
+        guard !FileManager.default.fileExists(atPath: folder.path) else { return }
+        SecItemDelete(walletFilePasswordQuery(cacheId: cacheId) as CFDictionary)
+    }
+
+    /// Delete the passwords of every cache id that starts with `prefix`
+    /// (payment-link envelopes: "envelopes/"). Only for a caller that has
+    /// just deleted all of those folders.
+    func deleteWalletFilePasswords(cacheIdPrefix prefix: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Self.walletFilePasswordService,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]] else { return }
+        for item in items {
+            guard let account = item[kSecAttrAccount as String] as? String, account.hasPrefix(prefix) else { continue }
+            SecItemDelete(walletFilePasswordQuery(cacheId: account) as CFDictionary)
+        }
+    }
+
+    private enum WalletFilePasswordRead {
+        case found(String)
+        case notFound
+        case failed
+    }
+
+    /// Only `errSecItemNotFound` counts as missing (see `itemIsMissing`).
+    /// A stored value that is not 64 hex characters counts as failed, not
+    /// missing, so it is never replaced.
+    private func readWalletFilePassword(cacheId: String) -> WalletFilePasswordRead {
+        var query = walletFilePasswordQuery(cacheId: cacheId)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data,
+                  let password = String(data: data, encoding: .utf8),
+                  password.count == 64, password.allSatisfy(\.isHexDigit) else { return .failed }
+            return .found(password)
+        case errSecItemNotFound:
+            return .notFound
+        default:
+            return .failed
+        }
+    }
+
+    private func walletFilePasswordQuery(cacheId: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Self.walletFilePasswordService,
+            kSecAttrAccount as String: cacheId
+        ]
+    }
+
     // MARK: - Keychain Helpers
 
     private func saveKeychainItem(account: String, data: Data) throws {

@@ -46,7 +46,7 @@ final class UsernameTests: XCTestCase {
     return UsernameRegistry(
       configuration: UsernameConfiguration(
         url: URL(string: "http://localhost:8787")!, registrarKey: f["key"]!,
-        rulesHash: f["rulesHash"]!), session: URLSession(configuration: config),
+        rulesHash: f["rulesHash"]!, termsVersion: "test-terms-v1"), session: URLSession(configuration: config),
       deviceTokens: tokens, allowDevProof: allowDevProof)
   }
   private func claim(
@@ -214,6 +214,7 @@ final class UsernameTests: XCTestCase {
     var made = 0
     var signed = 0
     var claimNonce: String?
+    var claimTerms: String?
     UsernameURLProtocol.handler = { [info, f] request in
       switch (request.httpMethod ?? "GET", request.url?.path ?? "") {
       case ("GET", "/v1/handles/alice"): return (404, ["error": ["code": "handle.not_found"]])
@@ -222,6 +223,7 @@ final class UsernameTests: XCTestCase {
       case ("POST", "/v1/nonce"): return (200, ["nonce": nonce])
       case ("POST", "/v1/claims"):
         claimNonce = UsernameURLProtocol.body(request)["nonce"] as? String
+        claimTerms = UsernameURLProtocol.body(request)["terms_version"] as? String
         return (409, ["error": ["code": "name.unavailable"]])
       default:
         XCTFail("Unexpected request \(request.url?.path ?? "")")
@@ -246,6 +248,7 @@ final class UsernameTests: XCTestCase {
     XCTAssertEqual(made, 1)
     XCTAssertEqual(signed, 1)
     XCTAssertEqual(claimNonce, nonce)
+    XCTAssertEqual(claimTerms, "test-terms-v1")
     XCTAssertNil(store.state.pending)
     XCTAssertTrue(store.state.bindings.isEmpty)
   }
@@ -800,6 +803,103 @@ final class UsernameTests: XCTestCase {
     ] {
       XCTAssertFalse(UsernameConfiguration.isDebugURL(URL(string: raw)!), raw)
     }
+  }
+  func testReleaseURLIsOnlyTheProductionRegistryOrMirrorOverHTTPS() {
+    for raw in ["https://registry.monero.one", "https://mirror.monero.one/oah/v1/", "https://Registry.Monero.One"] {
+      XCTAssertTrue(UsernameConfiguration.allows(URL(string: raw)!, debug: false), raw)
+    }
+    for raw in [
+      "http://registry.monero.one", "https://registry.monero.one:8443", "https://staging-registry.monero.one",
+      "https://staging-mirror.monero.one/oah/v1/", "http://localhost:8787", "https://localhost:8787",
+      "https://mac.example-tailnet.ts.net", "https://registry.monero.one.example.com", "https://monero.one",
+      "https://user@registry.monero.one", "https://registry.monero.one?debug=1", "https://registry.monero.one#x",
+    ] {
+      XCTAssertFalse(UsernameConfiguration.allows(URL(string: raw)!, debug: false), raw)
+    }
+    XCTAssertFalse(UsernameConfiguration.allows(URL(string: "https://registry.monero.one")!, debug: true))
+    XCTAssertFalse(UsernameConfiguration.allows(URL(string: "https://staging-registry.monero.one:444")!, debug: true))
+  }
+  func testReleaseBuildValuesAreProductionAndMakeAWorkingConfiguration() throws {
+    let values = UsernameEnvironment.production
+    let configuration = try XCTUnwrap(UsernameResolutionConfiguration.make(values, debug: false))
+    XCTAssertEqual(configuration.registry.url.absoluteString, "https://registry.monero.one")
+    XCTAssertEqual(configuration.mirror.absoluteString, "https://mirror.monero.one/oah/v1/")
+    XCTAssertEqual(configuration.genesisRoot, "37c80669fb410913857b678d9aea9a54c5344fe152c0fb247549040d05477f26")
+    XCTAssertEqual(
+      configuration.registry.registrarKey, "40f69d3b401370c38c6f0b62976a688fd44b56abe22be66168b1f9a44822a988")
+    XCTAssertEqual(
+      configuration.registry.rulesHash, "b775ea7a655fd01c57820f09d08a421e51b0739240fbd940f399e65bd6fcdeac")
+    XCTAssertEqual(configuration.registry.termsVersion, "terms-pending-v1")
+    XCTAssertEqual(configuration.origin, "monero.one/oah")
+    // A debug build never reaches production, and a release build never reaches staging.
+    XCTAssertNil(UsernameConfiguration.make(values, debug: true))
+    XCTAssertNil(UsernameResolutionConfiguration.make(.staging, debug: false))
+  }
+  func testDebugBuildDefaultsToStagingAndTheLaunchEnvironmentOverridesEachValue() throws {
+    let staging = try XCTUnwrap(UsernameResolutionConfiguration.make(.staging, debug: true))
+    XCTAssertEqual(staging.registry.url.absoluteString, "https://staging-registry.monero.one")
+    XCTAssertEqual(staging.mirror.absoluteString, "https://staging-mirror.monero.one/oah/v1/")
+    XCTAssertEqual(staging.genesisRoot, "f0f5024f667e6957ce56d0a746a358b5bae36f7772dd56a0dd489a66a85e815e")
+    XCTAssertEqual(staging.registry.termsVersion, "local-development-v1")
+    XCTAssertEqual(UsernameEnvironment.staging.overridden(by: [:]), .staging)
+
+    let local = UsernameEnvironment.staging.overridden(by: [
+      "USERNAME_REGISTRY_URL": "http://localhost:8787", "USERNAME_MIRROR_URL": "http://localhost:8788/oah/v1/",
+      "USERNAME_GENESIS_ROOT": String(repeating: "1", count: 64),
+      "USERNAME_REGISTRAR_KEY": String(repeating: "2", count: 64),
+      "USERNAME_RULES_HASH": String(repeating: "3", count: 64), "USERNAME_TERMS_VERSION": "local-test-v2",
+    ])
+    let configuration = try XCTUnwrap(UsernameResolutionConfiguration.make(local, debug: true))
+    XCTAssertEqual(configuration.registry.url.absoluteString, "http://localhost:8787")
+    XCTAssertEqual(configuration.mirror.absoluteString, "http://localhost:8788/oah/v1/")
+    XCTAssertEqual(configuration.genesisRoot, String(repeating: "1", count: 64))
+    XCTAssertEqual(configuration.registry.registrarKey, String(repeating: "2", count: 64))
+    XCTAssertEqual(configuration.registry.rulesHash, String(repeating: "3", count: 64))
+    XCTAssertEqual(configuration.registry.termsVersion, "local-test-v2")
+    // A local registry still cannot reach a release build.
+    XCTAssertNil(UsernameConfiguration.make(local, debug: false))
+
+    let one = UsernameEnvironment.staging.overridden(by: ["USERNAME_REGISTRY_URL": "https://mac.example.ts.net"])
+    XCTAssertEqual(one.registryURL, "https://mac.example.ts.net")
+    XCTAssertEqual(one.mirrorURL, UsernameEnvironment.staging.mirrorURL)
+  }
+  func testConfigurationRefusesBadValues() {
+    var values = UsernameEnvironment.staging
+    XCTAssertNotNil(UsernameResolutionConfiguration.make(values, debug: true))
+    for change: (inout UsernameEnvironment) -> Void in [
+      { $0.registrarKey = String(repeating: "A", count: 64) }, { $0.rulesHash = String(repeating: "b", count: 63) },
+      { $0.genesisRoot = String(repeating: "g", count: 64) }, { $0.termsVersion = "" },
+      { $0.termsVersion = "terms pending" }, { $0.termsVersion = String(repeating: "t", count: 65) },
+      { $0.registryURL = "" }, { $0.mirrorURL = "https://example.com/oah/v1/" },
+      { $0.mirrorURL = $0.registryURL },
+    ] {
+      values = .staging
+      change(&values)
+      XCTAssertNil(UsernameResolutionConfiguration.make(values, debug: true))
+    }
+  }
+  func testTestResetClearsTheSavedStateAndCanKeepTheDeviceID() throws {
+    let memory = UsernameMemory()
+    let store = UsernameStore(persistence: memory)
+    try store.savePending(pending())
+    let deviceID = memory.state.deviceID
+    memory.state.bindings = [binding()]
+    memory.state.nextFreeClaim = .distantFuture
+
+    UsernameStore.applyTestReset(nil, to: memory)
+    UsernameStore.applyTestReset("0", to: memory)
+    XCTAssertEqual(memory.state.bindings.count, 1)
+
+    UsernameStore.applyTestReset("keep-device", to: memory)
+    XCTAssertTrue(memory.state.bindings.isEmpty)
+    XCTAssertNil(memory.state.pending)
+    XCTAssertNil(memory.state.nextFreeClaim)
+    XCTAssertEqual(memory.state.deviceID, deviceID)
+
+    memory.state.bindings = [binding()]
+    UsernameStore.applyTestReset("1", to: memory)
+    XCTAssertTrue(memory.state.bindings.isEmpty)
+    XCTAssertNotEqual(memory.state.deviceID, deviceID)
   }
 }
 

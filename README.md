@@ -59,11 +59,16 @@ OAH_REPO=/path/to/oah bash scripts/build-oah-ios.sh
 
 The generated XCFramework is ignored by Git. The simulator slice is arm64, matching the existing MoneroKit binary. The local OAH repository must contain `crates/oah-mobile` (`feature/mobile-claim`). Do not regenerate the Xcode project; its package and file references are maintained directly.
 
-Debug builds offer registration only with these explicit environment variables:
+Release builds talk only to the production registry (`https://registry.monero.one`) and mirror (`https://mirror.monero.one/oah/v1/`), with the pins in `UsernameEnvironment.production` (UsernameRegistry.swift). Debug builds use the staging registry and mirror by default and never reach production. To test against a local registry, set these launch environment variables; each one replaces its staging value:
 
 - `USERNAME_REGISTRY_URL=http://localhost:8787`
+- `USERNAME_MIRROR_URL=<the local mirror URL>`
+- `USERNAME_GENESIS_ROOT=<64 lowercase hex, the local epoch 0 root>`
 - `USERNAME_REGISTRAR_KEY=<64 lowercase hex, pinned from the local registry setup>`
 - `USERNAME_RULES_HASH=<64 lowercase hex, pinned from the local rules>`
+- `USERNAME_TERMS_VERSION=<optional, sent as terms_version>`
+
+`USERNAME_TEST_RESET=1` (debug builds only) starts the app with no saved usernames and a new device ID; `keep-device` keeps the device ID.
 
 Initialize the local registry using its README, including its development epoch 0. The app checks those pins against `/v1/info` and the canonical rules; fetching an untrusted key is not a substitute for supplying the expected pin. The production build cannot enable this local device-proof implementation. Home and Welcome make no eligibility or username requests; network work begins at the final Claim tap.
 

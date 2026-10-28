@@ -27,39 +27,113 @@ enum UsernameFailure: Error, LocalizedError {
   }
 }
 
+/// The public values of one registry and its mirror (no secrets). Release
+/// builds use `production`; debug builds use `staging` unless the launch
+/// environment overrides a value (`USERNAME_*`, for a local registry).
+struct UsernameEnvironment: Equatable {
+  var registryURL: String
+  var mirrorURL: String
+  var genesisRoot: String
+  var registrarKey: String
+  var rulesHash: String
+  var termsVersion: String
+  var origin = "monero.one/oah"
+
+  static let production = UsernameEnvironment(
+    registryURL: "https://registry.monero.one",
+    mirrorURL: "https://mirror.monero.one/oah/v1/",
+    genesisRoot: "37c80669fb410913857b678d9aea9a54c5344fe152c0fb247549040d05477f26",
+    registrarKey: "40f69d3b401370c38c6f0b62976a688fd44b56abe22be66168b1f9a44822a988",
+    rulesHash: "b775ea7a655fd01c57820f09d08a421e51b0739240fbd940f399e65bd6fcdeac",
+    // Placeholder until the terms text exists. Replace it before a release ships.
+    termsVersion: "terms-pending-v1")
+
+  static let staging = UsernameEnvironment(
+    registryURL: "https://staging-registry.monero.one",
+    mirrorURL: "https://staging-mirror.monero.one/oah/v1/",
+    genesisRoot: "f0f5024f667e6957ce56d0a746a358b5bae36f7772dd56a0dd489a66a85e815e",
+    registrarKey: "809d48344049bab6e37503094af5b3a947184ee0be45b304305d7c916d1588e2",
+    rulesHash: "b775ea7a655fd01c57820f09d08a421e51b0739240fbd940f399e65bd6fcdeac",
+    termsVersion: "local-development-v1")
+
+  /// This build's values. Release builds ignore the launch environment.
+  static var build: UsernameEnvironment {
+    #if DEBUG
+      staging.overridden(by: ProcessInfo.processInfo.environment)
+    #else
+      production
+    #endif
+  }
+
+  /// Each `USERNAME_*` variable that is set replaces its one value.
+  func overridden(by env: [String: String]) -> UsernameEnvironment {
+    var values = self
+    if let value = env["USERNAME_REGISTRY_URL"] { values.registryURL = value }
+    if let value = env["USERNAME_MIRROR_URL"] { values.mirrorURL = value }
+    if let value = env["USERNAME_GENESIS_ROOT"] { values.genesisRoot = value }
+    if let value = env["USERNAME_REGISTRAR_KEY"] { values.registrarKey = value }
+    if let value = env["USERNAME_RULES_HASH"] { values.rulesHash = value }
+    if let value = env["USERNAME_TERMS_VERSION"] { values.termsVersion = value }
+    return values
+  }
+
+  static func isHex64(_ value: String) -> Bool {
+    value.utf8.count == 64 && value.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
+  }
+}
+
 struct UsernameConfiguration {
   let url: URL
   let registrarKey: String
   let rulesHash: String
-  /// No production registry is configured yet. This explicit local
-  /// development configuration cannot enable public claims in a release.
-  static var current: UsernameConfiguration? {
-    #if DEBUG
-      let env = ProcessInfo.processInfo.environment
-      guard let raw = env["USERNAME_REGISTRY_URL"], let url = URL(string: raw), isDebugURL(url),
-        let key = env["USERNAME_REGISTRAR_KEY"], key.count == 64,
-        let rules = env["USERNAME_RULES_HASH"], rules.count == 64
-      else { return nil }
-      return UsernameConfiguration(url: url, registrarKey: key, rulesHash: rules)
-    #else
-      return nil
-    #endif
+  /// Sent as `terms_version` with each claim.
+  let termsVersion: String
+
+  #if DEBUG
+    static let isDebugBuild = true
+  #else
+    static let isDebugBuild = false
+  #endif
+
+  /// The registry this build talks to, or nil when a value is not valid.
+  static var current: UsernameConfiguration? { make(UsernameEnvironment.build, debug: isDebugBuild) }
+
+  static func make(_ values: UsernameEnvironment, debug: Bool) -> UsernameConfiguration? {
+    guard let url = URL(string: values.registryURL), allows(url, debug: debug),
+      UsernameEnvironment.isHex64(values.registrarKey), UsernameEnvironment.isHex64(values.rulesHash),
+      (1...64).contains(values.termsVersion.utf8.count),
+      values.termsVersion.utf8.allSatisfy({ (33...126).contains($0) })
+    else { return nil }
+    return UsernameConfiguration(
+      url: url, registrarKey: values.registrarKey, rulesHash: values.rulesHash, termsVersion: values.termsVersion)
   }
+
+  /// Release builds reach only the production registry and mirror over
+  /// HTTPS. Debug builds reach only the hosts in `isDebugURL`, never production.
+  static func allows(_ url: URL, debug: Bool) -> Bool {
+    if debug { return isDebugURL(url) }
+    guard url.user == nil, url.password == nil, url.query == nil, url.fragment == nil, url.port == nil,
+      url.scheme?.lowercased() == "https", let host = url.host?.lowercased()
+    else { return false }
+    return productionHosts.contains(host)
+  }
+
   /// Debug builds talk to a registry on this machine, to one on the developer's
   /// private Tailscale network over HTTPS, for tests on a real phone, or to the
   /// staging registry and its mirror.
   static func isDebugURL(_ url: URL) -> Bool {
     guard url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
-      let scheme = url.scheme, let host = url.host
+      let scheme = url.scheme?.lowercased(), let host = url.host
     else { return false }
     if host == "localhost" { return ["http", "https"].contains(scheme) }
-    if stagingHosts.contains(host.lowercased()) { return scheme == "https" }
+    if stagingHosts.contains(host.lowercased()) { return scheme == "https" && url.port == nil }
     let labels = host.lowercased().split(separator: ".", omittingEmptySubsequences: false)
     return scheme == "https" && labels.count >= 3 && labels.suffix(2) == ["ts", "net"]
       && labels.allSatisfy { label in
         !label.isEmpty && label.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 45 }
       }
   }
+  private static let productionHosts: Set<String> = ["registry.monero.one", "mirror.monero.one"]
   private static let stagingHosts: Set<String> = ["staging-registry.monero.one", "staging-mirror.monero.one"]
 }
 
@@ -435,7 +509,7 @@ final class UsernameRegistry {
             "nonce": pending.nonce,
             "record": pending.unsignedRecord, "owner_signature": pending.ownerSignature,
             "device": device,
-            "terms_version": "local-development-v1",
+            "terms_version": configuration.termsVersion,
           ]))
       guard response["handle"] as? String == pending.handle,
         let record = response["record"] as? String

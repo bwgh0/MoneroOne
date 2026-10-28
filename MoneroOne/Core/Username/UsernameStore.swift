@@ -130,8 +130,29 @@ final class UsernameStore: ObservableObject {
 
   init(persistence: UsernamePersistence = UsernameKeychain()) {
     self.persistence = persistence
+    #if DEBUG
+      Self.applyTestReset(ProcessInfo.processInfo.environment["USERNAME_TEST_RESET"], to: persistence)
+    #endif
     reload()
   }
+  #if DEBUG
+    /// Test hook, debug builds only (release builds compile it out). The
+    /// launch environment variable `USERNAME_TEST_RESET` starts the app with
+    /// no saved usernames, so one test phone can claim again:
+    /// - `1` clears the claims, the pending claim, the free-claim date and
+    ///   the device ID (the registry sees a new phone).
+    /// - `keep-device` clears the same but keeps the device ID (the registry
+    ///   sees the same phone, to test `noFreeClaim`).
+    /// Any other value changes nothing.
+    static func applyTestReset(_ mode: String?, to persistence: UsernamePersistence) {
+      guard mode == "1" || mode == "keep-device" else { return }
+      var cleared = UsernameLocalState()
+      if mode == "keep-device", let deviceID = (try? persistence.read())?.deviceID {
+        cleared.deviceID = deviceID
+      }
+      try? persistence.write(cleared)
+    }
+  #endif
   func reload() {
     do {
       state = try persistence.read()

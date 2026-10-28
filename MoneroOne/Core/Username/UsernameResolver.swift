@@ -87,20 +87,14 @@ struct UsernameResolutionConfiguration {
   let mirror: URL
   let genesisRoot: String
   var origin = "monero.one/oah"
-  static var current: Self? {
-    #if DEBUG
-      let env = ProcessInfo.processInfo.environment
-      guard let registry = UsernameConfiguration.current,
-        let raw = env["USERNAME_MIRROR_URL"], let mirror = URL(string: raw),
-        UsernameConfiguration.isDebugURL(mirror),
-        mirror != registry.url,
-        let root = env["USERNAME_GENESIS_ROOT"], root.count == 64,
-        root.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })
-      else { return nil }
-      return Self(registry: registry, mirror: mirror, genesisRoot: root)
-    #else
-      return nil
-    #endif
+  static var current: Self? { make(UsernameEnvironment.build, debug: UsernameConfiguration.isDebugBuild) }
+
+  static func make(_ values: UsernameEnvironment, debug: Bool) -> Self? {
+    guard let registry = UsernameConfiguration.make(values, debug: debug),
+      let mirror = URL(string: values.mirrorURL), UsernameConfiguration.allows(mirror, debug: debug),
+      mirror != registry.url, UsernameEnvironment.isHex64(values.genesisRoot)
+    else { return nil }
+    return Self(registry: registry, mirror: mirror, genesisRoot: values.genesisRoot, origin: values.origin)
   }
 }
 

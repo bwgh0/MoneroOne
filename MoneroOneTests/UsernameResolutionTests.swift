@@ -50,8 +50,8 @@ final class UsernameResolutionTests: XCTestCase {
       configuration: .init(
         registry: .init(
           url: URL(string: "https://registry.example")!,
-          registrarKey: value["registrar_key"] as! String, rulesHash: value["rules_hash"] as! String
-        ),
+          registrarKey: value["registrar_key"] as! String, rulesHash: value["rules_hash"] as! String,
+          termsVersion: "test-terms-v1"),
         mirror: URL(string: "https://mirror.example")!,
         genesisRoot: value["genesis_epoch_root"] as! String),
       network: "mainnet", session: URLSession(configuration: sessionConfiguration), store: store,

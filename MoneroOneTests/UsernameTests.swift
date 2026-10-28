@@ -562,7 +562,8 @@ final class UsernameTests: XCTestCase {
     let chevron = UIImage(
       systemName: "chevron.right",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .medium))!.size.width
-    let available = 375 - 2 * 16 - 2 * 24 - 10 - chevron
+    let margins: CGFloat = 2 * 16 + 2 * 24 + 10
+    let available: CGFloat = 375 - margins - chevron
     let name = NSAttributedString(
       string: "@mmmmmmmmmmmmmmm",
       attributes: [

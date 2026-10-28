@@ -48,7 +48,7 @@ Select the `MoneroOne` scheme, pick a simulator or your device, and build.
 
 ### Username development branch (2026-10-21)
 
-The native claim flow uses the existing `oah-core` and registry, through the new `oah-mobile` C boundary. This branch is based on `feature/motion-moments` (`0648931`). It needs the signing kit at `89e08a4` (`feature/handles-sign`), alongside this checkout. Neither the kit changes nor this feature have been published.
+The native claim flow uses the existing `oah-core` and registry, through the new `oah-mobile` C boundary. This branch is based on `feature/motion-moments` (`0648931`). It needs the signing kit at `0df961d` (`feature/handles-sign`), alongside this checkout. CI checks out that kit commit and builds the verifier from `bwgh0/oah` at `ef77ae2` with the `OAH_DEPLOY_KEY` secret (`.github/actions/build-oah`).
 
 Build the local verifier before opening Xcode:
 
@@ -84,7 +84,7 @@ This implements the local claim-and-card milestone. Public registration still ne
 
 ### CI
 
-CI runs automatically on every push and pull request to `main` — it builds for the iOS Simulator (no signing required). Tagged releases (`v*`) trigger a TestFlight deploy and publish a sideloadable IPA to [GitHub Releases](https://github.com/bwgh0/MoneroOne/releases).
+CI runs automatically on every push to `main` or a `feature/**` branch and on every pull request to `main` — it builds for the iOS Simulator (no signing required). Tagged releases (`v*`) trigger a TestFlight deploy and publish a sideloadable IPA to [GitHub Releases](https://github.com/bwgh0/MoneroOne/releases).
 
 ## Releases
 

@@ -1,0 +1,53 @@
+name: Build OAHMobile.xcframework
+description: >
+  Builds Packages/OAHCore/OAHMobile.xcframework (iOS arm64 and arm64 simulator) from the private
+  bwgh0/oah repository at a pinned commit, with scripts/build-oah-ios.sh. The XCFramework is
+  gitignored, so every job that builds the app runs this first, after Xcode is selected.
+
+inputs:
+  deploy-key:
+    description: A read-only SSH deploy key of bwgh0/oah (the OAH_DEPLOY_KEY secret).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check oah access
+      shell: bash
+      env:
+        OAH_DEPLOY_KEY: ${{ inputs.deploy-key }}
+      run: |
+        if [ -z "$OAH_DEPLOY_KEY" ]; then
+          echo "::error::Secret OAH_DEPLOY_KEY is not set. It must hold a read-only deploy key of bwgh0/oah."
+          exit 1
+        fi
+
+    # bwgh0/oah feature/mobile-claim. Move this pin (and the Android one) when the app needs a newer oah-mobile.
+    - name: Checkout oah
+      uses: actions/checkout@v7
+      with:
+        repository: bwgh0/oah
+        ref: ef77ae2b583e80ccdd7776f8919084bb201d5132
+        path: oah-src
+        ssh-key: ${{ inputs.deploy-key }}
+        persist-credentials: false
+
+    - name: Build oah-mobile
+      shell: bash
+      env:
+        OAH_RUST: 1.92.0
+      run: |
+        set -euo pipefail
+        if ! command -v rustup > /dev/null; then
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.cargo/bin:$PATH"
+        fi
+        rustup toolchain install "$OAH_RUST" --profile minimal
+        rustup target add --toolchain "$OAH_RUST" aarch64-apple-ios aarch64-apple-ios-sim
+        RUSTUP_TOOLCHAIN="$OAH_RUST" OAH_REPO="$GITHUB_WORKSPACE/oah-src" bash scripts/build-oah-ios.sh
+        for slice in ios-arm64 ios-arm64-simulator; do
+          test -s "Packages/OAHCore/OAHMobile.xcframework/$slice/liboah_mobile.a"
+          test -s "Packages/OAHCore/OAHMobile.xcframework/$slice/Headers/oah_mobile.h"
+        done
+        ls -l Packages/OAHCore/OAHMobile.xcframework/*/liboah_mobile.a

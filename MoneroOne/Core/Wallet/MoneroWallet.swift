@@ -788,6 +788,20 @@ class MoneroWallet: ObservableObject {
         return kit.createSubaddress()
     }
 
+    /// A new subaddress that is in the wallet file when this returns
+    /// (`Kit.createSubaddressAndStore`).
+    func createSubaddressAndStore() async throws -> MoneroKit.SubAddress {
+        guard let kit = kit else { throw MoneroCoreError.walletNotInitialized }
+        return try await kit.createSubaddressAndStore()
+    }
+
+    /// `address` as a listed subaddress of this wallet, or nil when it is
+    /// not one (`Kit.listOwnSubaddress`).
+    func listOwnSubaddress(_ address: String) async throws -> MoneroKit.SubAddress? {
+        guard let kit = kit else { throw MoneroCoreError.walletNotInitialized }
+        return try await kit.listOwnSubaddress(address)
+    }
+
     /// Update label on an existing subaddress, persisted via wallet2 cache.
     @discardableResult
     func setSubaddressLabel(index: Int, label: String) -> Bool {

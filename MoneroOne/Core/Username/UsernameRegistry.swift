@@ -4,14 +4,15 @@ import Foundation
 import OAHCore
 
 enum UsernameFailure: Error, LocalizedError {
-  case storage, walletChanged, unavailable, noFreeClaim, notConfigured, verification, pendingClaim
-  case regionBlocked, deviceUnsupported, retry
+  case storage, walletChanged, walletOpening, unavailable, noFreeClaim, notConfigured, verification
+  case pendingClaim, regionBlocked, deviceUnsupported, retry
   case server(String)
   var errorDescription: String? {
     switch self {
     case .storage: return String(localized: "Your username could not be saved securely. Unlock the app and try again.")
     case .walletChanged:
       return String(localized: "The wallet changed. Open this flow from the wallet you want to use.")
+    case .walletOpening: return String(localized: "Your wallet is still opening. Try again in a moment.")
     case .unavailable: return String(localized: "This username is unavailable.")
     case .noFreeClaim: return String(localized: "A free username isn't available on this phone.")
     case .notConfigured: return String(localized: "Username registration isn't available yet.")
@@ -44,19 +45,22 @@ struct UsernameConfiguration {
       return nil
     #endif
   }
-  /// Debug builds talk to a registry on this machine, or to one on the developer's
-  /// private Tailscale network over HTTPS, for tests on a real phone.
+  /// Debug builds talk to a registry on this machine, to one on the developer's
+  /// private Tailscale network over HTTPS, for tests on a real phone, or to the
+  /// staging registry and its mirror.
   static func isDebugURL(_ url: URL) -> Bool {
     guard url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
       let scheme = url.scheme, let host = url.host
     else { return false }
     if host == "localhost" { return ["http", "https"].contains(scheme) }
+    if stagingHosts.contains(host.lowercased()) { return scheme == "https" }
     let labels = host.lowercased().split(separator: ".", omittingEmptySubsequences: false)
     return scheme == "https" && labels.count >= 3 && labels.suffix(2) == ["ts", "net"]
       && labels.allSatisfy { label in
         !label.isEmpty && label.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 45 }
       }
   }
+  private static let stagingHosts: Set<String> = ["staging-registry.monero.one", "staging-mirror.monero.one"]
 }
 
 enum UsernameRules {
@@ -253,11 +257,16 @@ final class UsernameRegistry {
 
   /// Called only after the user agrees to claim. No preflight runs on Home
   /// or Welcome, and no spend key leaves the wallet's existing signer.
+  /// `ownsSubaddress` is true for a subaddress of the open wallet: a name
+  /// that already points to one comes back with no new claim. It runs only
+  /// for a record that passed every check, and may list a subaddress that
+  /// the wallet does not list yet.
   func claim(
     displayHandle: String, walletKey: String, network: String, store: UsernameStore,
     makeSubaddress: () async throws -> String,
     sign: (String, String) throws -> String,
     claimKey: () throws -> String,
+    ownsSubaddress: (String) async throws -> Bool,
     isCurrentWallet: () -> Bool
   ) async throws -> UsernameBinding {
     guard isCurrentWallet(), !walletKey.isEmpty else { throw UsernameFailure.walletChanged }
@@ -295,9 +304,8 @@ final class UsernameRegistry {
       info["open"] as? Bool == true
     else { throw UsernameFailure.verification }
     let rulesData = try await request("rules")
-    guard let rules = String(data: rulesData, encoding: .utf8), isCurrentWallet() else {
-      throw UsernameFailure.walletChanged
-    }
+    guard let rules = String(data: rulesData, encoding: .utf8) else { throw UsernameFailure.verification }
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
     do {
       let existing = try object(await request("handles/" + handle))
       // The earlier signed request landed after the check above: it is this
@@ -308,6 +316,16 @@ final class UsernameRegistry {
       {
         return binding
       }
+      // This wallet already holds the name: a new phone, a restored wallet
+      // or cleared app data.
+      if isCurrentWallet(),
+        let binding = try await restore(
+          existing, handle: handle, displayHandle: displayHandle, walletKey: walletKey,
+          network: network, rules: rules, owns: ownsSubaddress, isCurrentWallet: isCurrentWallet,
+          store: store)
+      {
+        return binding
+      }
       throw UsernameFailure.unavailable
     } catch is RegistryNotFound {}
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
@@ -315,9 +333,8 @@ final class UsernameRegistry {
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
     let nonceReply = try object(
       await request("nonce", body: ["handle": handle, "subaddress": subaddress]))
-    guard let nonce = nonceReply["nonce"] as? String, isCurrentWallet() else {
-      throw UsernameFailure.walletChanged
-    }
+    guard let nonce = nonceReply["nonce"] as? String else { throw UsernameFailure.verification }
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
     let unsigned = try OAHCore.call([
       "op": "prepare_claim", "handle": handle, "subaddress": subaddress,
       "nonce": nonce, "network": network, "rules": rules, "rules_hash": configuration.rulesHash,
@@ -439,9 +456,46 @@ final class UsernameRegistry {
     }
   }
 
-  private func accept(_ record: String, pending: PendingUsernameClaim, store: UsernameStore) throws
-    -> UsernameBinding
-  {
+  /// The found name as this wallet's binding, or nil when a check fails.
+  /// The chain must be one record that is the head, with no tombstone, and
+  /// the claim checks (registrar and owner signatures, handle, network,
+  /// rules) must pass for a subaddress of the open wallet. No nonce,
+  /// signature or device token is made, and the phone's free claim stays.
+  /// A chain with later records (a rotation, a subhandle) stays
+  /// unavailable: the app makes none, and `verify_claim` checks a genesis
+  /// head only.
+  private func restore(
+    _ found: [String: Any], handle: String, displayHandle: String, walletKey: String,
+    network: String, rules: String, owns: (String) async throws -> Bool,
+    isCurrentWallet: () -> Bool, store: UsernameStore
+  ) async throws -> UsernameBinding? {
+    guard found["handle"] as? String == handle, found["tombstoned"] as? Bool == false,
+      let owner = found["owner"] as? String,
+      let head = found["head"] as? [String: Any], head["seq"] as? Int == 0,
+      let hash = head["record_hash"] as? String, found["genesis_hash"] as? String == hash,
+      let rows = found["records"] as? [[String: Any]], rows.count == 1,
+      rows[0]["record_hash"] as? String == hash, let record = rows[0]["record"] as? String
+    else { return nil }
+    // The checks of a claim's reply, with the found head and owner in place
+    // of a saved claim. It is never saved and holds no request or signature.
+    let held = PendingUsernameClaim(
+      walletKey: walletKey, network: network, handle: handle, displayHandle: displayHandle,
+      subaddress: owner, nonce: "", unsignedRecord: "", recordHash: hash, ownerSignature: "",
+      registrarKey: configuration.registrarKey, rules: rules, rulesHash: configuration.rulesHash)
+    // The record must verify before the wallet is asked: a record that
+    // fails never makes the wallet list a subaddress.
+    guard (try? OAHCore.call(Self.claimCheck(record, pending: held))) != nil else { return nil }
+    guard try await owns(owner) else { return nil }
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
+    do {
+      return try accept(record, pending: held, usesFreeClaim: false, store: store)
+    } catch UsernameFailure.verification { return nil }
+  }
+
+  private func accept(
+    _ record: String, pending: PendingUsernameClaim, usesFreeClaim: Bool = true,
+    store: UsernameStore
+  ) throws -> UsernameBinding {
     do {
       _ = try OAHCore.call(Self.claimCheck(record, pending: pending))
     } catch { throw UsernameFailure.verification }
@@ -449,7 +503,7 @@ final class UsernameRegistry {
       walletKey: pending.walletKey, network: pending.network,
       handle: pending.handle, displayHandle: pending.displayHandle, subaddress: pending.subaddress,
       genesisHash: pending.recordHash, record: record, claimedAt: Date())
-    try store.accept(binding)
+    try store.accept(binding, usesFreeClaim: usesFreeClaim)
     return binding
   }
 }

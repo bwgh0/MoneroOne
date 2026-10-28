@@ -98,16 +98,35 @@ final class UsernameStore: ObservableObject {
     #endif
     return UsernameStore()
   }()
-  @Published private(set) var state = UsernameLocalState()
+  /// Each change is saved first and is in memory at once. While the flow
+  /// holds updates, its publish waits, so Home does not redraw under the
+  /// claim's motion.
+  private(set) var state = UsernameLocalState() {
+    willSet {
+      if holdsUpdates { heldUpdate = true } else { objectWillChange.send() }
+    }
+  }
   @Published private(set) var storageError = false
   private let persistence: UsernamePersistence
   private var claiming = false
+  private var holdsUpdates = false
+  private var heldUpdate = false
 
   func beginClaim() throws {
     guard !claiming else { throw UsernameFailure.pendingClaim }
     claiming = true
   }
   func endClaim() { claiming = false }
+  /// The claim flow holds the publish of `state` from the claim's start
+  /// until its result has animated in. Saves are not held.
+  func holdUpdates() { holdsUpdates = true }
+  /// Sends the held change, if any, once.
+  func releaseUpdates() {
+    holdsUpdates = false
+    guard heldUpdate else { return }
+    heldUpdate = false
+    objectWillChange.send()
+  }
 
   init(persistence: UsernamePersistence = UsernameKeychain()) {
     self.persistence = persistence
@@ -136,7 +155,9 @@ final class UsernameStore: ObservableObject {
     guard !walletKey.isEmpty, state.pending?.walletKey == walletKey else { return }
     try savePending(nil)
   }
-  func accept(_ binding: UsernameBinding) throws {
+  /// `usesFreeClaim` is false for a name the wallet already held: no claim
+  /// ran on this phone, so its free claim date stays.
+  func accept(_ binding: UsernameBinding, usesFreeClaim: Bool = true) throws {
     guard !storageError else { throw UsernameFailure.storage }
     var next = state
     if let old = next.bindings.first(where: { $0.id == binding.id }),
@@ -147,8 +168,10 @@ final class UsernameStore: ObservableObject {
     next.bindings.removeAll { $0.id == binding.id }
     next.bindings.append(binding)
     next.pending = nil
-    next.nextFreeClaim = Calendar(identifier: .gregorian).date(
-      byAdding: .month, value: 12, to: binding.claimedAt)
+    if usesFreeClaim {
+      next.nextFreeClaim = Calendar(identifier: .gregorian).date(
+        byAdding: .month, value: 12, to: binding.claimedAt)
+    }
     try persistence.write(next)
     state = next
   }

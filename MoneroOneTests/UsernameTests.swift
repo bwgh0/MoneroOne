@@ -51,10 +51,11 @@ final class UsernameTests: XCTestCase {
   }
   private func claim(
     _ client: UsernameRegistry, _ store: UsernameStore, handle: String = "Alice",
-    wallet: String = "wallet-A", current: @escaping () -> Bool = { true }
+    wallet: String = "wallet-A", network: String = "mainnet",
+    owns: (String) async throws -> Bool = { _ in false }, current: @escaping () -> Bool = { true }
   ) async throws -> UsernameBinding {
     try await client.claim(
-      displayHandle: handle, walletKey: wallet, network: "mainnet", store: store,
+      displayHandle: handle, walletKey: wallet, network: network, store: store,
       makeSubaddress: {
         XCTFail("Recovery must not allocate a new subaddress")
         throw UsernameFailure.verification
@@ -66,7 +67,34 @@ final class UsernameTests: XCTestCase {
       claimKey: {
         XCTFail("Recovery must not read the claim key")
         throw UsernameFailure.verification
-      }, isCurrentWallet: current)
+      }, ownsSubaddress: owns, isCurrentWallet: current)
+  }
+  /// `GET /v1/handles/alice` as the registry answers for a held name, with
+  /// the fixture's record as the whole chain.
+  private func found(_ change: (inout [String: Any]) -> Void = { _ in }) -> [String: Any] {
+    var reply: [String: Any] = [
+      "handle": "alice", "genesis_hash": f["hash"]!, "owner": f["owner"]!, "tombstoned": false,
+      "head": ["seq": 0, "record_hash": f["hash"]!],
+      "records": [["seq": 0, "type": "genesis", "record_hash": f["hash"]!, "record": f["record"]!]],
+    ]
+    change(&reply)
+    return reply
+  }
+  /// A registry that holds alice: any request after the lookup (a nonce or
+  /// a claim) fails the test.
+  private func serve(_ reply: [String: Any], network: String = "mainnet") {
+    UsernameURLProtocol.handler = { [info, f] request in
+      var info = info
+      info["network"] = network
+      switch (request.httpMethod ?? "GET", request.url?.path ?? "") {
+      case ("GET", "/v1/info"): return (200, info)
+      case ("GET", "/v1/rules"): return (200, Data(f["rules"]!.utf8))
+      case ("GET", "/v1/handles/alice"): return (200, reply)
+      default:
+        XCTFail("A held name must not send \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+        throw URLError(.badURL)
+      }
+    }
   }
   override func tearDown() {
     UsernameURLProtocol.handler = nil
@@ -210,7 +238,7 @@ final class UsernameTests: XCTestCase {
         sign: { _, _ in
           signed += 1
           return "public-test-signature"
-        }, claimKey: { Self.claimKey }, isCurrentWallet: { true })
+        }, claimKey: { Self.claimKey }, ownsSubaddress: { _ in false }, isCurrentWallet: { true })
       XCTFail("Expected unavailable")
     } catch {
       XCTAssertEqual(failure(error), UsernameFailure.unavailable.localizedDescription)
@@ -317,6 +345,213 @@ final class UsernameTests: XCTestCase {
     XCTAssertEqual(accepted.genesisHash, f["hash"])
     XCTAssertNil(store.state.pending)
     XCTAssertEqual(store.binding(walletKey: "wallet-A", network: "mainnet")?.handle, "alice")
+    // That claim ran on this phone: it used the free claim.
+    XCTAssertFalse(store.hasLocalClaimSlot)
+  }
+
+  // MARK: - A name this wallet already holds
+
+  func testOwnNameComesBackWithNoClaim() async throws {
+    let store = UsernameStore(persistence: UsernameMemory())
+    var paths: [String] = []
+    let reply = found()
+    UsernameURLProtocol.handler = { [info, f] request in
+      paths.append((request.httpMethod ?? "GET") + " " + (request.url?.path ?? ""))
+      switch request.url?.path ?? "" {
+      case "/v1/info": return (200, info)
+      case "/v1/rules": return (200, Data(f["rules"]!.utf8))
+      case "/v1/handles/alice": return (200, reply)
+      default: throw URLError(.badURL)
+      }
+    }
+    // The helper fails the test on a new subaddress, a signature or a claim key.
+    let restored = try await claim(client(), store, owns: { [f] in $0 == f["owner"]! })
+    XCTAssertEqual(paths, ["GET /v1/info", "GET /v1/rules", "GET /v1/handles/alice"])
+    XCTAssertEqual(restored.handle, "alice")
+    XCTAssertEqual(restored.displayHandle, "Alice")
+    XCTAssertEqual(restored.subaddress, f["owner"])
+    XCTAssertEqual(restored.genesisHash, f["hash"])
+    XCTAssertEqual(restored.record, f["record"])
+    XCTAssertEqual(store.binding(walletKey: "wallet-A", network: "mainnet"), restored)
+    XCTAssertNil(store.state.pending)
+    // No claim ran on this phone: its free claim is still there.
+    XCTAssertNil(store.state.nextFreeClaim)
+    XCTAssertTrue(store.hasLocalClaimSlot)
+  }
+  func testNameOfAnotherWalletStaysUnavailable() async throws {
+    // (the open wallet's subaddress, the lookup's owner field, the wallet is asked)
+    let rows: [(String, String, Bool)] = [
+      // The name points to a subaddress of another wallet.
+      ("public-test-address", f["owner"]!, true),
+      // The lookup names this wallet, but the signed record points elsewhere:
+      // the wallet is never asked, so it lists no subaddress for it.
+      ("public-test-address", "public-test-address", false),
+    ]
+    for (own, owner, asks) in rows {
+      let store = UsernameStore(persistence: UsernameMemory())
+      serve(found { $0["owner"] = owner })
+      var asked: [String] = []
+      do {
+        _ = try await claim(
+          client(), store,
+          owns: {
+            asked.append($0)
+            return $0 == own
+          })
+        XCTFail("Restored a name of another wallet: \(owner)")
+      } catch {
+        XCTAssertEqual(failure(error), UsernameFailure.unavailable.localizedDescription, owner)
+      }
+      XCTAssertEqual(asked, asks ? [owner] : [], owner)
+      XCTAssertTrue(store.state.bindings.isEmpty, owner)
+      XCTAssertTrue(store.hasLocalClaimSlot, owner)
+    }
+  }
+  func testTombstonedOldOrWrongNetworkRecordStaysUnavailable() async throws {
+    let hash = f["hash"]!
+    let record = f["record"]!
+    let later = String(repeating: "2", count: 64)
+    let genesis: [String: Any] = ["seq": 0, "type": "genesis", "record_hash": hash, "record": record]
+    // (case, network, change to the lookup reply)
+    let rows: [(String, String, (inout [String: Any]) -> Void)] = [
+      ("tombstoned", "mainnet", { $0["tombstoned"] = true }),
+      ("no tombstone flag", "mainnet", { $0["tombstoned"] = nil }),
+      ("a later head", "mainnet", { $0["head"] = ["seq": 1, "record_hash": later] }),
+      (
+        "two records", "mainnet",
+        {
+          $0["head"] = ["seq": 1, "record_hash": later]
+          $0["records"] = [genesis, ["seq": 1, "type": "rotate", "record_hash": later, "record": record]]
+        }
+      ),
+      (
+        "the record is not the named head", "mainnet",
+        {
+          $0["genesis_hash"] = later
+          $0["head"] = ["seq": 0, "record_hash": later]
+          $0["records"] = [["seq": 0, "type": "genesis", "record_hash": later, "record": record]]
+        }
+      ),
+      (
+        "a forged signature", "mainnet",
+        {
+          $0["records"] = [
+            ["seq": 0, "type": "genesis", "record_hash": hash, "record": String(record.dropLast(2)) + "AA"]
+          ]
+        }
+      ),
+      ("another name", "mainnet", { $0["handle"] = "alicf" }),
+      ("wrong network", "testnet", { _ in }),
+    ]
+    for (name, network, change) in rows {
+      let store = UsernameStore(persistence: UsernameMemory())
+      serve(found(change), network: network)
+      var asked = 0
+      do {
+        _ = try await claim(
+          client(), store, network: network,
+          owns: { [f] in
+            asked += 1
+            return $0 == f["owner"]!
+          })
+        XCTFail("Restored \(name)")
+      } catch {
+        XCTAssertEqual(failure(error), UsernameFailure.unavailable.localizedDescription, name)
+      }
+      // A record that fails a check never makes the wallet list a subaddress.
+      XCTAssertEqual(asked, 0, name)
+      XCTAssertTrue(store.state.bindings.isEmpty, name)
+      XCTAssertTrue(store.hasLocalClaimSlot, name)
+    }
+  }
+  /// A seed restore on a new phone: the wallet lists only its first rows.
+  /// The ownership check may list the subaddress first (it waits for the
+  /// wallet), and the name then comes back as on the old phone.
+  func testOwnNameComesBackAfterTheWalletListsItsSubaddress() async throws {
+    let store = UsernameStore(persistence: UsernameMemory())
+    serve(found())
+    var listed: [String] = []
+    let restored = try await claim(
+      client(), store,
+      owns: { [f] address in
+        await Task.yield()
+        guard address == f["owner"]! else { return false }
+        listed.append(address)
+        return true
+      })
+    XCTAssertEqual(listed, [f["owner"]!])
+    XCTAssertEqual(restored.subaddress, f["owner"])
+    XCTAssertEqual(store.binding(walletKey: "wallet-A", network: "mainnet"), restored)
+    XCTAssertTrue(store.hasLocalClaimSlot)
+  }
+  /// The wallet's own cause shows, not "unavailable": a wallet file still
+  /// opening, or a wallet change while it lists the subaddress.
+  func testOwnNameShowsTheWalletsCauseWhenItCannotBeChecked() async throws {
+    let rows: [(String, UsernameFailure, Bool)] = [
+      ("still opening", .walletOpening, true),
+      ("changed while it listed", .walletChanged, false),
+    ]
+    for (name, expected, throwsFromWallet) in rows {
+      let store = UsernameStore(persistence: UsernameMemory())
+      serve(found())
+      var current = true
+      do {
+        _ = try await claim(
+          client(), store,
+          owns: { _ in
+            if throwsFromWallet { throw expected }
+            current = false
+            return true
+          }, current: { current })
+        XCTFail("Restored \(name)")
+      } catch {
+        XCTAssertEqual(failure(error), expected.localizedDescription, name)
+      }
+      XCTAssertTrue(store.state.bindings.isEmpty, name)
+      XCTAssertNil(store.state.pending, name)
+    }
+  }
+  /// A registry reply with a missing field is a verification failure. It
+  /// used to say "The wallet changed", which sent people to the wrong fix.
+  func testABadRegistryReplyIsNotAWalletChange() async throws {
+    let store = UsernameStore(persistence: UsernameMemory())
+    var made = 0
+    UsernameURLProtocol.handler = { [info, f] request in
+      switch (request.httpMethod ?? "GET", request.url?.path ?? "") {
+      case ("GET", "/v1/info"): return (200, info)
+      case ("GET", "/v1/rules"): return (200, Data(f["rules"]!.utf8))
+      case ("GET", "/v1/handles/alice"): return (404, ["error": ["code": "handle.not_found"]])
+      case ("POST", "/v1/nonce"): return (200, ["expires_at": 0])
+      default:
+        XCTFail("Unexpected request \(request.url?.path ?? "")")
+        throw URLError(.badURL)
+      }
+    }
+    do {
+      _ = try await client().claim(
+        displayHandle: "Alice", walletKey: "wallet-A", network: "mainnet", store: store,
+        makeSubaddress: { [f] in
+          made += 1
+          return f["owner"]!
+        },
+        sign: { _, _ in
+          XCTFail("No signature without a nonce")
+          return ""
+        }, claimKey: { Self.claimKey }, ownsSubaddress: { _ in false }, isCurrentWallet: { true })
+      XCTFail("Claimed with no nonce")
+    } catch {
+      XCTAssertEqual(failure(error), UsernameFailure.verification.localizedDescription)
+    }
+    XCTAssertEqual(made, 1)
+    XCTAssertNil(store.state.pending)
+  }
+  func testWalletOpeningHasItsOwnMessage() {
+    XCTAssertEqual(
+      UsernameFailure.walletOpening.localizedDescription,
+      "Your wallet is still opening. Try again in a moment.")
+    XCTAssertNotEqual(
+      UsernameFailure.walletOpening.localizedDescription,
+      UsernameFailure.walletChanged.localizedDescription)
   }
   func testLongestHomeNameFitsOneLineAtTheLargestStripSize() {
     // 375 pt iPhone: 16 pt screen margins, 24 pt strip padding, a 10 pt gap
@@ -418,7 +653,7 @@ final class UsernameTests: XCTestCase {
       let binding = try await registry.claim(
         displayHandle: "Alice", walletKey: "wallet-A", network: "mainnet", store: store,
         makeSubaddress: { [f] in f["owner"]! }, sign: { _, _ in "public-test-signature" },
-        claimKey: { Self.claimKey }, isCurrentWallet: { true })
+        claimKey: { Self.claimKey }, ownsSubaddress: { _ in false }, isCurrentWallet: { true })
       return (.success(binding), devices)
     } catch {
       return (.failure(error), devices)
@@ -547,9 +782,10 @@ final class UsernameTests: XCTestCase {
     XCTAssertEqual(failure(result), UsernameFailure.retry.localizedDescription)
     XCTAssertTrue(none.isEmpty)
   }
-  func testDebugURLIsThisMachineOrATailscaleHTTPSName() {
+  func testDebugURLIsThisMachineATailscaleHTTPSNameOrStaging() {
     for raw in ["http://localhost:8787", "https://localhost:8787", "https://mac.example-tailnet.ts.net",
-      "https://Mac.Example-Tailnet.TS.NET/oah"]
+      "https://Mac.Example-Tailnet.TS.NET/oah", "https://staging-registry.monero.one",
+      "https://staging-mirror.monero.one/oah/v1/"]
     {
       XCTAssertTrue(UsernameConfiguration.isDebugURL(URL(string: raw)!), raw)
     }
@@ -558,7 +794,9 @@ final class UsernameTests: XCTestCase {
       "https://example.com", "https://xts.net", "ftp://localhost", "https://user@mac.example-tailnet.ts.net",
       "https://user:secret@mac.example-tailnet.ts.net", "http://user@localhost:8787",
       "https://mac.example-tailnet.ts.net?debug=1", "https://mac.example-tailnet.ts.net#top",
-      "http://localhost:8787?debug=1",
+      "http://localhost:8787?debug=1", "http://staging-registry.monero.one", "https://registry.monero.one",
+      "https://mirror.monero.one", "https://staging-registry.monero.one.example.com",
+      "https://user@staging-registry.monero.one",
     ] {
       XCTAssertFalse(UsernameConfiguration.isDebugURL(URL(string: raw)!), raw)
     }

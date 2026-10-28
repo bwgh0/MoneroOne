@@ -3194,12 +3194,71 @@ class WalletManager: ObservableObject {
     /// The username claim key, from the claiming wallet's private view key
     /// (`UsernameDevice.claimKey`). Made for each claim; never stored or logged.
     func usernameClaimKey(expectedSession: UUID) throws -> String {
-        guard isUnlocked, walletSessionId == expectedSession, !isHardwareWallet, !isViewOnly,
-              let hex = moneroWallet?.secretViewKey, hex != NullKeyAddress.zeroSecretKey,
+        guard isUnlocked, walletSessionId == expectedSession, !isHardwareWallet, !isViewOnly else {
+            throw UsernameFailure.walletChanged
+        }
+        // No view key yet: the wallet file is still opening.
+        guard let hex = moneroWallet?.secretViewKey, hex != NullKeyAddress.zeroSecretKey,
               let viewKey = UsernameDevice.keyBytes(hex: hex),
               let claimKey = UsernameDevice.claimKey(privateViewKey: viewKey)
-        else { throw UsernameFailure.walletChanged }
+        else { throw UsernameFailure.walletOpening }
         return claimKey
+    }
+
+    /// The subaddress for a new username claim. It is in the wallet file
+    /// when this returns (`Kit.createSubaddressAndStore`), so a quit before
+    /// the next sync store cannot lose it, and the next new subaddress never
+    /// gets the same address. Keys only: the node does not need to answer.
+    func createUsernameSubaddress(expectedSession: UUID) async throws -> String {
+        let wallet = try usernameWallet(expectedSession: expectedSession)
+        let created: MoneroKit.SubAddress
+        do {
+            created = try await wallet.createSubaddressAndStore()
+        } catch {
+            throw usernameFailure(error, expectedSession: expectedSession, wallet: wallet)
+        }
+        guard isUsernameSession(expectedSession, wallet: wallet) else { throw UsernameFailure.walletChanged }
+        userCreatedSubaddressIndices.insert(created.index)
+        saveUserCreatedSubaddresses()
+        return created.address
+    }
+
+    /// True when `address` is a subaddress of the claiming wallet. One that
+    /// the wallet does not list yet (a wallet restored from its seed on a
+    /// new phone lists only the rows up to the last one that received
+    /// funds) is listed, and the wallet file is stored.
+    func ownsUsernameSubaddress(_ address: String, expectedSession: UUID) async throws -> Bool {
+        let wallet = try usernameWallet(expectedSession: expectedSession)
+        if subaddresses.contains(where: { $0.address == address }) { return true }
+        let listed: MoneroKit.SubAddress?
+        do {
+            listed = try await wallet.listOwnSubaddress(address)
+        } catch {
+            throw usernameFailure(error, expectedSession: expectedSession, wallet: wallet)
+        }
+        guard isUsernameSession(expectedSession, wallet: wallet) else { throw UsernameFailure.walletChanged }
+        guard let listed else { return false }
+        userCreatedSubaddressIndices.insert(listed.index)
+        saveUserCreatedSubaddresses()
+        return true
+    }
+
+    private func isUsernameSession(_ expectedSession: UUID, wallet: MoneroWallet? = nil) -> Bool {
+        isUnlocked && walletSessionId == expectedSession && !isHardwareWallet && !isViewOnly
+            && (wallet == nil || moneroWallet === wallet)
+    }
+
+    private func usernameWallet(expectedSession: UUID) throws -> MoneroWallet {
+        guard isUsernameSession(expectedSession) else { throw UsernameFailure.walletChanged }
+        guard let wallet = moneroWallet else { throw UsernameFailure.walletOpening }
+        return wallet
+    }
+
+    /// The cause to show when the kit refused a username step.
+    private func usernameFailure(_ error: Error, expectedSession: UUID, wallet: MoneroWallet) -> UsernameFailure {
+        guard isUsernameSession(expectedSession, wallet: wallet) else { return .walletChanged }
+        if case MoneroCoreError.walletNotInitialized = error { return .walletOpening }
+        return .retry
     }
 
     /// Create a new subaddress for receiving payments

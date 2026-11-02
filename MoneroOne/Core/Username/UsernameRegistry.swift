@@ -11,9 +11,16 @@ enum UsernameFailure: Error, LocalizedError {
   /// taken text: in the claim flow the name is not free. The @name screen
   /// shows the hold from `UsernameStore.nameState(for:)` instead.
   case held(UsernameHold)
+  /// `400 terms.outdated`: the registry no longer accepts this build's
+  /// Username Terms version. Only an app update helps. The registry read no
+  /// state, so the saved claim and its nonce stay unused. Its text stays the
+  /// generic error until the update text lands.
+  case termsOutdated
   var errorDescription: String? {
     switch self {
     case .held: return String(localized: "This username is unavailable.")
+    case .termsOutdated:
+      return String(localized: "The username service couldn't complete the request. Please try again.")
     case .storage: return String(localized: "Your username could not be saved securely. Unlock the app and try again.")
     case .walletChanged:
       return String(localized: "The wallet changed. Open this flow from the wallet you want to use.")
@@ -380,6 +387,7 @@ final class UsernameRegistry {
         throw UsernameFailure.server(String(localized: "This username is reserved to protect users from scams."))
       }
       if code == "nonce.invalid" { throw ExpiredClaim() }
+      if code == "terms.outdated" { throw UsernameFailure.termsOutdated }
       throw UsernameFailure.server(
         String(localized: "The username service couldn't complete the request. Please try again."))
     }

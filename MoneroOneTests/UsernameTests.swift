@@ -739,6 +739,27 @@ final class UsernameTests: XCTestCase {
         UsernameFailure.retry.localizedDescription, "The claim could not be completed. Please try again.")
     }
   }
+  func testOutdatedTermsGiveTheirOwnFailureAndKeepTheSavedClaim() async throws {
+    // registry e2e claims.rs: an old terms version gets 400 terms.outdated,
+    // and the nonce and the phone's claim slot stay unused.
+    let store = UsernameStore(persistence: UsernameMemory())
+    let (result, devices) = await freshClaim(
+      client(), store,
+      reply: (400, ["error": ["code": "terms.outdated", "message": "These Username Terms are out of date."]]))
+    guard case .failure(let error) = result, case .termsOutdated? = error as? UsernameFailure else {
+      return XCTFail("\(result)")
+    }
+    XCTAssertEqual(devices.count, 1)
+    XCTAssertNotNil(store.state.pending)
+    XCTAssertTrue(store.state.bindings.isEmpty)
+    XCTAssertNil(store.state.nextFreeClaim)
+    // Another 400 is not an outdated app.
+    let other = UsernameStore(persistence: UsernameMemory())
+    let (bad, _) = await freshClaim(client(), other, reply: (400, ["error": ["code": "request.bad_field"]]))
+    guard case .failure(let badError) = bad, case .server? = badError as? UsernameFailure else {
+      return XCTFail("\(bad)")
+    }
+  }
   func testPlatformErrorsShowTheirMessagesInARelease() async {
     // (tokens, message): a phone that can never make a token, or one that can on a retry.
     let rows: [(FakeDeviceTokens, String)] = [

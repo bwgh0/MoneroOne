@@ -594,6 +594,44 @@ final class UsernameRetireTests: XCTestCase {
       XCTAssertEqual(paths, ["registry.example/v1/handles/alice"], name)
     }
   }
+
+  // MARK: - The @name screen's texts
+
+  func testRetireDateIsTheFirstLocalDayThatStartsAtOrAfterTheFreeClaim() throws {
+    var utc = DateComponents(calendar: Calendar(identifier: .gregorian), timeZone: TimeZone(identifier: "UTC"))
+    utc.year = 2027
+    utc.month = 12
+    utc.day = 1
+    let free = try XCTUnwrap(utc.date)
+    // (time zone, local day of the long date)
+    let rows: [(String, Int, Int)] = [
+      ("America/New_York", 12, 1),  // Nov 30, 19:00: the claim works from Dec 1 on.
+      ("UTC", 12, 1),  // Midnight sharp.
+      ("Europe/Berlin", 12, 2),  // Dec 1, 01:00: Dec 1 would be an hour early.
+    ]
+    for (zone, month, day) in rows {
+      var calendar = Calendar(identifier: .gregorian)
+      calendar.timeZone = try XCTUnwrap(TimeZone(identifier: zone))
+      let shown = UsernameDetailsView.claimDay(free, calendar: calendar)
+      XCTAssertEqual(calendar.dateComponents([.month, .day], from: shown), DateComponents(month: month, day: day), zone)
+      XCTAssertEqual(calendar.startOfDay(for: shown), shown, zone)
+      XCTAssertGreaterThanOrEqual(shown, free, zone)
+    }
+  }
+
+  func testHeldTextsNameEachReasonAndTheSendAndClaimTexts() {
+    let texts = UsernameHoldReason.allCases.map { UsernameDetailsView.holdText($0, name: "joe") }
+    XCTAssertEqual(
+      texts,
+      [
+        "@joe is on hold because of a court order. Payments to @joe don't work while it's on hold.",
+        "@joe is on hold because of a notice we received. Payments to @joe don't work while it's on hold.",
+        "@joe is on hold because of sanctions rules. Payments to @joe don't work while it's on hold.",
+        "@joe is on hold because of a breach of the Username Terms. Payments to @joe don't work while it's on hold.",
+      ])
+    XCTAssertEqual(OpenAliasFailure.usernameHeld.message, "This name is on hold.")
+    XCTAssertEqual(UsernameFailure.termsOutdated.localizedDescription, "Update Monero One to claim a name.")
+  }
 }
 
 private final class RetireMemory: UsernamePersistence {

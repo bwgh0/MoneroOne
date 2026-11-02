@@ -11269,6 +11269,386 @@
         }
       }
     },
+    "@%@ is on hold because of a breach of the Username Terms. Payments to @%@ don't work while it's on hold." : {
+      "comment" : "Gray On hold row at the top of the user's own @username screen. Both %@ are the same username (without the @).",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ ist wegen eines Verstoßes gegen die Nutzungsbedingungen für Benutzernamen gesperrt. Zahlungen an @%2$@ funktionieren nicht, solange der Benutzername gesperrt ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ está retenido por un incumplimiento de los Términos de nombres de usuario. Los pagos a @%2$@ no funcionan mientras esté retenido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ est suspendu en raison d’un manquement aux Conditions des noms d’utilisateur. Les paiements vers @%2$@ ne fonctionnent pas tant qu’il est suspendu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ è sospeso per una violazione dei Termini dei nomi utente. I pagamenti a @%2$@ non funzionano finché è sospeso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ はユーザ名利用規約への違反により保留中です。保留中は @%2$@ への支払いは機能しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@은(는) 사용자 이름 약관 위반으로 보류 중입니다. 보류 중에는 @%2$@(으)로의 결제가 작동하지 않습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ is geblokkeerd vanwege een schending van de Gebruikersnaamvoorwaarden. Betalingen aan @%2$@ werken niet zolang de naam geblokkeerd is."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ jest zawieszona z powodu naruszenia Regulaminu nazw użytkownika. Płatności na @%2$@ nie działają, dopóki jest zawieszona."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ está suspenso por causa de uma violação dos Termos de Nomes de Usuário. Os pagamentos para @%2$@ não funcionam enquanto ele estiver suspenso."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ este suspendat din cauza unei încălcări a Termenilor pentru numele de utilizator. Plățile către @%2$@ nu funcționează cât timp este suspendat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ заблокировано из-за нарушения Условий для имён пользователей. Платежи на @%2$@ не работают, пока оно заблокировано."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ Kullanıcı Adı Koşulları'nın ihlali nedeniyle askıya alındı. Askıda olduğu sürece @%2$@ adresine ödemeler çalışmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ заблоковано через порушення Умов для імен користувачів. Платежі на @%2$@ не працюють, доки його заблоковано."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ 因违反用户名条款而被暂停。暂停期间，向 @%2$@ 的付款无法使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ 因違反使用者名稱條款而遭暫停。暫停期間，傳送至 @%2$@ 的付款無法使用。"
+          }
+        }
+      }
+    },
+    "@%@ is on hold because of a court order. Payments to @%@ don't work while it's on hold." : {
+      "comment" : "Gray On hold row at the top of the user's own @username screen. Both %@ are the same username (without the @).",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ ist wegen eines Gerichtsbeschlusses gesperrt. Zahlungen an @%2$@ funktionieren nicht, solange der Benutzername gesperrt ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ está retenido por una orden judicial. Los pagos a @%2$@ no funcionan mientras esté retenido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ est suspendu en raison d’une décision de justice. Les paiements vers @%2$@ ne fonctionnent pas tant qu’il est suspendu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ è sospeso per un ordine del tribunale. I pagamenti a @%2$@ non funzionano finché è sospeso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ は裁判所の命令により保留中です。保留中は @%2$@ への支払いは機能しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@은(는) 법원 명령으로 보류 중입니다. 보류 중에는 @%2$@(으)로의 결제가 작동하지 않습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ is geblokkeerd vanwege een gerechtelijk bevel. Betalingen aan @%2$@ werken niet zolang de naam geblokkeerd is."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ jest zawieszona z powodu nakazu sądowego. Płatności na @%2$@ nie działają, dopóki jest zawieszona."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ está suspenso por causa de uma ordem judicial. Os pagamentos para @%2$@ não funcionam enquanto ele estiver suspenso."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ este suspendat din cauza unei hotărâri judecătorești. Plățile către @%2$@ nu funcționează cât timp este suspendat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ заблокировано по решению суда. Платежи на @%2$@ не работают, пока оно заблокировано."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ bir mahkeme kararı nedeniyle askıya alındı. Askıda olduğu sürece @%2$@ adresine ödemeler çalışmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ заблоковано за рішенням суду. Платежі на @%2$@ не працюють, доки його заблоковано."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ 因法院命令而被暂停。暂停期间，向 @%2$@ 的付款无法使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ 因法院命令而遭暫停。暫停期間，傳送至 @%2$@ 的付款無法使用。"
+          }
+        }
+      }
+    },
+    "@%@ is on hold because of a notice we received. Payments to @%@ don't work while it's on hold." : {
+      "comment" : "Gray On hold row at the top of the user's own @username screen. Both %@ are the same username (without the @).",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ ist wegen einer Meldung, die wir erhalten haben, gesperrt. Zahlungen an @%2$@ funktionieren nicht, solange der Benutzername gesperrt ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ está retenido por un aviso que recibimos. Los pagos a @%2$@ no funcionan mientras esté retenido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ est suspendu en raison d’un signalement que nous avons reçu. Les paiements vers @%2$@ ne fonctionnent pas tant qu’il est suspendu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ è sospeso per una segnalazione che abbiamo ricevuto. I pagamenti a @%2$@ non funzionano finché è sospeso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ は当社が受け取った通知により保留中です。保留中は @%2$@ への支払いは機能しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@은(는) 당사가 받은 신고로 보류 중입니다. 보류 중에는 @%2$@(으)로의 결제가 작동하지 않습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ is geblokkeerd vanwege een melding die we hebben ontvangen. Betalingen aan @%2$@ werken niet zolang de naam geblokkeerd is."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ jest zawieszona z powodu otrzymanego przez nas zgłoszenia. Płatności na @%2$@ nie działają, dopóki jest zawieszona."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ está suspenso por causa de um aviso que recebemos. Os pagamentos para @%2$@ não funcionam enquanto ele estiver suspenso."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ este suspendat din cauza unei notificări primite de noi. Plățile către @%2$@ nu funcționează cât timp este suspendat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ заблокировано из-за полученного нами уведомления. Платежи на @%2$@ не работают, пока оно заблокировано."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ aldığımız bir bildirim nedeniyle askıya alındı. Askıda olduğu sürece @%2$@ adresine ödemeler çalışmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ заблоковано через отримане нами повідомлення. Платежі на @%2$@ не працюють, доки його заблоковано."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ 因我们收到的通知而被暂停。暂停期间，向 @%2$@ 的付款无法使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ 因我們收到的通知而遭暫停。暫停期間，傳送至 @%2$@ 的付款無法使用。"
+          }
+        }
+      }
+    },
+    "@%@ is on hold because of sanctions rules. Payments to @%@ don't work while it's on hold." : {
+      "comment" : "Gray On hold row at the top of the user's own @username screen. Both %@ are the same username (without the @).",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ ist wegen Sanktionsvorschriften gesperrt. Zahlungen an @%2$@ funktionieren nicht, solange der Benutzername gesperrt ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ está retenido por normas de sanciones. Los pagos a @%2$@ no funcionan mientras esté retenido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ est suspendu en raison de règles de sanctions. Les paiements vers @%2$@ ne fonctionnent pas tant qu’il est suspendu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ è sospeso per norme sulle sanzioni. I pagamenti a @%2$@ non funzionano finché è sospeso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ は制裁規則により保留中です。保留中は @%2$@ への支払いは機能しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@은(는) 제재 규정으로 보류 중입니다. 보류 중에는 @%2$@(으)로의 결제가 작동하지 않습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ is geblokkeerd vanwege sanctieregels. Betalingen aan @%2$@ werken niet zolang de naam geblokkeerd is."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ jest zawieszona z powodu przepisów o sankcjach. Płatności na @%2$@ nie działają, dopóki jest zawieszona."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ está suspenso por causa de regras de sanções. Os pagamentos para @%2$@ não funcionam enquanto ele estiver suspenso."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ este suspendat din cauza regulilor privind sancțiunile. Plățile către @%2$@ nu funcționează cât timp este suspendat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ заблокировано из-за санкционных правил. Платежи на @%2$@ не работают, пока оно заблокировано."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ yaptırım kuralları nedeniyle askıya alındı. Askıda olduğu sürece @%2$@ adresine ödemeler çalışmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ заблоковано через санкційні правила. Платежі на @%2$@ не працюють, доки його заблоковано."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ 因制裁规定而被暂停。暂停期间，向 @%2$@ 的付款无法使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ 因制裁規定而遭暫停。暫停期間，傳送至 @%2$@ 的付款無法使用。"
+          }
+        }
+      }
+    },
     "A free username isn't available on this phone." : {
       "comment" : "Shown when this phone has already used its free username",
       "localizations" : {
@@ -69094,6 +69474,196 @@
         }
       }
     },
+    "Payments to @%@ stop working within about 2 hours, and nobody can claim it again." : {
+      "comment" : "Message of the Retire Name confirmation when the app knows no date for a new claim. %@ is the username",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zahlungen an @%@ funktionieren innerhalb von etwa 2 Stunden nicht mehr, und niemand kann den Benutzernamen erneut registrieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los pagos a @%@ dejarán de funcionar en unas 2 horas y nadie podrá reservarlo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les paiements vers @%@ cesseront de fonctionner d’ici 2 heures environ, et personne ne pourra le réserver à nouveau."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I pagamenti a @%@ smetteranno di funzionare entro circa 2 ore e nessuno potrà più registrarlo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ への支払いは約2時間以内に機能しなくなり、誰も再取得できなくなります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@(으)로의 결제는 약 2시간 이내에 작동하지 않으며, 누구도 다시 등록할 수 없습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Betalingen aan @%@ werken binnen ongeveer 2 uur niet meer, en niemand kan de naam opnieuw claimen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Płatności na @%@ przestaną działać w ciągu około 2 godzin i nikt nie będzie mógł jej ponownie zarejestrować."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os pagamentos para @%@ deixarão de funcionar em cerca de 2 horas, e ninguém poderá registrá-lo novamente."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plățile către @%@ nu vor mai funcționa în aproximativ 2 ore și nimeni nu îl va mai putea revendica."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Платежи на @%@ перестанут работать примерно через 2 часа, и никто не сможет занять это имя снова."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ adresine yapılan ödemeler yaklaşık 2 saat içinde çalışmayı durdurur ve bu adı kimse yeniden alamaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Платежі на @%@ перестануть працювати приблизно за 2 години, і ніхто не зможе зайняти це ім’я знову."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "约 2 小时内，向 @%@ 的付款将停止生效，且任何人都无法再次认领该用户名。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "約 2 小時內，傳送至 @%@ 的付款將停止運作，且任何人都無法再次認領該使用者名稱。"
+          }
+        }
+      }
+    },
+    "Payments to @%@ stop working within about 2 hours, and nobody can claim it again. You can claim a new name starting %@." : {
+      "comment" : "Message of the Retire Name confirmation. The first %@ is the username, the second a long date (for example December 1, 2027): the first day this phone can claim a new username",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zahlungen an @%1$@ funktionieren innerhalb von etwa 2 Stunden nicht mehr, und niemand kann den Benutzernamen erneut registrieren. Du kannst ab dem %2$@ einen neuen Benutzernamen registrieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los pagos a @%1$@ dejarán de funcionar en unas 2 horas y nadie podrá reservarlo de nuevo. Podrás reservar un nuevo nombre de usuario a partir del %2$@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les paiements vers @%1$@ cesseront de fonctionner d’ici 2 heures environ, et personne ne pourra le réserver à nouveau. Vous pourrez réserver un nouveau nom d’utilisateur à partir du %2$@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I pagamenti a @%1$@ smetteranno di funzionare entro circa 2 ore e nessuno potrà più registrarlo. Potrai registrare un nuovo nome utente a partire dal %2$@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ への支払いは約2時間以内に機能しなくなり、誰も再取得できなくなります。新しいユーザ名は%2$@から取得できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@(으)로의 결제는 약 2시간 이내에 작동하지 않으며, 누구도 다시 등록할 수 없습니다. 새 사용자 이름은 %2$@부터 등록할 수 있습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Betalingen aan @%1$@ werken binnen ongeveer 2 uur niet meer, en niemand kan de naam opnieuw claimen. Je kunt vanaf %2$@ een nieuwe gebruikersnaam claimen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Płatności na @%1$@ przestaną działać w ciągu około 2 godzin i nikt nie będzie mógł jej ponownie zarejestrować. Nową nazwę użytkownika możesz zarejestrować od %2$@."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os pagamentos para @%1$@ deixarão de funcionar em cerca de 2 horas, e ninguém poderá registrá-lo novamente. Você poderá registrar um novo nome de usuário a partir de %2$@."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plățile către @%1$@ nu vor mai funcționa în aproximativ 2 ore și nimeni nu îl va mai putea revendica. Poți revendica un nume nou începând cu %2$@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Платежи на @%1$@ перестанут работать примерно через 2 часа, и никто не сможет занять это имя снова. Новое имя пользователя можно будет получить начиная с %2$@."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%1$@ adresine yapılan ödemeler yaklaşık 2 saat içinde çalışmayı durdurur ve bu adı kimse yeniden alamaz. %2$@ tarihinden itibaren yeni bir kullanıcı adı alabilirsiniz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Платежі на @%1$@ перестануть працювати приблизно за 2 години, і ніхто не зможе зайняти це ім’я знову. Нове ім’я користувача можна буде отримати починаючи з %2$@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "约 2 小时内，向 @%1$@ 的付款将停止生效，且任何人都无法再次认领该用户名。你可以从 %2$@ 起认领新的用户名。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "約 2 小時內，傳送至 @%1$@ 的付款將停止運作，且任何人都無法再次認領該使用者名稱。你可以從 %2$@ 起認領新的使用者名稱。"
+          }
+        }
+      }
+    },
     "Payments to your main address can be linked together." : {
       "comment" : "Select Address: footer under the main address",
       "localizations" : {
@@ -81263,6 +81833,481 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "受限制"
+          }
+        }
+      }
+    },
+    "Retire" : {
+      "comment" : "Destructive button in the Retire Name confirmation",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufgeben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritira"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "廃止"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "폐기"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opgeven"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wycofaj"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirar"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrage"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отказаться"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bırak"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відмовитися"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "注销"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "註銷"
+          }
+        }
+      }
+    },
+    "Retire @%@?" : {
+      "comment" : "Title of the confirmation for Retire Name. %@ is the username",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ aufgeben?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Retirar @%@?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer @%@ ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritirare @%@?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ を廃止しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@을(를) 폐기할까요?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ opgeven?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wycofać @%@?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirar @%@?"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retragi @%@?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отказаться от @%@?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ bırakılsın mı?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відмовитися від @%@?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要注销 @%@ 吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要註銷 @%@ 嗎？"
+          }
+        }
+      }
+    },
+    "Retire Name" : {
+      "comment" : "Red row at the bottom of the user's own @username screen. Retiring gives the username up for good",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benutzernamen aufgeben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirar nombre de usuario"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer le nom d’utilisateur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritira nome utente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ユーザ名を廃止"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용자 이름 폐기"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gebruikersnaam opgeven"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wycofaj nazwę użytkownika"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirar nome de usuário"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrage numele de utilizator"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отказаться от имени пользователя"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanıcı Adını Bırak"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відмовитися від імені користувача"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "注销用户名"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "註銷使用者名稱"
+          }
+        }
+      }
+    },
+    "Retires @%@ after you confirm" : {
+      "comment" : "VoiceOver hint of the Retire Name row. %@ is the username",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gibt @%@ nach deiner Bestätigung auf"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retira @%@ después de que lo confirmes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retire @%@ après votre confirmation"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritira @%@ dopo la tua conferma"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認後に @%@ を廃止します"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "확인 후 @%@을(를) 폐기합니다"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geeft @%@ op nadat je bevestigt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wycofuje @%@ po potwierdzeniu"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retira @%@ depois que você confirmar"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrage @%@ după ce confirmi"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отказывается от @%@ после подтверждения"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onayladıktan sonra @%@ adını bırakır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відмовляється від @%@ після підтвердження"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认后注销 @%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認後註銷 @%@"
+          }
+        }
+      }
+    },
+    "Retiring @%@" : {
+      "comment" : "VoiceOver label of the Retire Name row while the retire runs. %@ is the username",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ wird aufgegeben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirando @%@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrait de @%@ en cours"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritiro di @%@ in corso"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ を廃止中"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ 폐기 중"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ wordt opgegeven"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wycofywanie @%@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirando @%@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se retrage @%@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отказ от @%@ выполняется"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@%@ bırakılıyor"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відмова від @%@ виконується"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在注销 @%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在註銷 @%@"
           }
         }
       }
@@ -98717,6 +99762,101 @@
         }
       }
     },
+    "This name is on hold." : {
+      "comment" : "Send: the registry holds this username, so it cannot receive payments",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Benutzername ist gesperrt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este nombre de usuario está retenido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce nom d’utilisateur est suspendu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo nome utente è sospeso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このユーザ名は保留中です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 사용자 이름은 보류 중입니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze gebruikersnaam is geblokkeerd."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta nazwa użytkownika jest zawieszona."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este nome de usuário está suspenso."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acest nume de utilizator este suspendat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это имя пользователя заблокировано."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kullanıcı adı askıya alındı."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це ім’я користувача заблоковано."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此用户名已被暂停。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此使用者名稱已遭暫停。"
+          }
+        }
+      }
+    },
     "This name lists more than one Monero address" : {
       "localizations" : {
         "de" : {
@@ -106171,6 +107311,101 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更新位置"
+          }
+        }
+      }
+    },
+    "Update Monero One to claim a name." : {
+      "comment" : "Claim error: this app version's Username Terms are outdated. Keep Monero One in Latin letters",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisiere Monero One, um einen Benutzernamen zu registrieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualiza Monero One para reservar un nombre de usuario."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettez à jour Monero One pour réserver un nom d’utilisateur."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiorna Monero One per registrare un nome utente."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ユーザ名を取得するには Monero One をアップデートしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용자 이름을 등록하려면 Monero One을 업데이트하세요."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Werk Monero One bij om een gebruikersnaam te claimen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zaktualizuj Monero One, aby zarejestrować nazwę użytkownika."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atualize o Monero One para registrar um nome de usuário."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizează Monero One pentru a revendica un nume de utilizator."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновите Monero One, чтобы получить имя пользователя."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanıcı adı almak için Monero One'ı güncelleyin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оновіть Monero One, щоб отримати ім’я користувача."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请更新 Monero One 以认领用户名。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請更新 Monero One 以認領使用者名稱。"
           }
         }
       }

@@ -425,28 +425,165 @@ private struct UsernameArrive: ViewModifier {
   }
 }
 
+/// The @name screen: the wallet's own name, its hold, and Retire Name.
 struct UsernameDetailsView: View {
   let binding: UsernameBinding
   let walletName: String
   let walletEmoji: String
+  let walletSession: UUID
+  @ObservedObject var store: UsernameStore
+  @EnvironmentObject private var wallets: WalletManager
   @Environment(\.dismiss) private var dismiss
+  @State private var confirmsRetire = false
+  @State private var retiring = false
+  @State private var error: String?
+
+  private var nameState: UsernameNameState { store.nameState(for: binding) }
+  private var currentWallet: Bool {
+    wallets.isUnlocked && wallets.walletSessionId == walletSession
+      && wallets.usernameWalletKey == binding.walletKey
+  }
   var body: some View {
     NavigationStack {
       ScrollView {
         VStack(spacing: 28) {
+          if let reason = nameState.heldReason {
+            ErrorBanner(message: Self.holdText(reason, name: binding.displayHandle), type: .held)
+              .padding(.top, 16)
+          }
           UsernameCard(handle: binding.displayHandle, externalAddress: binding.externalAddress)
-            .padding(.top, 35)
+            .padding(.top, nameState.heldReason == nil ? 35 : 0)
           VStack(spacing: 5) {
             Text("Payments go to").font(.footnote).foregroundStyle(.secondary)
             Text(verbatim: "\(walletEmoji) \(walletName)").font(.subheadline.weight(.medium))
           }
           UsernameActions(binding: binding)
+          if nameState.retireAllowed { retireRow }
         }.padding(.horizontal, 24).padding(.bottom, 35)
       }
       .navigationTitle("Your Username").navigationBarTitleDisplayMode(.inline)
       .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
     }
     .presentationBackground(.ultraThinMaterial)
+    .interactiveDismissDisabled(retiring)
+    .task { await checkStatus() }
+  }
+
+  /// The red Retire Name row: one confirmation at the row, progress and
+  /// errors in place.
+  private var retireRow: some View {
+    VStack(spacing: 4) {
+      Button(role: .destructive) {
+        error = nil
+        confirmsRetire = true
+      } label: {
+        HStack(spacing: 8) {
+          if retiring { ProgressView().tint(.brand) }
+          Text("Retire Name")
+        }
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .contentShape(Rectangle())
+      }
+      .disabled(retiring)
+      .accessibilityIdentifier("username.retire")
+      .accessibilityLabel(retiring ? Text("Retiring @\(binding.displayHandle)") : Text("Retire Name"))
+      .accessibilityHint(Text("Retires @\(binding.displayHandle) after you confirm"))
+      .confirmationDialog(
+        Text("Retire @\(binding.displayHandle)?"), isPresented: $confirmsRetire, titleVisibility: .visible
+      ) {
+        Button("Retire", role: .destructive) { retire() }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        if let date = nameState.nextFreeClaim {
+          Text(
+            "Payments to @\(binding.displayHandle) stop working within about 2 hours, and nobody can claim it again. You can claim a new name starting \(Self.claimDay(date).formatted(date: .long, time: .omitted))."
+          )
+        } else {
+          Text(
+            "Payments to @\(binding.displayHandle) stop working within about 2 hours, and nobody can claim it again."
+          )
+        }
+      }
+      if let error {
+        Text(error).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
+          .accessibilityIdentifier("username.retire.error")
+      }
+    }
+  }
+
+  /// The gray On hold row's text, one sentence pair per reason.
+  static func holdText(_ reason: UsernameHoldReason, name: String) -> String {
+    switch reason {
+    case .order:
+      return String(
+        localized: "@\(name) is on hold because of a court order. Payments to @\(name) don't work while it's on hold.")
+    case .notice:
+      return String(
+        localized:
+          "@\(name) is on hold because of a notice we received. Payments to @\(name) don't work while it's on hold.")
+    case .sanctions:
+      return String(
+        localized: "@\(name) is on hold because of sanctions rules. Payments to @\(name) don't work while it's on hold.")
+    case .terms:
+      return String(
+        localized:
+          "@\(name) is on hold because of a breach of the Username Terms. Payments to @\(name) don't work while it's on hold."
+      )
+    }
+  }
+
+  /// The first local day that starts at or after the next free claim, as a
+  /// long date: "starting" that day never names a day too early.
+  static func claimDay(_ date: Date, calendar: Calendar = .current) -> Date {
+    let start = calendar.startOfDay(for: date)
+    return start < date ? calendar.date(byAdding: .day, value: 1, to: start) ?? date : start
+  }
+
+  /// The registry's state of the name when the screen opens. A hold shows
+  /// its row; a retired or erased name is forgotten, as after a retire.
+  private func checkStatus() async {
+    guard let configuration = UsernameConfiguration.current else { return }
+    let status = try? await UsernameRegistry(configuration: configuration).status(of: binding, store: store)
+    switch status {
+    case .retired, .notFound:
+      guard !retiring else { return }
+      try? store.forget(binding)
+      dismiss()
+    default: break
+    }
+  }
+
+  private func retire() {
+    guard !retiring else { return }
+    guard currentWallet else {
+      error = UsernameFailure.walletChanged.localizedDescription
+      return
+    }
+    guard let configuration = UsernameConfiguration.current else {
+      error = UsernameFailure.notConfigured.localizedDescription
+      return
+    }
+    retiring = true
+    error = nil
+    Task { @MainActor in
+      defer { retiring = false }
+      do {
+        try await UsernameRegistry(configuration: configuration).retire(
+          binding, store: store,
+          sign: { message, address in
+            try wallets.signUsername(message, subaddress: address, expectedSession: walletSession)
+          },
+          isCurrentWallet: { currentWallet })
+        dismiss()
+      } catch UsernameFailure.held {
+        // The hold is now an order or sanctions hold: its row shows, and
+        // the Retire row goes away.
+      } catch {
+        self.error =
+          (error as? UsernameFailure)?.localizedDescription
+          ?? String(localized: "The username service couldn't complete the request. Please try again.")
+      }
+    }
   }
 }
 

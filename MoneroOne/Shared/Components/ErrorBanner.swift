@@ -9,10 +9,13 @@ struct ErrorBanner: View {
         case offline
         case error
         case warning
+        /// A neutral state: the registry holds the wallet's own username.
+        case held
 
         var icon: String {
             switch self {
             case .offline: return "wifi.slash"
+            case .held: return "pause.circle.fill"
             case .error: return "exclamationmark.circle.fill"
             case .warning: return "exclamationmark.triangle.fill"
             }
@@ -20,7 +23,7 @@ struct ErrorBanner: View {
 
         var color: Color {
             switch self {
-            case .offline: return .gray
+            case .offline, .held: return .gray
             case .error: return .red
             case .warning: return .yellow
             }
@@ -67,7 +70,19 @@ struct ErrorBanner: View {
         .background(type.fill)
         .cornerRadius(12)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(type == .error ? String(localized: "Error") : type == .warning ? String(localized: "Warning") : String(localized: "Offline")): \(message)")
+        .accessibilityLabel(accessibilityText)
+    }
+}
+
+extension ErrorBanner {
+    /// The banner's kind, then its message. A hold's message names it already.
+    fileprivate var accessibilityText: String {
+        switch type {
+        case .error: return "\(String(localized: "Error")): \(message)"
+        case .warning: return "\(String(localized: "Warning")): \(message)"
+        case .offline: return "\(String(localized: "Offline")): \(message)"
+        case .held: return message
+        }
     }
 }
 

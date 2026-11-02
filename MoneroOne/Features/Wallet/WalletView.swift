@@ -229,7 +229,9 @@ struct WalletView: View {
             }
             .sheet(item: $shownUsername) { binding in
                 UsernameDetailsView(binding: binding, walletName: walletManager.activeWallet?.name ?? "",
-                                    walletEmoji: walletManager.activeWallet?.emoji ?? "")
+                                    walletEmoji: walletManager.activeWallet?.emoji ?? "",
+                                    walletSession: walletManager.walletSessionId, store: usernames)
+                    .environmentObject(walletManager)
             }
             .onChange(of: walletManager.isUnlocked) { _, unlocked in
                 if !unlocked { showUsernameClaim = false; shownUsername = nil }

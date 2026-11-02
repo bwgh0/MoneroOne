@@ -558,12 +558,56 @@ final class UsernameRetireTests: XCTestCase {
     XCTAssertEqual(paths, ["/v1/info", "/v1/rules", "/v1/handles/alice"])
     XCTAssertNil(store.state.pending)
   }
+
+  // MARK: - Send: another person's held name
+
+  func testSendGetsTheHeldResultOnlyForACheckedHoldAndNeverReadsTheMirror() async throws {
+    // (case, status, body, result)
+    let rows: [(String, Int, [String: Any], OpenAliasFailure)] = [
+      ("checked hold", 451, heldBody(.order), .usernameHeld),
+      ("bad signature", 451, heldBody(.order, signature: Hold.signatures[.notice]), .usernameUnavailable),
+      ("other 451", 451, ["error": ["code": "geo.blocked"]], .usernameUnavailable),
+      ("not found", 404, ["error": ["code": "handle.not_found"]], .usernameUnavailable),
+    ]
+    for (name, status, body, expected) in rows {
+      var paths: [String] = []
+      RetireURLProtocol.handler = { request in
+        paths.append(request.url?.host.map { $0 + (request.url?.path ?? "") } ?? "")
+        return (status, body)
+      }
+      let config = URLSessionConfiguration.ephemeral
+      config.protocolClasses = [RetireURLProtocol.self]
+      let resolver = UsernameResolver(
+        configuration: .init(
+          registry: .init(
+            url: URL(string: "https://registry.example")!, registrarKey: Hold.key,
+            rulesHash: String(repeating: "c", count: 64), termsVersion: "test-terms-v1"),
+          mirror: URL(string: "https://mirror.example")!, genesisRoot: String(repeating: "d", count: 64)),
+        network: "mainnet", session: URLSession(configuration: config), store: NoReceipts(),
+        ownedGenesis: { _, _ in nil })
+      do {
+        _ = try await resolver.resolve(OpenAliasName(display: "@alice", query: "alice.monero.one"))
+        XCTFail("Resolved: \(name)")
+      } catch {
+        XCTAssertEqual(error as? OpenAliasFailure, expected, name)
+      }
+      XCTAssertEqual(paths, ["registry.example/v1/handles/alice"], name)
+    }
+  }
 }
 
 private final class RetireMemory: UsernamePersistence {
   var state = UsernameLocalState()
   func read() throws -> UsernameLocalState { state }
   func write(_ state: UsernameLocalState) throws { self.state = state }
+}
+
+private struct NoReceipts: UsernameResolutionPersistence {
+  func read(_ name: String) throws -> [String: Any]? {
+    XCTFail("No receipt may be read")
+    return nil
+  }
+  func write(_ value: [String: Any], name: String) throws { XCTFail("No receipt may be saved") }
 }
 
 private final class RetireURLProtocol: URLProtocol {

@@ -173,12 +173,29 @@ final class UsernameResolver {
     self.ownedGenesis = ownedGenesis
   }
 
-  private func fetch(_ base: URL, _ path: String) async throws -> Data {
+  /// `held` names the handle of the registry lookup: its `451 name.held`
+  /// with a notice that passes the check is `usernameHeld`. Any other 451
+  /// or 404 keeps the unavailable text. A 451 is an answer: the lookup
+  /// stops there and never reads the mirror.
+  private func fetch(_ base: URL, _ path: String, held: String? = nil) async throws -> Data {
     var request = URLRequest(
       url: base.appendingPathComponent(path), cachePolicy: .reloadIgnoringLocalCacheData)
     request.setValue("application/json, application/octet-stream", forHTTPHeaderField: "Accept")
     let (bytes, response) = try await session.bytes(for: request)
     guard let http = response as? HTTPURLResponse else { throw OpenAliasFailure.network }
+    if http.statusCode == 451, let held {
+      var data = Data()
+      for try await byte in bytes {
+        guard data.count < 65_536 else { throw OpenAliasFailure.usernameUnavailable }
+        data.append(byte)
+      }
+      if let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+        UsernameHold.parse(body, handle: held, registrarKey: configuration.registry.registrarKey) != nil
+      {
+        throw OpenAliasFailure.usernameHeld
+      }
+      throw OpenAliasFailure.usernameUnavailable
+    }
     if http.statusCode == 404 || http.statusCode == 451 {
       throw OpenAliasFailure.usernameUnavailable
     }
@@ -213,7 +230,7 @@ final class UsernameResolver {
     let api = configuration.registry.url
     let mirror = configuration.mirror
     // Always ask the operator before showing a username (including a hold).
-    let head = try object(await fetch(api, "v1/handles/" + handle))
+    let head = try object(await fetch(api, "v1/handles/" + handle, held: handle))
     guard let rows = head["records"] as? [[String: Any]], !rows.isEmpty, rows.count <= 4096 else {
       throw OpenAliasFailure.usernameVerification
     }

@@ -42,6 +42,8 @@ enum DnssecStatus: Equatable {
 
 enum OpenAliasFailure: Error, Equatable {
     case usernameUnavailable, usernameVerification, usernameStale, usernameNotConfigured
+    /// The registry holds the name (`451 name.held`, notice checked).
+    case usernameHeld
     case noRecord
     case severalAddresses
     case paymentID

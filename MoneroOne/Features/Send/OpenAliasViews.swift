@@ -311,7 +311,8 @@ final class OpenAliasLookupModel: ObservableObject {
 extension OpenAliasFailure {
     var message: String {
         switch self {
-        case .usernameUnavailable: return String(localized: "This username is unavailable")
+        // A held name keeps the unavailable text until its own text lands.
+        case .usernameUnavailable, .usernameHeld: return String(localized: "This username is unavailable")
         case .usernameVerification: return String(localized: "Username signature check failed. Do not send to this address.")
         case .usernameStale: return String(localized: "The public username records are too old for a first payment. Try again later.")
         case .usernameNotConfigured: return String(localized: "Username payments aren't available yet")

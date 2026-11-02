@@ -47,9 +47,12 @@ struct ErrorBanner: View {
                 .foregroundColor(type.color)
                 .accessibilityHidden(true)
 
+            // The label sits on the text, not on the container, so VoiceOver
+            // reads the message once and Retry stays its own element.
             Text(message)
                 .font(.subheadline)
                 .foregroundColor(.primary)
+                .accessibilityLabel(accessibilityText)
 
             Spacer()
 
@@ -70,7 +73,6 @@ struct ErrorBanner: View {
         .background(type.fill)
         .cornerRadius(12)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilityText)
     }
 }
 

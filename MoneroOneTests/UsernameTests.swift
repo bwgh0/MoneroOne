@@ -786,6 +786,51 @@ final class UsernameTests: XCTestCase {
     XCTAssertEqual(failure(result), UsernameFailure.retry.localizedDescription)
     XCTAssertTrue(none.isEmpty)
   }
+  #if DEBUG
+    /// Registry ops/DEPLOY.md, "Test device proofs": the worked example.
+    func testStagingTestProofMatchesTheRegistryWorkedExample() throws {
+      let zeroKey = String(repeating: "0", count: 64)
+      let claimKey = String(repeating: "11", count: 32)
+      let deviceID = "00000000-0000-4000-8000-000000000001"
+      let device = UsernameDevice.devProof(
+        claimKey: claimKey, deviceID: "keychain-id", testKeyHex: zeroKey, testDeviceID: { deviceID })
+      XCTAssertEqual(device["platform"], "dev")
+      var text = try XCTUnwrap(device["proof"])
+      XCTAssertFalse(text.contains("=") || text.contains("+") || text.contains("/"))
+      text = text.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+      text += String(repeating: "=", count: (4 - text.count % 4) % 4)
+      let json = try XCTUnwrap(Data(base64Encoded: text))
+      let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: json) as? [String: String])
+      XCTAssertEqual(
+        fields,
+        [
+          "device_id": deviceID, "claim_key": claimKey,
+          "test_mac": "3861641707b6370a6b8953065dd944e24909b403e9c7b7c36e5f8e4d6316e0ca",
+        ])
+    }
+    func testNoOrBadTestKeyGivesThePlainDevProof() {
+      let claimKey = String(repeating: "11", count: 32)
+      let plain = ["platform": "dev", "proof": UsernameDevice.base64URL(Data("keychain-id".utf8))]
+      for raw in [nil, "", "zz", String(repeating: "0", count: 63), String(repeating: "g", count: 64),
+        String(repeating: "0", count: 66)]
+      {
+        let device = UsernameDevice.devProof(
+          claimKey: claimKey, deviceID: "keychain-id", testKeyHex: raw, testDeviceID: { "unused" })
+        XCTAssertEqual(device, plain, raw ?? "nil")
+      }
+    }
+    func testTestDeviceIDIsOneUUIDPerInstall() throws {
+      let suite = "UsernameTests.testDeviceID.\(UUID().uuidString)"
+      let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+      defer { defaults.removePersistentDomain(forName: suite) }
+      let first = UsernameDevice.testDeviceID(defaults)
+      XCTAssertNotNil(UUID(uuidString: first))
+      XCTAssertEqual(UsernameDevice.testDeviceID(defaults), first)
+      // A reinstall clears UserDefaults: a new device.
+      defaults.removePersistentDomain(forName: suite)
+      XCTAssertNotEqual(UsernameDevice.testDeviceID(defaults), first)
+    }
+  #endif
   func testDebugURLIsThisMachineATailscaleHTTPSNameOrStaging() {
     for raw in ["http://localhost:8787", "https://localhost:8787", "https://mac.example-tailnet.ts.net",
       "https://Mac.Example-Tailnet.TS.NET/oah", "https://staging-registry.monero.one",

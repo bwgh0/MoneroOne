@@ -225,13 +225,64 @@ enum UsernameDevice {
 
   /// The dev proof that a local dev registry accepts. A release build has
   /// none, whatever the caller asks.
-  private static func devProof(deviceID: String, allowed: Bool) -> [String: String]? {
+  private static func devProof(claimKey: String, deviceID: String, allowed: Bool) -> [String: String]? {
     #if DEBUG
-      return allowed ? ["platform": "dev", "proof": base64URL(Data(deviceID.utf8))] : nil
+      guard allowed else { return nil }
+      return devProof(
+        claimKey: claimKey, deviceID: deviceID,
+        testKeyHex: ProcessInfo.processInfo.environment["USERNAME_TEST_DEVICE_KEY"],
+        testDeviceID: { testDeviceID(UserDefaults.standard) })
     #else
       return nil
     #endif
   }
+
+  #if DEBUG
+    /// Test hook, debug builds only (release builds compile it out). With the
+    /// launch environment variable `USERNAME_TEST_DEVICE_KEY` (the staging
+    /// test key, 64 hex digits), the dev proof is signed for staging
+    /// (registry ops/DEPLOY.md, "Test device proofs"). Without it, or with a
+    /// malformed value, it is the plain dev proof a local dev registry accepts.
+    static func devProof(
+      claimKey: String, deviceID: String, testKeyHex: String?, testDeviceID: () -> String
+    ) -> [String: String] {
+      let plain = ["platform": "dev", "proof": base64URL(Data(deviceID.utf8))]
+      guard let testKeyHex else { return plain }
+      guard let key = keyBytes(hex: testKeyHex) else {
+        NSLog("[Username] USERNAME_TEST_DEVICE_KEY is not 64 hex digits; sending the plain dev proof")
+        return plain
+      }
+      guard let proof = testProof(key: key, claimKey: claimKey, deviceID: testDeviceID()) else { return plain }
+      return ["platform": "dev", "proof": proof]
+    }
+
+    /// base64url of {"device_id", "claim_key", "test_mac"}, where test_mac is
+    /// HMAC-SHA256(key, tag || 32 claim-key bytes || UTF-8 device id).
+    static func testProof(key: Data, claimKey: String, deviceID: String) -> String? {
+      guard key.count == 32, let claimBytes = keyBytes(hex: claimKey) else { return nil }
+      var message = Data("oah-registry/device-test/v1".utf8)
+      message.append(claimBytes)
+      message.append(Data(deviceID.utf8))
+      let mac = HMAC<SHA256>.authenticationCode(for: message, using: SymmetricKey(data: key))
+      let json = try? JSONSerialization.data(
+        withJSONObject: [
+          "device_id": deviceID, "claim_key": claimKey.lowercased(),
+          "test_mac": mac.map { String(format: "%02x", $0) }.joined(),
+        ],
+        options: [.sortedKeys, .withoutEscapingSlashes])
+      return json.map(base64URL)
+    }
+
+    /// One UUID per app install, in UserDefaults: a reinstall gives a new
+    /// test device, so staging gives it a new free claim.
+    static func testDeviceID(_ defaults: UserDefaults) -> String {
+      let key = "usernameTestDeviceID"
+      if let saved = defaults.string(forKey: key), UUID(uuidString: saved) != nil { return saved }
+      let made = UUID().uuidString
+      defaults.set(made, forKey: key)
+      return made
+    }
+  #endif
 
   /// The proof for one claim attempt. `featureUnsupported` means this phone
   /// can never make a token; other platform errors can pass on a retry.
@@ -240,14 +291,14 @@ enum UsernameDevice {
     claimKey: String, deviceID: String, tokens: UsernameDeviceTokens, allowDevProof: Bool
   ) async throws -> [String: String] {
     guard tokens.isSupported else {
-      if let dev = devProof(deviceID: deviceID, allowed: allowDevProof) { return dev }
+      if let dev = devProof(claimKey: claimKey, deviceID: deviceID, allowed: allowDevProof) { return dev }
       throw UsernameFailure.deviceUnsupported
     }
     let token: Data
     do {
       token = try await tokens.generateToken()
     } catch let error as DCError where error.code == .featureUnsupported {
-      if let dev = devProof(deviceID: deviceID, allowed: allowDevProof) { return dev }
+      if let dev = devProof(claimKey: claimKey, deviceID: deviceID, allowed: allowDevProof) { return dev }
       throw UsernameFailure.deviceUnsupported
     } catch {
       throw UsernameFailure.retry

@@ -227,7 +227,10 @@ struct UsernameFlowView: View {
         // A development build must not pretend this is public registration.
         Text("This is a local development claim.").font(.footnote).foregroundStyle(.secondary)
         #endif
-        primary("Claim @\(input)") { claim() }
+        VStack(spacing: 12) {
+          primary("Claim @\(input)") { claim() }
+          termsNote
+        }
       }
       // The buttons are laid out, hidden, as soon as the result is in, so
       // the pop does not wait for them to be built.
@@ -250,6 +253,14 @@ struct UsernameFlowView: View {
       _ = try UsernameRules.normalize(input)
       return String(localized: "3–15 characters. Availability is checked when you claim.")
     } catch { return UsernameRules.message(for: error) }
+  }
+  /// The agreement the claim records (terms version in `UsernameRegistry`).
+  /// The link opens in the browser, like the app's other monero.one links.
+  private var termsNote: some View {
+    Text("By claiming, you confirm you are 18 or older and agree to the [Username Terms](https://monero.one/username-terms).")
+      .font(.footnote).foregroundStyle(.secondary).tint(.brand)
+      .multilineTextAlignment(.center)
+      .accessibilityAddTraits(.isLink)
   }
   private var walletNote: some View {
     VStack(spacing: 4) {

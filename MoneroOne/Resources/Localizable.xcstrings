@@ -20894,6 +20894,101 @@
         }
       }
     },
+    "By claiming, you confirm you are 18 or older and agree to the [Username Terms](https://monero.one/username-terms)." : {
+      "comment" : "Footnote under the Claim button. Keep the Markdown link: the bracketed words are the link to the username terms page; keep the URL as it is",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit der Registrierung bestätigst du, dass du mindestens 18 Jahre alt bist, und stimmst den [Nutzungsbedingungen für Benutzernamen](https://monero.one/username-terms) zu."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al reservarlo, confirmas que tienes 18 años o más y aceptas los [Términos de nombres de usuario](https://monero.one/username-terms)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En réservant, vous confirmez avoir 18 ans ou plus et acceptez les [Conditions des noms d’utilisateur](https://monero.one/username-terms)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Richiedendolo, confermi di avere almeno 18 anni e accetti i [Termini dei nomi utente](https://monero.one/username-terms)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取得すると、18歳以上であることを確認し、[ユーザ名利用規約](https://monero.one/username-terms)に同意したことになります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "등록하면 만 18세 이상임을 확인하고 [사용자 이름 약관](https://monero.one/username-terms)에 동의하게 됩니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Door te claimen bevestig je dat je 18 jaar of ouder bent en ga je akkoord met de [Gebruikersnaamvoorwaarden](https://monero.one/username-terms)."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rezerwując, potwierdzasz, że masz co najmniej 18 lat, i akceptujesz [Regulamin nazw użytkownika](https://monero.one/username-terms)."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ao reservar, você confirma que tem 18 anos ou mais e concorda com os [Termos de Nomes de Usuário](https://monero.one/username-terms)."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prin rezervare, confirmi că ai cel puțin 18 ani și accepți [Termenii pentru numele de utilizator](https://monero.one/username-terms)."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регистрируя имя, вы подтверждаете, что вам исполнилось 18 лет, и принимаете [Условия для имён пользователей](https://monero.one/username-terms)."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Talep ederek 18 yaşında veya daha büyük olduğunuzu onaylar ve [Kullanıcı Adı Koşulları](https://monero.one/username-terms)’nı kabul edersiniz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Реєструючи ім’я, ви підтверджуєте, що вам виповнилося 18 років, і приймаєте [Умови для імен користувачів](https://monero.one/username-terms)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "注册即表示你确认已年满 18 岁，并同意[用户名条款](https://monero.one/username-terms)。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "註冊即表示你確認已年滿 18 歲，並同意[使用者名稱條款](https://monero.one/username-terms)。"
+          }
+        }
+      }
+    },
     "Camera input not supported" : {
       "localizations" : {
         "de" : {

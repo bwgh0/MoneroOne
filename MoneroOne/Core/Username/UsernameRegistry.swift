@@ -282,10 +282,14 @@ enum UsernameDevice {
       return json.map(base64URL)
     }
 
+    /// The UserDefaults key of the test device ID. `USERNAME_TEST_RESET=1`
+    /// removes it (`UsernameStore.applyTestReset`).
+    static let testDeviceIDKey = "usernameTestDeviceID"
+
     /// One UUID per app install, in UserDefaults: a reinstall gives a new
     /// test device, so staging gives it a new free claim.
     static func testDeviceID(_ defaults: UserDefaults) -> String {
-      let key = "usernameTestDeviceID"
+      let key = testDeviceIDKey
       if let saved = defaults.string(forKey: key), UUID(uuidString: saved) != nil { return saved }
       let made = UUID().uuidString
       defaults.set(made, forKey: key)

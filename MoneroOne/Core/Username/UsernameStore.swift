@@ -139,18 +139,22 @@ final class UsernameStore: ObservableObject {
     /// Test hook, debug builds only (release builds compile it out). The
     /// launch environment variable `USERNAME_TEST_RESET` starts the app with
     /// no saved usernames, so one test phone can claim again:
-    /// - `1` clears the claims, the pending claim, the free-claim date and
-    ///   the device ID (the registry sees a new phone).
-    /// - `keep-device` clears the same but keeps the device ID (the registry
-    ///   sees the same phone, to test `noFreeClaim`).
+    /// - `1` clears the claims, the pending claim, the free-claim date, the
+    ///   device ID and the staging test device ID (the registry sees a new
+    ///   phone).
+    /// - `keep-device` clears the same but keeps both device IDs (the
+    ///   registry sees the same phone, to test `noFreeClaim`).
     /// Any other value changes nothing.
-    static func applyTestReset(_ mode: String?, to persistence: UsernamePersistence) {
+    static func applyTestReset(
+      _ mode: String?, to persistence: UsernamePersistence, defaults: UserDefaults = .standard
+    ) {
       guard mode == "1" || mode == "keep-device" else { return }
       var cleared = UsernameLocalState()
       if mode == "keep-device", let deviceID = (try? persistence.read())?.deviceID {
         cleared.deviceID = deviceID
       }
       try? persistence.write(cleared)
+      if mode == "1" { defaults.removeObject(forKey: UsernameDevice.testDeviceIDKey) }
     }
   #endif
   func reload() {

@@ -946,6 +946,10 @@ final class UsernameTests: XCTestCase {
     }
   }
   func testTestResetClearsTheSavedStateAndCanKeepTheDeviceID() throws {
+    let suite = "UsernameTests.testReset.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let testDevice = UsernameDevice.testDeviceID(defaults)
     let memory = UsernameMemory()
     let store = UsernameStore(persistence: memory)
     try store.savePending(pending())
@@ -953,20 +957,24 @@ final class UsernameTests: XCTestCase {
     memory.state.bindings = [binding()]
     memory.state.nextFreeClaim = .distantFuture
 
-    UsernameStore.applyTestReset(nil, to: memory)
-    UsernameStore.applyTestReset("0", to: memory)
+    UsernameStore.applyTestReset(nil, to: memory, defaults: defaults)
+    UsernameStore.applyTestReset("0", to: memory, defaults: defaults)
     XCTAssertEqual(memory.state.bindings.count, 1)
 
-    UsernameStore.applyTestReset("keep-device", to: memory)
+    UsernameStore.applyTestReset("keep-device", to: memory, defaults: defaults)
     XCTAssertTrue(memory.state.bindings.isEmpty)
     XCTAssertNil(memory.state.pending)
     XCTAssertNil(memory.state.nextFreeClaim)
     XCTAssertEqual(memory.state.deviceID, deviceID)
+    XCTAssertEqual(UsernameDevice.testDeviceID(defaults), testDevice)
 
+    // `1` also drops the staging test device ID: an install over the old
+    // app keeps UserDefaults, and staging must see a new phone.
     memory.state.bindings = [binding()]
-    UsernameStore.applyTestReset("1", to: memory)
+    UsernameStore.applyTestReset("1", to: memory, defaults: defaults)
     XCTAssertTrue(memory.state.bindings.isEmpty)
     XCTAssertNotEqual(memory.state.deviceID, deviceID)
+    XCTAssertNotEqual(UsernameDevice.testDeviceID(defaults), testDevice)
   }
 }
 

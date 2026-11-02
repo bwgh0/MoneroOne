@@ -132,7 +132,8 @@ struct WalletView: View {
                             arrival: playingArrival,
                             onArrivalDone: { playingArrival = nil },
                             username: ownUsername,
-                            onUsernameTap: { shownUsername = ownUsername }
+                            onUsernameTap: { shownUsername = ownUsername },
+                            onClaimUsername: canOfferUsername ? { showUsernameClaim = true } : nil
                         )
                         .id(walletManager.walletSessionId)
                         .padding(.horizontal)
@@ -177,8 +178,7 @@ struct WalletView: View {
             .background {
                 Color.clear.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
             }
-            .walletHeader(showWalletManager: $showWalletManager, offersUsername: canOfferUsername,
-                          onClaimUsername: { showUsernameClaim = true })
+            .walletHeader(showWalletManager: $showWalletManager)
             .navigationDestination(isPresented: $showLinks) {
                 TransactionListView(initialFilter: .links)
             }
@@ -548,8 +548,6 @@ struct RecentTransactionCard: View {
 
 private struct WalletHeaderContent: View {
     @Binding var showWalletManager: Bool
-    var offersUsername = false
-    var onClaimUsername: () -> Void = {}
     @EnvironmentObject var walletManager: WalletManager
 
     var body: some View {
@@ -564,12 +562,6 @@ private struct WalletHeaderContent: View {
                     .environmentObject(walletManager)
             }
             .padding(.horizontal)
-
-            if offersUsername && !showWalletManager {
-                Button("Get Your Username", action: onClaimUsername)
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.brand)
-                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading).padding(.horizontal)
-            }
 
             if walletManager.isTestnet {
                 TestnetBanner()
@@ -593,14 +585,14 @@ private struct WalletHeaderContent: View {
 
 private extension View {
     @ViewBuilder
-    func walletHeader(showWalletManager: Binding<Bool>, offersUsername: Bool = false, onClaimUsername: @escaping () -> Void = {}) -> some View {
+    func walletHeader(showWalletManager: Binding<Bool>) -> some View {
         if #available(iOS 26.0, *) {
             self.safeAreaBar(edge: .top, spacing: 12) {
-                WalletHeaderContent(showWalletManager: showWalletManager, offersUsername: offersUsername, onClaimUsername: onClaimUsername)
+                WalletHeaderContent(showWalletManager: showWalletManager)
             }
         } else {
             self.safeAreaInset(edge: .top, spacing: 12) {
-                WalletHeaderContent(showWalletManager: showWalletManager, offersUsername: offersUsername, onClaimUsername: onClaimUsername)
+                WalletHeaderContent(showWalletManager: showWalletManager)
             }
         }
     }

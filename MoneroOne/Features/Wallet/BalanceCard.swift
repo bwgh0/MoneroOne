@@ -33,6 +33,9 @@ struct BalanceCard: View {
     var onArrivalDone: () -> Void = {}
     var username: UsernameBinding? = nil
     var onUsernameTap: () -> Void = {}
+    /// Set while the wallet can claim a username: the name row invites the
+    /// claim, in the slot "@name" takes after it.
+    var onClaimUsername: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var balanceSize: CGFloat = 32
@@ -141,18 +144,20 @@ struct BalanceCard: View {
     var body: some View {
         VStack(spacing: 0) {
             if let username {
-                Button(action: onUsernameTap) {
-                    HStack(spacing: 10) {
-                        (Text(verbatim: "@").foregroundColor(.brand) + Text(verbatim: username.displayHandle).foregroundColor(.primary))
-                            .font(.system(size: min(usernameSize, Self.usernameMaxSize), weight: .medium)).tracking(-0.35).lineLimit(1)
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                    }.padding(.horizontal, 24).frame(height: 48).contentShape(Rectangle())
+                nameRow(action: onUsernameTap) {
+                    Text(verbatim: "@").foregroundColor(.brand) + Text(verbatim: username.displayHandle).foregroundColor(.primary)
                 }
-                .buttonStyle(.plain)
                 .accessibilityLabel("Your username, \(username.shortName)")
                 .accessibilityHint("Opens your username card")
                 .accessibilityIdentifier("username.home")
+                Divider()
+            } else if let onClaimUsername {
+                nameRow(action: onClaimUsername) {
+                    Text("Get Your Username").foregroundColor(.brand)
+                }
+                .accessibilityLabel("Get Your Username")
+                .accessibilityHint("Opens the username claim")
+                .accessibilityIdentifier("username.invite")
                 Divider()
             }
             balanceContent
@@ -165,6 +170,19 @@ struct BalanceCard: View {
         .overlay {
             if username != nil { UsernameBottomEdge().fill(Color.brand).allowsHitTesting(false) }
         }
+    }
+
+    /// The card's first row: "@name" once claimed, the invite before.
+    private func nameRow(action: @escaping () -> Void, label: () -> Text) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                label()
+                    .font(.system(size: min(usernameSize, Self.usernameMaxSize), weight: .medium)).tracking(-0.35).lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+            }.padding(.horizontal, 24).frame(height: 48).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var balanceContent: some View {

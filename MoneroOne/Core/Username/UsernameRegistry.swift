@@ -45,8 +45,7 @@ struct UsernameEnvironment: Equatable {
     genesisRoot: "37c80669fb410913857b678d9aea9a54c5344fe152c0fb247549040d05477f26",
     registrarKey: "40f69d3b401370c38c6f0b62976a688fd44b56abe22be66168b1f9a44822a988",
     rulesHash: "b775ea7a655fd01c57820f09d08a421e51b0739240fbd940f399e65bd6fcdeac",
-    // Placeholder until the terms text exists. Replace it before a release ships.
-    termsVersion: "terms-pending-v1")
+    termsVersion: "usernames-2026-11-01")
 
   static let staging = UsernameEnvironment(
     registryURL: "https://staging-registry.monero.one",

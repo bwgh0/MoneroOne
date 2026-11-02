@@ -875,7 +875,7 @@ final class UsernameTests: XCTestCase {
       configuration.registry.registrarKey, "40f69d3b401370c38c6f0b62976a688fd44b56abe22be66168b1f9a44822a988")
     XCTAssertEqual(
       configuration.registry.rulesHash, "b775ea7a655fd01c57820f09d08a421e51b0739240fbd940f399e65bd6fcdeac")
-    XCTAssertEqual(configuration.registry.termsVersion, "terms-pending-v1")
+    XCTAssertEqual(configuration.registry.termsVersion, "usernames-2026-11-01")
     XCTAssertEqual(configuration.origin, "monero.one/oah")
     // A debug build never reaches production, and a release build never reaches staging.
     XCTAssertNil(UsernameConfiguration.make(values, debug: true))

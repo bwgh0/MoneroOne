@@ -223,9 +223,10 @@ struct UsernameFlowView: View {
           .accessibilityAddTraits(.updatesFrequently)
       } else if stage == .confirm {
         Text("Usernames are permanent.").font(.subheadline.weight(.medium))
-        // The production terms and device gates are pending. A local
-        // development build must not pretend this is public registration.
+        #if DEBUG
+        // A development build must not pretend this is public registration.
         Text("This is a local development claim.").font(.footnote).foregroundStyle(.secondary)
+        #endif
         primary("Claim @\(input)") { claim() }
       }
       // The buttons are laid out, hidden, as soon as the result is in, so

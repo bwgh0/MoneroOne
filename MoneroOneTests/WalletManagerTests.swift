@@ -724,3 +724,130 @@ final class NeedsRestoreTests: XCTestCase {
         XCTAssertEqual(manager.activeWallet?.id, made[1].id, "Skip A: it needs restore")
     }
 }
+
+// MARK: - A new wallet's saved address
+
+/// A wallet that reports a fixed primary address and stops at once.
+private final class ReportingWallet: MoneroWallet {
+    var reportedAddress = ""
+    override var primaryAddress: String { reportedAddress }
+    override func stopAsync() async {}
+}
+
+/// The username invite reads the active wallet's saved address
+/// (`usernameWalletKey`). A wallet that was just created or restored saves
+/// that address as soon as it reports it, not only at the first lock.
+@MainActor
+final class NewWalletAddressTests: XCTestCase {
+
+    private let pin = "123456"
+    private let store = WalletStore()
+    private let address = "4" + String(repeating: "A", count: 94)
+    private let otherAddress = "4" + String(repeating: "B", count: 94)
+    private let settingKeys = ["isTestnet", "selectedNodeURL"]
+    private var savedSettings: [Any?] = []
+
+    override func setUp() async throws {
+        savedSettings = settingKeys.map { UserDefaults.standard.object(forKey: $0) }
+        UserDefaults.standard.set(false, forKey: "isTestnet")
+        UserDefaults.standard.set("http://localhost:1", forKey: "selectedNodeURL")
+        WalletManager().deleteAllWallets()
+    }
+
+    override func tearDown() async throws {
+        WalletManager().deleteAllWallets()
+        for (key, value) in zip(settingKeys, savedSettings) {
+            if let value { UserDefaults.standard.set(value, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+    }
+
+    /// A manager with one new wallet, saved the way Create Wallet saves it.
+    private func managerWithNewWallet(opening opened: ReportingWallet) throws -> (WalletManager, UUID) {
+        let manager = WalletManager()
+        try manager.addWallet(name: "Personal", mnemonic: manager.generatePolyseed(), pin: pin, restoreHeight: 0)
+        manager.openWalletForTesting = { _ in opened }
+        return (manager, try XCTUnwrap(manager.activeWallet?.id))
+    }
+
+    private func savedAddress(_ id: UUID) -> String? {
+        store.loadWallets().first { $0.id == id }?.cachedPrimaryAddress
+    }
+
+    /// Lets the main queue deliver the wallet's events.
+    private func waitForEvents(until done: () -> Bool = { false }) async throws {
+        for _ in 0..<50 where !done() {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
+
+    func testANewWalletSavesItsAddressWhenItReportsIt() async throws {
+        let opened = ReportingWallet()
+        let (manager, id) = try managerWithNewWallet(opening: opened)
+        XCTAssertEqual(manager.usernameWalletKey, "", "Create Wallet saves no address")
+
+        try await manager.unlock(pin: pin)
+        XCTAssertEqual(manager.usernameWalletKey, "", "wallet2 has not reported the address yet")
+
+        opened.reportedAddress = address
+        opened.syncState = .connecting
+        try await waitForEvents { manager.usernameWalletKey == self.address }
+
+        XCTAssertEqual(manager.usernameWalletKey, address, "The invite can show before the first lock")
+        XCTAssertEqual(savedAddress(id), address, "Saved where the lock saves it")
+        XCTAssertNil(manager.activeWallet?.cachedBalance, "The saved balance stays as it was")
+        XCTAssertEqual(WalletManager().usernameWalletKey, address, "The address is there after a relaunch")
+    }
+
+    func testAWalletThatReportsItsAddressAtOnceSavesItAtUnlock() async throws {
+        let opened = ReportingWallet()
+        opened.reportedAddress = address
+        let (manager, id) = try managerWithNewWallet(opening: opened)
+
+        try await manager.unlock(pin: pin)
+
+        XCTAssertEqual(manager.usernameWalletKey, address)
+        XCTAssertEqual(savedAddress(id), address)
+    }
+
+    func testASavedAddressStaysAsItIs() async throws {
+        let opened = ReportingWallet()
+        opened.reportedAddress = otherAddress
+        let (manager, id) = try managerWithNewWallet(opening: opened)
+        var info = try XCTUnwrap(manager.activeWallet)
+        info.cachedPrimaryAddress = address
+        store.updateWallet(info)
+        manager.activeWallet = info
+        manager.wallets = store.loadWallets()
+
+        try await manager.unlock(pin: pin)
+        opened.syncState = .connecting
+        try await waitForEvents()
+
+        XCTAssertEqual(manager.usernameWalletKey, address, "Only an empty saved address is filled in")
+        XCTAssertEqual(savedAddress(id), address)
+    }
+
+    /// A switch makes the next wallet active while the wallet it leaves still
+    /// runs. A late event from that wallet saves nothing into the next one.
+    func testTheWalletASwitchLeavesSavesNothingIntoTheNextWallet() async throws {
+        let manager = WalletManager()
+        try manager.addWallet(name: "Next", mnemonic: manager.generatePolyseed(), pin: pin, restoreHeight: 0)
+        let next = try XCTUnwrap(manager.activeWallet?.id)
+        let leaving = ReportingWallet()
+        leaving.reportedAddress = address
+        try manager.addWallet(name: "First", mnemonic: manager.generatePolyseed(), pin: pin, restoreHeight: 0)
+        let first = try XCTUnwrap(manager.activeWallet?.id)
+        manager.openWalletForTesting = { _ in leaving }
+        try await manager.unlock(pin: pin)
+        XCTAssertEqual(savedAddress(first), address)
+
+        XCTAssertNotNil(manager.prepareSwitchToWallet(id: next))
+        leaving.syncState = .connecting
+        try await waitForEvents()
+
+        XCTAssertEqual(manager.activeWallet?.id, next)
+        XCTAssertEqual(manager.usernameWalletKey, "", "The next wallet keeps no address of the wallet it replaced")
+        XCTAssertNil(savedAddress(next))
+        XCTAssertEqual(savedAddress(first), address)
+    }
+}

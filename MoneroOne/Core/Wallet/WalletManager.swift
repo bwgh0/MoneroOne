@@ -2477,6 +2477,9 @@ class WalletManager: ObservableObject {
 
     private func bindToWallet(_ wallet: MoneroWallet) {
         pendingRotatedIndex = nil
+        // The wallet this instance belongs to: every caller binds right
+        // after it opens the active wallet.
+        let boundWalletId = activeWallet?.id
 
         // Bind wallet state to manager state with widget updates
         wallet.$balance
@@ -2656,11 +2659,13 @@ class WalletManager: ObservableObject {
                     }
                 }
                 self.reconcileReceiveAddress()
+                self.savePrimaryAddressIfMissing(from: wallet, walletId: boundWalletId)
             }
             .store(in: &cancellables)
 
         // Set primary address immediately if available
         primaryAddress = wallet.primaryAddress
+        savePrimaryAddressIfMissing(from: wallet, walletId: boundWalletId)
 
         // Also update primaryAddress when sync state changes (kit may not be ready initially)
         wallet.$syncState
@@ -2671,6 +2676,7 @@ class WalletManager: ObservableObject {
                 if !addr.isEmpty && self.primaryAddress.isEmpty {
                     self.primaryAddress = addr
                 }
+                self.savePrimaryAddressIfMissing(from: wallet, walletId: boundWalletId)
             }
             .store(in: &cancellables)
 
@@ -2771,6 +2777,26 @@ class WalletManager: ObservableObject {
             info.cachedPrimaryAddress = primaryAddress.isEmpty ? nil : primaryAddress
         }
         info.userCreatedSubaddressIndices = Array(userCreatedSubaddressIndices)
+        walletStore.updateWallet(info)
+        activeWallet = info
+        if let idx = wallets.firstIndex(where: { $0.id == info.id }) {
+            wallets[idx] = info
+        }
+    }
+
+    /// A wallet that was just created or restored has no saved address
+    /// until the first lock, and the username invite reads the saved one.
+    /// Saves the address that `cacheActiveWalletData` would save at that
+    /// lock, as soon as the live wallet reports it. Changes only an empty
+    /// saved address, and only while `wallet` is still the open instance of
+    /// the active wallet `walletId` (a stale event from the wallet a switch
+    /// leaves must not write into the next one).
+    private func savePrimaryAddressIfMissing(from wallet: MoneroWallet, walletId: UUID?) {
+        guard moneroWallet === wallet, var info = activeWallet, info.id == walletId,
+              (info.cachedPrimaryAddress ?? "").isEmpty else { return }
+        let addr = wallet.primaryAddress
+        guard !addr.isEmpty else { return }
+        info.cachedPrimaryAddress = addr
         walletStore.updateWallet(info)
         activeWallet = info
         if let idx = wallets.firstIndex(where: { $0.id == info.id }) {

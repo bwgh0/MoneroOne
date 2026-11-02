@@ -53,7 +53,7 @@ struct UsernameEnvironment: Equatable {
     genesisRoot: "f0f5024f667e6957ce56d0a746a358b5bae36f7772dd56a0dd489a66a85e815e",
     registrarKey: "809d48344049bab6e37503094af5b3a947184ee0be45b304305d7c916d1588e2",
     rulesHash: "b775ea7a655fd01c57820f09d08a421e51b0739240fbd940f399e65bd6fcdeac",
-    termsVersion: "local-development-v1")
+    termsVersion: "usernames-2026-11-01")
 
   /// This build's values. Release builds ignore the launch environment.
   static var build: UsernameEnvironment {

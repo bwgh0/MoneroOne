@@ -886,7 +886,7 @@ final class UsernameTests: XCTestCase {
     XCTAssertEqual(staging.registry.url.absoluteString, "https://staging-registry.monero.one")
     XCTAssertEqual(staging.mirror.absoluteString, "https://staging-mirror.monero.one/oah/v1/")
     XCTAssertEqual(staging.genesisRoot, "f0f5024f667e6957ce56d0a746a358b5bae36f7772dd56a0dd489a66a85e815e")
-    XCTAssertEqual(staging.registry.termsVersion, "local-development-v1")
+    XCTAssertEqual(staging.registry.termsVersion, "usernames-2026-11-01")
     XCTAssertEqual(UsernameEnvironment.staging.overridden(by: [:]), .staging)
 
     let local = UsernameEnvironment.staging.overridden(by: [

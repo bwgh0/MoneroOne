@@ -190,11 +190,52 @@ final class UsernameStore: ObservableObject {
     next.bindings.append(binding)
     next.pending = nil
     if usesFreeClaim {
-      next.nextFreeClaim = Calendar(identifier: .gregorian).date(
-        byAdding: .month, value: 12, to: binding.claimedAt)
+      // The registry's rule, rounded up. A later saved date stays.
+      let free = UsernameClaimSlot.nextFreeClaim(after: binding.claimedAt)
+      next.nextFreeClaim = max(free, next.nextFreeClaim ?? free)
     }
     try persistence.write(next)
     state = next
+  }
+  /// After a retire: the name, its saved claim and its hold go. The free
+  /// claim date stays, so Home hides the invite until the phone can claim
+  /// again.
+  func forget(_ binding: UsernameBinding) throws {
+    guard !storageError else { throw UsernameFailure.storage }
+    var next = state
+    next.bindings.removeAll { $0.id == binding.id && $0.genesisHash == binding.genesisHash }
+    if let pending = next.pending, pending.walletKey == binding.walletKey,
+      pending.network == binding.network, pending.handle == binding.handle
+    {
+      next.pending = nil
+    }
+    try persistence.write(next)
+    holds[Self.holdKey(binding.handle, binding.network)] = nil
+    state = next
+  }
+  /// The checked hold of each name the registry holds, by network and
+  /// handle. Kept in memory: the @name screen checks again when it opens.
+  @Published private(set) var holds: [String: UsernameHold] = [:]
+  /// Saves the hold of a name, or clears it (nil) when the registry shows
+  /// the name live again.
+  func noteHold(_ hold: UsernameHold?, handle: String, network: String) {
+    let key = Self.holdKey(handle, network)
+    guard holds[key] != hold else { return }
+    holds[key] = hold
+  }
+  func hold(for binding: UsernameBinding) -> UsernameHold? {
+    holds[Self.holdKey(binding.handle, binding.network)]
+  }
+  private static func holdKey(_ handle: String, _ network: String) -> String { network + ":" + handle }
+  /// This phone's next free claim while it is still ahead, else nil. Home
+  /// hides the invite until then (`hasLocalClaimSlot`).
+  var inviteHiddenUntil: Date? {
+    guard let date = state.nextFreeClaim, date > Date() else { return nil }
+    return date
+  }
+  /// What the @name screen shows for this wallet's name.
+  func nameState(for binding: UsernameBinding) -> UsernameNameState {
+    UsernameNameState(hold: hold(for: binding), nextFreeClaim: inviteHiddenUntil)
   }
   /// While a saved claim may hold a name, only its own wallet offers a
   /// claim. Other wallets show nothing until a check settles it.

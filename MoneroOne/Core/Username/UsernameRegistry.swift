@@ -7,8 +7,13 @@ enum UsernameFailure: Error, LocalizedError {
   case storage, walletChanged, walletOpening, unavailable, noFreeClaim, notConfigured, verification
   case pendingClaim, regionBlocked, deviceUnsupported, retry
   case server(String)
+  /// `451 name.held` with a notice that passed its check. Its text is the
+  /// taken text: in the claim flow the name is not free. The @name screen
+  /// shows the hold from `UsernameStore.nameState(for:)` instead.
+  case held(UsernameHold)
   var errorDescription: String? {
     switch self {
+    case .held: return String(localized: "This username is unavailable.")
     case .storage: return String(localized: "Your username could not be saved securely. Unlock the app and try again.")
     case .walletChanged:
       return String(localized: "The wallet changed. Open this flow from the wallet you want to use.")
@@ -340,7 +345,10 @@ final class UsernameRegistry {
       ?? URLSession(configuration: options, delegate: UsernameSessionDelegate(), delegateQueue: nil)
   }
 
-  private func request(_ path: String, body: [String: Any]? = nil) async throws -> Data {
+  /// `held` names the handle of a lookup or an owner record: a `451
+  /// name.held` for it throws `UsernameFailure.held` once its notice passes
+  /// the check. A hold is an answer: nothing is read from the mirror.
+  private func request(_ path: String, body: [String: Any]? = nil, held: String? = nil) async throws -> Data {
     let url = configuration.url.appendingPathComponent("v1").appendingPathComponent(path)
     var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
     if let body {
@@ -355,7 +363,14 @@ final class UsernameRegistry {
     guard (200..<300).contains(response.statusCode) else {
       let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
       let code = (object?["error"] as? [String: Any])?["code"] as? String ?? ""
+      // A notice that fails its check gets the generic error below, with no reason.
+      if response.statusCode == 451, code == "name.held", let held, let object,
+        let hold = UsernameHold.parse(object, handle: held, registrarKey: configuration.registrarKey)
+      {
+        throw UsernameFailure.held(hold)
+      }
       if code == "handle.not_found" { throw RegistryNotFound() }
+      if code == "chain.record_after_tombstone" { throw RegistryRetired() }
       if code == "device.slot_used" { throw UsernameFailure.noFreeClaim }
       if code == "name.unavailable" { throw UsernameFailure.unavailable }
       if code == "geo.blocked" { throw UsernameFailure.regionBlocked }
@@ -371,12 +386,31 @@ final class UsernameRegistry {
     return data
   }
   private struct RegistryNotFound: Error {}
+  private struct RegistryRetired: Error {}
   private struct ExpiredClaim: Error {}
   private func object(_ data: Data) throws -> [String: Any] {
     guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
       throw UsernameFailure.verification
     }
     return value
+  }
+  /// `GET /v1/handles/{handle}`. The store learns the name's hold: a
+  /// checked hold is saved, then thrown as `UsernameFailure.held`; a live
+  /// or unknown name clears it.
+  private func lookUp(_ handle: String, network: String, store: UsernameStore) async throws
+    -> [String: Any]
+  {
+    do {
+      let found = try object(await request("handles/" + handle, held: handle))
+      store.noteHold(nil, handle: handle, network: network)
+      return found
+    } catch UsernameFailure.held(let hold) {
+      store.noteHold(hold, handle: handle, network: network)
+      throw UsernameFailure.held(hold)
+    } catch let error as RegistryNotFound {
+      store.noteHold(nil, handle: handle, network: network)
+      throw error
+    }
   }
 
   /// Called only after the user agrees to claim. No preflight runs on Home
@@ -431,7 +465,8 @@ final class UsernameRegistry {
     guard let rules = String(data: rulesData, encoding: .utf8) else { throw UsernameFailure.verification }
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
     do {
-      let existing = try object(await request("handles/" + handle))
+      // A held name stops the claim here, and a saved claim stays.
+      let existing = try await lookUp(handle, network: network, store: store)
       // The earlier signed request landed after the check above: it is this
       // wallet's name, with no new signature.
       if let released, let rows = existing["records"] as? [[String: Any]], rows.count == 1,
@@ -501,7 +536,8 @@ final class UsernameRegistry {
     }
     let records: [[String: Any]]
     do {
-      let existing = try object(await request("handles/" + pending.handle))
+      // A held name keeps the saved claim: its result is not known.
+      let existing = try await lookUp(pending.handle, network: pending.network, store: store)
       guard let rows = existing["records"] as? [[String: Any]], !rows.isEmpty else {
         throw UsernameFailure.verification
       }
@@ -629,5 +665,100 @@ final class UsernameRegistry {
       genesisHash: pending.recordHash, record: record, claimedAt: Date())
     try store.accept(binding, usesFreeClaim: usesFreeClaim)
     return binding
+  }
+
+  // MARK: - The wallet's own name: its state and its retire
+
+  /// The registry's state of the wallet's own name. The store learns a hold
+  /// (or its end), so `UsernameStore.nameState(for:)` shows it; the @name
+  /// screen runs this when it opens. It signs and saves nothing else.
+  /// Throws while the registry cannot answer, or when its answer is not
+  /// about this name (another genesis or owner).
+  func status(of binding: UsernameBinding, store: UsernameStore) async throws -> UsernameNameStatus {
+    let found: [String: Any]
+    do {
+      found = try await lookUp(binding.handle, network: binding.network, store: store)
+    } catch UsernameFailure.held(let hold) {
+      return .held(hold)
+    } catch is RegistryNotFound {
+      return .notFound
+    }
+    guard found["handle"] as? String == binding.handle,
+      found["genesis_hash"] as? String == binding.genesisHash,
+      let tombstoned = found["tombstoned"] as? Bool
+    else { throw UsernameFailure.verification }
+    if tombstoned { return .retired }
+    // The owner signs the retire: the name must still point to it.
+    guard found["owner"] as? String == binding.subaddress, let head = UsernameHead(json: found["head"]),
+      head.seq > 0 || head.recordHash == binding.genesisHash
+    else { throw UsernameFailure.verification }
+    return .live(head)
+  }
+
+  /// Retires the wallet's own name: signs a tombstone with the owner key
+  /// and posts it (`POST /v1/handles/{handle}/records`). A live name gets
+  /// it at head seq + 1 over the head hash; a `notice` or `terms` hold at
+  /// `hold.head.seq + 1` over `hold.head.record_hash`. On success, and when
+  /// the registry shows the name retired or gone already, the app forgets
+  /// the name, its saved claim and its hold; the free claim date stays.
+  ///
+  /// Throws `UsernameFailure.held` for an `order` or `sanctions` hold (no
+  /// retire; the store shows the hold), `.walletChanged`, `.storage`,
+  /// `.verification` (a reply that fails a check: the name stays), and the
+  /// registry's other refusals as in a claim. `sign` is the claim's signer:
+  /// (message, subaddress) to a `SigV2` string.
+  func retire(
+    _ binding: UsernameBinding, store: UsernameStore,
+    sign: (String, String) throws -> String,
+    isCurrentWallet: () -> Bool
+  ) async throws {
+    guard isCurrentWallet(), !binding.walletKey.isEmpty else { throw UsernameFailure.walletChanged }
+    guard !store.storageError else { throw UsernameFailure.storage }
+    // One username request at a time: a claim and a retire never overlap.
+    try store.beginClaim()
+    defer { store.endClaim() }
+    guard store.binding(walletKey: binding.walletKey, network: binding.network) == binding else {
+      throw UsernameFailure.walletChanged
+    }
+    let head: UsernameHead
+    switch try await status(of: binding, store: store) {
+    case .retired, .notFound:
+      // An earlier retire landed (its reply was lost), or the epoch erased it.
+      try store.forget(binding)
+      return
+    case .live(let live): head = live
+    case .held(let hold):
+      guard hold.allowsRetire, let held = hold.head else { throw UsernameFailure.held(hold) }
+      // A genesis head must be this wallet's genesis.
+      guard held.seq > 0 || held.recordHash == binding.genesisHash else {
+        throw UsernameFailure.verification
+      }
+      head = held
+    }
+    guard head.seq < UInt32.max,
+      let unsigned = UsernameTombstone.unsigned(handle: binding.handle, seq: head.seq + 1, prev: head.recordHash)
+    else { throw UsernameFailure.verification }
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
+    let signature = try sign(UsernameTombstone.signingMessage(unsigned), binding.subaddress)
+    guard signature.hasPrefix("SigV2") else { throw UsernameFailure.verification }
+    guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
+    do {
+      let reply = try object(
+        await request(
+          "handles/" + binding.handle + "/records",
+          body: ["record": UsernameDevice.base64URL(unsigned), "owner_signatures": [signature]],
+          held: binding.handle))
+      guard reply["handle"] as? String == binding.handle,
+        let record = (reply["record"] as? String).flatMap(UsernameDevice.base64URLDecode),
+        UsernameTombstone.isCountersigned(record, unsigned: unsigned, registrarKey: configuration.registrarKey)
+      else { throw UsernameFailure.verification }
+    } catch UsernameFailure.held(let hold) {
+      // The hold changed to `order` or `sanctions` since the lookup.
+      store.noteHold(hold, handle: binding.handle, network: binding.network)
+      throw UsernameFailure.held(hold)
+    } catch is RegistryRetired {
+      // The same retire landed from an earlier try.
+    }
+    try store.forget(binding)
   }
 }

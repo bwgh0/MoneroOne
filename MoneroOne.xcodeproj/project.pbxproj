@@ -10,6 +10,8 @@
 		CAFE04000000000000000002 /* username-resolution.json in Resources */ = {isa = PBXBuildFile; fileRef = CAFE04000000000000000001 /* username-resolution.json */; };
 		CAFE03000000000000000002 /* UsernameResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE03000000000000000001 /* UsernameResolutionTests.swift */; };
 		CAFE02000000000000000002 /* UsernameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE02000000000000000001 /* UsernameResolver.swift */; };
+		CAFE05000000000000000002 /* UsernameRetire.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE05000000000000000001 /* UsernameRetire.swift */; };
+		CAFE06000000000000000002 /* UsernameRetireTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE06000000000000000001 /* UsernameRetireTests.swift */; };
 		CAFE01000000000000000002 /* UsernameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE01000000000000000001 /* UsernameTests.swift */; };
 		4D07100000000000000000D2 /* MotionMomentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000D1 /* MotionMomentsTests.swift */; };
 		4D07100000000000000000C2 /* MoneyArrival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D07100000000000000000C1 /* MoneyArrival.swift */; };
@@ -252,6 +254,8 @@
 		CAFE04000000000000000001 /* username-resolution.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "MoneroOneTests/Fixtures/username-resolution.json"; sourceTree = SOURCE_ROOT; };
 		CAFE03000000000000000001 /* UsernameResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOneTests/UsernameResolutionTests.swift"; sourceTree = SOURCE_ROOT; };
 		CAFE02000000000000000001 /* UsernameResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Core/Username/UsernameResolver.swift"; sourceTree = SOURCE_ROOT; };
+		CAFE05000000000000000001 /* UsernameRetire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOne/Core/Username/UsernameRetire.swift"; sourceTree = SOURCE_ROOT; };
+		CAFE06000000000000000001 /* UsernameRetireTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneroOneTests/UsernameRetireTests.swift"; sourceTree = SOURCE_ROOT; };
 		CAFE01000000000000000001 /* UsernameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameTests.swift; sourceTree = "<group>"; };
 		4D07100000000000000000D1 /* MotionMomentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionMomentsTests.swift; sourceTree = "<group>"; };
 		4D07100000000000000000C1 /* MoneyArrival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyArrival.swift; sourceTree = "<group>"; };
@@ -508,6 +512,7 @@
 				CAFE01000000000000000001 /* UsernameTests.swift */,
 				CAFE04000000000000000001 /* username-resolution.json */,
 				CAFE03000000000000000001 /* UsernameResolutionTests.swift */,
+				CAFE06000000000000000001 /* UsernameRetireTests.swift */,
 				4D07100000000000000000D1 /* MotionMomentsTests.swift */,
 				5EED00000000000000000055 /* legacy-vectors.json */,
 				5EED00000000000000000052 /* PolyseedCodecTests.swift */,
@@ -704,6 +709,7 @@
 				E35F81CEB4EBE5660169F3DC /* UsernameCard.swift */,
 				E8547681C25FE51B41D63FE3 /* UsernameRegistry.swift */,
 				CAFE02000000000000000001 /* UsernameResolver.swift */,
+				CAFE05000000000000000001 /* UsernameRetire.swift */,
 				72D7CD8D011014EFE4EDBD3A /* UsernameStore.swift */,
 				DA37D8A22F64D8D5D63F9F81 /* MoneroOne */,
 				02EFD0FFD04912A60D8FC21D /* MoneroOneTests */,
@@ -1128,6 +1134,7 @@
 				7E71E0000000000000000004 /* ReviewPromptGateTests.swift in Sources */,
 				CAFE01000000000000000002 /* UsernameTests.swift in Sources */,
 				CAFE03000000000000000002 /* UsernameResolutionTests.swift in Sources */,
+				CAFE06000000000000000002 /* UsernameRetireTests.swift in Sources */,
 				4D07100000000000000000D2 /* MotionMomentsTests.swift in Sources */,
 				5EED00000000000000000062 /* PolyseedCodecTests.swift in Sources */,
 				5EED00000000000000000061 /* LegacySeedCodecTests.swift in Sources */,
@@ -1190,6 +1197,7 @@ D4CA1886455E66B7BC4DD4A0 /* AmountFormattingTests.swift in Sources */,
 				2E5A07090DE34561A9B74502 /* UsernameCard.swift in Sources */,
 				C34C226794D657B24E5C7D17 /* UsernameRegistry.swift in Sources */,
 				CAFE02000000000000000002 /* UsernameResolver.swift in Sources */,
+				CAFE05000000000000000002 /* UsernameRetire.swift in Sources */,
 				CF030EEFC593E8E7B61A3B67 /* UsernameStore.swift in Sources */,
 				5EED00000000000000000028 /* SeedPhraseEntryView.swift in Sources */,
 				5EED00000000000000000027 /* SeedWordField.swift in Sources */,

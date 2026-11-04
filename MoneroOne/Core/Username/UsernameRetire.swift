@@ -163,6 +163,27 @@ enum UsernameTombstone {
       Data(signingMessage(unsigned).utf8), signature: Data(bytes.suffix(64)), key: registrarKey)
   }
 
+  /// A record that the registry serves, read as a tombstone of `handle`:
+  /// its unsigned bytes, `seq` and `prev`, when the record is that
+  /// tombstone with one owner signature and the registrar's
+  /// countersignature under `registrarKey`. Nil for any other record.
+  static func countersigned(_ record: Data, handle: String, registrarKey: String)
+    -> (unsigned: Data, seq: UInt32, prev: String)?
+  {
+    let bytes = [UInt8](record)
+    let length = 4 + 1 + 1 + handle.utf8.count + 4 + 32
+    guard bytes.count == length + 128 else { return nil }
+    let at = 6 + handle.utf8.count
+    let seq = bytes[at..<at + 4].reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+    let prev = bytes[(at + 4)..<length].map { String(format: "%02x", $0) }.joined()
+    // The rebuilt header must be the record's own: "OAH1", type 4, this handle.
+    guard let unsigned = unsigned(handle: handle, seq: seq, prev: prev),
+      unsigned == Data(bytes[0..<length]),
+      isCountersigned(record, unsigned: unsigned, registrarKey: registrarKey)
+    else { return nil }
+    return (unsigned, seq, prev)
+  }
+
   /// oah-core `validate_label`: 3 to 15 of a-z, 0-9 and _, a letter first,
   /// no `__`. The blocked-name list is not checked: a name that the list
   /// blocks later can still retire.
@@ -219,9 +240,11 @@ enum UsernameNameStatus: Equatable {
   case live(UsernameHead)
   /// The registry holds the name, and the notice passed its check.
   case held(UsernameHold)
-  /// The chain ends in a tombstone; the erasure runs at the next epoch.
+  /// The chain ends in this name's tombstone, countersigned by the
+  /// registrar; the erasure runs at the next epoch.
   case retired
   /// The registry has no such name (erased, or never registered there).
+  /// A 404 is not signed: alone it proves no retire.
   case notFound
 }
 

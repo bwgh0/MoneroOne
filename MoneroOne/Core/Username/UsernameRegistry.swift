@@ -680,10 +680,11 @@ final class UsernameRegistry {
   // MARK: - The wallet's own name: its state and its retire
 
   /// The registry's state of the wallet's own name. The store learns a hold
-  /// (or its end), so `UsernameStore.nameState(for:)` shows it; the @name
-  /// screen runs this when it opens. It signs and saves nothing else.
-  /// Throws while the registry cannot answer, or when its answer is not
-  /// about this name (another genesis or owner).
+  /// (or its end), so `UsernameStore.nameState(for:)` shows it. It signs
+  /// and saves nothing else. Throws while the registry cannot answer, or
+  /// when its answer is not about this name (another genesis or owner).
+  /// `.retired` needs the registrar's countersigned tombstone: the
+  /// `tombstoned` flag alone is not signed, and throws `.verification`.
   func status(of binding: UsernameBinding, store: UsernameStore) async throws -> UsernameNameStatus {
     let found: [String: Any]
     do {
@@ -697,7 +698,12 @@ final class UsernameRegistry {
       found["genesis_hash"] as? String == binding.genesisHash,
       let tombstoned = found["tombstoned"] as? Bool
     else { throw UsernameFailure.verification }
-    if tombstoned { return .retired }
+    if tombstoned {
+      guard endsInTombstone(found, of: binding, attempt: store.retireAttempt(for: binding)) else {
+        throw UsernameFailure.verification
+      }
+      return .retired
+    }
     // The owner signs the retire: the name must still point to it.
     guard found["owner"] as? String == binding.subaddress, let head = UsernameHead(json: found["head"]),
       head.seq > 0 || head.recordHash == binding.genesisHash
@@ -705,12 +711,48 @@ final class UsernameRegistry {
     return .live(head)
   }
 
+  /// True when the lookup's last record is a tombstone of this name that
+  /// the registrar countersigned with the pinned key: the one this phone
+  /// saved before its POST, or the one at seq 1 over the name's genesis
+  /// (a retire from another phone with this wallet).
+  private func endsInTombstone(
+    _ found: [String: Any], of binding: UsernameBinding, attempt: UsernameRetireAttempt?
+  ) -> Bool {
+    guard let rows = found["records"] as? [[String: Any]],
+      let record = (rows.last?["record"] as? String).flatMap(UsernameDevice.base64URLDecode),
+      let tombstone = UsernameTombstone.countersigned(
+        record, handle: binding.handle, registrarKey: configuration.registrarKey)
+    else { return false }
+    if let attempt, UsernameDevice.base64URL(tombstone.unsigned) == attempt.record { return true }
+    return tombstone.seq == 1 && tombstone.prev == binding.genesisHash
+  }
+
+  /// The @name screen's check when it opens. The store learns a hold. The
+  /// name is forgotten only when the registry proves the retire (`.retired`:
+  /// the registrar's countersigned tombstone). A 404, an unsigned
+  /// `tombstoned` flag, an answer that fails a check and no answer all keep
+  /// the name and its binding. `isRetiring` is true while a retire runs:
+  /// that retire forgets on its own. True when the name was forgotten.
+  func checkOnOpen(
+    _ binding: UsernameBinding, store: UsernameStore, isRetiring: () -> Bool
+  ) async -> Bool {
+    guard case .retired? = try? await status(of: binding, store: store), !isRetiring() else { return false }
+    return (try? store.forget(binding)) != nil
+  }
+
   /// Retires the wallet's own name: signs a tombstone with the owner key
   /// and posts it (`POST /v1/handles/{handle}/records`). A live name gets
   /// it at head seq + 1 over the head hash; a `notice` or `terms` hold at
-  /// `hold.head.seq + 1` over `hold.head.record_hash`. On success, and when
-  /// the registry shows the name retired or gone already, the app forgets
-  /// the name, its saved claim and its hold; the free claim date stays.
+  /// `hold.head.seq + 1` over `hold.head.record_hash`. The unsigned
+  /// tombstone is saved before the POST.
+  ///
+  /// The app forgets the name, its saved claim, its saved retire and its
+  /// hold (the free claim date stays) only after an answer that proves the
+  /// retire: the reply or the lookup holds the registrar's countersigned
+  /// tombstone. A 404 or `chain.record_after_tombstone` is not signed: it
+  /// ends the retire only when this phone saved a retire in an earlier try
+  /// (its reply was lost, then the epoch erased the name). Else it throws
+  /// `.verification`, and the name stays.
   ///
   /// Throws `UsernameFailure.held` for an `order` or `sanctions` hold (no
   /// retire; the store shows the hold), `.walletChanged`, `.storage`,
@@ -730,10 +772,18 @@ final class UsernameRegistry {
     guard store.binding(walletKey: binding.walletKey, network: binding.network) == binding else {
       throw UsernameFailure.walletChanged
     }
+    // A retire that this phone signed and saved in an earlier try.
+    let earlier = store.retireAttempt(for: binding) != nil
     let head: UsernameHead
     switch try await status(of: binding, store: store) {
-    case .retired, .notFound:
-      // An earlier retire landed (its reply was lost), or the epoch erased it.
+    case .retired:
+      // An earlier retire landed (its reply was lost): the registrar signed it.
+      try store.forget(binding)
+      return
+    case .notFound:
+      // The epoch erased the name after an earlier retire. A 404 alone is
+      // not proof: the name stays.
+      guard earlier else { throw UsernameFailure.verification }
       try store.forget(binding)
       return
     case .live(let live): head = live
@@ -752,6 +802,9 @@ final class UsernameRegistry {
     let signature = try sign(UsernameTombstone.signingMessage(unsigned), binding.subaddress)
     guard signature.hasPrefix("SigV2") else { throw UsernameFailure.verification }
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
+    // Persist before POST: if the reply is lost, the next try matches the
+    // registrar's copy of this tombstone in the lookup.
+    try store.saveRetire(UsernameRetireAttempt(binding: binding, unsigned: unsigned))
     do {
       let reply = try object(
         await request(
@@ -766,8 +819,10 @@ final class UsernameRegistry {
       // The hold changed to `order` or `sanctions` since the lookup.
       store.noteHold(hold, handle: binding.handle, network: binding.network)
       throw UsernameFailure.held(hold)
-    } catch is RegistryRetired {
-      // The same retire landed from an earlier try.
+    } catch is RegistryRetired, is RegistryNotFound {
+      // The same retire landed from an earlier try (under a hold, the
+      // lookup shows no chain). Not signed: it counts only after one.
+      guard earlier else { throw UsernameFailure.verification }
     }
     try store.forget(binding)
   }

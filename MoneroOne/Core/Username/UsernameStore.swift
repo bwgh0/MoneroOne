@@ -31,11 +31,38 @@ struct PendingUsernameClaim: Codable {
   let rulesHash: String
 }
 
+/// A retire this phone signed, saved before its POST. A later lookup can
+/// match the registrar's countersigned copy of `record`. While it is saved,
+/// an unsigned "gone" answer (a 404, `chain.record_after_tombstone`) can
+/// end the retire; with none saved, those answers keep the name.
+struct UsernameRetireAttempt: Codable, Equatable {
+  let walletKey: String
+  let network: String
+  let handle: String
+  let genesisHash: String
+  /// base64url of the unsigned tombstone.
+  let record: String
+
+  init(binding: UsernameBinding, unsigned: Data) {
+    walletKey = binding.walletKey
+    network = binding.network
+    handle = binding.handle
+    genesisHash = binding.genesisHash
+    record = UsernameDevice.base64URL(unsigned)
+  }
+  func matches(_ binding: UsernameBinding) -> Bool {
+    walletKey == binding.walletKey && network == binding.network && handle == binding.handle
+      && genesisHash == binding.genesisHash
+  }
+}
+
 struct UsernameLocalState: Codable {
   var bindings: [UsernameBinding] = []
   var pending: PendingUsernameClaim?
   var nextFreeClaim: Date?
   var deviceID = UUID().uuidString
+  /// Optional, so a state saved before retires decodes.
+  var retires: [UsernameRetireAttempt]?
 }
 
 protocol UsernamePersistence {
@@ -201,9 +228,10 @@ final class UsernameStore: ObservableObject {
     try persistence.write(next)
     state = next
   }
-  /// After a retire: the name, its saved claim and its hold go. The free
-  /// claim date stays, so Home hides the invite until the phone can claim
-  /// again.
+  /// After a retire: the name, its saved claim, its saved retire and its
+  /// hold go. The free claim date stays, so Home hides the invite until the
+  /// phone can claim again. Call it only after an answer that proves the
+  /// retire (see `UsernameRegistry.retire`).
   func forget(_ binding: UsernameBinding) throws {
     guard !storageError else { throw UsernameFailure.storage }
     var next = state
@@ -213,9 +241,27 @@ final class UsernameStore: ObservableObject {
     {
       next.pending = nil
     }
+    next.retires?.removeAll { $0.matches(binding) }
     try persistence.write(next)
     holds[Self.holdKey(binding.handle, binding.network)] = nil
     state = next
+  }
+  /// Saves a signed retire before its POST, in place of the wallet's
+  /// earlier one on this network.
+  func saveRetire(_ attempt: UsernameRetireAttempt) throws {
+    guard !storageError else { throw UsernameFailure.storage }
+    var next = state
+    var retires = next.retires ?? []
+    retires.removeAll { $0.walletKey == attempt.walletKey && $0.network == attempt.network }
+    retires.append(attempt)
+    next.retires = retires
+    try persistence.write(next)
+    state = next
+  }
+  /// The retire this phone signed and saved for this name, if any.
+  func retireAttempt(for binding: UsernameBinding) -> UsernameRetireAttempt? {
+    guard !storageError else { return nil }
+    return state.retires?.first { $0.matches(binding) }
   }
   /// The checked hold of each name the registry holds, by network and
   /// handle. Kept in memory: the @name screen checks again when it opens.

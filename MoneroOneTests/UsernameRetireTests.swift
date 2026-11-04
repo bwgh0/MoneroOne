@@ -1,10 +1,11 @@
+import CryptoKit
 import XCTest
 
 @testable import MoneroOne
 
 /// Retire, holds and the next free claim. Every key here is a PUBLIC TEST
 /// key from the oah vectors or the registry's e2e harness; no private key
-/// is in this file.
+/// is in this file (`TestRegistrar` makes a new one for each test).
 @MainActor
 final class UsernameRetireTests: XCTestCase {
   // oah vectors/records.json "alice-r5-tombstone" (the last record of
@@ -91,6 +92,28 @@ final class UsernameRetireTests: XCTestCase {
       "handle": "alice", "genesis_hash": Vector.genesis, "owner": Vector.owner, "tombstoned": false,
       "head": ["seq": 4, "record_hash": Vector.prev], "records": [],
     ]
+  }
+  /// The registry's lookup of alice after a tombstone, with these records
+  /// (base64url) in chain order.
+  private func retired(_ records: [String]) -> [String: Any] {
+    [
+      "handle": "alice", "genesis_hash": Vector.genesis, "owner": NSNull(), "tombstoned": true,
+      "head": ["seq": 5, "record_hash": Vector.recordHash], "records": records.map { ["record": $0] },
+    ]
+  }
+  private static let notFound: [String: Any] = ["error": ["code": "handle.not_found"]]
+  private static let afterTombstone: [String: Any] = ["error": ["code": "chain.record_after_tombstone"]]
+  /// A registrar key made for one test run, so it can countersign any
+  /// tombstone. The owner signature is filler: the app leaves that check
+  /// to the registrar.
+  private struct TestRegistrar {
+    let key = Curve25519.Signing.PrivateKey()
+    var publicKey: String { key.publicKey.rawRepresentation.map { String(format: "%02x", $0) }.joined() }
+    func tombstone(seq: UInt32, prev: String, handle: String = "alice") throws -> String {
+      let unsigned = try XCTUnwrap(UsernameTombstone.unsigned(handle: handle, seq: seq, prev: prev))
+      let countersignature = try key.signature(for: Data(UsernameTombstone.signingMessage(unsigned).utf8))
+      return UsernameDevice.base64URL(unsigned + Data(repeating: 7, count: 64) + countersignature)
+    }
   }
   private func client(registrarKey: String = Vector.registrarKey) -> UsernameRegistry {
     let config = URLSessionConfiguration.ephemeral
@@ -420,28 +443,155 @@ final class UsernameRetireTests: XCTestCase {
       XCTFail("Accepted a reply without the registrar's countersignature")
     } catch UsernameFailure.verification {}
     XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"))
-    // The retire landed: the next try finds the tombstone and signs nothing.
-    var retired = live
-    retired["tombstoned"] = true
-    retired["owner"] = NSNull()
-    serve(lookup: (200, retired))
+    // The unsigned tombstone was saved before the POST.
+    XCTAssertEqual(
+      store.retireAttempt(for: binding)?.record, UsernameDevice.base64URL(Self.data(hex: Vector.unsigned)))
+    // The retire landed: the next try finds the registrar's copy of the
+    // saved tombstone and signs nothing.
+    serve(lookup: (200, retired([UsernameDevice.base64URL(Self.data(hex: Vector.record))])))
     try await retire(client(), store, sign: noSignature)
     XCTAssertTrue(store.state.bindings.isEmpty)
+    XCTAssertEqual(store.state.retires, [])
   }
-  func testANameThatIsGoneOrRetiredAlreadyIsForgotten() async throws {
-    // (lookup, post): erased at an epoch; or the lookup ran before an
-    // earlier retire landed.
+  func testAGoneAnswerWithNoEarlierRetireKeepsTheName() async throws {
+    // (lookup, post): none of these answers is signed.
     let rows: [(String, (Int, Any), (Int, Any)?)] = [
-      ("erased", (404, ["error": ["code": "handle.not_found"]]), nil),
-      ("landed", (200, live), (409, ["error": ["code": "chain.record_after_tombstone"]])),
+      ("a 404", (404, Self.notFound), nil),
+      ("a live lookup, then record_after_tombstone", (200, live), (409, Self.afterTombstone)),
+      ("a live lookup, then a 404", (200, live), (404, Self.notFound)),
+      ("a notice hold, then record_after_tombstone", (451, heldBody(.notice)), (409, Self.afterTombstone)),
     ]
     for (name, lookup, post) in rows {
       let store = try store()
       serve(lookup: lookup, post: post)
-      try await retire(client(), store, sign: post == nil ? noSignature : nil)
+      do {
+        try await retire(client(registrarKey: Hold.key), store, sign: post == nil ? noSignature : nil)
+        XCTFail("Retired on an unsigned answer: \(name)")
+      } catch UsernameFailure.verification {}
+      XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"), name)
+    }
+  }
+  func testAGoneAnswerAfterAnEarlierRetireForgetsTheName() async throws {
+    // (lookup, post): erased at an epoch after the earlier retire; or it
+    // landed, and a hold or a stale lookup hid its tombstone.
+    let rows: [(String, (Int, Any), (Int, Any)?)] = [
+      ("erased", (404, Self.notFound), nil),
+      ("landed under a notice hold", (451, heldBody(.notice)), (409, Self.afterTombstone)),
+      ("landed after the lookup", (200, live), (409, Self.afterTombstone)),
+      ("erased after the lookup", (200, live), (404, Self.notFound)),
+    ]
+    for (name, lookup, post) in rows {
+      let store = try store()
+      // The earlier try: its reply is lost.
+      serve(lookup: (200, live), post: (500, ["error": ["code": "internal"]]))
+      do {
+        try await retire(client(registrarKey: Hold.key), store)
+        XCTFail("The lost reply finished the retire: \(name)")
+      } catch UsernameFailure.server {}
+      XCTAssertNotNil(store.retireAttempt(for: binding), name)
+      serve(lookup: lookup, post: post)
+      try await retire(client(registrarKey: Hold.key), store, sign: post == nil ? noSignature : nil)
       XCTAssertTrue(store.state.bindings.isEmpty, name)
+      XCTAssertNil(store.retireAttempt(for: binding), name)
       XCTAssertNotNil(store.state.nextFreeClaim, name)
     }
+  }
+  func testAnUnsignedTombstoneKeepsTheNameInRetireAndOnOpen() async throws {
+    let registrar = TestRegistrar()
+    let good = try registrar.tombstone(seq: 1, prev: Vector.genesis)
+    var tampered = try XCTUnwrap(UsernameDevice.base64URLDecode(good))
+    tampered[tampered.count - 1] ^= 1
+    let rows: [(String, [String])] = [
+      ("the tombstoned flag alone", []),
+      ("a record that is not base64url", ["not+base64"]),
+      ("another registrar key", [try TestRegistrar().tombstone(seq: 1, prev: Vector.genesis)]),
+      ("a bad countersignature", [UsernameDevice.base64URL(tampered)]),
+      ("another genesis", [try registrar.tombstone(seq: 1, prev: Vector.prev)]),
+      ("a later tombstone that this phone never signed", [try registrar.tombstone(seq: 5, prev: Vector.prev)]),
+      ("another name", [try registrar.tombstone(seq: 1, prev: Vector.genesis, handle: "bobby")]),
+      ("a tombstone that is not the last record", [good, UsernameDevice.base64URL(Data(repeating: 1, count: 40))]),
+    ]
+    for (name, records) in rows {
+      let store = try store()
+      serve(lookup: (200, retired(records)))
+      do {
+        try await retire(client(registrarKey: registrar.publicKey), store, sign: noSignature)
+        XCTFail("Retired: \(name)")
+      } catch UsernameFailure.verification {}
+      XCTAssertEqual(paths, ["GET /v1/handles/alice"], name)
+      let forgot = await client(registrarKey: registrar.publicKey).checkOnOpen(
+        binding(in: store), store: store, isRetiring: { false })
+      XCTAssertFalse(forgot, name)
+      XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"), name)
+    }
+  }
+  func testAnotherPhonesSignedRetireForgetsTheNameInRetireAndOnOpen() async throws {
+    let registrar = TestRegistrar()
+    serve(lookup: (200, retired(["genesis", try registrar.tombstone(seq: 1, prev: Vector.genesis)])))
+    let store = try store()
+    try await retire(client(registrarKey: registrar.publicKey), store, sign: noSignature)
+    XCTAssertTrue(store.state.bindings.isEmpty)
+    // On open: while a retire runs, the check leaves the forget to it.
+    let opened = try self.store()
+    let busy = await client(registrarKey: registrar.publicKey).checkOnOpen(
+      binding(in: opened), store: opened, isRetiring: { true })
+    XCTAssertFalse(busy)
+    XCTAssertNotNil(opened.binding(walletKey: "wallet-A", network: "mainnet"))
+    let forgot = await client(registrarKey: registrar.publicKey).checkOnOpen(
+      binding(in: opened), store: opened, isRetiring: { false })
+    XCTAssertTrue(forgot)
+    XCTAssertTrue(opened.state.bindings.isEmpty)
+    XCTAssertNotNil(opened.state.nextFreeClaim)
+  }
+  func testTheScreenCheckKeepsTheNameOnA404OrNoAnswer() async throws {
+    var otherGenesis = live
+    otherGenesis["genesis_hash"] = Vector.prev
+    let rows: [(String, (Int, Any)?)] = [
+      ("a 404", (404, Self.notFound)),
+      ("the tombstoned flag alone", (200, retired([]))),
+      ("another genesis", (200, otherGenesis)),
+      ("a server error", (500, ["error": ["code": "internal"]])),
+      ("an order hold", (451, heldBody(.order))),
+      ("no answer", nil),
+    ]
+    // Also after a retire try from this phone: only `retire` may end it.
+    for earlier in [false, true] {
+      for (name, lookup) in rows {
+        let store = try store()
+        if earlier {
+          try store.saveRetire(UsernameRetireAttempt(binding: binding, unsigned: Self.data(hex: Vector.unsigned)))
+        }
+        if let lookup {
+          serve(lookup: lookup)
+        } else {
+          RetireURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+        }
+        let forgot = await client(registrarKey: Hold.key).checkOnOpen(
+          binding(in: store), store: store, isRetiring: { false })
+        XCTAssertFalse(forgot, name)
+        XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"), name)
+        XCTAssertEqual(store.retireAttempt(for: binding) != nil, earlier, name)
+      }
+    }
+  }
+  func testAStateSavedBeforeRetiresDecodesAndEachWalletKeepsItsNewestRetire() throws {
+    let old = try JSONDecoder().decode(
+      UsernameLocalState.self, from: Data(#"{"bindings":[],"deviceID":"phone-1"}"#.utf8))
+    XCTAssertNil(old.retires)
+    XCTAssertEqual(old.deviceID, "phone-1")
+    let store = try store()
+    let first = UsernameRetireAttempt(binding: binding, unsigned: Data([1]))
+    let second = UsernameRetireAttempt(binding: binding, unsigned: Data([2]))
+    try store.saveRetire(first)
+    try store.saveRetire(second)
+    XCTAssertEqual(store.state.retires, [second])
+    // An earlier name of this wallet, with another genesis, has none.
+    let earlierName = UsernameBinding(
+      walletKey: "wallet-A", network: "mainnet", handle: "alice", displayHandle: "Alice",
+      subaddress: Vector.owner, genesisHash: Vector.prev, record: "record", claimedAt: Date())
+    XCTAssertNil(store.retireAttempt(for: earlierName))
+    try store.forget(binding)
+    XCTAssertEqual(store.state.retires, [])
   }
   func testRetireStopsOnALookupThatIsNotThisName() async throws {
     let rows: [(String, (inout [String: Any]) -> Void)] = [
@@ -479,6 +629,7 @@ final class UsernameRetireTests: XCTestCase {
     } catch UsernameFailure.walletChanged {}
     XCTAssertEqual(paths, ["GET /v1/handles/alice"])
     XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"))
+    XCTAssertNil(store.retireAttempt(for: binding))
   }
 
   // MARK: - The state of the own name

@@ -540,17 +540,13 @@ struct UsernameDetailsView: View {
   }
 
   /// The registry's state of the name when the screen opens. A hold shows
-  /// its row; a retired or erased name is forgotten, as after a retire.
+  /// its row. Only a retire that the registrar signed forgets the name and
+  /// closes the screen; a 404 or an unsigned answer keeps it.
   private func checkStatus() async {
     guard let configuration = UsernameConfiguration.current else { return }
-    let status = try? await UsernameRegistry(configuration: configuration).status(of: binding, store: store)
-    switch status {
-    case .retired, .notFound:
-      guard !retiring else { return }
-      try? store.forget(binding)
-      dismiss()
-    default: break
-    }
+    let forgot = await UsernameRegistry(configuration: configuration).checkOnOpen(
+      binding, store: store, isRetiring: { retiring })
+    if forgot { dismiss() }
   }
 
   private func retire() {

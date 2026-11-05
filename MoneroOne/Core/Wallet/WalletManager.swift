@@ -1461,6 +1461,9 @@ class WalletManager: ObservableObject {
     /// just derived and selected; cleared once the kit lists it. See
     /// `reconcileReceiveAddress`.
     private var pendingRotatedIndex: Int?
+    /// The wallet that rotation is making a subaddress for. One at a time:
+    /// each kit update reconciles again while the store runs.
+    private weak var rotatingWallet: MoneroWallet?
 
     // MARK: - Init
 
@@ -3211,10 +3214,16 @@ class WalletManager: ObservableObject {
     var usernameWalletKey: String { activeWallet?.cachedPrimaryAddress ?? "" }
     var usernameNetwork: String { isTestnet ? "testnet" : "mainnet" }
 
-    func signUsername(_ message: String, subaddress: String, expectedSession: UUID) throws -> String {
+    /// Signs off the main thread: the claim and retire screens keep their
+    /// waiting state while the kit's queue finishes the work ahead of it.
+    /// A wallet that changed during the wait gives `.walletChanged`, and its
+    /// signature is dropped.
+    func signUsername(_ message: String, subaddress: String, expectedSession: UUID) async throws -> String {
         guard isUnlocked, walletSessionId == expectedSession, !isHardwareWallet, !isViewOnly,
               let wallet = moneroWallet else { throw UsernameFailure.walletChanged }
-        return try wallet.signUsername(message, subaddress: subaddress)
+        let signature = try await wallet.signUsername(message, subaddress: subaddress)
+        guard isUsernameSession(expectedSession, wallet: wallet) else { throw UsernameFailure.walletChanged }
+        return signature
     }
 
     /// The username claim key, from the claiming wallet's private view key
@@ -3287,17 +3296,19 @@ class WalletManager: ObservableObject {
         return .retry
     }
 
-    /// Create a new subaddress for receiving payments
+    /// Create a new subaddress for receiving payments. It is stored in the
+    /// wallet file (`MoneroWallet.createSubaddressAndStore`, the username
+    /// claim's path), so a quit right after keeps its index and the next
+    /// new subaddress never repeats the address.
     /// - Returns: The newly created SubAddress, or nil if creation failed
+    ///   or the wallet changed while it was made.
     func createSubaddress() async -> MoneroKit.SubAddress? {
         guard let wallet = moneroWallet else { return nil }
-        let result = wallet.createSubaddress()
-        if let newSubaddr = result {
-            userCreatedSubaddressIndices.insert(newSubaddr.index)
-            saveUserCreatedSubaddresses()
-            return newSubaddr
-        }
-        return nil
+        guard let newSubaddr = try? await wallet.createSubaddressAndStore(),
+              moneroWallet === wallet else { return nil }
+        userCreatedSubaddressIndices.insert(newSubaddr.index)
+        saveUserCreatedSubaddresses()
+        return newSubaddr
     }
 
     /// Derives the next subaddress and makes it the address Receive shows
@@ -3535,10 +3546,25 @@ class WalletManager: ObservableObject {
         // Not `createSubaddress()`: rotation's addresses are not user
         // created and stay out of `userCreatedSubaddressIndices`.
         guard rotate, !primaryAddress.isEmpty, let wallet = moneroWallet,
-              let created = wallet.createSubaddress() else { return }
-        pendingRotatedIndex = created.index
-        setReceiveSelection(created.index)
-        receiveSelection.setBaseline(nil, for: walletId)
+              rotatingWallet !== wallet else { return }
+        rotatingWallet = wallet
+        Task { @MainActor [weak self] in
+            // Stored in the wallet file like New Address, so a quit right
+            // after does not hand out the same address again.
+            let created = try? await wallet.createSubaddressAndStore()
+            guard let self else { return }
+            if self.rotatingWallet === wallet { self.rotatingWallet = nil }
+            guard let created else { return }
+            // Shown only if nothing moved Receive meanwhile: the same
+            // wallet, rotation still on, no New Address or pick since.
+            guard self.moneroWallet === wallet, self.activeWallet?.id == walletId,
+                  self.rotateReceiveAddress, self.pendingRotatedIndex == nil,
+                  self.receiveSelection.index(for: walletId) == selected
+            else { return }
+            self.pendingRotatedIndex = created.index
+            self.setReceiveSelection(created.index)
+            self.receiveSelection.setBaseline(nil, for: walletId)
+        }
     }
 
     // MARK: - Validation

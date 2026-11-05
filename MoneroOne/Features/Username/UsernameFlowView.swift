@@ -361,7 +361,7 @@ struct UsernameFlowView: View {
             return address
           },
           sign: { message, address in
-            try wallets.signUsername(message, subaddress: address, expectedSession: walletSession)
+            try await wallets.signUsername(message, subaddress: address, expectedSession: walletSession)
           },
           claimKey: { try wallets.usernameClaimKey(expectedSession: walletSession) },
           ownsSubaddress: { address in
@@ -567,7 +567,7 @@ struct UsernameDetailsView: View {
         try await UsernameRegistry(configuration: configuration).retire(
           binding, store: store,
           sign: { message, address in
-            try wallets.signUsername(message, subaddress: address, expectedSession: walletSession)
+            try await wallets.signUsername(message, subaddress: address, expectedSession: walletSession)
           },
           isCurrentWallet: { currentWallet })
         dismiss()

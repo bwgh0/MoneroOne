@@ -454,7 +454,7 @@ final class UsernameRegistry {
   func claim(
     displayHandle: String, walletKey: String, network: String, store: UsernameStore,
     makeSubaddress: () async throws -> String,
-    sign: (String, String) throws -> String,
+    sign: (String, String) async throws -> String,
     claimKey: () throws -> String,
     ownsSubaddress: (String) async throws -> Bool,
     isCurrentWallet: () -> Bool
@@ -533,7 +533,7 @@ final class UsernameRegistry {
     guard let bytes = unsigned["record"] as? String, let hash = unsigned["record_hash"] as? String,
       let message = unsigned["signing_message"] as? String
     else { throw UsernameFailure.verification }
-    let signature = try sign(message, subaddress)
+    let signature = try await sign(message, subaddress)
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
     // A new token for each attempt, made before the claim is saved: a phone
     // that cannot make one leaves no saved claim behind.
@@ -809,7 +809,7 @@ final class UsernameRegistry {
   /// (message, subaddress) to a `SigV2` string.
   func retire(
     _ binding: UsernameBinding, store: UsernameStore,
-    sign: (String, String) throws -> String,
+    sign: (String, String) async throws -> String,
     isCurrentWallet: () -> Bool
   ) async throws {
     guard isCurrentWallet(), !binding.walletKey.isEmpty else { throw UsernameFailure.walletChanged }
@@ -848,7 +848,7 @@ final class UsernameRegistry {
       let unsigned = UsernameTombstone.unsigned(handle: binding.handle, seq: head.seq + 1, prev: head.recordHash)
     else { throw UsernameFailure.verification }
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
-    let signature = try sign(UsernameTombstone.signingMessage(unsigned), binding.subaddress)
+    let signature = try await sign(UsernameTombstone.signingMessage(unsigned), binding.subaddress)
     guard signature.hasPrefix("SigV2") else { throw UsernameFailure.verification }
     guard isCurrentWallet() else { throw UsernameFailure.walletChanged }
     // Persist before POST: if the reply is lost, the next try matches the

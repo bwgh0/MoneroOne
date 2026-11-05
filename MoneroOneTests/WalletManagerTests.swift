@@ -1,3 +1,4 @@
+import MoneroKit
 import XCTest
 @testable import MoneroOne
 
@@ -643,7 +644,7 @@ final class NeedsRestoreTests: XCTestCase {
         let phrase = WalletManager().generatePolyseed()
         let networkType = WalletManager().networkType
         let cachesBefore = moneroKitCacheEntries()
-        let address = try await MoneroWallet().probePrimaryAddress(seed: phrase, networkType: networkType)
+        let address = try await MoneroOne.MoneroWallet().probePrimaryAddress(seed: phrase, networkType: networkType)
         XCTAssertEqual(address.count, 95, "Primary address, got \(address)")
         XCTAssertTrue(address.hasPrefix("4"))
         XCTAssertEqual(moneroKitCacheEntries(), cachesBefore, "The throwaway wallet2 leaves no cache behind")
@@ -728,7 +729,7 @@ final class NeedsRestoreTests: XCTestCase {
 // MARK: - A new wallet's saved address
 
 /// A wallet that reports a fixed primary address and stops at once.
-private final class ReportingWallet: MoneroWallet {
+private final class ReportingWallet: MoneroOne.MoneroWallet {
     var reportedAddress = ""
     override var primaryAddress: String { reportedAddress }
     override func stopAsync() async {}
@@ -850,4 +851,183 @@ final class NewWalletAddressTests: XCTestCase {
         XCTAssertNil(savedAddress(next))
         XCTAssertEqual(savedAddress(first), address)
     }
+}
+
+/// A wallet whose subaddress store and username sign the test holds and
+/// releases, as the kit's queue holds them behind an open, a connect or a
+/// refresh.
+private final class HeldWallet: MoneroOne.MoneroWallet {
+    var reportedAddress = ""
+    override var primaryAddress: String { reportedAddress }
+    override func stopAsync() async {}
+
+    /// While true, a store or a sign waits for `release()`.
+    var holds = true
+    private var held: [CheckedContinuation<Void, Never>] = []
+    private(set) var plainAdds = 0
+    private(set) var storeCalls = 0
+    /// The indexes whose store finished: in the wallet file.
+    private(set) var storedIndexes: [Int] = []
+    private(set) var signCalls = 0
+    private var nextIndex = 1
+
+    func release() {
+        let waiting = held
+        held = []
+        waiting.forEach { $0.resume() }
+    }
+
+    private func hold() async {
+        guard holds else { return }
+        await withCheckedContinuation { held.append($0) }
+    }
+
+    /// The add that a quit loses. New Address and rotation must not use it.
+    override func createSubaddress() -> MoneroKit.SubAddress? {
+        plainAdds += 1
+        return nil
+    }
+
+    override func createSubaddressAndStore() async throws -> MoneroKit.SubAddress {
+        storeCalls += 1
+        let index = nextIndex
+        nextIndex += 1
+        await hold()
+        storedIndexes.append(index)
+        return MoneroKit.SubAddress(address: "8" + String(repeating: Character(String(index)), count: 94), index: index)
+    }
+
+    override func signUsername(_ message: String, subaddress: String) async throws -> String {
+        signCalls += 1
+        await hold()
+        return "SigV2signature"
+    }
+}
+
+/// New Address and receive-address rotation store the new subaddress in the
+/// wallet file before Receive shows it (`createSubaddressAndStore`), so a
+/// quit right after keeps its index. The username sign waits for the kit
+/// without blocking the main thread.
+@MainActor
+final class SubaddressStoreAndSignTests: XCTestCase {
+
+    private let pin = "123456"
+    private let address = "4" + String(repeating: "A", count: 94)
+    private let settingKeys = ["isTestnet", "selectedNodeURL", WalletManager.rotateReceiveAddressKey]
+    private var savedSettings: [Any?] = []
+
+    override func setUp() async throws {
+        savedSettings = settingKeys.map { UserDefaults.standard.object(forKey: $0) }
+        UserDefaults.standard.set(false, forKey: "isTestnet")
+        UserDefaults.standard.set("http://localhost:1", forKey: "selectedNodeURL")
+        UserDefaults.standard.removeObject(forKey: WalletManager.rotateReceiveAddressKey)
+        WalletManager().deleteAllWallets()
+    }
+
+    override func tearDown() async throws {
+        WalletManager().deleteAllWallets()
+        for (key, value) in zip(settingKeys, savedSettings) {
+            if let value { UserDefaults.standard.set(value, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+    }
+
+    private func unlockedManager(opening opened: HeldWallet) async throws -> WalletManager {
+        opened.reportedAddress = address
+        let manager = WalletManager()
+        try manager.addWallet(name: "Personal", mnemonic: manager.generatePolyseed(), pin: pin, restoreHeight: 0)
+        manager.openWalletForTesting = { _ in opened }
+        try await manager.unlock(pin: pin)
+        XCTAssertTrue(manager.isUnlocked)
+        return manager
+    }
+
+    /// Lets the main queue deliver the wallet's events.
+    private func waitForEvents(until done: () -> Bool = { false }) async throws {
+        for _ in 0..<50 where !done() {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
+
+    func testNewAddressIsStoredBeforeReceiveShowsIt() async throws {
+        let opened = HeldWallet()
+        let manager = try await unlockedManager(opening: opened)
+
+        let shown = Box<Int?>(nil)
+        let newAddress = Task { await manager.createAndSelectSubaddress { shown.value = $0.index } }
+        try await waitForEvents { opened.storeCalls == 1 }
+        XCTAssertEqual(opened.storeCalls, 1)
+        XCTAssertNil(shown.value, "Receive showed the address before its store")
+
+        opened.release()
+        let created = await newAddress.value
+        XCTAssertEqual(created?.index, 1)
+        XCTAssertEqual(opened.storedIndexes, [1], "a quit right after would lose the index")
+        XCTAssertEqual(shown.value, 1)
+        XCTAssertEqual(manager.selectedReceiveIndex, 1)
+        XCTAssertEqual(opened.plainAdds, 0, "New Address used the add that a quit loses")
+    }
+
+    func testRotationStoresTheFreshAddressBeforeReceiveShowsIt() async throws {
+        let opened = HeldWallet()
+        let manager = try await unlockedManager(opening: opened)
+        XCTAssertTrue(manager.rotateReceiveAddress)
+
+        // The kit lists the primary address only: rotation wants a fresh one.
+        opened.subaddresses = [MoneroKit.SubAddress(address: address, index: 0)]
+        try await waitForEvents { opened.storeCalls == 1 }
+        XCTAssertEqual(opened.storeCalls, 1)
+        XCTAssertEqual(manager.selectedReceiveIndex, 0, "Receive showed the address before its store")
+
+        // Kit updates while the store waits derive no second address.
+        opened.subaddresses = [MoneroKit.SubAddress(address: address, index: 0)]
+        try await waitForEvents()
+        XCTAssertEqual(opened.storeCalls, 1)
+
+        opened.release()
+        try await waitForEvents { manager.selectedReceiveIndex == 1 }
+        XCTAssertEqual(opened.storedIndexes, [1], "a quit right after would lose the index")
+        XCTAssertEqual(manager.selectedReceiveIndex, 1)
+        XCTAssertEqual(opened.plainAdds, 0, "rotation used the add that a quit loses")
+    }
+
+    func testSignWaitsForTheKitWithoutBlockingTheMainThread() async throws {
+        let opened = HeldWallet()
+        let manager = try await unlockedManager(opening: opened)
+        let session = manager.walletSessionId
+
+        let sign = Task { try await manager.signUsername("oah/genesis/v1:ab", subaddress: "8", expectedSession: session) }
+        try await waitForEvents { opened.signCalls == 1 }
+        XCTAssertEqual(opened.signCalls, 1)
+        // This test runs on the main actor: it gets here while the sign waits.
+        let mainRuns = expectation(description: "the main queue runs during the sign")
+        DispatchQueue.main.async { mainRuns.fulfill() }
+        await fulfillment(of: [mainRuns], timeout: 1)
+
+        opened.release()
+        let signature = try await sign.value
+        XCTAssertEqual(signature, "SigV2signature")
+    }
+
+    func testASignForAWalletThatLockedMeanwhileIsDropped() async throws {
+        let opened = HeldWallet()
+        let manager = try await unlockedManager(opening: opened)
+        let session = manager.walletSessionId
+
+        let sign = Task { try await manager.signUsername("oah/genesis/v1:ab", subaddress: "8", expectedSession: session) }
+        try await waitForEvents { opened.signCalls == 1 }
+        manager.lock()
+        opened.release()
+        do {
+            _ = try await sign.value
+            XCTFail("a signature for a locked wallet was returned")
+        } catch UsernameFailure.walletChanged {
+        } catch {
+            XCTFail("unexpected error \(error)")
+        }
+    }
+}
+
+private final class Box<Value> {
+    var value: Value
+    init(_ value: Value) { self.value = value }
 }

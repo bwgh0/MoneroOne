@@ -776,9 +776,11 @@ class MoneroWallet: ObservableObject {
 
     // MARK: - Subaddresses
 
-    func signUsername(_ message: String, subaddress: String) throws -> String {
+    /// Signs on the kit's lifecycle queue. The main actor is free while the
+    /// sign waits there for an open, a connect or a store.
+    func signUsername(_ message: String, subaddress: String) async throws -> String {
         guard let kit else { throw UsernameFailure.walletChanged }
-        return try kit.signMessage(message, subaddress: subaddress)
+        return try await kit.signMessage(message, subaddress: subaddress)
     }
 
     /// Create a new subaddress for receiving payments
@@ -788,8 +790,8 @@ class MoneroWallet: ObservableObject {
         return kit.createSubaddress()
     }
 
-    /// A new subaddress that is in the wallet file when this returns
-    /// (`Kit.createSubaddressAndStore`).
+    /// A new subaddress that is stored in the wallet file
+    /// (`Kit.createSubaddressAndStore`): a quit right after keeps it.
     func createSubaddressAndStore() async throws -> MoneroKit.SubAddress {
         guard let kit = kit else { throw MoneroCoreError.walletNotInitialized }
         return try await kit.createSubaddressAndStore()

@@ -48,6 +48,10 @@ struct UsernameEnvironment: Equatable {
   var rulesHash: String
   var termsVersion: String
   var origin = "monero.one/oah"
+  /// The registry's names zone (`zone` in its config and `/v1/info`): the
+  /// same on staging and production. Signed hold notices and retired
+  /// statements name it.
+  var zone = "monero.one"
 
   static let production = UsernameEnvironment(
     registryURL: "https://registry.monero.one",
@@ -97,6 +101,8 @@ struct UsernameConfiguration {
   let rulesHash: String
   /// Sent as `terms_version` with each claim.
   let termsVersion: String
+  /// `UsernameEnvironment.zone`.
+  var zone = "monero.one"
 
   #if DEBUG
     static let isDebugBuild = true
@@ -114,7 +120,8 @@ struct UsernameConfiguration {
       values.termsVersion.utf8.allSatisfy({ (33...126).contains($0) })
     else { return nil }
     return UsernameConfiguration(
-      url: url, registrarKey: values.registrarKey, rulesHash: values.rulesHash, termsVersion: values.termsVersion)
+      url: url, registrarKey: values.registrarKey, rulesHash: values.rulesHash, termsVersion: values.termsVersion,
+      zone: values.zone)
   }
 
   /// Release builds reach only the production registry and mirror over
@@ -357,8 +364,20 @@ final class UsernameRegistry {
   /// `held` names the handle of a lookup or an owner record: a `451
   /// name.held` for it throws `UsernameFailure.held` once its notice passes
   /// the check. A hold is an answer: nothing is read from the mirror.
-  private func request(_ path: String, body: [String: Any]? = nil, held: String? = nil) async throws -> Data {
-    let url = configuration.url.appendingPathComponent("v1").appendingPathComponent(path)
+  /// `query` goes in the URL's query string (`appendingPathComponent`
+  /// would escape a `?`).
+  private func request(
+    _ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil, held: String? = nil
+  ) async throws -> Data {
+    var url = configuration.url.appendingPathComponent("v1").appendingPathComponent(path)
+    if !query.isEmpty {
+      guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+        throw UsernameFailure.verification
+      }
+      parts.queryItems = query
+      guard let withQuery = parts.url else { throw UsernameFailure.verification }
+      url = withQuery
+    }
     var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
     if let body {
       request.httpMethod = "POST"
@@ -374,11 +393,12 @@ final class UsernameRegistry {
       let code = (object?["error"] as? [String: Any])?["code"] as? String ?? ""
       // A notice that fails its check gets the generic error below, with no reason.
       if response.statusCode == 451, code == "name.held", let held, let object,
-        let hold = UsernameHold.parse(object, handle: held, registrarKey: configuration.registrarKey)
+        let hold = UsernameHold.parse(
+          object, handle: held, registrarKey: configuration.registrarKey, zone: configuration.zone)
       {
         throw UsernameFailure.held(hold)
       }
-      if code == "handle.not_found" { throw RegistryNotFound() }
+      if code == "handle.not_found" { throw RegistryNotFound(body: data) }
       if code == "chain.record_after_tombstone" { throw RegistryRetired() }
       if code == "device.slot_used" { throw UsernameFailure.noFreeClaim }
       if code == "name.unavailable" { throw UsernameFailure.unavailable }
@@ -395,7 +415,9 @@ final class UsernameRegistry {
     }
     return data
   }
-  private struct RegistryNotFound: Error {}
+  /// `404 handle.not_found`. `body` is the answer's JSON: for a lookup with
+  /// `?genesis=` it can carry a signed retired statement.
+  private struct RegistryNotFound: Error { var body = Data() }
   private struct RegistryRetired: Error {}
   private struct ExpiredClaim: Error {}
   private func object(_ data: Data) throws -> [String: Any] {
@@ -468,7 +490,7 @@ final class UsernameRegistry {
     let info = try object(await request("info"))
     guard info["registrar_key"] as? String == configuration.registrarKey,
       info["rules_hash"] as? String == configuration.rulesHash,
-      info["network"] as? String == network, info["zone"] as? String == "monero.one",
+      info["network"] as? String == network, info["zone"] as? String == configuration.zone,
       info["open"] as? Bool == true
     else { throw UsernameFailure.verification }
     let rulesData = try await request("rules")
@@ -683,8 +705,11 @@ final class UsernameRegistry {
   /// (or its end), so `UsernameStore.nameState(for:)` shows it. It signs
   /// and saves nothing else. Throws while the registry cannot answer, or
   /// when its answer is not about this name (another genesis or owner).
-  /// `.retired` needs the registrar's countersigned tombstone: the
-  /// `tombstoned` flag alone is not signed, and throws `.verification`.
+  /// `.retired` needs a signed proof, never the unsigned `tombstoned` flag:
+  /// the registrar's countersigned tombstone at the end of the chain (with
+  /// the flag true, false or missing), or after a 404 its signed retired
+  /// statement for this name and genesis (`erasedProof`). A flag that is
+  /// not false with no countersigned tombstone throws `.verification`.
   func status(of binding: UsernameBinding, store: UsernameStore) async throws -> UsernameNameStatus {
     let found: [String: Any]
     do {
@@ -692,18 +717,15 @@ final class UsernameRegistry {
     } catch UsernameFailure.held(let hold) {
       return .held(hold)
     } catch is RegistryNotFound {
-      return .notFound
+      return await erasedProof(binding) ? .retired : .notFound
     }
     guard found["handle"] as? String == binding.handle,
-      found["genesis_hash"] as? String == binding.genesisHash,
-      let tombstoned = found["tombstoned"] as? Bool
+      found["genesis_hash"] as? String == binding.genesisHash
     else { throw UsernameFailure.verification }
-    if tombstoned {
-      guard endsInTombstone(found, of: binding, attempt: store.retireAttempt(for: binding)) else {
-        throw UsernameFailure.verification
-      }
-      return .retired
-    }
+    // The proof decides, not the flag (Android parity).
+    if endsInTombstone(found, of: binding, attempt: store.retireAttempt(for: binding)) { return .retired }
+    // A tombstone flag without the countersigned tombstone is unsigned: the name stays.
+    guard found["tombstoned"] as? Bool == false else { throw UsernameFailure.verification }
     // The owner signs the retire: the name must still point to it.
     guard found["owner"] as? String == binding.subaddress, let head = UsernameHead(json: found["head"]),
       head.seq > 0 || head.recordHash == binding.genesisHash
@@ -727,9 +749,31 @@ final class UsernameRegistry {
     return tombstone.seq == 1 && tombstone.prev == binding.genesisHash
   }
 
+  /// After a 404 for the wallet's own name (audit F12b): asks again with
+  /// `GET /v1/handles/{handle}?genesis=<binding.genesisHash>`. True only
+  /// when that answer is a 404 with the registrar's signed retired
+  /// statement for this handle and this genesis
+  /// (`UsernameRetiredStatement.proves`): the name was retired and erased,
+  /// also from another phone with this wallet. Any other answer, or no
+  /// answer, is false, and the name stays.
+  private func erasedProof(_ binding: UsernameBinding) async -> Bool {
+    guard UsernameEnvironment.isHex64(binding.genesisHash) else { return false }
+    do {
+      _ = try await request(
+        "handles/" + binding.handle, query: [URLQueryItem(name: "genesis", value: binding.genesisHash)])
+      return false
+    } catch let gone as RegistryNotFound {
+      guard let body = try? JSONSerialization.jsonObject(with: gone.body) as? [String: Any] else { return false }
+      return UsernameRetiredStatement.proves(
+        body, handle: binding.handle, genesisHash: binding.genesisHash,
+        registrarKey: configuration.registrarKey, zone: configuration.zone)
+    } catch { return false }
+  }
+
   /// The @name screen's check when it opens. The store learns a hold. The
   /// name is forgotten only when the registry proves the retire (`.retired`:
-  /// the registrar's countersigned tombstone). A 404, an unsigned
+  /// the registrar's countersigned tombstone, or its signed retired
+  /// statement after a 404). A plain 404, an unsigned
   /// `tombstoned` flag, an answer that fails a check and no answer all keep
   /// the name and its binding. `isRetiring` is true while a retire runs:
   /// that retire forgets on its own. True when the name was forgotten.
@@ -749,15 +793,17 @@ final class UsernameRegistry {
   /// The app forgets the name, its saved claim, its saved retire and its
   /// hold (the free claim date stays) only after an answer that proves the
   /// retire: the reply or the lookup holds the registrar's countersigned
-  /// tombstone. A lookup's 404 is not signed: it ends the retire only when
-  /// this phone saved a retire in an earlier try (its reply was lost, then
-  /// the epoch erased the name). A `chain.record_after_tombstone` or 404
-  /// refusal of the POST is not signed either: the app looks the name up
-  /// again, with the same rules (Android parity). Else it throws
-  /// `.verification`, and the name stays.
+  /// tombstone, or a lookup's 404 carries its signed retired statement for
+  /// this name and genesis (`erasedProof`). A plain 404 is not signed: it
+  /// ends the retire only when this phone saved a retire in an earlier try
+  /// (its reply was lost, then the epoch erased the name). A
+  /// `chain.record_after_tombstone` or 404 refusal of the POST is not signed
+  /// either: the app looks the name up again, with the same rules (Android
+  /// parity). Else it throws `.verification`, and the name stays.
   ///
   /// Throws `UsernameFailure.held` for an `order` or `sanctions` hold (no
-  /// retire; the store shows the hold), `.walletChanged`, `.storage`,
+  /// retire; the store shows the hold) and for any hold on the lookup
+  /// after a refused POST (Android parity), `.walletChanged`, `.storage`,
   /// `.verification` (a reply that fails a check: the name stays), and the
   /// registry's other refusals as in a claim. `sign` is the claim's signer:
   /// (message, subaddress) to a `SigV2` string.
@@ -779,12 +825,13 @@ final class UsernameRegistry {
     let head: UsernameHead
     switch try await status(of: binding, store: store) {
     case .retired:
-      // An earlier retire landed (its reply was lost): the registrar signed it.
+      // An earlier retire landed (its reply was lost), or another phone
+      // with this wallet retired the name: the registrar signed it.
       try store.forget(binding)
       return
     case .notFound:
-      // The epoch erased the name after an earlier retire. A 404 alone is
-      // not proof: the name stays.
+      // The epoch erased the name after an earlier retire. A 404 with no
+      // signed retired statement is not proof: the name stays.
       guard earlier else { throw UsernameFailure.verification }
       try store.forget(binding)
       return
@@ -834,16 +881,17 @@ final class UsernameRegistry {
 
   /// A new lookup after an unsigned refusal of the retire POST. True for
   /// the registrar's countersigned tombstone of this name, or for a 404
-  /// after an earlier saved retire. A `notice` or `terms` hold hides the
-  /// chain: no proof yet. An `order` or `sanctions` hold throws `.held`.
+  /// after an earlier saved retire or with the signed retired statement
+  /// (`erasedProof`). Any hold throws `.held`, and the store shows it
+  /// (Android parity): a `notice` or `terms` hold hides the chain (no proof
+  /// yet; the Retire row stays), an `order` or `sanctions` hold refuses it.
   private func provesRetire(_ binding: UsernameBinding, store: UsernameStore, earlier: Bool) async throws -> Bool {
     let found: [String: Any]
     do {
       found = try await lookUp(binding.handle, network: binding.network, store: store)
     } catch is RegistryNotFound {
-      return earlier
-    } catch UsernameFailure.held(let hold) where hold.allowsRetire {
-      return false
+      if earlier { return true }
+      return await erasedProof(binding)
     }
     return found["handle"] as? String == binding.handle
       && found["genesis_hash"] as? String == binding.genesisHash

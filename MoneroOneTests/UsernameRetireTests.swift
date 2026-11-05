@@ -114,7 +114,30 @@ final class UsernameRetireTests: XCTestCase {
       let countersignature = try key.signature(for: Data(UsernameTombstone.signingMessage(unsigned).utf8))
       return UsernameDevice.base64URL(unsigned + Data(repeating: 7, count: 64) + countersignature)
     }
+    /// The registry's 404 of an erased name with its retired statement
+    /// (registry tests/retired.rs). The key signs `signs`, and the answer
+    /// carries `statement`: both the registry's text by default.
+    func erased(
+      handle: String = "alice", genesis: String = Vector.genesis, zone: String = "monero.one",
+      signs: String? = nil, statement: String? = nil
+    ) throws -> [String: Any] {
+      let text = "oah-registry/retired/v1\nzone \(zone)\nhandle \(handle)\ngenesis_hash \(genesis)\n"
+      let signature = try key.signature(for: Data((signs ?? text).utf8))
+      return UsernameRetireTests.erasedBody(
+        handle: handle, genesis: genesis, statement: statement ?? text,
+        signature: UsernameDevice.base64URL(signature))
+    }
   }
+  /// The `404 handle.not_found` body with a top-level `retired` object.
+  nonisolated private static func erasedBody(handle: String, genesis: String, statement: String, signature: String)
+    -> [String: Any]
+  {
+    [
+      "error": ["code": "handle.not_found", "message": "No such handle."],
+      "retired": ["handle": handle, "genesis_hash": genesis, "statement": statement, "signature": signature],
+    ]
+  }
+  private var genesisQuery: String { "GET /v1/handles/alice?genesis=" + Vector.genesis }
   private func client(registrarKey: String = Vector.registrarKey) -> UsernameRegistry {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [RetireURLProtocol.self]
@@ -132,19 +155,22 @@ final class UsernameRetireTests: XCTestCase {
   }
   private var paths: [String] = []
   /// Serves `lookup` for the handle, and `post` for the retire. A later
-  /// lookup gets `relookup` when there is one.
+  /// lookup gets `relookup` when there is one. A lookup with a query
+  /// (`?genesis=`) gets `genesis` when there is one.
   private func serve(
     lookup: (Int, Any), post: (Int, Any)? = nil, relookup: (Int, Any)? = nil,
-    check: (([String: Any]) -> Void)? = nil
+    genesis: (Int, Any)? = nil, check: (([String: Any]) -> Void)? = nil
   ) {
     paths = []
     var looked = false
     RetireURLProtocol.handler = { [weak self] request in
       let method = request.httpMethod ?? "GET"
       let path = request.url?.path ?? ""
-      self?.paths.append(method + " " + path)
+      let query = request.url?.query
+      self?.paths.append(method + " " + path + (query.map { "?" + $0 } ?? ""))
       switch (method, path) {
       case ("GET", "/v1/handles/alice"):
+        if query != nil, let genesis { return genesis }
         defer { looked = true }
         return looked ? relookup ?? lookup : lookup
       case ("POST", "/v1/handles/alice/records"):
@@ -468,7 +494,6 @@ final class UsernameRetireTests: XCTestCase {
       ("record_after_tombstone, then a 404", (200, live), (409, Self.afterTombstone), gone),
       ("a 404 to the POST, then a 404", (200, live), gone, gone),
       ("record_after_tombstone, then the tombstoned flag alone", (200, live), (409, Self.afterTombstone), (200, retired([]))),
-      ("a notice hold, then record_after_tombstone", (451, heldBody(.notice)), (409, Self.afterTombstone), nil),
     ]
     for (name, lookup, post, relookup) in rows {
       let store = try store()
@@ -507,7 +532,6 @@ final class UsernameRetireTests: XCTestCase {
        (200, retired(["genesis", UsernameDevice.base64URL(Self.data(hex: Vector.record))])), false, true),
       ("released, with the countersigned tombstone", Hold.key, (451, heldBody(.notice)),
        (200, retired(["genesis", UsernameDevice.base64URL(Self.data(hex: Hold.record))])), false, true),
-      ("still held", Hold.key, (451, heldBody(.notice)), (451, heldBody(.notice)), true, false),
       ("live", Hold.key, (200, live), (200, live), true, false),
       ("the tombstoned flag alone", Hold.key, (200, live), (200, retired([])), true, false),
     ]
@@ -524,17 +548,35 @@ final class UsernameRetireTests: XCTestCase {
       XCTAssertEqual(paths, ["GET /v1/handles/alice", "POST /v1/handles/alice/records", "GET /v1/handles/alice"], name)
       XCTAssertEqual(store.binding(walletKey: "wallet-A", network: "mainnet") == nil, forgets, name)
     }
-    // An order hold on the new lookup shows, and the name stays.
-    let store = try store()
-    serve(lookup: (200, live), post: (409, Self.afterTombstone), relookup: (451, heldBody(.order)))
-    do {
-      try await retire(client(registrarKey: Hold.key), store)
-      XCTFail("Retired under an order hold")
-    } catch UsernameFailure.held(let hold) {
-      XCTAssertEqual(hold.reason, .order)
+  }
+  func testAHoldOnTheLookupAfterARefusedPostGivesTheHeldState() async throws {
+    // Android parity: each hold on the new lookup throws `.held`, the store
+    // shows it, and the name stays. A notice or terms hold keeps the
+    // Retire row; an order or sanctions hold takes it away.
+    let refusals: [(String, (Int, Any))] = [
+      ("record_after_tombstone", (409, Self.afterTombstone)), ("a 404", (404, Self.notFound)),
+    ]
+    for reason in UsernameHoldReason.allCases {
+      for (refusal, post) in refusals {
+        for (start, lookup) in [("live", (200, live as Any)), ("held", (451, heldBody(.notice) as Any))] {
+          let name = "\(start), \(refusal), then a \(reason) hold"
+          let store = try store()
+          serve(lookup: lookup, post: post, relookup: (451, heldBody(reason)))
+          do {
+            try await retire(client(registrarKey: Hold.key), store)
+            XCTFail("Retired: \(name)")
+          } catch UsernameFailure.held(let hold) {
+            XCTAssertEqual(hold.reason, reason, name)
+          }
+          XCTAssertEqual(paths, ["GET /v1/handles/alice", "POST /v1/handles/alice/records", "GET /v1/handles/alice"], name)
+          XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"), name)
+          XCTAssertEqual(store.nameState(for: binding).heldReason, reason, name)
+          XCTAssertEqual(store.nameState(for: binding).retireAllowed, reason.allowsRetire, name)
+          // The saved tombstone stays for the next try.
+          XCTAssertNotNil(store.retireAttempt(for: binding), name)
+        }
+      }
     }
-    XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"))
-    XCTAssertEqual(store.nameState(for: binding).heldReason, .order)
   }
   /// An earlier retire whose reply is lost: its tombstone stays saved.
   private func loseTheReplyOfAnEarlierRetire(_ store: UsernameStore) throws {
@@ -586,6 +628,157 @@ final class UsernameRetireTests: XCTestCase {
     XCTAssertTrue(forgot)
     XCTAssertTrue(opened.state.bindings.isEmpty)
     XCTAssertNotNil(opened.state.nextFreeClaim)
+  }
+  func testACountersignedTombstoneCountsWhenTheFlagIsFalseOrMissing() async throws {
+    // Android parity: the proof decides, not the unsigned flag.
+    let registrar = TestRegistrar()
+    let seqOne = try registrar.tombstone(seq: 1, prev: Vector.genesis)
+    let saved = UsernameDevice.base64URL(Self.data(hex: Vector.record))
+    let rows: [(String, String, [String], Bool, Any?)] = [
+      ("another phone's tombstone, flag false", registrar.publicKey, ["genesis", seqOne], false, false),
+      ("another phone's tombstone, no flag", registrar.publicKey, ["genesis", seqOne], false, nil),
+      ("the saved tombstone, flag false", Vector.registrarKey, ["genesis", saved], true, false),
+    ]
+    for (name, key, records, earlier, flag) in rows {
+      var found = retired(records)
+      found["tombstoned"] = flag
+      let store = try store()
+      if earlier { try loseTheReplyOfAnEarlierRetire(store) }
+      serve(lookup: (200, found))
+      let status = try await client(registrarKey: key).status(of: binding(in: store), store: store)
+      XCTAssertEqual(status, .retired, name)
+      try await retire(client(registrarKey: key), store, sign: noSignature)
+      XCTAssertTrue(store.state.bindings.isEmpty, name)
+      let opened = try self.store()
+      if earlier { try loseTheReplyOfAnEarlierRetire(opened) }
+      let forgot = await client(registrarKey: key).checkOnOpen(
+        binding(in: opened), store: opened, isRetiring: { false })
+      XCTAssertTrue(forgot, name)
+    }
+    // A flag that is false with no countersigned tombstone, and a live
+    // owner, is a live name.
+    var unsigned = retired([])
+    unsigned["tombstoned"] = false
+    let store = try store()
+    serve(lookup: (200, unsigned))
+    do {
+      _ = try await client(registrarKey: registrar.publicKey).status(of: binding(in: store), store: store)
+      XCTFail("No owner and no head is not a live name")
+    } catch UsernameFailure.verification {}
+  }
+
+  // MARK: - The signed retired statement (audit F12b)
+
+  func testTheRetiredStatementIsTheRegistrysTextAndTheHarnessVectorVerifies() {
+    let text = "oah-registry/retired/v1\nzone monero.one\nhandle alice\ngenesis_hash \(Vector.genesis)\n"
+    XCTAssertEqual(UsernameRetiredStatement.text(zone: "monero.one", handle: "alice", genesisHash: Vector.genesis), text)
+    // Signed with the registry e2e harness log key (`Hold.key`, from
+    // FileKeys seed [1; 32]), as registry tests/retired.rs signs it.
+    let body = Self.erasedBody(
+      handle: "alice", genesis: Vector.genesis, statement: text,
+      signature: "r66Sh-tO9pUfMXu50SJjJZj-XuZM2bFYw7RBFpgq3rHzJFxwn2ouNWWjccuna7J2-9hnu1ASYWyu5dGHMDGDAw")
+    let proves = { (handle: String, genesis: String, key: String, zone: String) in
+      UsernameRetiredStatement.proves(body, handle: handle, genesisHash: genesis, registrarKey: key, zone: zone)
+    }
+    XCTAssertTrue(proves("alice", Vector.genesis, Hold.key, "monero.one"))
+    XCTAssertFalse(proves("alice", Vector.genesis, Vector.registrarKey, "monero.one"), "another registrar key")
+    XCTAssertFalse(proves("alice", Vector.prev, Hold.key, "monero.one"), "another genesis")
+    XCTAssertFalse(proves("bobby", Vector.genesis, Hold.key, "monero.one"), "another name")
+    XCTAssertFalse(proves("alice", Vector.genesis, Hold.key, "staging.monero.one"), "another zone")
+    XCTAssertFalse(proves("alice", Vector.genesis.uppercased(), Hold.key, "monero.one"), "an uppercase genesis")
+    var otherCode = body
+    otherCode["error"] = ["code": "name.held"]
+    XCTAssertFalse(
+      UsernameRetiredStatement.proves(
+        otherCode, handle: "alice", genesisHash: Vector.genesis, registrarKey: Hold.key, zone: "monero.one"))
+  }
+  func testASignedRetiredStatementForgetsTheNameInRetireAndOnOpen() async throws {
+    // Another phone with this wallet retired the name, and the epoch erased
+    // it: this phone saved no retire.
+    let registrar = TestRegistrar()
+    let gone = (404, Self.notFound as Any)
+    serve(lookup: gone, genesis: (404, try registrar.erased()))
+    let store = try store()
+    try await retire(client(registrarKey: registrar.publicKey), store, sign: noSignature)
+    XCTAssertEqual(paths, ["GET /v1/handles/alice", genesisQuery])
+    XCTAssertTrue(store.state.bindings.isEmpty)
+    XCTAssertNotNil(store.state.nextFreeClaim)
+    // On open.
+    let opened = try self.store()
+    serve(lookup: gone, genesis: (404, try registrar.erased()))
+    let forgot = await client(registrarKey: registrar.publicKey).checkOnOpen(
+      binding(in: opened), store: opened, isRetiring: { false })
+    XCTAssertTrue(forgot)
+    XCTAssertEqual(paths, ["GET /v1/handles/alice", genesisQuery])
+    XCTAssertTrue(opened.state.bindings.isEmpty)
+    // After a refused POST: the name was erased since the first lookup.
+    for (refusal, post) in [("record_after_tombstone", (409, Self.afterTombstone as Any)), ("a 404", gone)] {
+      let posted = try self.store()
+      serve(lookup: (200, live), post: post, relookup: gone, genesis: (404, try registrar.erased()))
+      try await retire(client(registrarKey: registrar.publicKey), posted)
+      XCTAssertEqual(
+        paths, ["GET /v1/handles/alice", "POST /v1/handles/alice/records", "GET /v1/handles/alice", genesisQuery],
+        refusal)
+      XCTAssertTrue(posted.state.bindings.isEmpty, refusal)
+    }
+  }
+  func testARetiredStatementThatFailsACheckKeepsTheName() async throws {
+    let registrar = TestRegistrar()
+    let text = "oah-registry/retired/v1\nzone monero.one\nhandle alice\ngenesis_hash \(Vector.genesis)\n"
+    /// A good answer with one change to its `retired` object.
+    func changed(_ change: (inout [String: Any]) throws -> Void) throws -> [String: Any] {
+      var body = try registrar.erased()
+      var fields = try XCTUnwrap(body["retired"] as? [String: Any])
+      try change(&fields)
+      body["retired"] = fields
+      return body
+    }
+    let tampered = try changed {
+      var signature = try XCTUnwrap(UsernameDevice.base64URLDecode(try XCTUnwrap($0["signature"] as? String)))
+      signature[0] ^= 1
+      $0["signature"] = UsernameDevice.base64URL(signature)
+    }
+    let noStatement = try changed { $0["statement"] = nil }
+    let otherGenesisField = try changed { $0["genesis_hash"] = Vector.prev }
+    var serverError = try registrar.erased()
+    serverError["error"] = ["code": "internal"]
+    let rows: [(String, (Int, Any))] = [
+      ("another registrar key", (404, try TestRegistrar().erased())),
+      ("another genesis", (404, try registrar.erased(genesis: Vector.prev))),
+      ("another genesis field", (404, otherGenesisField)),
+      ("another name", (404, try registrar.erased(handle: "bobby"))),
+      ("another zone", (404, try registrar.erased(zone: "staging.monero.one"))),
+      ("a server text that differs, signed", (404, try registrar.erased(signs: text + "x", statement: text + "x"))),
+      ("a server text that differs from the signed text", (404, try registrar.erased(statement: text + "x"))),
+      ("no statement text", (404, noStatement)),
+      ("a bad signature", (404, tampered)),
+      ("a signature that is not base64url", (404, Self.erasedBody(
+        handle: "alice", genesis: Vector.genesis, statement: text, signature: "not+base64"))),
+      ("no retired object", (404, Self.notFound)),
+      ("a live answer", (200, live)),
+      ("a server error with a statement", (500, serverError)),
+      ("no answer", (0, NSNull())),
+    ]
+    for (name, answer) in rows {
+      let store = try store()
+      serve(lookup: (404, Self.notFound), genesis: answer)
+      if answer.0 == 0 {
+        // The first lookup answers; the one with the genesis gets no answer.
+        RetireURLProtocol.handler = { request in
+          guard request.url?.query == nil else { throw URLError(.notConnectedToInternet) }
+          return (404, Self.notFound)
+        }
+      }
+      do {
+        try await retire(client(registrarKey: registrar.publicKey), store, sign: noSignature)
+        XCTFail("Retired: \(name)")
+      } catch UsernameFailure.verification {}
+      if answer.0 != 0 { XCTAssertEqual(paths, ["GET /v1/handles/alice", genesisQuery], name) }
+      let forgot = await client(registrarKey: registrar.publicKey).checkOnOpen(
+        binding(in: store), store: store, isRetiring: { false })
+      XCTAssertFalse(forgot, name)
+      XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"), name)
+    }
   }
   func testTheScreenCheckKeepsTheNameOnA404OrNoAnswer() async throws {
     var otherGenesis = live

@@ -195,6 +195,50 @@ enum UsernameTombstone {
   }
 }
 
+/// The registrar's signed statement that a name, with its genesis, was
+/// retired and erased (registry README, "Retired statement", audit F12b).
+/// After the erasure a plain lookup answers the `404 handle.not_found` of a
+/// name that never existed. A lookup with `?genesis=<64 lowercase hex>`
+/// gets the same 404 with a top-level `retired` object
+/// `{"handle", "genesis_hash", "statement", "signature"}` when the
+/// registry retired that name with that genesis. The app never trusts the
+/// server's text: it builds the statement itself and checks the signature.
+enum UsernameRetiredStatement {
+  /// The first line of a retired statement: its domain tag.
+  static let tag = "oah-registry/retired/v1"
+
+  /// The signed bytes, as the registry's `retired_text` builds them.
+  static func text(zone: String, handle: String, genesisHash: String) -> String {
+    "\(tag)\nzone \(zone)\nhandle \(handle)\ngenesis_hash \(genesisHash)\n"
+  }
+
+  /// True when `body`, the JSON of a lookup's 404, proves that `handle`
+  /// with `genesisHash` was retired and erased. Each check must pass:
+  /// - `error.code` is `handle.not_found`;
+  /// - `handle` is a lowercase label and `genesisHash` is 64 lowercase hex;
+  /// - `retired.handle` is `handle` and `retired.genesis_hash` is
+  ///   `genesisHash`;
+  /// - `retired.statement` is the app's own `text(zone:handle:genesisHash:)`,
+  ///   byte for byte;
+  /// - `retired.signature` is strict base64url of 64 bytes, and a valid
+  ///   Ed25519 signature of the app's own text under the pinned
+  ///   `registrarKey`.
+  /// Anything else is false: the name stays.
+  static func proves(
+    _ body: [String: Any], handle: String, genesisHash: String, registrarKey: String, zone: String
+  ) -> Bool {
+    guard (body["error"] as? [String: Any])?["code"] as? String == "handle.not_found",
+      UsernameTombstone.isLabel(handle), UsernameEnvironment.isHex64(genesisHash),
+      let retired = body["retired"] as? [String: Any],
+      retired["handle"] as? String == handle, retired["genesis_hash"] as? String == genesisHash,
+      let signature = (retired["signature"] as? String).flatMap(UsernameDevice.base64URLDecode)
+    else { return false }
+    let own = text(zone: zone, handle: handle, genesisHash: genesisHash)
+    guard retired["statement"] as? String == own else { return false }
+    return UsernameRegistrar.isSigned(Data(own.utf8), signature: signature, key: registrarKey)
+  }
+}
+
 /// One free name per phone per 12 months (registry README, "Claim-slot
 /// safety"). The platforms date a phone mark by its UTC month only, and the
 /// registry keeps the mark in force while `month(now) <= month(mark) + 12`
@@ -241,10 +285,13 @@ enum UsernameNameStatus: Equatable {
   /// The registry holds the name, and the notice passed its check.
   case held(UsernameHold)
   /// The chain ends in this name's tombstone, countersigned by the
-  /// registrar; the erasure runs at the next epoch.
+  /// registrar (the erasure runs at the next epoch), or the epoch erased
+  /// the name and the registrar signed its retired statement for this
+  /// genesis (`UsernameRetiredStatement`).
   case retired
-  /// The registry has no such name (erased, or never registered there).
-  /// A 404 is not signed: alone it proves no retire.
+  /// The registry has no such name (erased, or never registered there),
+  /// and no signed retired statement came with the 404: alone it proves
+  /// no retire.
   case notFound
 }
 

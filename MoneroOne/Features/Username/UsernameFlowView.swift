@@ -572,8 +572,8 @@ struct UsernameDetailsView: View {
           isCurrentWallet: { currentWallet })
         dismiss()
       } catch UsernameFailure.held {
-        // The hold is now an order or sanctions hold: its row shows, and
-        // the Retire row goes away.
+        // A hold showed up on the name: its row shows. An order or sanctions
+        // hold also removes the Retire row; notice and terms holds keep it.
       } catch {
         self.error =
           (error as? UsernameFailure)?.localizedDescription

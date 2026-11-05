@@ -131,15 +131,22 @@ final class UsernameRetireTests: XCTestCase {
     return store
   }
   private var paths: [String] = []
-  /// Serves `lookup` for the handle, and `post` for the retire.
-  private func serve(lookup: (Int, Any), post: (Int, Any)? = nil, check: (([String: Any]) -> Void)? = nil) {
+  /// Serves `lookup` for the handle, and `post` for the retire. A later
+  /// lookup gets `relookup` when there is one.
+  private func serve(
+    lookup: (Int, Any), post: (Int, Any)? = nil, relookup: (Int, Any)? = nil,
+    check: (([String: Any]) -> Void)? = nil
+  ) {
     paths = []
+    var looked = false
     RetireURLProtocol.handler = { [weak self] request in
       let method = request.httpMethod ?? "GET"
       let path = request.url?.path ?? ""
       self?.paths.append(method + " " + path)
       switch (method, path) {
-      case ("GET", "/v1/handles/alice"): return lookup
+      case ("GET", "/v1/handles/alice"):
+        defer { looked = true }
+        return looked ? relookup ?? lookup : lookup
       case ("POST", "/v1/handles/alice/records"):
         guard let post else { XCTFail("No retire may be posted"); throw URLError(.badURL) }
         check?(RetireURLProtocol.body(request))
@@ -454,16 +461,18 @@ final class UsernameRetireTests: XCTestCase {
     XCTAssertEqual(store.state.retires, [])
   }
   func testAGoneAnswerWithNoEarlierRetireKeepsTheName() async throws {
-    // (lookup, post): none of these answers is signed.
-    let rows: [(String, (Int, Any), (Int, Any)?)] = [
-      ("a 404", (404, Self.notFound), nil),
-      ("a live lookup, then record_after_tombstone", (200, live), (409, Self.afterTombstone)),
-      ("a live lookup, then a 404", (200, live), (404, Self.notFound)),
-      ("a notice hold, then record_after_tombstone", (451, heldBody(.notice)), (409, Self.afterTombstone)),
+    // (lookup, post, the lookup after the POST): none of these is signed.
+    let gone = (404, Self.notFound as Any)
+    let rows: [(String, (Int, Any), (Int, Any)?, (Int, Any)?)] = [
+      ("a 404", gone, nil, nil),
+      ("record_after_tombstone, then a 404", (200, live), (409, Self.afterTombstone), gone),
+      ("a 404 to the POST, then a 404", (200, live), gone, gone),
+      ("record_after_tombstone, then the tombstoned flag alone", (200, live), (409, Self.afterTombstone), (200, retired([]))),
+      ("a notice hold, then record_after_tombstone", (451, heldBody(.notice)), (409, Self.afterTombstone), nil),
     ]
-    for (name, lookup, post) in rows {
+    for (name, lookup, post, relookup) in rows {
       let store = try store()
-      serve(lookup: lookup, post: post)
+      serve(lookup: lookup, post: post, relookup: relookup)
       do {
         try await retire(client(registrarKey: Hold.key), store, sign: post == nil ? noSignature : nil)
         XCTFail("Retired on an unsigned answer: \(name)")
@@ -472,29 +481,64 @@ final class UsernameRetireTests: XCTestCase {
     }
   }
   func testAGoneAnswerAfterAnEarlierRetireForgetsTheName() async throws {
-    // (lookup, post): erased at an epoch after the earlier retire; or it
-    // landed, and a hold or a stale lookup hid its tombstone.
-    let rows: [(String, (Int, Any), (Int, Any)?)] = [
-      ("erased", (404, Self.notFound), nil),
-      ("landed under a notice hold", (451, heldBody(.notice)), (409, Self.afterTombstone)),
-      ("landed after the lookup", (200, live), (409, Self.afterTombstone)),
-      ("erased after the lookup", (200, live), (404, Self.notFound)),
+    // (lookup, post, the lookup after the POST): erased at an epoch after
+    // the earlier retire.
+    let gone = (404, Self.notFound as Any)
+    let rows: [(String, (Int, Any), (Int, Any)?, (Int, Any)?)] = [
+      ("a 404", gone, nil, nil),
+      ("record_after_tombstone, then a 404", (200, live), (409, Self.afterTombstone), gone),
+      ("a 404 to the POST, then a 404", (200, live), gone, gone),
     ]
-    for (name, lookup, post) in rows {
+    for (name, lookup, post, relookup) in rows {
       let store = try store()
-      // The earlier try: its reply is lost.
-      serve(lookup: (200, live), post: (500, ["error": ["code": "internal"]]))
-      do {
-        try await retire(client(registrarKey: Hold.key), store)
-        XCTFail("The lost reply finished the retire: \(name)")
-      } catch UsernameFailure.server {}
-      XCTAssertNotNil(store.retireAttempt(for: binding), name)
-      serve(lookup: lookup, post: post)
+      try loseTheReplyOfAnEarlierRetire(store)
+      serve(lookup: lookup, post: post, relookup: relookup)
       try await retire(client(registrarKey: Hold.key), store, sign: post == nil ? noSignature : nil)
       XCTAssertTrue(store.state.bindings.isEmpty, name)
       XCTAssertNil(store.retireAttempt(for: binding), name)
       XCTAssertNotNil(store.state.nextFreeClaim, name)
     }
+  }
+  func testARefusedPostForgetsTheNameOnlyOnTheSignedTombstoneOfALookup() async throws {
+    // (registrar key, lookup, the lookup after the POST, an earlier retire,
+    // forgets): record_after_tombstone, then a new lookup.
+    let rows: [(String, String, (Int, Any), (Int, Any), Bool, Bool)] = [
+      ("the countersigned tombstone", Vector.registrarKey, (200, live),
+       (200, retired(["genesis", UsernameDevice.base64URL(Self.data(hex: Vector.record))])), false, true),
+      ("released, with the countersigned tombstone", Hold.key, (451, heldBody(.notice)),
+       (200, retired(["genesis", UsernameDevice.base64URL(Self.data(hex: Hold.record))])), false, true),
+      ("still held", Hold.key, (451, heldBody(.notice)), (451, heldBody(.notice)), true, false),
+      ("live", Hold.key, (200, live), (200, live), true, false),
+      ("the tombstoned flag alone", Hold.key, (200, live), (200, retired([])), true, false),
+    ]
+    for (name, key, lookup, relookup, earlier, forgets) in rows {
+      let store = try store()
+      if earlier { try loseTheReplyOfAnEarlierRetire(store) }
+      serve(lookup: lookup, post: (409, Self.afterTombstone), relookup: relookup)
+      do {
+        try await retire(client(registrarKey: key), store)
+        XCTAssertTrue(forgets, "Retired: \(name)")
+      } catch UsernameFailure.verification {
+        XCTAssertFalse(forgets, name)
+      }
+      XCTAssertEqual(paths, ["GET /v1/handles/alice", "POST /v1/handles/alice/records", "GET /v1/handles/alice"], name)
+      XCTAssertEqual(store.binding(walletKey: "wallet-A", network: "mainnet") == nil, forgets, name)
+    }
+    // An order hold on the new lookup shows, and the name stays.
+    let store = try store()
+    serve(lookup: (200, live), post: (409, Self.afterTombstone), relookup: (451, heldBody(.order)))
+    do {
+      try await retire(client(registrarKey: Hold.key), store)
+      XCTFail("Retired under an order hold")
+    } catch UsernameFailure.held(let hold) {
+      XCTAssertEqual(hold.reason, .order)
+    }
+    XCTAssertNotNil(store.binding(walletKey: "wallet-A", network: "mainnet"))
+    XCTAssertEqual(store.nameState(for: binding).heldReason, .order)
+  }
+  /// An earlier retire whose reply is lost: its tombstone stays saved.
+  private func loseTheReplyOfAnEarlierRetire(_ store: UsernameStore) throws {
+    try store.saveRetire(UsernameRetireAttempt(binding: binding, unsigned: Self.data(hex: Vector.unsigned)))
   }
   func testAnUnsignedTombstoneKeepsTheNameInRetireAndOnOpen() async throws {
     let registrar = TestRegistrar()

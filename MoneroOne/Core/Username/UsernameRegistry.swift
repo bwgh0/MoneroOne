@@ -749,9 +749,11 @@ final class UsernameRegistry {
   /// The app forgets the name, its saved claim, its saved retire and its
   /// hold (the free claim date stays) only after an answer that proves the
   /// retire: the reply or the lookup holds the registrar's countersigned
-  /// tombstone. A 404 or `chain.record_after_tombstone` is not signed: it
-  /// ends the retire only when this phone saved a retire in an earlier try
-  /// (its reply was lost, then the epoch erased the name). Else it throws
+  /// tombstone. A lookup's 404 is not signed: it ends the retire only when
+  /// this phone saved a retire in an earlier try (its reply was lost, then
+  /// the epoch erased the name). A `chain.record_after_tombstone` or 404
+  /// refusal of the POST is not signed either: the app looks the name up
+  /// again, with the same rules (Android parity). Else it throws
   /// `.verification`, and the name stays.
   ///
   /// Throws `UsernameFailure.held` for an `order` or `sanctions` hold (no
@@ -820,10 +822,31 @@ final class UsernameRegistry {
       store.noteHold(hold, handle: binding.handle, network: binding.network)
       throw UsernameFailure.held(hold)
     } catch is RegistryRetired, is RegistryNotFound {
-      // The same retire landed from an earlier try (under a hold, the
-      // lookup shows no chain). Not signed: it counts only after one.
-      guard earlier else { throw UsernameFailure.verification }
+      // A tombstone ends the chain already (this retire landed from an
+      // earlier try), or the epoch erased the name since the lookup. The
+      // refusal is not signed: look the name up again.
+      guard try await provesRetire(binding, store: store, earlier: earlier) else {
+        throw UsernameFailure.verification
+      }
     }
     try store.forget(binding)
+  }
+
+  /// A new lookup after an unsigned refusal of the retire POST. True for
+  /// the registrar's countersigned tombstone of this name, or for a 404
+  /// after an earlier saved retire. A `notice` or `terms` hold hides the
+  /// chain: no proof yet. An `order` or `sanctions` hold throws `.held`.
+  private func provesRetire(_ binding: UsernameBinding, store: UsernameStore, earlier: Bool) async throws -> Bool {
+    let found: [String: Any]
+    do {
+      found = try await lookUp(binding.handle, network: binding.network, store: store)
+    } catch is RegistryNotFound {
+      return earlier
+    } catch UsernameFailure.held(let hold) where hold.allowsRetire {
+      return false
+    }
+    return found["handle"] as? String == binding.handle
+      && found["genesis_hash"] as? String == binding.genesisHash
+      && endsInTombstone(found, of: binding, attempt: store.retireAttempt(for: binding))
   }
 }

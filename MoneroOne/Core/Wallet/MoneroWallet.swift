@@ -804,11 +804,13 @@ class MoneroWallet: ObservableObject {
         return try await kit.listOwnSubaddress(address)
     }
 
-    /// Update label on an existing subaddress, persisted via wallet2 cache.
+    /// Update label on an existing subaddress and store the wallet file
+    /// (`Kit.setSubaddressLabel`): off the caller's thread, and a refresh
+    /// that waits for the node holds it only a few seconds.
     @discardableResult
-    func setSubaddressLabel(index: Int, label: String) -> Bool {
+    func setSubaddressLabel(index: Int, label: String) async -> Bool {
         guard let kit = kit else { return false }
-        return kit.setSubaddressLabel(index: index, label: label)
+        return await kit.setSubaddressLabel(index: index, label: label)
     }
 
     /// The wallet's private view key, or nil if not yet loaded.

@@ -3334,10 +3334,14 @@ class WalletManager: ObservableObject {
         return created
     }
 
-    /// Rename a subaddress. Label is persisted via wallet2's `.keys` cache on disk.
+    /// Rename a subaddress. The kit stores the label in the wallet file off
+    /// the main thread (`MoneroWallet.setSubaddressLabel`).
+    /// - Returns: false when the rename failed or the wallet changed while
+    ///   it ran.
     @discardableResult
-    func setSubaddressLabel(index: Int, label: String) -> Bool {
-        guard let wallet = moneroWallet, wallet.setSubaddressLabel(index: index, label: label) else { return false }
+    func setSubaddressLabel(index: Int, label: String) async -> Bool {
+        guard let wallet = moneroWallet, await wallet.setSubaddressLabel(index: index, label: label),
+              moneroWallet === wallet else { return false }
         // wallet2 has the label now, but the kit republishes its list only
         // on its next update: show the new name at once.
         if let entry = subaddresses.first(where: { $0.index == index }) {

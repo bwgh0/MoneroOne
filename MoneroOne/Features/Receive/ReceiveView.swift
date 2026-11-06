@@ -740,14 +740,17 @@ struct AddressPickerView: View {
                 onSave: {
                     if let idx = renameIndex {
                         let packed = joinSubaddressLabel(emoji: renameEmoji, name: renameText)
-                        if walletManager.setSubaddressLabel(index: idx, label: packed),
-                           !packed.isEmpty, idx == selectedIndex,
-                           !walletManager.isManualReceiveSelection(index: idx) {
-                            // A name reserves the address, and rotation
-                            // moves past reserved ones. Naming the address
-                            // Receive shows keeps it there until it gets
-                            // paid instead.
-                            walletManager.noteManualReceiveSelection(index: idx)
+                        // The kit stores the label off the main thread.
+                        Task {
+                            if await walletManager.setSubaddressLabel(index: idx, label: packed),
+                               !packed.isEmpty, idx == selectedIndex,
+                               !walletManager.isManualReceiveSelection(index: idx) {
+                                // A name reserves the address, and rotation
+                                // moves past reserved ones. Naming the address
+                                // Receive shows keeps it there until it gets
+                                // paid instead.
+                                walletManager.noteManualReceiveSelection(index: idx)
+                            }
                         }
                     }
                     renameIndex = nil

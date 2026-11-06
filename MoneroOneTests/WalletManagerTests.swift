@@ -869,6 +869,9 @@ private final class HeldWallet: MoneroOne.MoneroWallet {
     /// The indexes whose store finished: in the wallet file.
     private(set) var storedIndexes: [Int] = []
     private(set) var signCalls = 0
+    private(set) var labelCalls = 0
+    /// The labels whose store finished: in the wallet file.
+    private(set) var storedLabels: [Int: String] = [:]
     private var nextIndex = 1
 
     func release() {
@@ -901,6 +904,13 @@ private final class HeldWallet: MoneroOne.MoneroWallet {
         signCalls += 1
         await hold()
         return "SigV2signature"
+    }
+
+    override func setSubaddressLabel(index: Int, label: String) async -> Bool {
+        labelCalls += 1
+        await hold()
+        storedLabels[index] = label
+        return true
     }
 }
 
@@ -1006,6 +1016,35 @@ final class SubaddressStoreAndSignTests: XCTestCase {
         opened.release()
         let signature = try await sign.value
         XCTAssertEqual(signature, "SigV2signature")
+    }
+
+    /// A rename waits for the kit's store (behind a slow refresh) without
+    /// blocking the main thread, and shows the name once it is stored.
+    func testRenameWaitsForTheStoreWithoutBlockingTheMainThread() async throws {
+        let opened = HeldWallet()
+        let manager = try await unlockedManager(opening: opened)
+        opened.subaddresses = [
+            MoneroKit.SubAddress(address: address, index: 0),
+            MoneroKit.SubAddress(address: "8" + String(repeating: "1", count: 94), index: 1),
+        ]
+        try await waitForEvents { manager.subaddresses.count == 2 }
+        XCTAssertEqual(manager.subaddresses.count, 2)
+
+        let rename = Task { await manager.setSubaddressLabel(index: 1, label: "Rent") }
+        try await waitForEvents { opened.labelCalls == 1 }
+        XCTAssertEqual(opened.labelCalls, 1)
+        // This test runs on the main actor: it gets here while the store waits.
+        let mainRuns = expectation(description: "the main queue runs during the rename")
+        DispatchQueue.main.async { mainRuns.fulfill() }
+        await fulfillment(of: [mainRuns], timeout: 1)
+        XCTAssertNotEqual(manager.subaddresses.first { $0.index == 1 }?.label, "Rent",
+                          "the name showed before its store")
+
+        opened.release()
+        let renamed = await rename.value
+        XCTAssertTrue(renamed)
+        XCTAssertEqual(opened.storedLabels, [1: "Rent"])
+        XCTAssertEqual(manager.subaddresses.first { $0.index == 1 }?.label, "Rent")
     }
 
     func testASignForAWalletThatLockedMeanwhileIsDropped() async throws {

@@ -381,6 +381,39 @@ final class UsernameTests: XCTestCase {
     XCTAssertNil(store.state.nextFreeClaim)
     XCTAssertTrue(store.hasLocalClaimSlot)
   }
+  /// Another wallet used this phone's free claim. A wallet with no name
+  /// still sees the entry on Home, and its own name comes back.
+  func testUsedFreeClaimKeepsTheEntryAndTheOwnNameComesBack() async throws {
+    let store = UsernameStore(persistence: UsernameMemory())
+    try store.accept(binding(wallet: "wallet-B"))
+    let free = store.state.nextFreeClaim
+    XCTAssertFalse(store.hasLocalClaimSlot)
+    XCTAssertTrue(store.offersEntry(walletKey: "wallet-A", network: "mainnet"))
+    XCTAssertFalse(store.offersEntry(walletKey: "wallet-B", network: "mainnet"))
+    XCTAssertTrue(store.offersEntry(walletKey: "wallet-B", network: "testnet"))
+    XCTAssertFalse(store.offersEntry(walletKey: "", network: "mainnet"))
+    serve(found())
+    let restored = try await claim(client(), store, owns: { [f] in $0 == f["owner"]! })
+    XCTAssertEqual(restored.handle, "alice")
+    XCTAssertEqual(store.binding(walletKey: "wallet-A", network: "mainnet"), restored)
+    XCTAssertEqual(store.binding(walletKey: "wallet-B", network: "mainnet")?.handle, "joe")
+    // The restore used no claim: the free claim date stays as it was.
+    XCTAssertEqual(store.state.nextFreeClaim, free)
+    XCTAssertFalse(store.offersEntry(walletKey: "wallet-A", network: "mainnet"))
+  }
+  /// Another wallet used this phone's free claim: a new name ends on
+  /// noFreeClaim, and the entry stays for a name the wallet may hold.
+  func testUsedFreeClaimGivesNoFreeClaimForANewName() async throws {
+    let store = UsernameStore(persistence: UsernameMemory())
+    try store.accept(binding(wallet: "wallet-B"))
+    XCTAssertTrue(store.offersEntry(walletKey: "wallet-A", network: "mainnet"))
+    let (result, _) = await freshClaim(
+      client(), store, reply: (403, ["error": ["code": "device.slot_used"]]))
+    XCTAssertEqual(failure(result), UsernameFailure.noFreeClaim.localizedDescription)
+    XCTAssertNil(store.state.pending)
+    XCTAssertNil(store.binding(walletKey: "wallet-A", network: "mainnet"))
+    XCTAssertTrue(store.offersEntry(walletKey: "wallet-A", network: "mainnet"))
+  }
   func testNameOfAnotherWalletStaysUnavailable() async throws {
     // (the open wallet's subaddress, the lookup's owner field, the wallet is asked)
     let rows: [(String, String, Bool)] = [

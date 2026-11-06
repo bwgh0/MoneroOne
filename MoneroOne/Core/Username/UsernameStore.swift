@@ -277,8 +277,7 @@ final class UsernameStore: ObservableObject {
     holds[Self.holdKey(binding.handle, binding.network)]
   }
   private static func holdKey(_ handle: String, _ network: String) -> String { network + ":" + handle }
-  /// This phone's next free claim while it is still ahead, else nil. Home
-  /// hides the invite until then (`hasLocalClaimSlot`).
+  /// This phone's next free claim while it is still ahead, else nil.
   var inviteHiddenUntil: Date? {
     guard let date = state.nextFreeClaim, date > Date() else { return nil }
     return date
@@ -292,6 +291,13 @@ final class UsernameStore: ObservableObject {
   func offersClaim(walletKey: String, network: String) -> Bool {
     guard let pending = state.pending else { return true }
     return pending.walletKey == walletKey && pending.network == network
+  }
+  /// Home offers the @name entry to each wallet with no name, also after
+  /// this phone used its free claim: a wallet that already holds a name
+  /// brings it back with no claim, and a new name ends on noFreeClaim.
+  func offersEntry(walletKey: String, network: String) -> Bool {
+    !walletKey.isEmpty && !storageError && binding(walletKey: walletKey, network: network) == nil
+      && offersClaim(walletKey: walletKey, network: network)
   }
   var hasLocalClaimSlot: Bool {
     !storageError && (state.nextFreeClaim.map { $0 <= Date() } ?? true)

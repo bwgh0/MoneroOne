@@ -40,8 +40,8 @@ struct WalletView: View {
     }
     private var canOfferUsername: Bool {
         UsernameConfiguration.current != nil && walletManager.isUnlocked && !walletManager.isViewOnly && !walletManager.usernameWalletKey.isEmpty
-            && !walletManager.isHardwareWallet && ownUsername == nil && usernames.hasLocalClaimSlot
-            && usernames.offersClaim(walletKey: walletManager.usernameWalletKey, network: walletManager.usernameNetwork)
+            && !walletManager.isHardwareWallet
+            && usernames.offersEntry(walletKey: walletManager.usernameWalletKey, network: walletManager.usernameNetwork)
     }
 
     /// Height the empty activity card needs to reach the bottom of the
